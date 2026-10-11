@@ -112,13 +112,14 @@ BEGIN
 
     -- E. Valida e calcula cupom de desconto se fornecido
     IF p_coupon_code IS NOT NULL AND TRIM(p_coupon_code) <> '' THEN
-        SELECT code, discount_type, discount_value, min_order_value, active, valid_until
+        SELECT code, discount_type, discount_value, min_order_value, active, end_date
         INTO v_coupon
         FROM public.coupons
         WHERE tenant_id = p_tenant_id 
           AND LOWER(code) = LOWER(TRIM(p_coupon_code))
           AND active = true
-          AND (valid_until IS NULL OR valid_until >= now());
+          AND (end_date IS NULL OR end_date >= now());
+
 
         IF FOUND THEN
             IF v_coupon.min_order_value IS NULL OR v_subtotal >= v_coupon.min_order_value THEN

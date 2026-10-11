@@ -175,7 +175,8 @@ CREATE POLICY "Public read banner_images"
 CREATE POLICY "Public read active coupons"
     ON public.coupons FOR SELECT
     TO anon, authenticated
-    USING (active = true AND (valid_until IS NULL OR valid_until >= now()));
+    USING (active = true AND (end_date IS NULL OR end_date >= now()));
+
 
 CREATE POLICY "Admin manage banners"
     ON public.banners FOR ALL
