@@ -139,7 +139,10 @@ export default function OrdersPage() {
 
     return () => {
       clearInterval(interval);
+      soundAlert.stopContinuousAlert();
+      soundAlert.setPendingCount(0);
     };
+
   }, [orderLimit]);
 
   const loadData = async () => {
@@ -280,11 +283,20 @@ export default function OrdersPage() {
         return next;
       });
       await Order.update(orderId, { status: newStatus });
+      const statusLabel =
+        newStatus === "confirmado" ? "confirmado" :
+        newStatus === "cancelado" ? "cancelado" :
+        newStatus === "preparando" ? "em preparo" :
+        newStatus === "enviado" ? "enviado" :
+        newStatus === "entregue" ? "entregue" : newStatus;
+      toast.success(`Pedido #${String(orderId).slice(-4).toUpperCase()} marcado como ${statusLabel}!`);
       loadOrdersOnly();
     } catch (err) {
       console.error("Erro ao atualizar status do pedido:", err);
+      toast.error("Erro ao atualizar status do pedido. Tente novamente.");
     }
   };
+
 
   const safeMoney = (val) => {
     const num = Number(val || 0);
@@ -337,9 +349,11 @@ export default function OrdersPage() {
     const methods = {
       dinheiro: "Dinheiro",
       pix: "PIX",
+      pix_online: "PIX Online (Mercado Pago)",
       cartao: "Cartão",
       cartao_credito: "Cartão de Crédito",
-      cartao_debito: "Cartão de Débito"
+      cartao_debito: "Cartão de Débito",
+      alimentacao: "Vale Alimentação / Refeição"
     };
     return methods[method] || method || "-";
   };

@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { AlertCircle, MapPin, Truck, Store, Plus, ArrowLeft, Loader2, Pencil, QrCode, CreditCard, Banknote, Home, Building2, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { AlertCircle, MapPin, Truck, Store, Plus, ArrowLeft, Loader2, Pencil, CreditCard, Banknote, Home, Building2, AlertTriangle, CheckCircle2, Zap, UtensilsCrossed } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { matchNeighborhood, isCityAllowed } from "@/utils/neighborhoodMatcher";
 import { User } from "@/entities/User";
@@ -605,6 +605,7 @@ export default function OrderModal({
     const orderData = {
       ...customerData,
       notes: finalNotes,
+      change_for: customerData.payment_method === 'dinheiro' && changeFor.trim() ? changeFor.trim() : null,
       user_email: user?.email,
       customer_address: deliveryAddress,
       delivery_fee: orderType === 'delivery' ? effectiveDeliveryFee : 0,
@@ -1357,60 +1358,71 @@ export default function OrderModal({
           <div className="space-y-3 pt-1">
             <div>
               <Label className="text-xs font-bold uppercase text-gray-700 mb-2 block">Forma de pagamento *</Label>
-              <div className="grid grid-cols-3 gap-2.5">
-                {/* Opção PIX */}
-                <button
-                  type="button"
-                  onClick={() => handleInputChange('payment_method', 'pix')}
-                  className={`p-3 rounded-2xl border text-center flex flex-col items-center justify-center gap-1.5 min-h-[76px] transition-all cursor-pointer ${
-                    customerData.payment_method === 'pix'
-                      ? 'border-emerald-600 bg-emerald-50/90 ring-2 ring-emerald-500/30 text-emerald-950 font-black shadow-sm'
-                      : 'border-stone-200 bg-white hover:border-stone-400 text-stone-700 font-bold'
-                  }`}
-                >
-                  <QrCode className={`w-5 h-5 ${customerData.payment_method === 'pix' ? 'text-emerald-600' : 'text-stone-600'}`} />
-                  <div className="flex flex-col items-center leading-none">
-                    <span className="text-xs sm:text-sm tracking-tight font-bold">PIX</span>
-                    <span className="text-[10px] font-medium opacity-75 mt-0.5">Na entrega</span>
-                  </div>
-                </button>
+              {(() => {
+                const pm = deliveryRules?.payment_methods || {};
+                const showOnlineMp = Boolean(pm.accept_online_mp && pm.mp_access_token);
+                const showCredit = pm.accept_card_credit !== undefined ? Boolean(pm.accept_card_credit) : (pm.accept_card_delivery !== false);
+                const showDebit = pm.accept_card_debit !== undefined ? Boolean(pm.accept_card_debit) : (pm.accept_card_delivery !== false);
+                const showMeal = Boolean(pm.accept_card_meal);
+                const showCash = pm.accept_cash !== false;
 
-                {/* Opção Cartão */}
-                <button
-                  type="button"
-                  onClick={() => handleInputChange('payment_method', 'cartao')}
-                  className={`p-3 rounded-2xl border text-center flex flex-col items-center justify-center gap-1.5 min-h-[76px] transition-all cursor-pointer ${
-                    customerData.payment_method === 'cartao'
-                      ? 'border-red-600 bg-red-50/90 ring-2 ring-red-500/30 text-red-950 font-black shadow-sm'
-                      : 'border-stone-200 bg-white hover:border-stone-400 text-stone-700 font-bold'
-                  }`}
-                >
-                  <CreditCard className={`w-5 h-5 ${customerData.payment_method === 'cartao' ? 'text-red-600' : 'text-stone-600'}`} />
-                  <span className="text-xs sm:text-sm tracking-tight">Cartão</span>
-                </button>
+                const availableMethods = [
+                  showOnlineMp && { id: 'pix_online', label: 'PIX Online', sub: '⚡ Instantâneo', icon: Zap, color: 'sky' },
+                  showCredit && { id: 'cartao_credito', label: 'Crédito', sub: 'Maquininha', icon: CreditCard, color: 'blue' },
+                  showDebit && { id: 'cartao_debito', label: 'Débito', sub: 'Maquininha', icon: CreditCard, color: 'indigo' },
+                  showMeal && { id: 'alimentacao', label: 'Vale Refeição', sub: 'VR / VA', icon: UtensilsCrossed, color: 'amber' },
+                  showCash && { id: 'dinheiro', label: 'Dinheiro', sub: 'Com troco', icon: Banknote, color: 'emerald' },
+                ].filter(Boolean);
 
-                {/* Opção Dinheiro */}
-                <button
-                  type="button"
-                  onClick={() => handleInputChange('payment_method', 'dinheiro')}
-                  className={`p-3 rounded-2xl border text-center flex flex-col items-center justify-center gap-1.5 min-h-[76px] transition-all cursor-pointer ${
-                    customerData.payment_method === 'dinheiro'
-                      ? 'border-amber-600 bg-amber-50/90 ring-2 ring-amber-500/30 text-amber-950 font-black shadow-sm'
-                      : 'border-stone-200 bg-white hover:border-stone-400 text-stone-700 font-bold'
-                  }`}
-                >
-                  <Banknote className={`w-5 h-5 ${customerData.payment_method === 'dinheiro' ? 'text-amber-600' : 'text-stone-600'}`} />
-                  <span className="text-xs sm:text-sm tracking-tight">Dinheiro</span>
-                </button>
-              </div>
+                // Auto-seleção caso o método salvo não esteja disponível ou seja inválido
+                if (availableMethods.length > 0 && (!customerData.payment_method || !availableMethods.some(m => m.id === customerData.payment_method))) {
+                  setTimeout(() => {
+                    handleInputChange('payment_method', availableMethods[0].id);
+                  }, 0);
+                }
 
-              {/* Informação quando seleciona PIX */}
-              {customerData.payment_method === 'pix' && (
-                <div className="mt-2.5 p-3 bg-emerald-50/80 border border-emerald-200 rounded-xl flex items-center gap-2.5 text-xs text-emerald-950 animate-in fade-in slide-in-from-top-1 duration-200">
-                  <QrCode className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>O pagamento via <strong>PIX será realizado na entrega</strong> (chave / QR Code com o entregador ou no balcão).</span>
-                </div>
-              )}
+                return (
+                  <>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+                      {availableMethods.map((method) => {
+                        const Icon = method.icon;
+                        const isSelected = customerData.payment_method === method.id;
+                        return (
+                          <button
+                            key={method.id}
+                            type="button"
+                            onClick={() => handleInputChange('payment_method', method.id)}
+                            className={`p-3 rounded-2xl border text-center flex flex-col items-center justify-center gap-1 min-h-[76px] transition-all cursor-pointer relative overflow-hidden ${
+                              isSelected
+                                ? 'border-red-600 bg-red-50/90 ring-2 ring-red-500/30 text-red-950 font-black shadow-sm'
+                                : 'border-stone-200 bg-white hover:border-stone-400 text-stone-700 font-bold'
+                            }`}
+                          >
+                            <Icon className={`w-5 h-5 ${isSelected ? 'text-red-600' : 'text-stone-600'}`} />
+                            <span className="text-xs sm:text-sm tracking-tight font-bold">{method.label}</span>
+                            {method.sub && (
+                              <span className={`text-[10px] font-semibold ${method.id === 'pix_online' ? 'text-sky-600 font-extrabold' : 'text-stone-500'}`}>
+                                {method.sub}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Informação quando seleciona PIX Online */}
+                    {customerData.payment_method === 'pix_online' && (
+                      <div className="mt-2.5 p-3.5 bg-sky-50/90 border border-sky-200 rounded-2xl flex items-center gap-3 text-xs text-sky-950 animate-in fade-in">
+                        <Zap className="w-5 h-5 text-sky-600 shrink-0" />
+                        <div>
+                          <span className="font-bold block">QR Code Automático Mercado Pago</span>
+                          <span className="text-[11px] text-sky-800">Ao confirmar seu pedido, o QR Code será exibido na tela com confirmação automática em 2 segundos!</span>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
 
               {/* Campo de troco quando seleciona Dinheiro */}
               {customerData.payment_method === 'dinheiro' && (

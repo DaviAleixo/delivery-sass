@@ -72,9 +72,85 @@ export function sanitizeOrderData(rawOrder = {}) {
   };
 }
 
-/**
- * Sanitiza rigorosamente dados de produto
- */
+export function sanitizeOrderUpdateData(rawUpdate = {}) {
+  const parseNum = (val, fallback = 0) => {
+    if (typeof val === "number" && !isNaN(val)) return Number(val.toFixed(2));
+    if (typeof val === "string") {
+      const parsed = parseBRLToNumber(val);
+      if (!isNaN(parsed)) return Number(parsed.toFixed(2));
+    }
+    return fallback;
+  };
+
+  const sanitized = { ...rawUpdate };
+
+  if (rawUpdate.status !== undefined) {
+    sanitized.status = String(rawUpdate.status).toLowerCase().trim();
+  }
+  if (rawUpdate.customer_name !== undefined) {
+    sanitized.customer_name = String(rawUpdate.customer_name).trim();
+  }
+  if (rawUpdate.customer_phone !== undefined) {
+    sanitized.customer_phone = String(rawUpdate.customer_phone).trim();
+  }
+  if (rawUpdate.delivery_time !== undefined) {
+    sanitized.delivery_time = String(rawUpdate.delivery_time).trim();
+  }
+  if (rawUpdate.notes !== undefined) {
+    sanitized.notes = rawUpdate.notes ? String(rawUpdate.notes).trim() : null;
+  }
+  if (rawUpdate.total_amount !== undefined) {
+    sanitized.total_amount = parseNum(rawUpdate.total_amount);
+  }
+  if (rawUpdate.total !== undefined) {
+    sanitized.total = parseNum(rawUpdate.total);
+  }
+  if (rawUpdate.subtotal !== undefined) {
+    sanitized.subtotal = parseNum(rawUpdate.subtotal);
+  }
+
+  sanitized.updated_date = new Date().toISOString();
+  return sanitized;
+}
+
+export function sanitizeProductUpdateData(rawUpdate = {}) {
+  const parseNum = (val, fallback = 0) => {
+    if (typeof val === "number" && !isNaN(val)) return Number(val.toFixed(2));
+    if (typeof val === "string") {
+      const parsed = parseBRLToNumber(val);
+      if (!isNaN(parsed)) return Number(parsed.toFixed(2));
+    }
+    return fallback;
+  };
+
+  const sanitized = { ...rawUpdate };
+
+  if (rawUpdate.name !== undefined) {
+    sanitized.name = String(rawUpdate.name).trim();
+  }
+  if (rawUpdate.price !== undefined) {
+    sanitized.price = parseNum(rawUpdate.price);
+  }
+  if (rawUpdate.description !== undefined) {
+    sanitized.description = rawUpdate.description ? String(rawUpdate.description).trim() : "";
+  }
+  if (rawUpdate.available !== undefined) {
+    sanitized.available = Boolean(rawUpdate.available);
+  }
+  if (rawUpdate.popular !== undefined) {
+    sanitized.popular = Boolean(rawUpdate.popular);
+  }
+  if (rawUpdate.category !== undefined) {
+    sanitized.category = String(rawUpdate.category).trim();
+  }
+  if (rawUpdate.image_url !== undefined) {
+    sanitized.image_url = String(rawUpdate.image_url).trim();
+  }
+
+  sanitized.updated_at = new Date().toISOString();
+  return sanitized;
+}
+
 export function sanitizeProductData(rawProduct = {}) {
   const parseNum = (val, fallback = 0) => {
     if (typeof val === "number" && !isNaN(val)) return Number(val.toFixed(2));
@@ -97,3 +173,4 @@ export function sanitizeProductData(rawProduct = {}) {
     popular: Boolean(rawProduct.popular),
   };
 }
+

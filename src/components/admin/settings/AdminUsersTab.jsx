@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import {
   Users,
   UserPlus,
-  Key,
   Lock,
   Eye,
   EyeOff,
@@ -16,10 +15,15 @@ import {
   Trash2,
   X,
   Save,
+  Copy,
+  Check,
 } from "lucide-react";
 import { ALL_ADMIN_SCREENS } from "./settingsConstants";
+import { toast } from "sonner";
 
 export default function AdminUsersTab({
+  storeCode = "1",
+  _storeSlug = "vruum-burguer",
   adminUsers,
   handleOpenAddUser,
   handleOpenEditUser,
@@ -37,8 +41,55 @@ export default function AdminUsersTab({
   handleDeselectAllScreens,
   toggleScreenPermission,
 }) {
+  const [copiedCode, setCopiedCode] = React.useState(false);
+
+  const displayCode = String(storeCode || "1");
+
+  const handleCopyStoreCode = () => {
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(displayCode);
+      setCopiedCode(true);
+      toast.success("Código da loja copiado com sucesso!");
+      setTimeout(() => setCopiedCode(false), 2000);
+    }
+  };
+
   return (
     <div className="space-y-6">
+      {/* Banner de Identificação da Loja para Login */}
+      <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-50 via-indigo-50/60 to-white border border-purple-200/90 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-xl bg-purple-600 text-white flex items-center justify-center font-black shadow-sm shrink-0 text-lg">
+            #{displayCode}
+          </div>
+          <div>
+            <p className="text-[11px] font-bold text-purple-800 uppercase tracking-wider flex items-center gap-1.5">
+              <span>🏷️ Código Numérico da sua Loja</span>
+              <span className="bg-purple-200/70 text-purple-900 px-1.5 py-0.2 rounded text-[10px]">Para Login</span>
+            </p>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="font-mono text-xl font-black text-purple-950 bg-white px-3 py-0.5 rounded-lg border border-purple-200 shadow-2xs select-all">
+                {displayCode}
+              </span>
+              <span className="text-xs text-stone-600 font-medium">
+                (Informe o número <strong>{displayCode}</strong> no campo <i>Código da Loja</i> ao fazer login)
+              </span>
+            </div>
+          </div>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={handleCopyStoreCode}
+          className="text-xs font-bold text-purple-700 border-purple-300 hover:bg-purple-100/60 shrink-0 self-start sm:self-auto cursor-pointer"
+        >
+          {copiedCode ? <Check className="w-3.5 h-3.5 mr-1 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 mr-1" />}
+          <span>{copiedCode ? "Copiado!" : `Copiar Código #${displayCode}`}</span>
+        </Button>
+      </div>
+
+
       <Card className="border-0 shadow-md">
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -61,6 +112,7 @@ export default function AdminUsersTab({
             </Button>
           </div>
         </CardHeader>
+
         <CardContent>
           <div className="border border-stone-200 rounded-2xl overflow-hidden bg-white shadow-2xs">
             <div className="overflow-x-auto">
@@ -101,18 +153,9 @@ export default function AdminUsersTab({
                                 <span className="font-bold text-stone-900 block">
                                   {user.username}
                                 </span>
-                                {user.initial_password ? (
-                                  <span className="text-[11px] text-stone-600 flex items-center gap-1.5 font-mono mt-0.5">
-                                    <Key className="w-3 h-3 text-amber-500" /> Senha atual:
-                                    <span className="font-bold text-stone-900 bg-stone-100 border border-stone-200 px-1.5 py-0.5 rounded text-[11px]">
-                                      {user.initial_password}
-                                    </span>
-                                  </span>
-                                ) : (
-                                  <span className="text-[11px] text-stone-400 flex items-center gap-1 font-mono">
-                                    <Lock className="w-3 h-3 text-stone-400" /> ••••••••
-                                  </span>
-                                )}
+                                <span className="text-[11px] text-stone-400 flex items-center gap-1 font-mono mt-0.5">
+                                  <Lock className="w-3 h-3 text-stone-400" /> Senha protegida (••••••••)
+                                </span>
                               </div>
                             </div>
                           </td>

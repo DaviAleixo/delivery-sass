@@ -9,7 +9,9 @@ import {
   Store, 
   Clock, 
   Bike, 
-  Users
+  Users,
+  CreditCard,
+  Wallet
 } from "lucide-react";
 import { fetchCityNeighborhoods } from "@/services/cityNeighborhoods";
 import { parseBRLToNumber } from "@/utils/moneyMask";
@@ -21,6 +23,8 @@ import GeneralSettingsTab from "@/components/admin/settings/GeneralSettingsTab";
 import HoursTab from "@/components/admin/settings/HoursTab";
 import DeliveryFeesTab from "@/components/admin/settings/DeliveryFeesTab";
 import AdminUsersTab from "@/components/admin/settings/AdminUsersTab";
+import SubscriptionTab from "@/components/admin/settings/SubscriptionTab";
+import PaymentMethodsTab from "@/components/admin/settings/PaymentMethodsTab";
 
 // Constantes e utilitários compartilhados
 import {
@@ -46,6 +50,7 @@ export {
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState("geral");
+  const [tenantDetails, setTenantDetails] = useState(null);
 
   const [settings, setSettings] = useState({
     restaurant_name: "",
@@ -144,6 +149,7 @@ export default function SettingsPage() {
 
         if (tenantData) {
           setSettingsId(tenantData.id);
+          setTenantDetails(tenantData);
           const loadedOpenDays = normalizeOpenDays(tenantData.open_days, tenantData.opening_time || "18:00", tenantData.closing_time || "23:00");
           const firstOpen = loadedOpenDays.find(d => d.enabled && d.opening_time);
 
@@ -635,40 +641,65 @@ export default function SettingsPage() {
 
     setIsSavingUser(true);
     try {
-      const currentTenantId = localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001";
+      const currentTenantId = localStorage.getItem("current_tenant_id") || tenantDetails?.id || "a0000000-0000-0000-0000-000000000001";
 
       if (editingUserId) {
-        const updatePayload = {
-          tenant_id: currentTenantId,
-          username: userFormData.username.trim(),
-          role: userFormData.role,
-          active: userFormData.active,
-          permissions: finalPermissions,
-        };
-        if (userFormData.password.trim()) {
-          updatePayload.password = userFormData.password.trim();
-          updatePayload.initial_password = userFormData.password.trim();
+        if (isSupabaseConfigured() && supabase) {
+          const { error: rpcErr } = await supabase.rpc("update_store_admin_user", {
+            p_user_id: editingUserId,
+            p_username: userFormData.username.trim(),
+            p_password: userFormData.password.trim() || null,
+            p_role: userFormData.role,
+            p_permissions: finalPermissions,
+            p_active: userFormData.active,
+          });
+          if (rpcErr) {
+            throw new Error(rpcErr.message || "Erro ao atualizar usuário");
+          }
+        } else {
+          const updatePayload = {
+            tenant_id: currentTenantId,
+            username: userFormData.username.trim(),
+            role: userFormData.role,
+            active: userFormData.active,
+            permissions: finalPermissions,
+          };
+          if (userFormData.password.trim()) {
+            updatePayload.password = userFormData.password.trim();
+          }
+          await AdminUser.update(editingUserId, updatePayload);
         }
-        await AdminUser.update(editingUserId, updatePayload);
         toast.success(`Usuário "${userFormData.username}" atualizado!`);
       } else {
-        const createPayload = {
-          tenant_id: currentTenantId,
-          username: userFormData.username.trim(),
-          password: userFormData.password.trim(),
-          initial_password: userFormData.password.trim(),
-          role: userFormData.role,
-          active: userFormData.active,
-          permissions: finalPermissions,
-        };
-        await AdminUser.create(createPayload);
-        toast.success(`Usuário "${userFormData.username}" criado!`);
+        if (isSupabaseConfigured() && supabase) {
+          const { error: rpcErr } = await supabase.rpc("create_store_admin_user", {
+            p_tenant_id: currentTenantId,
+            p_username: userFormData.username.trim(),
+            p_password: userFormData.password.trim(),
+            p_role: userFormData.role,
+            p_permissions: finalPermissions,
+          });
+          if (rpcErr) {
+            throw new Error(rpcErr.message || "Erro ao criar usuário no Supabase Auth");
+          }
+        } else {
+          const createPayload = {
+            tenant_id: currentTenantId,
+            username: userFormData.username.trim(),
+            password: userFormData.password.trim(),
+            role: userFormData.role,
+            active: userFormData.active,
+            permissions: finalPermissions,
+          };
+          await AdminUser.create(createPayload);
+        }
+        toast.success(`Usuário "${userFormData.username}" criado com sucesso no sistema!`);
       }
 
       await loadAdminUsers();
       setIsUserModalOpen(false);
     } catch (_err) {
-      toast.error("Erro ao salvar usuário. Verifique se o nome já existe.");
+      toast.error(_err?.message || "Erro ao salvar usuário. Verifique se o nome já existe.");
     } finally {
       setIsSavingUser(false);
     }
@@ -682,6 +713,13 @@ export default function SettingsPage() {
 
     if (confirm(`Excluir o usuário "${user.username}"?`)) {
       try {
+        if (isSupabaseConfigured() && supabase) {
+          try {
+            await supabase.rpc("delete_store_admin_user", { p_user_id: user.id });
+          } catch (_rpcErr) {
+            console.warn("RPC delete_store_admin_user falhou:", _rpcErr);
+          }
+        }
         await AdminUser.delete(user.id);
         toast.success(`Usuário "${user.username}" excluído!`);
         await loadAdminUsers();
@@ -690,6 +728,7 @@ export default function SettingsPage() {
       }
     }
   };
+
 
   // Salvar Configurações Gerais
   const handleSubmit = async (e) => {
@@ -909,6 +948,19 @@ export default function SettingsPage() {
 
           <button
             type="button"
+            onClick={() => setActiveTab("pagamentos")}
+            className={`flex items-center gap-2 py-3 px-4 font-bold text-xs sm:text-sm border-b-2 transition-all whitespace-nowrap cursor-pointer ${
+              activeTab === "pagamentos"
+                ? "border-emerald-600 text-emerald-600 bg-emerald-50/40 rounded-t-lg"
+                : "border-transparent text-stone-500 hover:text-stone-800"
+            }`}
+          >
+            <Wallet className="w-4 h-4" />
+            <span>Formas de Pagamento</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveTab("usuarios")}
             className={`flex items-center gap-2 py-3 px-4 font-bold text-xs sm:text-sm border-b-2 transition-all whitespace-nowrap cursor-pointer ${
               activeTab === "usuarios"
@@ -918,6 +970,22 @@ export default function SettingsPage() {
           >
             <Users className="w-4 h-4" />
             <span>Usuários & Acessos</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("assinatura")}
+            className={`flex items-center gap-2 py-3 px-4 font-bold text-xs sm:text-sm border-b-2 transition-all whitespace-nowrap cursor-pointer ${
+              activeTab === "assinatura"
+                ? "border-rose-600 text-rose-600 bg-rose-50/40 rounded-t-lg"
+                : "border-transparent text-stone-500 hover:text-stone-800"
+            }`}
+          >
+            <CreditCard className="w-4 h-4 text-rose-500" />
+            <span>Minha Assinatura</span>
+            {tenantDetails?.subscription_status === "pending" && (
+              <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" title="Pagamento pendente" />
+            )}
           </button>
         </div>
 
@@ -989,6 +1057,8 @@ export default function SettingsPage() {
 
           {activeTab === "usuarios" && (
             <AdminUsersTab
+              storeCode={tenantDetails?.code || 1}
+              storeSlug={tenantDetails?.slug || localStorage.getItem("current_tenant_slug") || "vruum-burguer"}
               adminUsers={adminUsers}
               handleOpenAddUser={handleOpenAddUser}
               handleOpenEditUser={handleOpenEditUser}
@@ -1008,26 +1078,42 @@ export default function SettingsPage() {
             />
           )}
 
-          {/* Botão Inferior de Salvar */}
-          <div className="flex justify-end pt-4 border-t border-stone-200">
-            <Button
-              type="submit"
-              disabled={isSaving}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm h-11 px-8 rounded-2xl shadow-md flex items-center gap-2 cursor-pointer"
-            >
-              {isSaving ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
-                  <span>Salvando Alterações...</span>
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4" />
-                  <span>Salvar Configurações</span>
-                </>
-              )}
-            </Button>
-          </div>
+          {activeTab === "pagamentos" && (
+            <PaymentMethodsTab 
+              tenantData={tenantDetails} 
+              onUpdateTenant={(updated) => setTenantDetails((prev) => ({ ...prev, ...updated }))}
+            />
+          )}
+
+          {activeTab === "assinatura" && (
+            <SubscriptionTab 
+              tenantData={tenantDetails} 
+              onUpdateTenant={(updated) => setTenantDetails((prev) => ({ ...prev, ...updated }))}
+            />
+          )}
+
+          {/* Botão Inferior de Salvar (oculto nas abas com botão próprio) */}
+          {!["assinatura", "pagamentos"].includes(activeTab) && (
+            <div className="flex justify-end pt-4 border-t border-stone-200">
+              <Button
+                type="submit"
+                disabled={isSaving}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm h-11 px-8 rounded-2xl shadow-md flex items-center gap-2 cursor-pointer"
+              >
+                {isSaving ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                    <span>Salvando Alterações...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    <span>Salvar Configurações</span>
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
         </form>
       </div>
     </div>

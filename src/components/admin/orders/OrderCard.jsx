@@ -148,7 +148,17 @@ export default function OrderCard({
                       )}
                       <div className="flex items-center gap-2 text-gray-600 text-xs md:text-sm">
                         <CreditCard className="w-3 h-3 md:w-4 md:h-4" />
-                        <span>{getPaymentMethodText(order.payment_method)}</span>
+                        <span className="font-medium text-stone-800">{getPaymentMethodText(order.payment_method)}</span>
+                        {order.payment_status === 'paid' && (
+                          <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 text-[10px] font-extrabold uppercase">
+                            ✓ Pago Online
+                          </Badge>
+                        )}
+                        {order.change_for && (
+                          <span className="text-amber-700 font-bold text-xs bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                            Troco p/ R$ {order.change_for}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>

@@ -1,3 +1,25 @@
+function canPlayStoreAudio() {
+  if (typeof window === "undefined") return false;
+  try {
+    const path = window.location.pathname.toLowerCase();
+    // SuperAdmin ou Login Geral do SaaS nunca tocam sirene de restaurante
+    if (path.includes("/superadmin") || path.includes("/adminlogin")) {
+      return false;
+    }
+    // Se o usuário for Super Admin geral da plataforma (Davi)
+    const rawUser = localStorage.getItem("admin_user");
+    if (rawUser) {
+      const user = JSON.parse(rawUser);
+      if (user?.role === "super_admin") {
+        return false;
+      }
+    }
+  } catch {
+    return false;
+  }
+  return true;
+}
+
 // Utilitário de alerta sonoro potente e contínuo para novos pedidos usando Web Audio API
 class SoundAlertManager {
   constructor() {
@@ -29,7 +51,7 @@ class SoundAlertManager {
   }
 
   isEnabled() {
-    return this.enabled;
+    return this.enabled && canPlayStoreAudio();
   }
 
   setEnabled(val) {
@@ -37,7 +59,7 @@ class SoundAlertManager {
     if (typeof window !== "undefined") {
       localStorage.setItem("vrumburguer_order_sound_enabled", this.enabled ? "true" : "false");
     }
-    if (!this.enabled) {
+    if (!this.enabled || !canPlayStoreAudio()) {
       this.stopContinuousAlert();
     } else if (this.pendingCount > 0) {
       this.startContinuousAlert();
@@ -47,7 +69,7 @@ class SoundAlertManager {
   // Atualiza a contagem de pedidos pendentes
   setPendingCount(count) {
     this.pendingCount = Math.max(0, Number(count) || 0);
-    if (this.pendingCount > 0 && this.enabled) {
+    if (this.pendingCount > 0 && this.enabled && canPlayStoreAudio()) {
       this.startContinuousAlert();
     } else {
       this.stopContinuousAlert();
@@ -55,6 +77,10 @@ class SoundAlertManager {
   }
 
   startContinuousAlert() {
+    if (!canPlayStoreAudio()) {
+      this.stopContinuousAlert();
+      return;
+    }
     if (this.isLooping || !this.enabled) return;
     this.isLooping = true;
     this.playLoop();
@@ -72,13 +98,13 @@ class SoundAlertManager {
   }
 
   playLoop() {
-    if (!this.isLooping || !this.enabled || this.pendingCount <= 0) {
+    if (!canPlayStoreAudio() || !this.isLooping || !this.enabled || this.pendingCount <= 0) {
       this.stopContinuousAlert();
       return;
     }
 
     this.playOrderChime(() => {
-      if (this.isLooping && this.enabled && this.pendingCount > 0) {
+      if (canPlayStoreAudio() && this.isLooping && this.enabled && this.pendingCount > 0) {
         this.loopTimer = setTimeout(() => {
           this.playLoop();
         }, 1500); // 1.5s entre cada sequência de campainha
@@ -90,10 +116,11 @@ class SoundAlertManager {
 
   // Toca um alerta sonoro potente estilo iFood/Anota AI
   playOrderChime(onFinish) {
-    if (!this.enabled) {
+    if (!canPlayStoreAudio() || !this.enabled) {
       if (onFinish) onFinish();
       return;
     }
+
 
     try {
       const ctx = this.getAudioContext();

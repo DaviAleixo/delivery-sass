@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { soundAlert } from "@/utils/soundAlert";
 
 const AuthContext = createContext({
   user: null,
@@ -76,11 +77,14 @@ export const AuthProvider = ({ children }) => {
 
   // Limpa estados e storages locais
   const clearSession = useCallback(() => {
+    soundAlert.stopContinuousAlert();
+    soundAlert.setPendingCount(0);
     setUser(null);
     setIsAdminAuthenticated(false);
     localStorage.removeItem("admin_auth");
     localStorage.removeItem("admin_user");
   }, []);
+
 
   // Inicialização e escuta reativa com Supabase onAuthStateChange
   useEffect(() => {

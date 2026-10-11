@@ -1,7 +1,7 @@
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { LayoutDashboard, Package, ShoppingBag, Settings, LogOut, Image as ImageIcon, Tag, BarChart, Folder, Users, Monitor, Layers, Flame } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingBag, Settings, LogOut, Image as ImageIcon, Tag, BarChart, Folder, Users, Monitor, Layers, Flame, Lock, CreditCard, ExternalLink, RefreshCw } from "lucide-react";
 import { Settings as SettingsEntity } from "@/entities/Settings";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useAuth } from "@/lib/AuthContext";
@@ -151,9 +151,20 @@ export default function Layout({ children, currentPageName }) {
     }
   }, [isPublicPage, isAdminAuthenticated, isLoadingAuth, isCheckingAuth, navigate]);
 
-  // Alerta Global de Novos Pedidos para TODAS as abas do Painel Administrativo
+  // Alerta Global de Novos Pedidos para TODAS as abas do Painel Administrativo do RESTAURANTE (nunca SuperAdmin)
   React.useEffect(() => {
-    if (isPublicPage || !isAdminAuthenticated) return;
+    const isSuperAdmin = user?.role === "super_admin" || (typeof window !== "undefined" && (() => {
+      try {
+        const u = JSON.parse(localStorage.getItem("admin_user") || "{}");
+        return u?.role === "super_admin";
+      } catch { return false; }
+    })());
+
+    if (isPublicPage || !isAdminAuthenticated || isSuperAdmin || currentPageName === "SuperAdmin") {
+      soundAlert.stopContinuousAlert();
+      soundAlert.setPendingCount(0);
+      return;
+    }
 
     // Solicita permissão para notificações na área de trabalho do PC
     if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
@@ -169,7 +180,7 @@ export default function Layout({ children, currentPageName }) {
         const currentPending = safeOrders.filter(o => o.status === 'pendente');
         const currentPendingIds = currentPending.map(o => o.id);
 
-        // Atualiza o alarme sonoro contínuo (toca sem parar enquanto houver pedidos pendentes)
+        // Atualiza o alarme sonoro contínuo do restaurante
         soundAlert.setPendingCount(currentPending.length);
 
         // Se NÃO estiver na página de Pedidos, atualiza a numeração de notificação
@@ -238,8 +249,11 @@ export default function Layout({ children, currentPageName }) {
     return () => {
       clearInterval(interval);
       if (unsubscribe && typeof unsubscribe === "function") unsubscribe();
+      soundAlert.stopContinuousAlert();
+      soundAlert.setPendingCount(0);
     };
-  }, [isPublicPage, isAdminAuthenticated, currentPageName, settings]);
+  }, [isPublicPage, isAdminAuthenticated, currentPageName, settings, user]);
+
 
   const loadUser = async () => {
     try {
@@ -426,11 +440,14 @@ export default function Layout({ children, currentPageName }) {
   };
 
   const handleLogout = async () => {
+    soundAlert.stopContinuousAlert();
+    soundAlert.setPendingCount(0);
     try {
       await logout();
     } catch (_e) {}
     navigate(createPageUrl("AdminLogin"), { replace: true });
   };
+
 
   const toggleSoundAlert = () => {
     const nextState = !soundEnabled;
@@ -456,6 +473,60 @@ export default function Layout({ children, currentPageName }) {
         <div className="text-center">
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-red-600 mx-auto mb-3"></div>
           <p className="text-sm text-gray-500">Redirecionando para login...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Se a loja estiver pausada / suspensa por inadimplência, bloquear o acesso administrativo da loja
+  if (settings && settings.is_active === false && user?.role !== "super_admin") {
+    const paymentLink = settings?.payment_link || "https://sandbox.asaas.com/i/r7wwc9plm0m0fp4n";
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-slate-900 border border-rose-900/60 rounded-3xl p-8 text-center shadow-2xl space-y-5">
+          <div className="w-16 h-16 rounded-2xl bg-rose-950/80 border border-rose-800 flex items-center justify-center mx-auto text-rose-400">
+            <Lock className="w-8 h-8" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-black text-white tracking-tight">{settings?.restaurant_name || "Loja"}</h2>
+            <p className="text-rose-400 text-xs font-bold uppercase tracking-wider mt-1">
+              🔒 Loja Pausada / Assinatura Pendente
+            </p>
+          </div>
+          <p className="text-sm text-slate-300 leading-relaxed">
+            O acesso a este painel e o cardápio público foram pausados temporariamente. Para reativar seu sistema instantaneamente, realize o pagamento da sua fatura no Asaas.
+          </p>
+          <div className="space-y-2.5 pt-2">
+            <a
+              href={paymentLink}
+              target="_blank"
+              rel="noreferrer"
+              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-extrabold text-sm py-3.5 px-6 rounded-2xl shadow-lg transition-all"
+            >
+              <CreditCard className="w-4 h-4" />
+              Pagar Fatura no Asaas (PIX / Cartão)
+              <ExternalLink className="w-4 h-4 ml-1" />
+            </a>
+
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold py-3 px-4 rounded-xl border border-slate-700 transition-colors cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Já realizei o pagamento (Reativar Agora)
+            </button>
+          </div>
+
+          <div className="pt-4 border-t border-slate-800">
+            <button
+              onClick={handleLogout}
+              className="text-xs text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-1.5 mx-auto cursor-pointer"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              Sair da conta
+            </button>
+          </div>
         </div>
       </div>
     );

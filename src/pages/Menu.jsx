@@ -18,6 +18,7 @@ import PopularProductsRow from "../components/menu/PopularProductsRow";
 import RecentOrdersRow from "../components/menu/RecentOrdersRow";
 import Cart from "../components/menu/Cart";
 import OrderModal from "../components/menu/OrderModal";
+import PixOnlineModal from "../components/menu/PixOnlineModal";
 import BannerCarousel from "../components/menu/BannerCarousel";
 import UserProfileSheet from "../components/menu/UserProfileSheet";
 import StoreInfoSheet from "../components/menu/StoreInfoSheet";
@@ -55,6 +56,7 @@ export default function MenuPage() {
   const [cart, setCart] = useState([]);
   const [isCartVisible, setIsCartVisible] = useState(false);
   const [showOrderModal, setShowOrderModal] = useState(false);
+  const [pixOnlineOrder, setPixOnlineOrder] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [storeIsOpen, setStoreIsOpen] = useState(true);
@@ -227,6 +229,7 @@ export default function MenuPage() {
         opening_time: tenant?.opening_time || "18:00",
         closing_time: tenant?.closing_time || "23:59",
         open_days: tenant?.open_days || [],
+        payment_methods: tenant?.payment_methods || null,
       };
 
       setSettings(resolvedSettings);
@@ -388,6 +391,14 @@ export default function MenuPage() {
           icon: "/favicon.ico",
         });
       }
+
+      // Se for PIX Online Mercado Pago e a loja tiver o Access Token configurado, abre o modal do QR Code!
+      const mpToken = tenant?.payment_methods?.mp_access_token;
+      if (orderData.payment_method === 'pix_online' && mpToken) {
+        setPixOnlineOrder(createdOrder);
+        setIsSubmitting(false);
+        return;
+      }
       
       navigate(`${createPageUrl("MyOrders")}?id=${createdOrder.id}`);
     } catch (_error) {
@@ -395,6 +406,39 @@ export default function MenuPage() {
     }
     setIsSubmitting(false);
   };
+
+  // Se a loja foi pausada pelo SuperAdmin ou por inadimplência, o cardápio sai do ar!
+  if (tenant && tenant.is_active === false) {
+    return (
+      <div className="min-h-screen bg-[#0d0a09] text-stone-100 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-[#171210] border border-stone-800 rounded-3xl p-8 text-center shadow-2xl space-y-5">
+          {tenant.logo_url ? (
+            <img src={tenant.logo_url} alt={tenant.name} className="w-20 h-20 mx-auto rounded-2xl object-cover border border-stone-700" />
+          ) : (
+            <div className="w-20 h-20 mx-auto rounded-2xl bg-stone-900 border border-stone-800 flex items-center justify-center text-2xl font-black text-rose-500">
+              {(tenant.name || "D").substring(0, 2).toUpperCase()}
+            </div>
+          )}
+          <div>
+            <h2 className="text-2xl font-extrabold text-white tracking-tight">{tenant.name || "Restaurante"}</h2>
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs font-bold mt-2">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+              Cardápio Temporariamente Indisponível
+            </div>
+          </div>
+          <p className="text-sm text-stone-400 leading-relaxed">
+            Este estabelecimento está com o atendimento online pausado no momento. Por favor, volte mais tarde ou tente novamente em breve!
+          </p>
+          {tenant.phone && (
+            <div className="pt-2 border-t border-stone-800/80">
+              <p className="text-xs text-stone-500">Dúvidas? Entre em contato diretamente com a loja:</p>
+              <p className="text-sm font-semibold text-stone-300 mt-0.5">{tenant.phone}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#0d0a09] text-stone-100 selection:bg-red-600 selection:text-white">
@@ -854,6 +898,23 @@ export default function MenuPage() {
         onSubmit={submitOrder}
         isSubmitting={isSubmitting}
       />
+
+      {pixOnlineOrder && (
+        <PixOnlineModal
+          isOpen={Boolean(pixOnlineOrder)}
+          onClose={() => {
+            const orderId = pixOnlineOrder.id;
+            setPixOnlineOrder(null);
+            navigate(`${createPageUrl("MyOrders")}?id=${orderId}`);
+          }}
+          order={pixOnlineOrder}
+          accessToken={tenant?.payment_methods?.mp_access_token}
+          onPaymentApproved={(paidOrder) => {
+            setPixOnlineOrder(null);
+            navigate(`${createPageUrl("MyOrders")}?id=${paidOrder.id}`);
+          }}
+        />
+      )}
       
       {selectedProduct && (
         <ProductDetailModal

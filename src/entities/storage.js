@@ -1,5 +1,10 @@
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
-import { sanitizeOrderData, sanitizeProductData } from "@/schemas/sanitizers";
+import {
+  sanitizeOrderData,
+  sanitizeProductData,
+  sanitizeOrderUpdateData,
+  sanitizeProductUpdateData
+} from "@/schemas/sanitizers";
 
 /**
  * Storage manager supporting Supabase with ultra-low egress caching,
@@ -25,7 +30,7 @@ const TABLE_COLUMNS = {
   orders: "id,tenant_id,order_number,customer_name,customer_phone,customer_email,customer_address,delivery_address,total_amount,total,subtotal,delivery_fee,status,payment_method,order_type,table_number,notes,coupon_code,discount_amount,discount,user_email,items,sent_at,created_date",
   users: "id,full_name,email,phone,role,created_date",
   user_addresses: "id,tenant_id,user_email,user_phone,name,cep,zip_code,street,number,complement,neighborhood,city,state,reference,is_default",
-  admin_users: "id,tenant_id,username,initial_password,role,active,permissions,created_date,updated_date",
+  admin_users: "id,tenant_id,username,role,active,permissions,created_date,updated_date",
 };
 
 // Tabelas estáticas elegíveis para cache persistido em LocalStorage
@@ -531,9 +536,9 @@ export function createEntityModel(collectionKey, defaultData = []) {
       invalidateCache(collectionKey);
       let sanitized = data;
       if (collectionKey === "orders") {
-        sanitized = sanitizeOrderData(data);
+        sanitized = sanitizeOrderUpdateData(data);
       } else if (collectionKey === "products") {
-        sanitized = sanitizeProductData(data);
+        sanitized = sanitizeProductUpdateData(data);
       }
 
       if (isSupabaseConfigured() && supabase) {
@@ -557,11 +562,14 @@ export function createEntityModel(collectionKey, defaultData = []) {
             setStoredLocalCache(collectionKey, updatedItems);
             notifySubscribers(collectionKey, "update", { id, ...sanitized }, id);
             return { id, ...sanitized };
+          } else if (error) {
+            console.error(`[Supabase] Erro ao atualizar ${collectionKey} id=${id}:`, error);
           }
         } catch (_err) {
           console.warn(`[Supabase] Erro ao atualizar em ${collectionKey}:`, _err);
         }
       }
+
 
       const items = getCollection(collectionKey, defaultData);
       let updatedItem = null;
