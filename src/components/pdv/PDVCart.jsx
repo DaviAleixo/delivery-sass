@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import PDVClientSelectModal from "./PDVClientSelectModal";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { getActiveTenantId } from "@/entities/storage";
 
 export default function PDVCart({
   cart,
@@ -44,9 +45,12 @@ export default function PDVCart({
       setIsSearchingPhone(true);
       try {
         if (isSupabaseConfigured() && supabase) {
+          const activeTenantId = getActiveTenantId();
           const { data, error } = await supabase.rpc("lookup_customer_by_phone", {
             p_phone: formatted,
+            p_tenant_id: activeTenantId || undefined
           });
+
           if (!error && data && data.length > 0) {
             const client = data[0];
             if (client.customer_name && (!customerName || customerName === "Balcão" || customerName === "Cliente")) {

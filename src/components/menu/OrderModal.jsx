@@ -20,6 +20,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { base44 } from "@/api/base44Client";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { validateSchema, orderSchema } from "@/schemas";
+import { getActiveTenantId } from "@/entities/storage";
 
 export const parseAddressString = (addrStr) => {
   if (!addrStr || typeof addrStr !== 'string') return null;
@@ -728,8 +729,10 @@ export default function OrderModal({
       // 1. Tentar obter nome do cliente no Supabase (RPC ou users ou orders)
       if (isSupabaseConfigured() && supabase) {
         try {
+          const activeTenantId = getActiveTenantId();
           const { data, error } = await supabase.rpc("lookup_customer_by_phone", {
-            p_phone: phoneStr
+            p_phone: phoneStr,
+            p_tenant_id: activeTenantId || undefined
           });
           if (!error && data && data.length > 0) {
             const client = data[0];
@@ -737,6 +740,7 @@ export default function OrderModal({
             if (client.customer_email) foundEmail = client.customer_email;
           }
         } catch {}
+
 
         if (!foundName) {
           try {

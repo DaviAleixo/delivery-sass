@@ -124,8 +124,15 @@ CREATE POLICY "Admin view own membership"
     TO authenticated
     USING (user_id = auth.uid() OR public.is_super_admin());
 
+CREATE POLICY "Superadmin manage tenant_admins"
+    ON public.tenant_admins FOR ALL
+    TO authenticated
+    USING (public.is_super_admin())
+    WITH CHECK (public.is_super_admin());
+
 CREATE POLICY "Service role full tenant_admins"
     ON public.tenant_admins FOR ALL
     TO service_role
     USING (true)
     WITH CHECK (true);
+

@@ -207,23 +207,44 @@ DROP POLICY IF EXISTS "Public insert orders" ON public.orders;
 DROP POLICY IF EXISTS "Allow admin update orders" ON public.orders;
 DROP POLICY IF EXISTS "Public read order_items" ON public.order_items;
 DROP POLICY IF EXISTS "Public insert order_items" ON public.order_items;
+DROP POLICY IF EXISTS "Admin view tenant orders" ON public.orders;
+DROP POLICY IF EXISTS "Admin insert tenant orders" ON public.orders;
+DROP POLICY IF EXISTS "Admin update tenant orders" ON public.orders;
+DROP POLICY IF EXISTS "Admin delete tenant orders" ON public.orders;
+DROP POLICY IF EXISTS "Admin manage tenant order_items" ON public.order_items;
+DROP POLICY IF EXISTS "Admin view tenant order_items" ON public.order_items;
 
--- Apenas operadores do restaurante do pedido ou superadmin podem ler ou alterar pedidos diretamente
+-- Apenas operadores do restaurante do pedido ou superadmin podem ler pedidos
 CREATE POLICY "Admin view tenant orders"
     ON public.orders FOR SELECT
     TO authenticated
     USING (tenant_id = public.get_auth_tenant_id() OR public.is_super_admin());
 
+-- Criação de pedidos no PDV (Balcão) por operadores autenticados
+CREATE POLICY "Admin insert tenant orders"
+    ON public.orders FOR INSERT
+    TO authenticated
+    WITH CHECK (tenant_id = public.get_auth_tenant_id() OR public.is_super_admin());
+
+-- Atualização de status e dados de pedidos por operadores autenticados
 CREATE POLICY "Admin update tenant orders"
     ON public.orders FOR UPDATE
     TO authenticated
     USING (tenant_id = public.get_auth_tenant_id() OR public.is_super_admin())
     WITH CHECK (tenant_id = public.get_auth_tenant_id() OR public.is_super_admin());
 
-CREATE POLICY "Admin view tenant order_items"
-    ON public.order_items FOR SELECT
+-- Cancelamento/exclusão de pedidos por operadores autenticados
+CREATE POLICY "Admin delete tenant orders"
+    ON public.orders FOR DELETE
     TO authenticated
     USING (tenant_id = public.get_auth_tenant_id() OR public.is_super_admin());
+
+-- Gestão completa de order_items por operadores autenticados
+CREATE POLICY "Admin manage tenant order_items"
+    ON public.order_items FOR ALL
+    TO authenticated
+    USING (tenant_id = public.get_auth_tenant_id() OR public.is_super_admin())
+    WITH CHECK (tenant_id = public.get_auth_tenant_id() OR public.is_super_admin());
 
 CREATE POLICY "Service role full orders"
     ON public.orders FOR ALL
@@ -236,6 +257,7 @@ CREATE POLICY "Service role full order_items"
     TO service_role
     USING (true)
     WITH CHECK (true);
+
 
 
 -- ==============================================================================
@@ -267,7 +289,96 @@ CREATE POLICY "Service role full customers"
 
 
 -- ==============================================================================
--- 7. STORAGE BUCKET (restaurant-images)
+-- 7. TABELAS AUXILIARES (ENDEREÇOS, CUPONS USADOS, ADICIONAIS)
+-- ==============================================================================
+ALTER TABLE public.product_additionals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.order_item_additionals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_addresses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.coupon_usages ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public read additionals" ON public.product_additionals;
+DROP POLICY IF EXISTS "Admin manage additionals" ON public.product_additionals;
+DROP POLICY IF EXISTS "Public read order_item_additionals" ON public.order_item_additionals;
+DROP POLICY IF EXISTS "Public insert order_item_additionals" ON public.order_item_additionals;
+DROP POLICY IF EXISTS "Admin manage order_item_additionals" ON public.order_item_additionals;
+DROP POLICY IF EXISTS "Public manage user_addresses" ON public.user_addresses;
+DROP POLICY IF EXISTS "Admin view tenant addresses" ON public.user_addresses;
+DROP POLICY IF EXISTS "Anon insert address" ON public.user_addresses;
+DROP POLICY IF EXISTS "Public manage coupon_usages" ON public.coupon_usages;
+DROP POLICY IF EXISTS "Admin view coupon_usages" ON public.coupon_usages;
+DROP POLICY IF EXISTS "Anon insert coupon_usages" ON public.coupon_usages;
+
+-- Adicionais de produtos (Cardápio público / Admin)
+CREATE POLICY "Public read active product_additionals"
+    ON public.product_additionals FOR SELECT
+    TO anon, authenticated
+    USING (active = true);
+
+CREATE POLICY "Admin manage product_additionals"
+    ON public.product_additionals FOR ALL
+    TO authenticated
+    USING (tenant_id = public.get_auth_tenant_id() OR public.is_super_admin())
+    WITH CHECK (tenant_id = public.get_auth_tenant_id() OR public.is_super_admin());
+
+-- Adicionais de itens de pedidos
+CREATE POLICY "Admin manage order_item_additionals"
+    ON public.order_item_additionals FOR ALL
+    TO authenticated
+    USING (EXISTS (
+        SELECT 1 FROM public.order_items oi 
+        WHERE oi.id = order_item_additionals.order_item_id 
+          AND (oi.tenant_id = public.get_auth_tenant_id() OR public.is_super_admin())
+    ))
+    WITH CHECK (EXISTS (
+        SELECT 1 FROM public.order_items oi 
+        WHERE oi.id = order_item_additionals.order_item_id 
+          AND (oi.tenant_id = public.get_auth_tenant_id() OR public.is_super_admin())
+    ));
+
+CREATE POLICY "Service role full order_item_additionals"
+    ON public.order_item_additionals FOR ALL
+    TO service_role
+    USING (true)
+    WITH CHECK (true);
+
+-- Endereços de entrega cadastrados
+CREATE POLICY "Admin manage user_addresses"
+    ON public.user_addresses FOR ALL
+    TO authenticated
+    USING (tenant_id = public.get_auth_tenant_id() OR public.is_super_admin())
+    WITH CHECK (tenant_id = public.get_auth_tenant_id() OR public.is_super_admin());
+
+CREATE POLICY "Anon insert user_addresses"
+    ON public.user_addresses FOR INSERT
+    TO anon, authenticated
+    WITH CHECK (true);
+
+CREATE POLICY "Service role full user_addresses"
+    ON public.user_addresses FOR ALL
+    TO service_role
+    USING (true)
+    WITH CHECK (true);
+
+-- Registro de uso de cupons
+CREATE POLICY "Admin view coupon_usages"
+    ON public.coupon_usages FOR SELECT
+    TO authenticated
+    USING (tenant_id = public.get_auth_tenant_id() OR public.is_super_admin());
+
+CREATE POLICY "Anon insert coupon_usages"
+    ON public.coupon_usages FOR INSERT
+    TO anon, authenticated
+    WITH CHECK (true);
+
+CREATE POLICY "Service role full coupon_usages"
+    ON public.coupon_usages FOR ALL
+    TO service_role
+    USING (true)
+    WITH CHECK (true);
+
+
+-- ==============================================================================
+-- 8. STORAGE BUCKET (restaurant-images)
 -- ==============================================================================
 DROP POLICY IF EXISTS "Anyone can delete restaurant-images" ON storage.objects;
 DROP POLICY IF EXISTS "Anyone can update restaurant-images" ON storage.objects;

@@ -259,12 +259,228 @@ BEGIN
 END;
 $$;
 
--- Revoga execução pública e anônima de todas as procedures administrativas
+
+-- 6. CREATE_NEW_TENANT (Apenas SuperAdmin ou service_role)
+CREATE OR REPLACE FUNCTION public.create_new_tenant(
+    p_name TEXT,
+    p_slug TEXT,
+    p_plan TEXT DEFAULT 'basic'::TEXT,
+    p_admin_username TEXT DEFAULT 'admin'::TEXT,
+    p_admin_password TEXT DEFAULT NULL::TEXT,
+    p_primary_color TEXT DEFAULT '#E11D48'::TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_tenant_id UUID := gen_random_uuid();
+    v_clean_slug TEXT := LOWER(REGEXP_REPLACE(TRIM(p_slug), '[^a-zA-Z0-9\-]', '-', 'g'));
+BEGIN
+    -- Validação de Autorização: Apenas SuperAdmin ou service_role pode criar estabelecimentos
+    IF NOT (public.is_super_admin() OR auth.role() = 'service_role') THEN
+        RAISE EXCEPTION 'Acesso negado: Apenas o SuperAdmin pode cadastrar novos restaurantes.';
+    END IF;
+
+    IF p_admin_password IS NULL OR length(trim(p_admin_password)) < 6 THEN
+        RETURN jsonb_build_object('success', false, 'message', 'A senha do administrador deve ter no mínimo 6 caracteres.');
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM public.tenants WHERE slug = v_clean_slug) THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Este slug/endereço já está em uso por outro restaurante.');
+    END IF;
+
+    INSERT INTO public.tenants (
+        id, slug, name, plan, logo_url, banner_url, theme_config, is_active,
+        phone, whatsapp, address, instagram, delivery_fee, min_order_value
+    )
+    VALUES (
+        v_tenant_id,
+        v_clean_slug,
+        TRIM(p_name),
+        COALESCE(p_plan, 'basic'),
+        NULL,
+        NULL,
+        jsonb_build_object(
+            'primary_color', p_primary_color,
+            'secondary_color', '#111827',
+            'layout_style', CASE WHEN p_plan = 'premium' THEN 'premium' ELSE 'standard' END
+        ),
+        TRUE,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        0.00,
+        0.00
+    );
+
+    INSERT INTO public.admin_users (
+        tenant_id, username, password, initial_password, role, permissions, active
+    )
+    VALUES (
+        v_tenant_id,
+        LOWER(TRIM(p_admin_username)),
+        crypt(p_admin_password, gen_salt('bf', 8)),
+        NULL,
+        'admin',
+        '["*"]'::jsonb,
+        TRUE
+    );
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'tenant_id', v_tenant_id,
+        'slug', v_clean_slug,
+        'name', TRIM(p_name),
+        'message', 'Restaurante criado com sucesso!'
+    );
+END;
+$$;
+
+
+-- 7. UPDATE_TENANT_INFO (Apenas SuperAdmin ou Administrador da própria loja)
+CREATE OR REPLACE FUNCTION public.update_tenant_info(
+    p_tenant_id UUID,
+    p_name TEXT,
+    p_slug TEXT,
+    p_plan TEXT DEFAULT NULL,
+    p_logo_url TEXT DEFAULT NULL,
+    p_admin_username TEXT DEFAULT NULL,
+    p_admin_password TEXT DEFAULT NULL
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_clean_slug TEXT := LOWER(REGEXP_REPLACE(TRIM(p_slug), '[^a-zA-Z0-9\-]', '-', 'g'));
+    v_existing_id UUID;
+BEGIN
+    -- Validação de Autorização: Apenas SuperAdmin ou o Administrador do próprio restaurante
+    IF NOT (public.is_super_admin() OR (p_tenant_id = public.get_auth_tenant_id() AND public.get_auth_admin_role() IN ('super_admin', 'admin'))) THEN
+        RAISE EXCEPTION 'Acesso negado: Você não possui autorização para editar este restaurante.';
+    END IF;
+
+    SELECT id INTO v_existing_id 
+    FROM public.tenants 
+    WHERE slug = v_clean_slug AND id != p_tenant_id;
+
+    IF v_existing_id IS NOT NULL THEN
+        RETURN jsonb_build_object('success', false, 'message', 'Este slug/endereço já está em uso por outro restaurante.');
+    END IF;
+
+    UPDATE public.tenants
+    SET 
+        name = TRIM(p_name),
+        slug = v_clean_slug,
+        plan = COALESCE(p_plan, plan),
+        logo_url = NULLIF(TRIM(p_logo_url), ''),
+        updated_date = NOW()
+    WHERE id = p_tenant_id;
+
+    IF p_admin_username IS NOT NULL AND TRIM(p_admin_username) != '' THEN
+        IF p_admin_password IS NOT NULL AND TRIM(p_admin_password) != '' THEN
+            UPDATE public.admin_users
+            SET 
+                username = LOWER(TRIM(p_admin_username)),
+                password = crypt(p_admin_password, gen_salt('bf', 8)),
+                initial_password = NULL,
+                updated_date = NOW()
+            WHERE tenant_id = p_tenant_id;
+        ELSE
+            UPDATE public.admin_users
+            SET 
+                username = LOWER(TRIM(p_admin_username)),
+                updated_date = NOW()
+            WHERE tenant_id = p_tenant_id;
+        END IF;
+    ELSIF p_admin_password IS NOT NULL AND TRIM(p_admin_password) != '' THEN
+        UPDATE public.admin_users
+        SET 
+            password = crypt(p_admin_password, gen_salt('bf', 8)),
+            initial_password = NULL,
+            updated_date = NOW()
+        WHERE tenant_id = p_tenant_id;
+    END IF;
+
+    RETURN jsonb_build_object(
+        'success', true,
+        'tenant_id', p_tenant_id,
+        'slug', v_clean_slug,
+        'name', TRIM(p_name),
+        'message', 'Restaurante atualizado com sucesso!'
+    );
+END;
+$$;
+
+
+-- 8. LOOKUP_CUSTOMER_BY_PHONE (Seguro contra vazamento de endereço)
+CREATE OR REPLACE FUNCTION public.lookup_customer_by_phone(
+    p_phone TEXT,
+    p_tenant_id UUID DEFAULT NULL
+)
+RETURNS TABLE (
+    customer_name TEXT,
+    customer_phone TEXT,
+    customer_email TEXT,
+    last_address TEXT,
+    total_orders BIGINT
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_effective_tenant_id UUID;
+    v_is_admin BOOLEAN := false;
+BEGIN
+    -- Se autenticado como admin/staff, utiliza seu próprio tenant_id
+    IF public.get_auth_tenant_id() IS NOT NULL OR public.is_super_admin() THEN
+        v_effective_tenant_id := COALESCE(p_tenant_id, public.get_auth_tenant_id());
+        v_is_admin := true;
+    ELSE
+        -- Usuário anônimo no cardápio: deve fornecer o tenant_id da loja ativa
+        v_effective_tenant_id := p_tenant_id;
+        IF v_effective_tenant_id IS NULL THEN
+            RETURN;
+        END IF;
+    END IF;
+
+    RETURN QUERY
+    SELECT 
+        (ARRAY_AGG(o.customer_name ORDER BY o.created_date DESC))[1] AS customer_name,
+        o.customer_phone,
+        (ARRAY_AGG(o.customer_email ORDER BY o.created_date DESC) FILTER (WHERE o.customer_email IS NOT NULL AND o.customer_email <> ''))[1] AS customer_email,
+        CASE WHEN v_is_admin THEN (ARRAY_AGG(COALESCE(o.delivery_address, o.customer_address) ORDER BY o.created_date DESC) FILTER (WHERE COALESCE(o.delivery_address, o.customer_address) IS NOT NULL))[1] ELSE NULL END AS last_address,
+        COUNT(*)::BIGINT AS total_orders
+    FROM public.orders o
+    WHERE o.tenant_id = v_effective_tenant_id
+      AND REGEXP_REPLACE(o.customer_phone, '\D', '', 'g') = REGEXP_REPLACE(p_phone, '\D', '', 'g')
+    GROUP BY o.customer_phone
+    LIMIT 1;
+END;
+$$;
+
+
+-- 9. ELIMINAÇÃO DEFINITIVA DE ASSINATURAS LEGADAS INSEGURAS
+DROP FUNCTION IF EXISTS public.get_sales_metrics(timestamptz, timestamptz);
+DROP FUNCTION IF EXISTS public.get_clients_summary();
+DROP FUNCTION IF EXISTS public.lookup_customer_by_phone(text);
+DROP FUNCTION IF EXISTS public.update_customer_name_by_phone(text, text);
+DROP FUNCTION IF EXISTS public.verify_admin_login(text, text);
+
+
+-- 10. CONTROLE ESTRITO DE PRIVILÉGIOS (REVOKE / GRANT)
 REVOKE EXECUTE ON FUNCTION public.delete_tenant(UUID) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.get_master_tenants() FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.toggle_tenant_status(UUID, BOOLEAN) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.get_sales_metrics(UUID, TIMESTAMPTZ, TIMESTAMPTZ) FROM PUBLIC, anon;
 REVOKE EXECUTE ON FUNCTION public.get_clients_summary(UUID) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.create_new_tenant(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.update_tenant_info(UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) FROM PUBLIC, anon;
 
 -- Concede execução exclusivamente a usuários autenticados e service_role
 GRANT EXECUTE ON FUNCTION public.delete_tenant(UUID) TO authenticated, service_role;
@@ -272,3 +488,7 @@ GRANT EXECUTE ON FUNCTION public.get_master_tenants() TO authenticated, service_
 GRANT EXECUTE ON FUNCTION public.toggle_tenant_status(UUID, BOOLEAN) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.get_sales_metrics(UUID, TIMESTAMPTZ, TIMESTAMPTZ) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.get_clients_summary(UUID) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.create_new_tenant(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.update_tenant_info(UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.lookup_customer_by_phone(TEXT, UUID) TO anon, authenticated, service_role;
+
