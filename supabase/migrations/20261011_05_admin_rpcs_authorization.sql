@@ -418,6 +418,7 @@ $$;
 
 
 -- 8. LOOKUP_CUSTOMER_BY_PHONE (Seguro contra vazamento de endereço)
+DROP FUNCTION IF EXISTS public.lookup_customer_by_phone(text, uuid);
 CREATE OR REPLACE FUNCTION public.lookup_customer_by_phone(
     p_phone TEXT,
     p_tenant_id UUID DEFAULT NULL
@@ -471,6 +472,8 @@ DROP FUNCTION IF EXISTS public.get_clients_summary();
 DROP FUNCTION IF EXISTS public.lookup_customer_by_phone(text);
 DROP FUNCTION IF EXISTS public.update_customer_name_by_phone(text, text);
 DROP FUNCTION IF EXISTS public.verify_admin_login(text, text);
+DROP FUNCTION IF EXISTS public.verify_admin_login(text, text, text);
+
 
 
 -- 10. CONTROLE ESTRITO DE PRIVILÉGIOS (REVOKE / GRANT)
