@@ -244,6 +244,13 @@ export default function SettingsPage() {
   const loadAdminUsers = async () => {
     try {
       const currentTenantId = localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001";
+      if (isSupabaseConfigured() && supabase) {
+        const { data, error } = await supabase.rpc("get_store_admin_users", { p_tenant_id: currentTenantId });
+        if (!error && Array.isArray(data)) {
+          setAdminUsers(data);
+          return;
+        }
+      }
       const users = await AdminUser.filter({ tenant_id: currentTenantId });
       setAdminUsers(Array.isArray(users) ? users : []);
     } catch (_error) {
