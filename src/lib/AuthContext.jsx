@@ -1,57 +1,192 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 const AuthContext = createContext({
   user: null,
-  isLoadingAuth: false,
-  isLoadingPublicSettings: false,
-  authError: null,
-  navigateToLogin: () => {},
-  logout: () => {},
+  role: null,
+  tenantId: null,
+  isAdminAuthenticated: false,
+  isLoadingAuth: true,
+  logout: async () => {},
+  refreshSession: async () => {},
 });
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [isLoadingAuth, setIsLoadingAuth] = useState(false);
-  const [isLoadingPublicSettings, setIsLoadingPublicSettings] = useState(false);
-  const [authError, setAuthError] = useState(null);
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
 
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        if (base44?.auth?.me) {
-          const userData = await base44.auth.me();
-          setUser(userData);
-        }
-      } catch (err) {
-        // public access allowed
+  // Carrega os dados de autorização do usuário na tabela tenant_admins
+  const fetchUserProfile = useCallback(async (authUser) => {
+    if (!authUser || !supabase) return null;
+
+    try {
+      const { data: member, error } = await supabase
+        .from("tenant_admins")
+        .select("id, user_id, tenant_id, role, username, is_active")
+        .eq("user_id", authUser.id)
+        .maybeSingle();
+
+      if (error || !member) {
+        return null;
       }
-    };
-    checkAuth();
+
+      let tenantSlug = null;
+      let tenantName = "Restaurante";
+
+      if (member.tenant_id) {
+        const { data: tenant } = await supabase
+          .from("tenants")
+          .select("slug, name")
+          .eq("id", member.tenant_id)
+          .maybeSingle();
+
+        if (tenant) {
+          tenantSlug = tenant.slug;
+          tenantName = tenant.name;
+        }
+      }
+
+      const sessionUser = {
+        id: member.id,
+        user_id: authUser.id,
+        email: authUser.email,
+        username: member.username,
+        role: member.role,
+        tenant_id: member.tenant_id,
+        tenant_slug: tenantSlug,
+        tenant_name: tenantName,
+        permissions: ["*"],
+      };
+
+      // Sincroniza retrocompatibilidade com localStorage para código síncrono legado
+      localStorage.setItem("admin_auth", "authenticated");
+      localStorage.setItem("admin_user", JSON.stringify(sessionUser));
+      if (member.tenant_id) {
+        localStorage.setItem("current_tenant_id", member.tenant_id);
+        if (tenantSlug) localStorage.setItem("current_tenant_slug", tenantSlug);
+        if (tenantName) localStorage.setItem("current_tenant_name", tenantName);
+      }
+
+      return sessionUser;
+    } catch (_err) {
+      return null;
+    }
   }, []);
 
-  const navigateToLogin = () => {
-    if (base44?.auth?.redirectToLogin) {
-      base44.auth.redirectToLogin();
+  // Limpa estados e storages locais
+  const clearSession = useCallback(() => {
+    setUser(null);
+    setIsAdminAuthenticated(false);
+    localStorage.removeItem("admin_auth");
+    localStorage.removeItem("admin_user");
+  }, []);
+
+  // Inicialização e escuta reativa com Supabase onAuthStateChange
+  useEffect(() => {
+    let mounted = true;
+
+    if (!isSupabaseConfigured() || !supabase) {
+      // Fallback offline / mock se Supabase não estiver configurado
+      const stored = localStorage.getItem("admin_auth");
+      const rawUser = localStorage.getItem("admin_user");
+      if (stored === "authenticated" && rawUser) {
+        try {
+          setUser(JSON.parse(rawUser));
+          setIsAdminAuthenticated(true);
+        } catch (_e) {
+          clearSession();
+        }
+      }
+      setIsLoadingAuth(false);
+      return;
     }
-  };
+
+    const initAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user && mounted) {
+          const profile = await fetchUserProfile(session.user);
+          if (mounted) {
+            if (profile) {
+              setUser(profile);
+              setIsAdminAuthenticated(true);
+            } else {
+              clearSession();
+            }
+          }
+        } else if (mounted) {
+          clearSession();
+        }
+      } catch (_e) {
+        if (mounted) clearSession();
+      } finally {
+        if (mounted) setIsLoadingAuth(false);
+      }
+    };
+
+    initAuth();
+
+    // ⚡ Escuta reativa de mudanças de sessão em tempo real
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+
+      if (event === "SIGNED_OUT" || !session) {
+        clearSession();
+        setIsLoadingAuth(false);
+      } else if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+        setIsLoadingAuth(true);
+        const profile = await fetchUserProfile(session.user);
+        if (mounted) {
+          if (profile) {
+            setUser(profile);
+            setIsAdminAuthenticated(true);
+          } else {
+            clearSession();
+          }
+          setIsLoadingAuth(false);
+        }
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription?.unsubscribe();
+    };
+  }, [clearSession, fetchUserProfile]);
 
   const logout = async () => {
-    if (base44?.auth?.logout) {
-      await base44.auth.logout();
+    if (isSupabaseConfigured() && supabase) {
+      try {
+        await supabase.auth.signOut();
+      } catch (_e) {}
     }
-    setUser(null);
+    clearSession();
+  };
+
+  const refreshSession = async () => {
+    if (isSupabaseConfigured() && supabase) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const profile = await fetchUserProfile(session.user);
+        if (profile) {
+          setUser(profile);
+          setIsAdminAuthenticated(true);
+        }
+      }
+    }
   };
 
   return (
     <AuthContext.Provider
       value={{
         user,
+        role: user?.role || null,
+        tenantId: user?.tenant_id || null,
+        isAdminAuthenticated,
         isLoadingAuth,
-        isLoadingPublicSettings,
-        authError,
-        navigateToLogin,
         logout,
+        refreshSession,
       }}
     >
       {children}
@@ -60,3 +195,4 @@ export const AuthProvider = ({ children }) => {
 };
 
 export const useAuth = () => useContext(AuthContext);
+export default AuthContext;

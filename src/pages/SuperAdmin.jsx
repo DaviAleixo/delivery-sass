@@ -77,26 +77,76 @@ export default function SuperAdminPage() {
   const [deletingTenant, setDeletingTenant] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // 1. Checa autenticação de Super Admin
+  // 1. Checa autenticação de Super Admin via Supabase Session
   useEffect(() => {
-    const adminAuth = localStorage.getItem("admin_auth");
-    const rawUser = localStorage.getItem("admin_user");
-    let user = null;
-    try {
-      user = rawUser ? JSON.parse(rawUser) : null;
-    } catch (_e) {}
+    let isMounted = true;
 
-    if (adminAuth !== "authenticated" || !user || user.role !== "super_admin") {
+    const handleUnauthorized = () => {
       toast({
         title: "Acesso Não Autorizado",
         description: "Esta área é restrita ao Super Admin da plataforma.",
         variant: "destructive",
       });
       navigate(createPageUrl("AdminLogin"), { replace: true });
-      return;
-    }
+    };
 
-    loadTenants();
+    const checkSuperAdminAuth = async () => {
+      if (isSupabaseConfigured() && supabase) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session?.user) {
+            handleUnauthorized();
+            return;
+          }
+
+          const { data: profile } = await supabase
+            .from("tenant_admins")
+            .select("id, role, username")
+            .eq("user_id", session.user.id)
+            .maybeSingle();
+
+          if (!profile || profile.role !== "super_admin") {
+            handleUnauthorized();
+            return;
+          }
+        } catch (_err) {
+          handleUnauthorized();
+          return;
+        }
+      } else {
+        const adminAuth = localStorage.getItem("admin_auth");
+        const rawUser = localStorage.getItem("admin_user");
+        let user = null;
+        try {
+          user = rawUser ? JSON.parse(rawUser) : null;
+        } catch (_e) {}
+
+        if (adminAuth !== "authenticated" || !user || user.role !== "super_admin") {
+          handleUnauthorized();
+          return;
+        }
+      }
+
+      if (isMounted) {
+        loadTenants();
+      }
+    };
+
+    checkSuperAdminAuth();
+
+    // Listener reativo do Supabase para encerrar a sessão imediatamente em caso de logout
+    const { data: authListener } = isSupabaseConfigured() && supabase
+      ? supabase.auth.onAuthStateChange((event, session) => {
+          if (event === "SIGNED_OUT" || !session) {
+            handleUnauthorized();
+          }
+        })
+      : { data: { subscription: null } };
+
+    return () => {
+      isMounted = false;
+      authListener?.subscription?.unsubscribe();
+    };
   }, [navigate]);
 
   // 2. Carrega lista de tenants do Supabase
@@ -404,13 +454,18 @@ export default function SuperAdminPage() {
   };
 
   // 10. Logout do Super Admin
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    if (isSupabaseConfigured() && supabase) {
+      try {
+        await supabase.auth.signOut();
+      } catch (_e) {}
+    }
     localStorage.removeItem("admin_auth");
     localStorage.removeItem("admin_user");
     localStorage.removeItem("current_tenant_id");
     localStorage.removeItem("current_tenant_slug");
     localStorage.removeItem("current_tenant_name");
-    navigate(createPageUrl("AdminLogin"));
+    navigate(createPageUrl("AdminLogin"), { replace: true });
   };
 
   // Métricas calculadas

@@ -4,6 +4,7 @@ import { createPageUrl } from "@/utils";
 import { LayoutDashboard, Package, ShoppingBag, Settings, LogOut, Image as ImageIcon, Tag, BarChart, Folder, Users, Monitor, Layers, Flame } from "lucide-react";
 import { Settings as SettingsEntity } from "@/entities/Settings";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { useAuth } from "@/lib/AuthContext";
 import {
   Sidebar,
   SidebarContent,
@@ -103,6 +104,7 @@ export default function Layout({ children, currentPageName }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user: authUser, isAdminAuthenticated: isSessionAuth, isLoadingAuth, logout } = useAuth();
   const [user, setUser] = React.useState(null);
   const [settings, setSettings] = React.useState(null);
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
@@ -115,7 +117,13 @@ export default function Layout({ children, currentPageName }) {
 
   const publicPages = ["Menu", "MyOrders", "AdminLogin", "Home", "PrintOrder", "SuperAdmin"];
   const isPublicPage = publicPages.includes(currentPageName);
-  const isAdminAuthenticated = typeof window !== "undefined" && localStorage.getItem("admin_auth") === "authenticated";
+  const isAdminAuthenticated = isSessionAuth || (typeof window !== "undefined" && localStorage.getItem("admin_auth") === "authenticated");
+
+  React.useEffect(() => {
+    if (authUser) {
+      setUser(authUser);
+    }
+  }, [authUser]);
 
   React.useEffect(() => {
     loadUser();
@@ -138,10 +146,10 @@ export default function Layout({ children, currentPageName }) {
   }, [currentPageName, location.pathname]);
 
   React.useEffect(() => {
-    if (!isPublicPage && !isAdminAuthenticated && !isCheckingAuth) {
+    if (!isPublicPage && !isAdminAuthenticated && !isLoadingAuth && !isCheckingAuth) {
       navigate(createPageUrl("AdminLogin"), { replace: true });
     }
-  }, [isPublicPage, isAdminAuthenticated, isCheckingAuth, navigate]);
+  }, [isPublicPage, isAdminAuthenticated, isLoadingAuth, isCheckingAuth, navigate]);
 
   // Alerta Global de Novos Pedidos para TODAS as abas do Painel Administrativo
   React.useEffect(() => {
@@ -418,13 +426,9 @@ export default function Layout({ children, currentPageName }) {
   };
 
   const handleLogout = async () => {
-    if (isSupabaseConfigured() && supabase) {
-      try {
-        await supabase.auth.signOut();
-      } catch (_e) {}
-    }
-    localStorage.removeItem("admin_auth");
-    localStorage.removeItem("admin_user");
+    try {
+      await logout();
+    } catch (_e) {}
     navigate(createPageUrl("AdminLogin"), { replace: true });
   };
 

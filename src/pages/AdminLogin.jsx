@@ -20,21 +20,47 @@ export default function AdminLoginPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Se já está logado, redireciona para a tela correspondente
-    const adminAuth = localStorage.getItem("admin_auth");
-    const rawUser = localStorage.getItem("admin_user");
-    let user = null;
-    try {
-      user = rawUser ? JSON.parse(rawUser) : null;
-    } catch (_e) {}
+    const checkActiveSession = async () => {
+      if (isSupabaseConfigured() && supabase) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user) {
+            const { data: profile } = await supabase
+              .from("tenant_admins")
+              .select("id, role, tenant_id")
+              .eq("user_id", session.user.id)
+              .maybeSingle();
 
-    if (adminAuth === "authenticated") {
-      if (user?.role === "super_admin") {
-        navigate(createPageUrl("SuperAdmin"), { replace: true });
-      } else {
-        navigate(createPageUrl("Dashboard"), { replace: true });
+            if (profile) {
+              if (profile.role === "super_admin") {
+                navigate(createPageUrl("SuperAdmin"), { replace: true });
+                return;
+              } else {
+                navigate(createPageUrl("Dashboard"), { replace: true });
+                return;
+              }
+            }
+          }
+        } catch (_err) {}
       }
-    }
+
+      const adminAuth = localStorage.getItem("admin_auth");
+      const rawUser = localStorage.getItem("admin_user");
+      let user = null;
+      try {
+        user = rawUser ? JSON.parse(rawUser) : null;
+      } catch (_e) {}
+
+      if (adminAuth === "authenticated" && user) {
+        if (user?.role === "super_admin") {
+          navigate(createPageUrl("SuperAdmin"), { replace: true });
+        } else {
+          navigate(createPageUrl("Dashboard"), { replace: true });
+        }
+      }
+    };
+
+    checkActiveSession();
   }, [navigate]);
 
   const handleLogin = async (e) => {
