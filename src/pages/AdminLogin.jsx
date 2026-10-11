@@ -120,89 +120,31 @@ export default function AdminLoginPage() {
                 navigate(createPageUrl("Dashboard"), { replace: true });
               }
               return;
-            }
-          }
-        } catch (_authEx) {
-          // Continua para o fallback de transição
-        }
-      }
-
-      // 2. Transição suave: Validação via RPC verify_admin_login
-      if (isSupabaseConfigured() && supabase) {
-        const { data, error: rpcError } = await supabase.rpc("verify_admin_login", {
-          p_username: username.trim(),
-          p_password: password,
-        });
-
-        if (!rpcError && data) {
-          const authData = Array.isArray(data) ? data[0] : data;
-
-          if (authData && authData.success) {
-            localStorage.setItem("admin_auth", "authenticated");
-            localStorage.setItem("admin_user", JSON.stringify(authData));
-
-            if (authData.role === "super_admin") {
-              navigate(createPageUrl("SuperAdmin"), { replace: true });
             } else {
-              if (authData.tenant_id) {
-                localStorage.setItem("current_tenant_id", authData.tenant_id);
-                localStorage.setItem("current_tenant_slug", authData.tenant_slug);
-                localStorage.setItem("current_tenant_name", authData.tenant_name);
-              }
-              navigate(createPageUrl("Dashboard"), { replace: true });
+              setError("Usuário autenticado, mas nenhum perfil administrativo foi encontrado.");
+              setIsLoading(false);
+              return;
             }
-            return;
-          } else if (authData && authData.message) {
-            setError(authData.message);
+          } else {
+            setError(authError?.message === "Invalid login credentials" ? "Usuário ou senha incorretos." : (authError?.message || "Erro ao autenticar. Verifique suas credenciais."));
             setIsLoading(false);
             return;
           }
+        } catch (_authEx) {
+          setError("Erro de comunicação com o servidor de autenticação.");
+          setIsLoading(false);
+          return;
         }
-      }
-
-      // 2. Fallback de desenvolvimento local
-      if (username === "davi" && password === "davi123") {
-        localStorage.setItem("admin_auth", "authenticated");
-        localStorage.setItem("admin_user", JSON.stringify({ username: "davi", role: "super_admin" }));
-        navigate(createPageUrl("SuperAdmin"), { replace: true });
-        return;
-      }
-
-      if (
-        (username === "vrumm" && (password === "vrumm123" || password === "123")) ||
-        (username === "admin" && (password === "admin123" || password === "123" || password === "admin"))
-      ) {
-        localStorage.setItem("admin_auth", "authenticated");
-        localStorage.setItem("admin_user", JSON.stringify({
-          username: "vrumm",
-          role: "admin",
-          tenant_id: "a0000000-0000-0000-0000-000000000001",
-          tenant_slug: "vruum-burguer",
-          tenant_name: "Vruum Burguer"
-        }));
-        localStorage.setItem("current_tenant_id", "a0000000-0000-0000-0000-000000000001");
-        localStorage.setItem("current_tenant_slug", "vruum-burguer");
-        localStorage.setItem("current_tenant_name", "Vruum Burguer");
-        navigate(createPageUrl("Dashboard"), { replace: true });
-        return;
-      }
-
-      const users = await AdminUser.filter({ username: username.trim(), active: true });
-      const matched = users.find(u => u.password === password);
-      
-      if (matched) {
-        localStorage.setItem("admin_auth", "authenticated");
-        localStorage.setItem("admin_user", JSON.stringify({ id: matched.id, username: matched.username, role: matched.role || "admin" }));
-        navigate(createPageUrl("Dashboard"), { replace: true });
       } else {
-        setError("Usuário ou senha incorretos");
+        setError("Serviço de autenticação não configurado.");
       }
     } catch (_error) {
       setError("Erro ao processar login. Tente novamente.");
+    } finally {
+      setIsLoading(false);
     }
-    
-    setIsLoading(false);
   };
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
