@@ -46,13 +46,29 @@ export default function AdminLoginPage() {
       // 1. Tentar autenticação nativa via Supabase Auth (GoTrue)
       if (isSupabaseConfigured() && supabase) {
         const cleanUser = username.trim();
-        const emailToTry = cleanUser.includes("@") ? cleanUser : `${cleanUser.toLowerCase()}@delivery.internal`;
+        let emailToTry = cleanUser;
+
+        if (!cleanUser.includes("@")) {
+          try {
+            const { data: resolvedEmail } = await supabase.rpc("resolve_admin_login_email", {
+              p_username: cleanUser,
+            });
+            if (resolvedEmail) {
+              emailToTry = resolvedEmail;
+            } else {
+              emailToTry = `${cleanUser.toLowerCase()}@delivery.internal`;
+            }
+          } catch {
+            emailToTry = `${cleanUser.toLowerCase()}@delivery.internal`;
+          }
+        }
 
         try {
           const { data: authResult, error: authError } = await supabase.auth.signInWithPassword({
             email: emailToTry,
             password: password,
           });
+
 
           if (!authError && authResult?.user) {
             // Busca perfil autorizado na tabela tenant_admins vinculada por auth.uid()
