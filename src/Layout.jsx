@@ -235,6 +235,33 @@ export default function Layout({ children, currentPageName }) {
 
   const loadUser = async () => {
     try {
+      // 1. Tentar ler sessão nativa do Supabase Auth
+      if (isSupabaseConfigured() && supabase) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user) {
+            const { data: member } = await supabase
+              .from("tenant_admins")
+              .select("id, tenant_id, role, username")
+              .eq("user_id", session.user.id)
+              .maybeSingle();
+
+            if (member) {
+              setUser({
+                id: member.id,
+                user_id: session.user.id,
+                username: member.username,
+                role: member.role,
+                tenant_id: member.tenant_id,
+                permissions: ["*"],
+              });
+              return;
+            }
+          }
+        } catch (_authErr) {}
+      }
+
+      // 2. Fallback de transição: admin_user em localStorage
       const storedAdmin = localStorage.getItem("admin_user");
       if (storedAdmin) {
         let username = "admin";
@@ -391,6 +418,11 @@ export default function Layout({ children, currentPageName }) {
   };
 
   const handleLogout = async () => {
+    if (isSupabaseConfigured() && supabase) {
+      try {
+        await supabase.auth.signOut();
+      } catch (_e) {}
+    }
     localStorage.removeItem("admin_auth");
     localStorage.removeItem("admin_user");
     navigate(createPageUrl("AdminLogin"), { replace: true });

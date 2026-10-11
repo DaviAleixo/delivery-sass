@@ -43,7 +43,75 @@ export default function AdminLoginPage() {
     setIsLoading(true);
 
     try {
-      // 1. Tentar validação segura por RPC no Supabase com Bcrypt
+      // 1. Tentar autenticação nativa via Supabase Auth (GoTrue)
+      if (isSupabaseConfigured() && supabase) {
+        const cleanUser = username.trim();
+        const emailToTry = cleanUser.includes("@") ? cleanUser : `${cleanUser.toLowerCase()}@delivery.internal`;
+
+        try {
+          const { data: authResult, error: authError } = await supabase.auth.signInWithPassword({
+            email: emailToTry,
+            password: password,
+          });
+
+          if (!authError && authResult?.user) {
+            // Busca perfil autorizado na tabela tenant_admins vinculada por auth.uid()
+            const { data: profile } = await supabase
+              .from("tenant_admins")
+              .select("id, user_id, tenant_id, role, username")
+              .eq("user_id", authResult.user.id)
+              .maybeSingle();
+
+            if (profile) {
+              let tenantSlug = null;
+              let tenantName = "Restaurante";
+
+              if (profile.tenant_id) {
+                const { data: tenantData } = await supabase
+                  .from("tenants")
+                  .select("slug, name")
+                  .eq("id", profile.tenant_id)
+                  .maybeSingle();
+
+                if (tenantData) {
+                  tenantSlug = tenantData.slug;
+                  tenantName = tenantData.name;
+                }
+              }
+
+              const sessionUser = {
+                id: profile.id,
+                user_id: authResult.user.id,
+                username: profile.username,
+                role: profile.role,
+                tenant_id: profile.tenant_id,
+                tenant_slug: tenantSlug,
+                tenant_name: tenantName,
+                permissions: ["*"],
+              };
+
+              localStorage.setItem("admin_auth", "authenticated");
+              localStorage.setItem("admin_user", JSON.stringify(sessionUser));
+
+              if (profile.role === "super_admin") {
+                navigate(createPageUrl("SuperAdmin"), { replace: true });
+              } else {
+                if (profile.tenant_id) {
+                  localStorage.setItem("current_tenant_id", profile.tenant_id);
+                  if (tenantSlug) localStorage.setItem("current_tenant_slug", tenantSlug);
+                  if (tenantName) localStorage.setItem("current_tenant_name", tenantName);
+                }
+                navigate(createPageUrl("Dashboard"), { replace: true });
+              }
+              return;
+            }
+          }
+        } catch (_authEx) {
+          // Continua para o fallback de transição
+        }
+      }
+
+      // 2. Transição suave: Validação via RPC verify_admin_login
       if (isSupabaseConfigured() && supabase) {
         const { data, error: rpcError } = await supabase.rpc("verify_admin_login", {
           p_username: username.trim(),
