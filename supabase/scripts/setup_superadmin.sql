@@ -8,16 +8,19 @@
 DO $$
 DECLARE
     v_user_id UUID;
-    v_email TEXT := 'SEU_EMAIL_AQUI'; -- << Substitua pelo email criado no Supabase Auth
+    v_email TEXT := 'davi@delivery.internal';
 BEGIN
-    -- Localiza o UID do usuário gerado pelo Supabase Auth
+    -- Localiza o UID do usuário no Supabase Auth
     SELECT id INTO v_user_id 
     FROM auth.users 
-    WHERE email = LOWER(TRIM(v_email));
+    WHERE email = LOWER(TRIM(v_email)) OR email LIKE 'davi@%'
+    ORDER BY created_at DESC
+    LIMIT 1;
 
     IF v_user_id IS NULL THEN
-        RAISE EXCEPTION 'Usuário com o email "%" não foi encontrado no Supabase Auth. Crie o usuário no Supabase Dashboard (Authentication -> Users -> Add User) antes de executar este script.', v_email;
+        RAISE EXCEPTION 'Usuário "davi" não foi encontrado no Supabase Auth. Crie o usuário com o identificador "davi@delivery.internal" no painel Authentication -> Users do Supabase.';
     END IF;
+
 
     -- Vincula com segurança na tabela tenant_admins
     INSERT INTO public.tenant_admins (
