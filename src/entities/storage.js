@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { sanitizeOrderData, sanitizeProductData } from "@/schemas/sanitizers";
 
 /**
  * Storage manager supporting Supabase with ultra-low egress caching,
@@ -11,20 +12,20 @@ const STORAGE_PREFIX = "vrumburguer_db_";
 // Retorna apenas as colunas indispensáveis para economizar banda/egress do Supabase
 const TABLE_COLUMNS = {
   settings: "id,restaurant_name,restaurant_logo,opening_time,closing_time,open_days,phone,address,instagram,whatsapp,delivery_fee,min_order_value,delivery_time,manual_store_open,manual_override_date",
-  categories: "id,name,order_index,is_combo,created_date",
-  products: "id,name,description,price,category,category_id,image_url,available,popular,created_date",
-  product_additionals: "id,product_id,name,price,required,max_quantity,active",
-  complement_groups: "id,name,description,min_quantity,max_quantity,required,active,order_index",
-  complement_items: "id,group_id,name,description,price,max_quantity,image_url,active,order_index",
-  product_complement_groups: "id,product_id,group_id,order_index",
-  banner_images: "id,title,image_url,order_index,active",
-  banners: "id,title,image_url,order_index,active",
-  coupons: "id,code,name,description,discount_type,discount_value,apply_to,applicable_products,min_order_value,usage_limit,start_date,end_date,active",
-  coupon_usages: "id,coupon_id,user_email,order_id,created_date",
-  orders: "id,order_number,customer_name,customer_phone,customer_email,customer_address,delivery_address,total_amount,total,subtotal,delivery_fee,status,payment_method,order_type,table_number,notes,coupon_code,discount_amount,discount,user_email,items,sent_at,created_date",
+  categories: "id,tenant_id,name,order_index,is_combo,created_date",
+  products: "id,tenant_id,name,description,price,category,category_id,image_url,available,popular,created_date",
+  product_additionals: "id,tenant_id,product_id,name,price,required,max_quantity,active",
+  complement_groups: "id,tenant_id,name,description,min_quantity,max_quantity,required,active,order_index",
+  complement_items: "id,tenant_id,group_id,name,description,price,max_quantity,image_url,active,order_index",
+  product_complement_groups: "id,tenant_id,product_id,group_id,order_index",
+  banner_images: "id,tenant_id,title,image_url,order_index,active",
+  banners: "id,tenant_id,title,image_url,order_index,active",
+  coupons: "id,tenant_id,code,name,description,discount_type,discount_value,apply_to,applicable_products,min_order_value,usage_limit,start_date,end_date,active",
+  coupon_usages: "id,tenant_id,coupon_id,user_email,order_id,created_date",
+  orders: "id,tenant_id,order_number,customer_name,customer_phone,customer_email,customer_address,delivery_address,total_amount,total,subtotal,delivery_fee,status,payment_method,order_type,table_number,notes,coupon_code,discount_amount,discount,user_email,items,sent_at,created_date",
   users: "id,full_name,email,phone,role,created_date",
-  user_addresses: "id,user_email,user_phone,name,cep,zip_code,street,number,complement,neighborhood,city,state,reference,is_default",
-  admin_users: "id,username,role,active,permissions,created_date,updated_date",
+  user_addresses: "id,tenant_id,user_email,user_phone,name,cep,zip_code,street,number,complement,neighborhood,city,state,reference,is_default",
+  admin_users: "id,tenant_id,username,initial_password,role,active,permissions,created_date,updated_date",
 };
 
 // Tabelas estáticas elegíveis para cache persistido em LocalStorage
@@ -63,8 +64,33 @@ const CACHE_TTL_MAP = {
   admin_users: 5 * 1000,                 // 5 segundos
 };
 
+// Coleções com dados isolados por restaurante (tenant_id)
+const MULTI_TENANT_COLLECTIONS = new Set([
+  "categories",
+  "products",
+  "product_additionals",
+  "complement_groups",
+  "complement_items",
+  "product_complement_groups",
+  "banner_images",
+  "banners",
+  "coupons",
+  "coupon_usages",
+  "orders",
+  "admin_users",
+  "user_addresses",
+  "users",
+  "customers",
+]);
+
+export function getActiveTenantId() {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("current_tenant_id") || null;
+}
+
 function getCacheKey(collectionKey, method, query, sort, limit) {
-  return `${collectionKey}_${method}_${JSON.stringify(query || {})}_${sort || ''}_${limit || ''}`;
+  const tenantId = MULTI_TENANT_COLLECTIONS.has(collectionKey) ? getActiveTenantId() : "global";
+  return `${collectionKey}_${tenantId || "default"}_${method}_${JSON.stringify(query || {})}_${sort || ""}_${limit || ""}`;
 }
 
 export function invalidateCache(collectionKey) {
@@ -81,6 +107,9 @@ export function invalidateCache(collectionKey) {
     }
     if (typeof window !== "undefined") {
       try {
+        const tenantId = getActiveTenantId();
+        const prefix = tenantId ? `${STORAGE_PREFIX}${tenantId}_` : STORAGE_PREFIX;
+        localStorage.removeItem(`${prefix}cache_ts_${targetKey}`);
         localStorage.removeItem(`${STORAGE_PREFIX}cache_ts_${targetKey}`);
       } catch {}
     }
@@ -123,8 +152,8 @@ if (typeof window !== "undefined") {
   });
 }
 
-// Garantir que a versão oficial do novo cardápio seja carregada
-const MENU_DATA_VERSION = "vruum_menu_v2026_09_official";
+// Garantir que a versão oficial do cardápio seja carregada
+const MENU_DATA_VERSION = "delivery_menu_v1_0";
 if (typeof window !== "undefined") {
   try {
     const currentVer = localStorage.getItem(`${STORAGE_PREFIX}menu_data_version`);
@@ -143,15 +172,24 @@ if (typeof window !== "undefined") {
   } catch {}
 }
 
+function getStoragePrefixForCollection(collectionKey) {
+  if (MULTI_TENANT_COLLECTIONS.has(collectionKey)) {
+    const tenantId = getActiveTenantId();
+    if (tenantId) return `${STORAGE_PREFIX}${tenantId}_`;
+  }
+  return STORAGE_PREFIX;
+}
+
 function getStoredLocalCache(collectionKey, ttl) {
   if (typeof window === "undefined" || !PERSISTENT_CACHE_TABLES.has(collectionKey)) return null;
   try {
-    const rawTs = localStorage.getItem(`${STORAGE_PREFIX}cache_ts_${collectionKey}`);
+    const prefix = getStoragePrefixForCollection(collectionKey);
+    const rawTs = localStorage.getItem(`${prefix}cache_ts_${collectionKey}`);
     if (!rawTs) return null;
     const ts = parseInt(rawTs, 10);
     if (Date.now() - ts > ttl) return null;
 
-    const rawData = localStorage.getItem(`${STORAGE_PREFIX}${collectionKey}`);
+    const rawData = localStorage.getItem(`${prefix}${collectionKey}`);
     if (!rawData) return null;
     return JSON.parse(rawData);
   } catch {
@@ -162,29 +200,38 @@ function getStoredLocalCache(collectionKey, ttl) {
 function setStoredLocalCache(collectionKey, data) {
   if (typeof window === "undefined" || !PERSISTENT_CACHE_TABLES.has(collectionKey)) return;
   try {
-    localStorage.setItem(`${STORAGE_PREFIX}cache_ts_${collectionKey}`, String(Date.now()));
-    localStorage.setItem(`${STORAGE_PREFIX}${collectionKey}`, JSON.stringify(data));
+    const prefix = getStoragePrefixForCollection(collectionKey);
+    localStorage.setItem(`${prefix}cache_ts_${collectionKey}`, String(Date.now()));
+    localStorage.setItem(`${prefix}${collectionKey}`, JSON.stringify(data));
   } catch {}
 }
 
 function getCollection(collectionKey, defaultData = []) {
   if (typeof window === "undefined") return defaultData;
+  const prefix = getStoragePrefixForCollection(collectionKey);
+  const tenantId = getActiveTenantId();
+  // Se for uma nova empresa que não seja a Vruum ("a0000000-0000-0000-0000-000000000001"), o defaultData deve ser zerado []
+  const effectiveDefault = MULTI_TENANT_COLLECTIONS.has(collectionKey) && tenantId && tenantId !== "a0000000-0000-0000-0000-000000000001"
+    ? []
+    : defaultData;
+
   try {
-    const raw = localStorage.getItem(STORAGE_PREFIX + collectionKey);
+    const raw = localStorage.getItem(prefix + collectionKey);
     if (!raw) {
-      localStorage.setItem(STORAGE_PREFIX + collectionKey, JSON.stringify(defaultData));
-      return defaultData;
+      localStorage.setItem(prefix + collectionKey, JSON.stringify(effectiveDefault));
+      return effectiveDefault;
     }
     return JSON.parse(raw);
   } catch (_e) {
-    return defaultData;
+    return effectiveDefault;
   }
 }
 
 function setCollection(collectionKey, items) {
   if (typeof window === "undefined") return;
+  const prefix = getStoragePrefixForCollection(collectionKey);
   try {
-    localStorage.setItem(STORAGE_PREFIX + collectionKey, JSON.stringify(items));
+    localStorage.setItem(prefix + collectionKey, JSON.stringify(items));
   } catch (_e) {
     console.error("Failed to save to localStorage", _e);
   }
@@ -274,6 +321,10 @@ export function createEntityModel(collectionKey, defaultData = []) {
         if (isSupabaseConfigured() && supabase) {
           try {
             let q = supabase.from(collectionKey).select(projection);
+            const activeTenantId = getActiveTenantId();
+            if (MULTI_TENANT_COLLECTIONS.has(collectionKey) && activeTenantId) {
+              q = q.eq("tenant_id", activeTenantId);
+            }
             if (sort) {
               const isDesc = sort.startsWith("-");
               const field = isDesc ? sort.substring(1) : sort;
@@ -287,6 +338,9 @@ export function createEntityModel(collectionKey, defaultData = []) {
               const altTable = collectionKey === "banner_images" ? "banners" : "banner_images";
               try {
                 let altQ = supabase.from(altTable).select(projection);
+                if (activeTenantId) {
+                  altQ = altQ.eq("tenant_id", activeTenantId);
+                }
                 if (sort) {
                   const isDesc = sort.startsWith("-");
                   const field = isDesc ? sort.substring(1) : sort;
@@ -343,8 +397,13 @@ export function createEntityModel(collectionKey, defaultData = []) {
         if (isSupabaseConfigured() && supabase) {
           try {
             let q = supabase.from(collectionKey).select(projection);
-            if (query && Object.keys(query).length > 0) {
-              q = q.match(query);
+            const activeTenantId = getActiveTenantId();
+            const filterQuery = { ...(query || {}) };
+            if (MULTI_TENANT_COLLECTIONS.has(collectionKey) && activeTenantId && !filterQuery.tenant_id) {
+              filterQuery.tenant_id = activeTenantId;
+            }
+            if (Object.keys(filterQuery).length > 0) {
+              q = q.match(filterQuery);
             }
             if (sort) {
               const isDesc = sort.startsWith("-");
@@ -359,8 +418,8 @@ export function createEntityModel(collectionKey, defaultData = []) {
               const altTable = collectionKey === "banner_images" ? "banners" : "banner_images";
               try {
                 let altQ = supabase.from(altTable).select(projection);
-                if (query && Object.keys(query).length > 0) {
-                  altQ = altQ.match(query);
+                if (Object.keys(filterQuery).length > 0) {
+                  altQ = altQ.match(filterQuery);
                 }
                 if (sort) {
                   const isDesc = sort.startsWith("-");
@@ -419,15 +478,24 @@ export function createEntityModel(collectionKey, defaultData = []) {
 
     async create(data) {
       invalidateCache(collectionKey);
+      let sanitized = data;
+      if (collectionKey === "orders") {
+        sanitized = sanitizeOrderData(data);
+      } else if (collectionKey === "products") {
+        sanitized = sanitizeProductData(data);
+      }
+
       const isUuidTable = ["orders", "coupons", "coupon_usages", "users", "user_addresses", "settings", "admin_users"].includes(collectionKey);
-      const newId = data.id || (isUuidTable && typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" 
+      const newId = sanitized.id || (isUuidTable && typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" 
         ? crypto.randomUUID() 
         : `${collectionKey}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`);
       
+      const activeTenantId = getActiveTenantId();
       const newItem = {
         id: newId,
         created_date: new Date().toISOString(),
-        ...data,
+        ...(MULTI_TENANT_COLLECTIONS.has(collectionKey) && activeTenantId && !sanitized.tenant_id ? { tenant_id: activeTenantId } : {}),
+        ...sanitized,
       };
 
       if (isSupabaseConfigured() && supabase) {
@@ -461,11 +529,18 @@ export function createEntityModel(collectionKey, defaultData = []) {
 
     async update(id, data) {
       invalidateCache(collectionKey);
+      let sanitized = data;
+      if (collectionKey === "orders") {
+        sanitized = sanitizeOrderData(data);
+      } else if (collectionKey === "products") {
+        sanitized = sanitizeProductData(data);
+      }
+
       if (isSupabaseConfigured() && supabase) {
         try {
           const { data: updated, error } = await supabase
             .from(collectionKey)
-            .update(data)
+            .update(sanitized)
             .eq("id", id)
             .select("id")
             .single();
@@ -474,14 +549,14 @@ export function createEntityModel(collectionKey, defaultData = []) {
             const items = getCollection(collectionKey, defaultData);
             const updatedItems = items.map((item) => {
               if (String(item.id) === String(id)) {
-                return { ...item, ...data };
+                return { ...item, ...sanitized };
               }
               return item;
             });
             setCollection(collectionKey, updatedItems);
             setStoredLocalCache(collectionKey, updatedItems);
-            notifySubscribers(collectionKey, "update", { id, ...data }, id);
-            return { id, ...data };
+            notifySubscribers(collectionKey, "update", { id, ...sanitized }, id);
+            return { id, ...sanitized };
           }
         } catch (_err) {
           console.warn(`[Supabase] Erro ao atualizar em ${collectionKey}:`, _err);
@@ -535,8 +610,9 @@ export function createEntityModel(collectionKey, defaultData = []) {
     subscribe(callback, options = {}) {
       if (typeof window === "undefined") return () => {};
 
-      // Realtime do Supabase somente é aberto para orders quando explicitamente solicitado ou filtrado
-      const allowSupabaseRealtime = collectionKey === "orders";
+      // Realtime do Supabase somente é aberto quando explicitamente solicitado COM filtro específico
+      // Isso impede abertura acidental de canais globais sem filtro de tenant
+      const allowSupabaseRealtime = collectionKey === "orders" && Boolean(options?.filter);
 
       if (allowSupabaseRealtime && isSupabaseConfigured() && supabase) {
         const channelFilter = options?.filter ? { filter: options.filter } : {};

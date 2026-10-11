@@ -1,9 +1,9 @@
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { LayoutDashboard, Package, ShoppingBag, Settings, LogOut, Image as ImageIcon, Tag, BarChart, Folder, Users, Monitor, Layers } from "lucide-react";
-import { base44 } from "@/api/base44Client";
+import { LayoutDashboard, Package, ShoppingBag, Settings, LogOut, Image as ImageIcon, Tag, BarChart, Folder, Users, Monitor, Layers, Flame } from "lucide-react";
 import { Settings as SettingsEntity } from "@/entities/Settings";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import {
   Sidebar,
   SidebarContent,
@@ -31,6 +31,12 @@ const navigationItems = [
     pageKey: "Orders",
     url: createPageUrl("Orders"),
     icon: ShoppingBag,
+  },
+  {
+    title: "KDS Cozinha",
+    pageKey: "KDS",
+    url: createPageUrl("KDS"),
+    icon: Flame,
   },
   {
     title: "PDV Balcão",
@@ -107,7 +113,7 @@ export default function Layout({ children, currentPageName }) {
   const isFirstLoad = React.useRef(true);
   const isFetchingRef = React.useRef(false);
 
-  const publicPages = ["Menu", "MyOrders", "AdminLogin", "Home", "PrintOrder"];
+  const publicPages = ["Menu", "MyOrders", "AdminLogin", "Home", "PrintOrder", "SuperAdmin"];
   const isPublicPage = publicPages.includes(currentPageName);
   const isAdminAuthenticated = typeof window !== "undefined" && localStorage.getItem("admin_auth") === "authenticated";
 
@@ -117,15 +123,19 @@ export default function Layout({ children, currentPageName }) {
     setIsCheckingAuth(false);
   }, [location.pathname, currentPageName]);
 
-  // Se estiver na página de Pedidos, limpa o contador de não lidos e o título
+  const pathSegments = location.pathname.split("/").filter(Boolean);
+  const RESERVED_LIST = new Set(["menu", "dashboard", "orders", "pedidos", "pdv", "clients", "products", "categories", "banners", "coupons", "complements", "reports", "settings", "superadmin", "adminlogin", "myorders", "printorder", "home", "api"]);
+  const routeStoreSlug = pathSegments.length > 0 && !RESERVED_LIST.has(pathSegments[0].toLowerCase()) ? pathSegments[0].toLowerCase() : null;
+  const prettySlugName = routeStoreSlug ? routeStoreSlug.split("-").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") : null;
+
+  const currentStoreName = settings?.restaurant_name || (routeStoreSlug ? prettySlugName : (typeof window !== "undefined" ? localStorage.getItem("current_tenant_name") : null)) || 'Delivery 1.0';
+
+  // Se estiver na página de Pedidos, limpa o contador de não lidos
   React.useEffect(() => {
     if (currentPageName === "Orders" || location.pathname.endsWith("/Orders")) {
       setPendingOrdersCount(0);
-      if (typeof document !== "undefined") {
-        document.title = `${settings?.restaurant_name || 'Vruum Burguer'} - Painel Admin`;
-      }
     }
-  }, [currentPageName, location.pathname, settings]);
+  }, [currentPageName, location.pathname]);
 
   React.useEffect(() => {
     if (!isPublicPage && !isAdminAuthenticated && !isCheckingAuth) {
@@ -158,18 +168,11 @@ export default function Layout({ children, currentPageName }) {
         const isCurrentlyOnOrdersPage = currentPageName === "Orders" || window.location.pathname.endsWith("/Orders");
         if (!isCurrentlyOnOrdersPage) {
           setPendingOrdersCount(currentPending.length);
-          if (typeof document !== "undefined") {
-            if (currentPending.length > 0) {
-              document.title = `(${currentPending.length}) 🍔 ${settings?.restaurant_name || 'Vruum Burguer'} - Painel Admin`;
-            } else {
-              document.title = `${settings?.restaurant_name || 'Vruum Burguer'} - Painel Admin`;
-            }
+          if (typeof document !== "undefined" && currentPending.length > 0) {
+            document.title = `(${currentPending.length}) 🛵 ${currentStoreName} — Pedidos`;
           }
         } else {
           setPendingOrdersCount(0);
-          if (typeof document !== "undefined") {
-            document.title = `${settings?.restaurant_name || 'Vruum Burguer'} - Painel Admin`;
-          }
         }
 
         if (!isFirstLoad.current) {
@@ -216,9 +219,12 @@ export default function Layout({ children, currentPageName }) {
 
     let unsubscribe;
     try {
-      unsubscribe = Order.subscribe(() => {
-        checkNewOrders();
-      });
+      const activeTenantId = typeof window !== "undefined" ? localStorage.getItem("current_tenant_id") : null;
+      if (activeTenantId) {
+        unsubscribe = Order.subscribe(() => {
+          checkNewOrders();
+        }, { filter: `tenant_id=eq.${activeTenantId}` });
+      }
     } catch (_e) {}
 
     return () => {
@@ -292,9 +298,16 @@ export default function Layout({ children, currentPageName }) {
     return userPermissions.includes(pageKey);
   }, [userPermissions]);
 
+  const activeSlug = routeStoreSlug || (typeof window !== "undefined" ? localStorage.getItem("current_tenant_slug") : null) || "vrumm";
+
   const allowedNavigationItems = React.useMemo(() => {
-    return navigationItems.filter(item => hasPermission(item.pageKey));
-  }, [hasPermission]);
+    return navigationItems
+      .filter(item => hasPermission(item.pageKey))
+      .map(item => ({
+        ...item,
+        url: `/${activeSlug}/${item.pageKey}`
+      }));
+  }, [hasPermission, activeSlug]);
 
   // Se o usuário tentar acessar uma tela para a qual não tem permissão, redireciona
   React.useEffect(() => {
@@ -315,12 +328,65 @@ export default function Layout({ children, currentPageName }) {
 
   const loadSettings = async () => {
     try {
-      const settingsData = await SettingsEntity.list();
-      if (settingsData && settingsData.length > 0) {
-        setSettings(settingsData[0]);
+      const segments = location.pathname.split("/").filter(Boolean);
+      const RESERVED = new Set(["menu", "dashboard", "orders", "pedidos", "pdv", "clients", "products", "categories", "banners", "coupons", "complements", "reports", "settings", "superadmin", "adminlogin", "myorders", "printorder", "home", "api"]);
+      const slugFromPath = segments.length > 0 && !RESERVED.has(segments[0].toLowerCase()) ? segments[0].toLowerCase() : null;
+      const targetSlug = slugFromPath || localStorage.getItem("current_tenant_slug");
+      const currentTenantId = localStorage.getItem("current_tenant_id");
+      const currentTenantName = localStorage.getItem("current_tenant_name");
+
+      if (isSupabaseConfigured() && supabase) {
+        let query = supabase.from("tenants").select("id, name, slug, logo_url, banner_url, opening_time, closing_time, open_days, phone, address, whatsapp, instagram, delivery_fee, min_order_value, delivery_fee_type, delivery_neighborhoods, delivery_unlisted_policy, delivery_fallback_fee, free_delivery_threshold, address_city, address_state, address_neighborhood, cep");
+        if (targetSlug) {
+          query = query.eq("slug", targetSlug);
+        } else if (currentTenantId) {
+          query = query.eq("id", currentTenantId);
+        }
+
+        const { data: tenantData } = await query.maybeSingle();
+
+        if (tenantData) {
+          setSettings({
+            restaurant_name: tenantData.name || currentTenantName || "Delivery 1.0",
+            restaurant_logo: tenantData.logo_url || null,
+            ...tenantData,
+          });
+          localStorage.setItem("current_tenant_id", tenantData.id);
+          localStorage.setItem("current_tenant_slug", tenantData.slug);
+          localStorage.setItem("current_tenant_name", tenantData.name);
+          return;
+        }
+      }
+
+      if (currentTenantName) {
+        setSettings((prev) => ({
+          ...prev,
+          restaurant_name: currentTenantName,
+          restaurant_logo: null,
+        }));
+        return;
+      }
+
+      const isVruum = currentTenantId === "a0000000-0000-0000-0000-000000000001" || localStorage.getItem("current_tenant_slug") === "vrumm";
+      if (isVruum) {
+        const settingsData = await SettingsEntity.list();
+        if (settingsData && settingsData.length > 0) {
+          setSettings(settingsData[0]);
+        }
+      } else {
+        setSettings({
+          restaurant_name: currentTenantName || "Minha Loja",
+          restaurant_logo: null,
+          instagram: null,
+          phone: null,
+          whatsapp: null,
+          address: null,
+          delivery_fee: 0,
+          min_order_value: 0,
+        });
       }
     } catch (_error) {
-      console.log("Error loading settings");
+      console.log("Error loading settings", _error);
     }
   };
 
@@ -339,9 +405,12 @@ export default function Layout({ children, currentPageName }) {
     }
   };
 
-  // Se for página de login ou impressão, mostrar sem layout de barra lateral
+  // Se for página de login, impressão ou SuperAdmin, mostrar sem layout de barra lateral de loja
   if (currentPageName === "AdminLogin" || currentPageName === "PrintOrder") {
     return <div className="min-h-screen bg-white">{children}</div>;
+  }
+  if (currentPageName === "SuperAdmin") {
+    return <div className="min-h-screen bg-slate-950">{children}</div>;
   }
 
   // Se for página privada e não estiver logado como admin, redirecionar
@@ -362,6 +431,17 @@ export default function Layout({ children, currentPageName }) {
       <SidebarProvider>
         <div className="min-h-screen flex w-full bg-gray-50">
           <Sidebar className="border-r border-stone-200 bg-white text-stone-900">
+            {user?.role === "super_admin" && (
+              <div className="p-2 bg-slate-900 border-b border-slate-800 flex items-center justify-between text-xs text-slate-200">
+                <span className="font-semibold text-rose-400">👑 Modo Super Admin</span>
+                <Link
+                  to={createPageUrl("SuperAdmin")}
+                  className="bg-rose-600 hover:bg-rose-700 text-white px-2 py-0.5 rounded text-[11px] font-bold"
+                >
+                  Painel Master
+                </Link>
+              </div>
+            )}
             <SidebarHeader className="border-b border-stone-200 p-4 bg-stone-50/50">
               <div className="flex items-center gap-3">
                 {settings?.restaurant_logo ? (
@@ -371,13 +451,13 @@ export default function Layout({ children, currentPageName }) {
                     className="w-10 h-10 rounded-xl object-cover shadow-sm border border-stone-200"
                   />
                 ) : (
-                  <div className="w-10 h-10 bg-gradient-to-br from-red-600 to-red-700 rounded-xl flex items-center justify-center shadow-sm">
-                    <Package className="w-6 h-6 text-white" />
+                  <div className="w-10 h-10 bg-slate-900 text-white rounded-xl flex items-center justify-center font-black text-sm shadow-sm border border-slate-800">
+                    {(settings?.restaurant_name || "D").substring(0, 2).toUpperCase()}
                   </div>
                 )}
                 <div>
                   <h2 className="font-extrabold text-base text-stone-950 leading-tight" style={{ letterSpacing: '-0.02em' }}>
-                    {settings?.restaurant_name || 'Vruum Burguer'}
+                    {settings?.restaurant_name || 'Delivery 1.0'}
                   </h2>
                   <p className="text-xs font-bold text-red-600 mt-0.5">Painel Administrativo</p>
                 </div>
@@ -430,7 +510,7 @@ export default function Layout({ children, currentPageName }) {
                   <SidebarMenu>
                     <SidebarMenuItem>
                       <SidebarMenuButton asChild className="rounded-xl border border-stone-200 text-stone-800 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all font-bold text-sm">
-                        <Link to={createPageUrl("Menu")} className="flex items-center gap-3 px-3 py-2.5">
+                        <Link to={`/${activeSlug}/menu`} target="_blank" className="flex items-center gap-3 px-3 py-2.5">
                           <ShoppingBag className="w-4 h-4 text-red-600 flex-shrink-0" />
                           <span>Ver Cardápio Online</span>
                         </Link>

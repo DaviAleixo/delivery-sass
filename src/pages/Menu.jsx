@@ -37,9 +37,11 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { Button } from "@/components/ui/button";
 import { isStoreOpen } from "@/utils/storeStatus";
+import { useTenant } from "@/lib/TenantContext";
 
 export default function MenuPage() {
   const navigate = useNavigate();
+  const { tenant, tenantId } = useTenant();
   const [searchParams] = useSearchParams();
   const urlMesa = searchParams.get("mesa");
 
@@ -80,19 +82,14 @@ export default function MenuPage() {
     const unsubBanners = BannerImage.subscribe(() => loadData());
     const unsubProducts = Product.subscribe(() => loadData());
     const unsubCategories = Category.subscribe(() => loadData());
-    const unsubOrders = Order.subscribe(() => {
-      checkActiveOrders();
-      loadRecentOrders();
-    });
 
     return () => {
       if (typeof unsubSettings === "function") unsubSettings();
       if (typeof unsubBanners === "function") unsubBanners();
       if (typeof unsubProducts === "function") unsubProducts();
       if (typeof unsubCategories === "function") unsubCategories();
-      if (typeof unsubOrders === "function") unsubOrders();
     };
-  }, []);
+  }, [tenantId, tenant]);
 
   const requestNotificationPermission = async () => {
     if ("Notification" in window && Notification.permission === "default") {
@@ -184,15 +181,17 @@ export default function MenuPage() {
 
   const loadData = async () => {
     try {
+      const activeTenantId = tenantId || localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001";
+
       const [productsData, additionalsData, settingsData, bannerData, categoryData, groupsData, itemsData, pcgData] = await Promise.all([
-        Product.filter({ available: true }, "-created_date"),
-        ProductAdditional.list(),
+        Product.filter({ tenant_id: activeTenantId, available: true }, "-created_date"),
+        ProductAdditional.filter({ tenant_id: activeTenantId }),
         Settings.list(),
-        BannerImage.filter({ active: true }, "order_index"),
-        Category.filter({}, "order_index"),
-        ComplementGroup.list("order_index"),
-        ComplementItem.list("order_index"),
-        ProductComplementGroup.list("-created_date"),
+        BannerImage.filter({ tenant_id: activeTenantId, active: true }, "order_index"),
+        Category.filter({ tenant_id: activeTenantId }, "order_index"),
+        ComplementGroup.filter({ tenant_id: activeTenantId }, "order_index"),
+        ComplementItem.filter({ tenant_id: activeTenantId }, "order_index"),
+        ProductComplementGroup.filter({ tenant_id: activeTenantId }, "-created_date"),
       ]);
 
       setProducts(productsData || []);
@@ -200,14 +199,42 @@ export default function MenuPage() {
       setComplementGroups(groupsData || []);
       setComplementItems(itemsData || []);
       setProductComplementGroups(pcgData || []);
-      if (settingsData.length > 0) {
-        setSettings(settingsData[0]);
-        setStoreIsOpen(isStoreOpen(settingsData[0]));
-      }
+
+      const segments = window.location.pathname.split("/").filter(Boolean);
+      const RESERVED = ["menu", "dashboard", "orders", "pdv", "adminlogin", "superadmin"];
+      const pathSlug = segments.length > 0 && !RESERVED.includes(segments[0].toLowerCase()) ? segments[0].toLowerCase() : null;
+      const effectiveSlug = pathSlug || tenant?.slug || localStorage.getItem("current_tenant_slug");
+      const isVruum = effectiveSlug === "vrumm" || effectiveSlug === "vruum-burguer";
+
+      const resolvedSettings = {
+        restaurant_name: tenant?.name || (isVruum ? "Vruum Burguer" : "Novo Restaurante"),
+        restaurant_logo: tenant?.logo_url || (isVruum ? settingsData[0]?.restaurant_logo : null),
+        banner_url: tenant?.banner_url || (isVruum ? settingsData[0]?.banner_url : null),
+        delivery_fee: tenant?.delivery_fee ?? (isVruum ? 6.50 : 0),
+        min_order_value: tenant?.min_order_value ?? (isVruum ? 20.00 : 0),
+        delivery_time: tenant?.delivery_time || "40-50 min",
+        delivery_fee_type: tenant?.delivery_fee_type || "fixed",
+        delivery_neighborhoods: Array.isArray(tenant?.delivery_neighborhoods) ? tenant.delivery_neighborhoods : [],
+        delivery_unlisted_policy: tenant?.delivery_unlisted_policy || "block",
+        delivery_fallback_fee: tenant?.delivery_fallback_fee ?? 10.00,
+        free_delivery_threshold: tenant?.free_delivery_threshold ?? null,
+        phone: tenant?.phone || (isVruum ? settingsData[0]?.phone : ""),
+        whatsapp: tenant?.whatsapp || (isVruum ? settingsData[0]?.whatsapp : ""),
+        address: tenant?.address || (isVruum ? settingsData[0]?.address : ""),
+        address_city: tenant?.address_city || "",
+        address_state: tenant?.address_state || "",
+        instagram: tenant?.instagram || (isVruum ? settingsData[0]?.instagram : ""),
+        opening_time: tenant?.opening_time || "18:00",
+        closing_time: tenant?.closing_time || "23:59",
+        open_days: tenant?.open_days || [],
+      };
+
+      setSettings(resolvedSettings);
+      setStoreIsOpen(isStoreOpen(resolvedSettings));
       setBanners(bannerData || []);
       setCategories(categoryData || []);
       
-      if (categoryData.length > 0 && !activeCategory) {
+      if (categoryData && categoryData.length > 0 && !activeCategory) {
         setActiveCategory(categoryData[0].id);
       }
     } catch (_error) {
@@ -308,7 +335,12 @@ export default function MenuPage() {
   const submitOrder = async (orderData) => {
     setIsSubmitting(true);
     try {
-      const createdOrder = await Order.create(orderData);
+      const activeTenantId = tenantId || localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001";
+      const orderPayload = {
+        ...orderData,
+        tenant_id: activeTenantId,
+      };
+      const createdOrder = await Order.create(orderPayload);
 
       try {
         const recentOrders = JSON.parse(localStorage.getItem("vrumburguer_recent_orders") || "[]");
@@ -379,12 +411,14 @@ export default function MenuPage() {
                 {settings?.restaurant_logo ? (
                   <img src={settings.restaurant_logo} alt="Logo" className="w-full h-full object-contain" />
                 ) : (
-                  <span className="text-xl">🍔</span>
+                  <div className="w-10 h-10 rounded-xl bg-stone-900 border border-stone-800 flex items-center justify-center font-black text-sm text-white">
+                    {(settings?.restaurant_name || "D").substring(0, 2).toUpperCase()}
+                  </div>
                 )}
               </motion.div>
               <div>
                 <h1 className="text-base sm:text-lg font-black leading-tight text-white tracking-tight" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-                  {settings?.restaurant_name || "Vruum Burguer"}
+                  {settings?.restaurant_name || "Delivery 1.0"}
                 </h1>
                 <div className="flex items-center gap-2 mt-0.5">
                   <div className="flex items-center gap-1.5">
@@ -634,7 +668,7 @@ export default function MenuPage() {
 
         {filteredProducts.length === 0 && (
           <div className="text-center py-16 bg-stone-900/40 rounded-3xl border border-stone-800/60 p-8 space-y-3">
-            <div className="text-5xl">🍔</div>
+            <div className="text-5xl">🍽️</div>
             <h3 className="text-lg font-bold text-white">Nenhum produto encontrado</h3>
             <p className="text-xs text-stone-400 max-w-sm mx-auto">
               {searchQuery ? `Não encontramos itens para "${searchQuery}". Tente outro termo.` : "Não há produtos disponíveis nesta categoria no momento."}
@@ -706,15 +740,17 @@ export default function MenuPage() {
                 {settings?.restaurant_logo ? (
                   <img src={settings.restaurant_logo} alt="Logo" className="w-full h-full object-contain" />
                 ) : (
-                  <span className="text-xl">🍔</span>
+                  <div className="w-10 h-10 rounded-xl bg-stone-900 border border-stone-800 flex items-center justify-center font-black text-sm text-white">
+                    {(settings?.restaurant_name || "D").substring(0, 2).toUpperCase()}
+                  </div>
                 )}
               </div>
               <h4 className="font-black text-base text-white tracking-tight" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-                {settings?.restaurant_name || "Vruum Burguer"}
+                {settings?.restaurant_name || "Delivery 1.0"}
               </h4>
             </div>
             <p className="text-xs text-stone-400 leading-relaxed max-w-xs font-normal">
-              Burgers artesanais preparados com ingredientes nobres e muito amor por hambúrguer de verdade.
+              Os melhores produtos preparados com ingredientes selecionados e entrega rápida para você.
             </p>
           </div>
 
@@ -769,7 +805,7 @@ export default function MenuPage() {
         </div>
 
         <div className="container mx-auto max-w-6xl pt-8 mt-8 border-t border-stone-800/60 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-stone-400">
-          <p>© {new Date().getFullYear()} {settings?.restaurant_name || "Vruum Burguer"}. Todos os direitos reservados.</p>
+          <p>© {new Date().getFullYear()} {settings?.restaurant_name || "Delivery 1.0"}. Todos os direitos reservados.</p>
           <p>
             Desenvolvido por{" "}
             <a
@@ -813,6 +849,7 @@ export default function MenuPage() {
         deliveryFee={settings?.delivery_fee || 0}
         minOrderValue={settings?.min_order_value || 0}
         deliveryTime={settings?.delivery_time || "40-50 min"}
+        deliveryRules={settings}
         initialTableNumber={urlMesa || ""}
         onSubmit={submitOrder}
         isSubmitting={isSubmitting}

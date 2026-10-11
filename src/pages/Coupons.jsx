@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/CurrencyInput";
+import { parseBRLToNumber, formatToBRL } from "@/utils/moneyMask";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -61,8 +63,10 @@ export default function CouponsPage() {
       const couponData = {
         ...couponForm,
         code: couponForm.code.toUpperCase(),
-        discount_value: parseFloat(couponForm.discount_value),
-        min_order_value: couponForm.min_order_value ? parseFloat(couponForm.min_order_value) : 0,
+        discount_value: couponForm.discount_type === 'fixed_amount' 
+          ? parseBRLToNumber(couponForm.discount_value) 
+          : (parseFloat(couponForm.discount_value) || 0),
+        min_order_value: parseBRLToNumber(couponForm.min_order_value),
         usage_limit: couponForm.usage_limit ? parseInt(couponForm.usage_limit) : null,
         start_date: couponForm.start_date ? new Date(couponForm.start_date + 'T00:00:00').toISOString() : null,
         end_date: couponForm.end_date ? new Date(couponForm.end_date + 'T23:59:59').toISOString() : null
@@ -114,10 +118,12 @@ export default function CouponsPage() {
       name: coupon.name,
       description: coupon.description || "",
       discount_type: coupon.discount_type,
-      discount_value: coupon.discount_value.toString(),
+      discount_value: coupon.discount_type === 'fixed_amount' 
+        ? (coupon.discount_value ? formatToBRL(coupon.discount_value) : "")
+        : (coupon.discount_value?.toString() || ""),
       apply_to: coupon.apply_to,
       applicable_products: coupon.applicable_products || [],
-      min_order_value: coupon.min_order_value ? coupon.min_order_value.toString() : "",
+      min_order_value: coupon.min_order_value ? formatToBRL(coupon.min_order_value) : "",
       usage_limit: coupon.usage_limit ? coupon.usage_limit.toString() : "",
       start_date: coupon.start_date ? format(new Date(coupon.start_date), 'yyyy-MM-dd') : "",
       end_date: coupon.end_date ? format(new Date(coupon.end_date), 'yyyy-MM-dd') : "",
@@ -355,15 +361,30 @@ export default function CouponsPage() {
                 </div>
 
                 <div>
-                  <Label htmlFor="discount_value">Valor do desconto *</Label>
-                  <Input
-                    id="discount_value"
-                    type="number"
-                    step="0.01"
-                    value={couponForm.discount_value}
-                    onChange={(e) => setCouponForm({...couponForm, discount_value: e.target.value})}
-                    required
-                  />
+                  <Label htmlFor="discount_value">
+                    {couponForm.discount_type === 'percentage' ? 'Desconto (%) *' : 'Desconto (R$) *'}
+                  </Label>
+                  {couponForm.discount_type === 'fixed_amount' ? (
+                    <CurrencyInput
+                      id="discount_value"
+                      value={couponForm.discount_value}
+                      onChange={(e) => setCouponForm({...couponForm, discount_value: e.target.value})}
+                      placeholder="R$ 10,00"
+                      required
+                    />
+                  ) : (
+                    <Input
+                      id="discount_value"
+                      type="number"
+                      step="1"
+                      min="1"
+                      max="100"
+                      value={couponForm.discount_value}
+                      onChange={(e) => setCouponForm({...couponForm, discount_value: e.target.value})}
+                      placeholder="Ex: 15"
+                      required
+                    />
+                  )}
                 </div>
               </div>
 
@@ -418,12 +439,11 @@ export default function CouponsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="min_order">Pedido mínimo (R$)</Label>
-                  <Input
+                  <CurrencyInput
                     id="min_order"
-                    type="number"
-                    step="0.01"
                     value={couponForm.min_order_value}
                     onChange={(e) => setCouponForm({...couponForm, min_order_value: e.target.value})}
+                    placeholder="R$ 0,00"
                   />
                 </div>
 

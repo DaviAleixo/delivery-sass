@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/CurrencyInput";
+import { parseBRLToNumber } from "@/utils/moneyMask";
 import { Label } from "@/components/ui/label";
 import { Banknote, CreditCard, Smartphone, CheckCircle } from "lucide-react";
 
@@ -35,7 +36,7 @@ export default function PDVPaymentModal({ total, onConfirm, onClose }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const inputRef = useRef(null);
 
-  const received = parseFloat(receivedAmount) || 0;
+  const received = parseBRLToNumber(receivedAmount);
   const change = received - total;
   const isMoneyValid = paymentMethod === "dinheiro" ? received >= total : true;
   const canConfirm = paymentMethod && isMoneyValid;
@@ -108,14 +109,11 @@ export default function PDVPaymentModal({ total, onConfirm, onClose }) {
             <div className="space-y-3">
               <div>
                 <Label className="font-semibold">Valor recebido (R$)</Label>
-                <Input
+                <CurrencyInput
                   ref={inputRef}
-                  type="number"
-                  step="0.01"
-                  min={total}
                   value={receivedAmount}
                   onChange={(e) => setReceivedAmount(e.target.value)}
-                  placeholder="0,00"
+                  placeholder="R$ 0,00"
                   className="text-2xl h-14 mt-1 font-bold text-center"
                 />
               </div>

@@ -64,13 +64,17 @@ import Products from './pages/Products';
 import Complements from './pages/Complements';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
+import SuperAdmin from './pages/SuperAdmin';
+import KDS from './pages/KDS';
 import __Layout from './Layout.jsx';
 
 
 export const PAGES = {
     "AdminLogin": AdminLogin,
+    "SuperAdmin": SuperAdmin,
     "PDV": PDV,
     "PDVOrders": PDVOrders,
+    "KDS": KDS,
     "Banners": Banners,
     "Categories": Categories,
     "Clients": Clients,

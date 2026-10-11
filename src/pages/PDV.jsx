@@ -5,8 +5,10 @@ import { Order } from "@/entities/Order";
 import PDVProductGrid from "../components/pdv/PDVProductGrid";
 import PDVCart from "../components/pdv/PDVCart";
 import PDVPaymentModal from "../components/pdv/PDVPaymentModal";
-import { ShoppingCart, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { validateSchema, orderSchema } from "@/schemas";
+import { toast } from "sonner";
 
 // Som ao adicionar item
 const playBeep = () => {
@@ -118,7 +120,23 @@ export default function PDVPage() {
       })),
     };
 
+    const zodValidation = validateSchema(orderSchema, {
+      ...orderData,
+      customer_phone: orderData.customer_phone === "-" ? "00000000" : orderData.customer_phone,
+      order_type: "balcao",
+      items: orderData.items.map(it => ({
+        ...it,
+        name: it.product_name,
+        price: it.product_price,
+      }))
+    });
+
+    if (!zodValidation.success) {
+      console.warn("Aviso de validação Zod (PDV):", zodValidation.errorList);
+    }
+
     const created = await Order.create(orderData);
+    toast.success("Pedido finalizado com sucesso!");
     setLastOrder(created);
     clearCart();
     setShowPayment(false);

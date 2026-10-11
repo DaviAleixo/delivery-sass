@@ -25,70 +25,100 @@ export default function ClientsPage() {
   const loadData = async () => {
     setIsLoading(true);
     try {
+      const segments = window.location.pathname.split("/").filter(Boolean);
+      const RESERVED = new Set(["clients", "dashboard", "orders", "pdv", "menu", "adminlogin", "superadmin"]);
+      const routeSlug = segments.length > 0 && !RESERVED.has(segments[0].toLowerCase()) ? segments[0].toLowerCase() : null;
+      let activeTenantId = localStorage.getItem("current_tenant_id");
+      const activeSlug = routeSlug || localStorage.getItem("current_tenant_slug");
+      const isVruum = activeSlug === "vrumm" || activeSlug === "vruum-burguer" || activeTenantId === "a0000000-0000-0000-0000-000000000001";
+
       if (isSupabaseConfigured() && supabase) {
-        const { data, error } = await supabase.rpc("get_clients_summary");
-        if (!error && data) {
-          setClients(data.map(c => ({
-            ...c,
-            totalOrders: Number(c.total_orders || 0),
-            totalSpent: Number(c.total_spent || 0),
-            lastOrderDate: c.last_order_date ? new Date(c.last_order_date) : null
-          })));
-          setIsLoading(false);
-          return;
+        if (activeSlug === "vrumm" || activeSlug === "vruum-burguer") {
+          activeTenantId = "a0000000-0000-0000-0000-000000000001";
+        } else if (activeSlug) {
+          const { data: tData } = await supabase.from("tenants").select("id").eq("slug", activeSlug).maybeSingle();
+          if (tData) activeTenantId = tData.id;
+        }
+
+        const effectiveId = activeTenantId || (isVruum ? "a0000000-0000-0000-0000-000000000001" : null);
+
+        if (effectiveId) {
+          const { data, error } = await supabase.rpc("get_clients_summary", {
+            p_tenant_id: effectiveId
+          });
+
+          if (!error && Array.isArray(data)) {
+            setClients(data.map(c => ({
+              id: c.id || c.customer_phone,
+              full_name: c.customer_name || "Cliente",
+              email: c.customer_email || "-",
+              phone: c.customer_phone || "-",
+              totalOrders: Number(c.total_orders || 0),
+              totalSpent: Number(c.total_spent || 0),
+              lastOrderDate: c.last_order_at ? new Date(c.last_order_at) : null
+            })));
+            setIsLoading(false);
+            return;
+          }
         }
       }
 
-      // Fallback
-      const [usersData, ordersData] = await Promise.all([
-        User.list("-created_date", 50),
-        Order.list("-created_date", 50)
-      ]);
-      const nonAdmins = usersData.filter(u => u.role !== 'admin');
-      const clientMap = new Map();
+      // Se for a loja piloto Vruum Burguer no fallback local
+      if (isVruum) {
+        const [usersData, ordersData] = await Promise.all([
+          User.list("-created_date", 50),
+          Order.list("-created_date", 50)
+        ]);
+        const nonAdmins = usersData.filter(u => u.role !== 'admin');
+        const clientMap = new Map();
 
-      nonAdmins.forEach(u => {
-        const key = u.phone || u.email || u.id;
-        clientMap.set(key, {
-          id: u.id,
-          full_name: u.full_name,
-          email: u.email,
-          phone: u.phone,
-          totalOrders: 0,
-          totalSpent: 0,
-          lastOrderDate: null
-        });
-      });
-
-      ordersData.forEach(order => {
-        if (order.status === 'cancelado') return;
-        const key = order.customer_phone || order.user_email || order.customer_name || order.id;
-        if (!clientMap.has(key)) {
+        nonAdmins.forEach(u => {
+          const key = u.phone || u.email || u.id;
           clientMap.set(key, {
-            id: key,
-            full_name: order.customer_name || "Cliente",
-            email: order.user_email || order.customer_email || "-",
-            phone: order.customer_phone || "-",
+            id: u.id,
+            full_name: u.full_name,
+            email: u.email,
+            phone: u.phone,
             totalOrders: 0,
             totalSpent: 0,
             lastOrderDate: null
           });
-        }
-        const client = clientMap.get(key);
-        if (order.customer_name && order.customer_name !== "Cliente" && (!client.full_name || client.full_name === "Cliente")) {
-          client.full_name = order.customer_name;
-        }
-        client.totalOrders += 1;
-        client.totalSpent += Number(order.total_amount || 0);
-        const orderDate = new Date(order.created_date);
-        if (!client.lastOrderDate || orderDate > client.lastOrderDate) {
-          client.lastOrderDate = orderDate;
-        }
-      });
+        });
 
-      setClients(Array.from(clientMap.values()));
+        ordersData.forEach(order => {
+          if (order.status === 'cancelado') return;
+          const key = order.customer_phone || order.user_email || order.customer_name || order.id;
+          if (!clientMap.has(key)) {
+            clientMap.set(key, {
+              id: key,
+              full_name: order.customer_name || "Cliente",
+              email: order.user_email || order.customer_email || "-",
+              phone: order.customer_phone || "-",
+              totalOrders: 0,
+              totalSpent: 0,
+              lastOrderDate: null
+            });
+          }
+          const client = clientMap.get(key);
+          if (order.customer_name && order.customer_name !== "Cliente" && (!client.full_name || client.full_name === "Cliente")) {
+            client.full_name = order.customer_name;
+          }
+          client.totalOrders += 1;
+          client.totalSpent += Number(order.total_amount || 0);
+          const orderDate = new Date(order.created_date);
+          if (!client.lastOrderDate || orderDate > client.lastOrderDate) {
+            client.lastOrderDate = orderDate;
+          }
+        });
+
+        setClients(Array.from(clientMap.values()));
+      } else {
+        // Nova loja: NUNCA herda os clientes da Vruum Burguer! Começa 100% zerada!
+        setClients([]);
+      }
     } catch (err) {
       console.error("Erro ao carregar clientes:", err);
+      setClients([]);
     } finally {
       setIsLoading(false);
     }

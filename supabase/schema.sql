@@ -98,14 +98,14 @@ CREATE TABLE IF NOT EXISTS public.users (
 -- ========================= SETTINGS ==================================
 CREATE TABLE IF NOT EXISTS public.settings (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    restaurant_name     TEXT DEFAULT 'Vruum Burguer',
+    restaurant_name     TEXT DEFAULT 'Delivery 1.0',
     restaurant_logo     TEXT,
     opening_time        TEXT DEFAULT '18:00',
     closing_time        TEXT DEFAULT '23:59',
     open_days           JSONB NOT NULL DEFAULT '[]'::jsonb,
     phone               TEXT DEFAULT '(11) 99999-9999',
     address             TEXT DEFAULT 'Av. Brasil, 1500 - Centro',
-    instagram           TEXT DEFAULT '@vrumburguer',
+    instagram           TEXT DEFAULT '@delivery',
     whatsapp            TEXT DEFAULT '11999999999',
     delivery_fee        NUMERIC(10,2) NOT NULL DEFAULT 6.50,
     min_order_value     NUMERIC(10,2) NOT NULL DEFAULT 20.00,
@@ -494,13 +494,13 @@ INSERT INTO public.settings (
     phone, address, instagram, whatsapp, delivery_fee, min_order_value, open_days
 ) VALUES (
     'a1b2c3d4-e5f6-7890-abcd-111122223333',
-    'Vruum Burguer',
+    'Delivery 1.0',
     NULL,
     '18:00',
     '23:59',
     '(11) 99999-9999',
     'Av. Brasil, 1500 - Centro',
-    '@vrumburguer',
+    '@delivery',
     '11999999999',
     6.50,
     20.00,

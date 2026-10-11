@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { Plus } from "lucide-react";
 
 const ProductCard = forwardRef(function ProductCard(
-  { product, onProductClick, _isStoreOpen = true, isPopular = false },
+  { product, onProductClick, _isStoreOpen = true, _isPopular = false },
   ref
 ) {
   const [imageError, setImageError] = useState(false);

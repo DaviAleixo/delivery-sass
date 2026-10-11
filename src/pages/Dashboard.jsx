@@ -17,27 +17,6 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadData();
-
-    // Subscribe to real-time order updates
-    let unsubscribe;
-    try {
-      unsubscribe = Order.subscribe((event) => {
-        if (event?.type === 'create' && event?.data) {
-          playNotificationSound();
-          setOrders(prev => [event.data, ...(prev || [])]);
-        } else if (event?.type === 'update' && event?.data) {
-          setOrders(prev => (prev || []).map(o => (o.id === event.id ? event.data : o)));
-        }
-      });
-    } catch (_e) {
-      console.log("Realtime subscribe error:", _e);
-    }
-
-    return () => {
-      if (unsubscribe && typeof unsubscribe === 'function') {
-        unsubscribe();
-      }
-    };
   }, []);
 
   const playNotificationSound = () => {
@@ -289,7 +268,7 @@ export default function DashboardPage() {
                             {product.image_url ? (
                               <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
                             ) : (
-                              <span>🍔</span>
+                              <span>🍽️</span>
                             )}
                             <span className="absolute top-0.5 left-0.5 bg-black/75 text-[10px] text-white font-black px-1 rounded">
                               #{idx + 1}

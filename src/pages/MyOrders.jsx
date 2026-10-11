@@ -54,58 +54,19 @@ export default function MyOrdersPage() {
   useEffect(() => {
     loadOrders();
     requestNotificationPermission();
-    const unsub = subscribeToOrderUpdates();
+
+    // Polling inteligente e seguro a cada 15s enquanto a aba estiver visível
+    // Evita conexões WebSocket abertas desnecessárias no cliente
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        loadOrders(false);
+      }
+    }, 15000);
+
     return () => {
-      if (unsub && typeof unsub === "function") unsub();
+      clearInterval(interval);
     };
   }, [highlightOrderId]);
-
-  const requestNotificationPermission = async () => {
-    if ("Notification" in window && Notification.permission === "default") {
-      await Notification.requestPermission();
-    }
-  };
-
-  const showNotification = (title, body) => {
-    if ("Notification" in window && Notification.permission === "granted") {
-      new Notification(title, {
-        body,
-        icon: "/favicon.ico",
-        badge: "/favicon.ico",
-        tag: "order-update",
-      });
-    }
-  };
-
-  const subscribeToOrderUpdates = () => {
-    try {
-      const filterOptions = highlightOrderId ? { filter: `id=eq.${highlightOrderId}` } : {};
-      return Order.subscribe((event) => {
-        if (event.type === "update") {
-          const status = event.data?.status;
-          if (status === "enviado") {
-            const isDelivery = event.data?.order_type === "delivery";
-            const isMesa = event.data?.order_type === "dine_in" || event.data?.table_number?.toLowerCase().includes("mesa");
-            const msg = isDelivery
-              ? "Seu pedido saiu para entrega! 🛵"
-              : isMesa
-                ? "Seu pedido está pronto e sendo servido na sua mesa! 🍽️"
-                : "Seu pedido está pronto para retirada no balcão! 🥡";
-            showNotification("Pedido Enviado / Pronto! 🎉", msg);
-          } else if (status === "confirmado") {
-            showNotification("Pedido Confirmado!", "Seu pedido foi confirmado pelo restaurante! 🎉");
-          } else if (status === "entregue") {
-            showNotification("Pedido Concluído!", "Seu pedido foi finalizado! Bom apetite! ✅");
-          } else if (status === "cancelado") {
-            showNotification("Pedido Cancelado", "Seu pedido foi cancelado. 😔");
-          }
-          loadOrders(false);
-        }
-      }, filterOptions);
-    } catch (_e) {
-      console.log("Realtime não disponível");
-    }
-  };
 
   const loadOrders = async (showLoading = true) => {
     if (showLoading) setIsLoading(true);

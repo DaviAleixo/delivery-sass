@@ -1,12 +1,12 @@
-# 🍔 VRUUM BURGUER — Documentação Completa do Projeto
+# 🛵 DELIVERY 1.0 — Documentação Completa do Projeto
 
-**Plataforma de pedidos online para restaurante** com cardápio digital para clientes e sistema interno de administração + PDV (Ponto de Venda) para gestão de pedidos.
+**Plataforma de pedidos online para restaurantes e estabelecimentos** com cardápio digital para clientes e sistema interno de administração + PDV (Ponto de Venda) para gestão de pedidos.
 
 ---
 
 ## 1. Visão Geral
 
-O Vruum Burguer é dividido em duas frentes:
+O Delivery 1.0 é dividido em duas frentes:
 
 | Frente                 | Descrição                                                                    | Acesso                                  |
 | ---------------------- | ---------------------------------------------------------------------------- | --------------------------------------- |

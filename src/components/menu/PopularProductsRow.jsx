@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Plus, Flame } from "lucide-react";
+import { Plus } from "lucide-react";
 
 function PopularProductCard({ product, index, hasMoved, onProductClick }) {
   const [imageError, setImageError] = useState(false);
@@ -42,7 +42,7 @@ function PopularProductCard({ product, index, hasMoved, onProductClick }) {
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-3xl bg-stone-900">
-              🍔
+              🍽️
             </div>
           )}
 

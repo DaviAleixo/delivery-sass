@@ -53,7 +53,7 @@ async function compressImageToWebP(file, maxDimension = 800, quality = 0.8) {
  * 2. Uploads to Supabase Storage 'restaurant-images' public bucket.
  * 3. Returns the public CDN URL with long cache-control header.
  */
-export async function UploadFile({ file, maxDimension = 800 }) {
+export async function UploadFile({ file, maxDimension = 800, tenantId = null }) {
   if (!file) {
     throw new Error("No file provided");
   }
@@ -64,7 +64,9 @@ export async function UploadFile({ file, maxDimension = 800 }) {
     try {
       const ext = "webp";
       const cleanName = file.name ? file.name.replace(/[^a-zA-Z0-9]/g, "_").slice(0, 20) : "image";
-      const filePath = `uploads/${Date.now()}_${Math.random().toString(36).substring(2, 7)}_${cleanName}.${ext}`;
+      const activeTenant = tenantId || (typeof window !== "undefined" ? localStorage.getItem("current_tenant_id") : null) || "global";
+      const cleanTenant = String(activeTenant).replace(/[^a-zA-Z0-9_-]/g, "");
+      const filePath = `tenants/${cleanTenant}/uploads/${Date.now()}_${Math.random().toString(36).substring(2, 7)}_${cleanName}.${ext}`;
 
       const { data, error } = await supabase.storage
         .from("restaurant-images")

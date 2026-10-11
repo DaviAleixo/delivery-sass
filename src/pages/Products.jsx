@@ -9,12 +9,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/CurrencyInput";
+import { parseBRLToNumber, formatToBRL } from "@/utils/moneyMask";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
+import { validateSchema, productSchema } from "@/schemas";
 import { 
   Plus, 
   Edit, 
@@ -26,7 +29,6 @@ import {
   EyeOff, 
   CheckCircle2, 
   Package, 
-  Filter,
   X
 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -44,7 +46,7 @@ function AdditionalsManager({ productId, initialAdditionals = [] }) {
     try {
       const created = await ProductAdditional.create({
         ...newAdditional,
-        price: parseFloat(newAdditional.price),
+        price: parseBRLToNumber(newAdditional.price),
         product_id: productId,
       });
       setAdditionals([...additionals, created]);
@@ -93,15 +95,13 @@ function AdditionalsManager({ productId, initialAdditionals = [] }) {
             placeholder="Ex: Bacon"
           />
         </div>
-        <div className="w-28">
+        <div className="w-32">
           <Label htmlFor="additional-price">Preço (R$)</Label>
-          <Input 
+          <CurrencyInput 
             id="additional-price"
-            type="number"
-            step="0.01"
             value={newAdditional.price}
             onChange={e => setNewAdditional({...newAdditional, price: e.target.value})}
-            placeholder="2.50"
+            placeholder="R$ 2,50"
           />
         </div>
         <Button type="button" onClick={handleAdd}>Adicionar</Button>
@@ -195,9 +195,16 @@ export default function ProductsPage() {
     try {
       const productData = {
         ...productForm,
-        price: parseFloat(productForm.price),
+        price: parseBRLToNumber(productForm.price),
         available: Boolean(productForm.available)
       };
+
+      const zodValidation = validateSchema(productSchema, productData);
+      if (!zodValidation.success) {
+        toast.error(zodValidation.errorList[0] || "Dados do produto inválidos");
+        setIsSubmitting(false);
+        return;
+      }
 
       let savedProduct;
       if (editingProduct) {
@@ -288,7 +295,7 @@ export default function ProductsPage() {
     setProductForm({
       name: product.name,
       description: product.description || "",
-      price: product.price.toString(),
+      price: product.price ? formatToBRL(product.price) : "",
       category: product.category || "",
       image_url: product.image_url || "",
       available: product.available !== false
@@ -325,7 +332,7 @@ export default function ProductsPage() {
         <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight flex items-center gap-2">
-              🍔 Produtos & Cardápio
+              📦 Produtos & Cardápio
             </h1>
             <p className="text-sm text-gray-600 mt-1">
               Gerencie os itens do cardápio, valores, complementos e oculte produtos indisponíveis
@@ -471,7 +478,7 @@ export default function ProductsPage() {
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-4xl bg-stone-100 text-gray-400">
-                          🍔
+                          🍽️
                         </div>
                       )}
 
@@ -664,13 +671,11 @@ export default function ProductsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="price">Preço (R$) *</Label>
-                  <Input
+                  <CurrencyInput
                     id="price"
-                    type="number"
-                    step="0.01"
                     value={productForm.price}
                     onChange={(e) => setProductForm({...productForm, price: e.target.value})}
-                    placeholder="32.90"
+                    placeholder="R$ 32,90"
                     required
                   />
                 </div>

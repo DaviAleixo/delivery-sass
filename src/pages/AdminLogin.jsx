@@ -20,10 +20,20 @@ export default function AdminLoginPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Se já está logado, redireciona para dashboard
+    // Se já está logado, redireciona para a tela correspondente
     const adminAuth = localStorage.getItem("admin_auth");
+    const rawUser = localStorage.getItem("admin_user");
+    let user = null;
+    try {
+      user = rawUser ? JSON.parse(rawUser) : null;
+    } catch (_e) {}
+
     if (adminAuth === "authenticated") {
-      navigate(createPageUrl("Dashboard"), { replace: true });
+      if (user?.role === "super_admin") {
+        navigate(createPageUrl("SuperAdmin"), { replace: true });
+      } else {
+        navigate(createPageUrl("Dashboard"), { replace: true });
+      }
     }
   }, [navigate]);
 
@@ -41,13 +51,25 @@ export default function AdminLoginPage() {
         });
 
         if (!rpcError && data) {
-          if (data.success) {
+          const authData = Array.isArray(data) ? data[0] : data;
+
+          if (authData && authData.success) {
             localStorage.setItem("admin_auth", "authenticated");
-            localStorage.setItem("admin_user", JSON.stringify(data.user || { username }));
-            navigate(createPageUrl("Dashboard"), { replace: true });
+            localStorage.setItem("admin_user", JSON.stringify(authData));
+
+            if (authData.role === "super_admin") {
+              navigate(createPageUrl("SuperAdmin"), { replace: true });
+            } else {
+              if (authData.tenant_id) {
+                localStorage.setItem("current_tenant_id", authData.tenant_id);
+                localStorage.setItem("current_tenant_slug", authData.tenant_slug);
+                localStorage.setItem("current_tenant_name", authData.tenant_name);
+              }
+              navigate(createPageUrl("Dashboard"), { replace: true });
+            }
             return;
-          } else {
-            setError(data.message || "Usuário ou senha incorretos");
+          } else if (authData && authData.message) {
+            setError(authData.message);
             setIsLoading(false);
             return;
           }
@@ -55,9 +77,28 @@ export default function AdminLoginPage() {
       }
 
       // 2. Fallback de desenvolvimento local
-      if (username === "admin" && (password === "123" || password === "admin")) {
+      if (username === "davi" && password === "davi123") {
         localStorage.setItem("admin_auth", "authenticated");
-        localStorage.setItem("admin_user", JSON.stringify({ username: "admin", role: "admin" }));
+        localStorage.setItem("admin_user", JSON.stringify({ username: "davi", role: "super_admin" }));
+        navigate(createPageUrl("SuperAdmin"), { replace: true });
+        return;
+      }
+
+      if (
+        (username === "vrumm" && (password === "vrumm123" || password === "123")) ||
+        (username === "admin" && (password === "admin123" || password === "123" || password === "admin"))
+      ) {
+        localStorage.setItem("admin_auth", "authenticated");
+        localStorage.setItem("admin_user", JSON.stringify({
+          username: "vrumm",
+          role: "admin",
+          tenant_id: "a0000000-0000-0000-0000-000000000001",
+          tenant_slug: "vruum-burguer",
+          tenant_name: "Vruum Burguer"
+        }));
+        localStorage.setItem("current_tenant_id", "a0000000-0000-0000-0000-000000000001");
+        localStorage.setItem("current_tenant_slug", "vruum-burguer");
+        localStorage.setItem("current_tenant_name", "Vruum Burguer");
         navigate(createPageUrl("Dashboard"), { replace: true });
         return;
       }
@@ -87,10 +128,10 @@ export default function AdminLoginPage() {
             <Lock className="w-8 h-8 text-white" />
           </div>
           <CardTitle className="text-2xl font-bold text-gray-900">
-            Admin Panel
+            Acesso Administrativo
           </CardTitle>
           <p className="text-sm text-gray-600">
-            Entre com suas credenciais de administrador
+            Portal de Gestão — Restaurantes e Painel Master
           </p>
         </CardHeader>
         

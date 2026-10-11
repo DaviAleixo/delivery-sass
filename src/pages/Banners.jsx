@@ -299,10 +299,10 @@ export default function BannersPage() {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isUploading}
                   className="flex-1 bg-red-500 hover:bg-red-600"
                 >
-                  {isSubmitting ? "Salvando..." : "Salvar"}
+                  {isSubmitting ? "Salvando..." : (isUploading ? "Enviando foto..." : "Salvar")}
                 </Button>
               </div>
             </form>

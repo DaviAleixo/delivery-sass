@@ -1,8 +1,8 @@
-**Welcome to your Base44 project**
+# 🛵 Delivery 1.0
 
-**About**
+Plataforma moderna de delivery e cardápio digital com painel administrativo e PDV.
 
-View and Edit your app on [Base44.com](http://Base44.com)
+---
 
 This project contains everything you need to run your app locally.
 

@@ -36,6 +36,8 @@ export default function TableQRCodeModal({ settings }) {
   const tables = getTablesList();
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
 
+  const activeSlug = (typeof window !== "undefined" ? localStorage.getItem("current_tenant_slug") : null) || "vrumm";
+
   const handlePrint = () => {
     const printContent = document.getElementById("table-qr-print-area");
     if (!printContent) return;
@@ -45,7 +47,7 @@ export default function TableQRCodeModal({ settings }) {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Plaquinhas de Mesa com QR Code - ${settings?.restaurant_name || "Vruum Burguer"}</title>
+          <title>Plaquinhas de Mesa com QR Code - ${settings?.restaurant_name || "Delivery 1.0"}</title>
           <style>
             @page {
               size: A4;
@@ -187,7 +189,7 @@ export default function TableQRCodeModal({ settings }) {
             
             <div className="bg-white border-2 border-stone-900 rounded-2xl p-6 text-center shadow-xl w-full max-w-xs flex flex-col items-center">
               <span className="text-base font-black text-red-600 tracking-wide uppercase">
-                {settings?.restaurant_name || "Vruum Burguer"}
+                {settings?.restaurant_name || "Delivery 1.0"}
               </span>
               
               <div className="bg-stone-900 text-white font-black text-xl px-5 py-1 rounded-full my-2">
@@ -196,7 +198,7 @@ export default function TableQRCodeModal({ settings }) {
 
               <div className="p-3 bg-stone-50 border-2 border-dashed border-stone-300 rounded-2xl my-2">
                 <QRCodeSVG
-                  value={`${baseUrl}/Menu?mesa=${encodeURIComponent(selectedMesa)}`}
+                  value={`${baseUrl}/${activeSlug}/menu?mesa=${encodeURIComponent(selectedMesa)}`}
                   size={150}
                   level="H"
                   includeMargin={true}
@@ -254,11 +256,11 @@ export default function TableQRCodeModal({ settings }) {
           <div id="table-qr-print-area" style={{ display: "none" }}>
             {tables.map(tableNum => (
               <div key={tableNum} className="card">
-                <div className="brand-name">{settings?.restaurant_name || "Vruum Burguer"}</div>
+                <div className="brand-name">{settings?.restaurant_name || "Delivery 1.0"}</div>
                 <div className="table-badge">MESA {tableNum}</div>
                 <div className="qr-wrapper">
                   <QRCodeSVG
-                    value={`${baseUrl}/Menu?mesa=${encodeURIComponent(tableNum)}`}
+                    value={`${baseUrl}/${activeSlug}/menu?mesa=${encodeURIComponent(tableNum)}`}
                     size={170}
                     level="H"
                     includeMargin={true}

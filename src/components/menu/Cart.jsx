@@ -149,7 +149,7 @@ export default function Cart({ cart, updateQuantity, onCheckout, deliveryFee = 0
                       {item.image_url ? (
                         <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center text-xl">🍔</div>
+                        <div className="w-full h-full flex items-center justify-center text-xl">🍽️</div>
                       )}
                     </div>
 

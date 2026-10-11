@@ -13,7 +13,7 @@ export default function PDVCart({
   onCustomerNameChange,
   customerPhone,
   onCustomerPhoneChange,
-  customerEmail,
+  _customerEmail,
   onCustomerEmailChange,
   onUpdateQty,
   onRemoveItem,

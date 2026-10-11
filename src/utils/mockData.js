@@ -256,12 +256,12 @@ export const MOCK_ADDITIONALS = [
 ];
 
 export const MOCK_SETTINGS = {
-  restaurant_name: "Vruum Burguer",
+  restaurant_name: "Delivery 1.0",
   restaurant_logo: "",
   opening_time: "18:00",
   closing_time: "23:59",
   address: "Av. Brasil, 1500 - Centro",
-  instagram: "@vrumburguer",
+  instagram: "@delivery",
   whatsapp: "11999999999",
   phone: "(11) 99999-9999",
   delivery_fee: 6.50,

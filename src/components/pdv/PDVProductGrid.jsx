@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Search, ShoppingCart, History, PanelLeft } from "lucide-react";
+import { Search, ShoppingCart, History } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
@@ -143,7 +143,7 @@ export default function PDVProductGrid({
                   />
                 ) : (
                   <div className="w-full h-24 sm:h-28 bg-gradient-to-br from-red-50 to-orange-50 flex items-center justify-center text-3xl shrink-0">
-                    🍔
+                    🍽️
                   </div>
                 )}
                 <div className="p-2 sm:p-2.5 flex flex-col justify-between flex-1 min-w-0">

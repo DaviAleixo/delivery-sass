@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/CurrencyInput";
+import { parseBRLToNumber } from "@/utils/moneyMask";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -179,7 +181,7 @@ export default function ComplementsPage() {
     if (!itemForm.name.trim()) return;
 
     try {
-      const priceNum = parseFloat(itemForm.price.replace?.(',', '.') || itemForm.price) || 0;
+      const priceNum = parseBRLToNumber(itemForm.price);
       await ComplementItem.create({
         group_id: activeGroupForItems.id,
         name: itemForm.name.trim(),
@@ -583,9 +585,9 @@ export default function ComplementsPage() {
                   </div>
                   <div>
                     <Label htmlFor="opt-price" className="text-xs font-semibold text-gray-600">Preço Adicional (R$)</Label>
-                    <Input
+                    <CurrencyInput
                       id="opt-price"
-                      placeholder="0,00"
+                      placeholder="R$ 0,00"
                       value={itemForm.price}
                       onChange={e => setItemForm({ ...itemForm, price: e.target.value })}
                       className="mt-1 bg-white"

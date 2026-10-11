@@ -82,7 +82,7 @@ export default function PrintOrderPage() {
   const deliveryAddress = order.customer_address || order.delivery_address || "";
   const customerPhone = order.customer_phone || order.phone || "";
   const customerName = order.customer_name || order.name || "Cliente Balcão";
-  const restaurantName = settings?.restaurant_name || "Vruum Burger";
+  const restaurantName = settings?.restaurant_name || "Delivery 1.0";
   const orderNumber = order.order_number || (order.id ? order.id.slice(-4).toUpperCase() : "0000");
 
   const orderDateFormatted = order.created_date

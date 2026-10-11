@@ -38,7 +38,7 @@ export default function StoreInfoSheet({ settings }) {
                   className="w-full h-full object-contain" 
                 />
               ) : (
-                <span className="text-2xl">🍔</span>
+                <span className="text-2xl">🛵</span>
               )}
             </div>
             <div>
@@ -46,7 +46,7 @@ export default function StoreInfoSheet({ settings }) {
                 className="text-lg sm:text-xl font-black text-white"
                 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
               >
-                {settings.restaurant_name || "Vruum Burguer"}
+                {settings.restaurant_name || "Delivery 1.0"}
               </SheetTitle>
               <p className="text-xs text-stone-400">Informações & Atendimento</p>
             </div>
