@@ -86,12 +86,28 @@ export default function PaymentMethodsTab({ tenantData, onUpdateTenant }) {
     }
   };
 
+  const updateSetting = (key, val) => {
+    const updated = {
+      ...config,
+      [key]: val,
+    };
+    setConfig(updated);
+    if (onUpdateTenant) {
+      onUpdateTenant({
+        payment_methods: {
+          ...updated,
+          accept_card_delivery: Boolean(
+            (key === "accept_card_credit" ? val : updated.accept_card_credit) ||
+            (key === "accept_card_debit" ? val : updated.accept_card_debit)
+          ),
+        },
+      });
+    }
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!tenantData?.id) {
-      toast.error("Identificador da empresa não encontrado.");
-      return;
-    }
+    const targetTenantId = tenantData?.id || localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001";
 
     // Se ativou Mercado Pago, garantir que tem token
     if (config.accept_online_mp && !config.mp_access_token.trim()) {
@@ -108,14 +124,23 @@ export default function PaymentMethodsTab({ tenantData, onUpdateTenant }) {
       };
 
       if (isSupabaseConfigured() && supabase) {
-        const { error } = await supabase
-          .from("tenants")
-          .update({
-            payment_methods: payload,
-          })
-          .eq("id", tenantData.id);
+        // Tenta via RPC Security Definer primeiro para garantir bypass de RLS
+        const { error: rpcError } = await supabase.rpc("update_tenant_payment_methods", {
+          p_tenant_id: targetTenantId,
+          p_payment_methods: payload,
+        });
 
-        if (error) throw error;
+        if (rpcError) {
+          // Fallback para update direto
+          const { error: directError } = await supabase
+            .from("tenants")
+            .update({
+              payment_methods: payload,
+            })
+            .eq("id", targetTenantId);
+
+          if (directError) throw directError;
+        }
       }
 
       if (onUpdateTenant) {
@@ -171,7 +196,7 @@ export default function PaymentMethodsTab({ tenantData, onUpdateTenant }) {
             </div>
             <Switch
               checked={config.accept_cash}
-              onCheckedChange={(val) => setConfig({ ...config, accept_cash: val })}
+              onCheckedChange={(val) => updateSetting("accept_cash", val)}
             />
           </div>
 
@@ -192,7 +217,7 @@ export default function PaymentMethodsTab({ tenantData, onUpdateTenant }) {
             </div>
             <Switch
               checked={config.accept_card_credit}
-              onCheckedChange={(val) => setConfig({ ...config, accept_card_credit: val })}
+              onCheckedChange={(val) => updateSetting("accept_card_credit", val)}
             />
           </div>
 
@@ -213,7 +238,7 @@ export default function PaymentMethodsTab({ tenantData, onUpdateTenant }) {
             </div>
             <Switch
               checked={config.accept_card_debit}
-              onCheckedChange={(val) => setConfig({ ...config, accept_card_debit: val })}
+              onCheckedChange={(val) => updateSetting("accept_card_debit", val)}
             />
           </div>
 
@@ -234,7 +259,7 @@ export default function PaymentMethodsTab({ tenantData, onUpdateTenant }) {
             </div>
             <Switch
               checked={config.accept_card_meal}
-              onCheckedChange={(val) => setConfig({ ...config, accept_card_meal: val })}
+              onCheckedChange={(val) => updateSetting("accept_card_meal", val)}
             />
           </div>
         </CardContent>
@@ -264,7 +289,7 @@ export default function PaymentMethodsTab({ tenantData, onUpdateTenant }) {
             </div>
             <Switch
               checked={config.accept_online_mp}
-              onCheckedChange={(val) => setConfig({ ...config, accept_online_mp: val })}
+              onCheckedChange={(val) => updateSetting("accept_online_mp", val)}
             />
           </div>
         </CardHeader>

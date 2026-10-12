@@ -809,6 +809,7 @@ export default function SettingsPage() {
           delivery_unlisted_policy: settings.delivery_unlisted_policy || 'block',
           delivery_fallback_fee: fallbackFeeNum,
           free_delivery_threshold: freeThresholdNum,
+          ...(tenantDetails?.payment_methods ? { payment_methods: tenantDetails.payment_methods } : {}),
           updated_date: new Date().toISOString(),
         });
 

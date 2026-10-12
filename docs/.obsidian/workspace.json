@@ -41,12 +41,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01 - 🗺️ Roadmap & Backlog.md",
+                "file": "03 - 🚀 Especificacao SaaS.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "01 - 🗺️ Roadmap & Backlog"
+              "title": "03 - 🚀 Especificacao SaaS"
             }
           },
           {
@@ -184,7 +184,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "01 - 🗺️ Roadmap & Backlog.md",
+                "file": "03 - 🚀 Especificacao SaaS.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -203,7 +203,7 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "01 - 🗺️ Roadmap & Backlog.md",
+                "file": "03 - 🚀 Especificacao SaaS.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
@@ -246,7 +246,7 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "01 - 🗺️ Roadmap & Backlog.md",
+                "file": "03 - 🚀 Especificacao SaaS.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
@@ -276,10 +276,10 @@
   "active": "1a11088e11f97939",
   "lastOpenFiles": [
     "02 - 💡 Ideias & Brainstorm.md",
+    "01 - 🗺️ Roadmap & Backlog.md",
     "00 - 🏠 Inicio.md",
     "03 - 🚀 Especificacao SaaS.md",
     "04 - 🗄️ Modelagem & Supabase.md",
-    "05 - 🖥️ Modulos do Sistema.md",
-    "01 - 🗺️ Roadmap & Backlog.md"
+    "05 - 🖥️ Modulos do Sistema.md"
   ]
 }

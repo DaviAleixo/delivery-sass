@@ -1357,7 +1357,9 @@ export default function OrderModal({
           {/* 3º BLOCO: FORMA DE PAGAMENTO E OBSERVAÇÕES */}
           <div className="space-y-3 pt-1">
             <div>
-              <Label className="text-xs font-bold uppercase text-gray-700 mb-2 block">Forma de pagamento *</Label>
+              <Label className="text-xs font-bold uppercase text-gray-700 mb-2.5 block">
+                Forma de Pagamento *
+              </Label>
               {(() => {
                 const pm = deliveryRules?.payment_methods || {};
                 const showOnlineMp = Boolean(pm.accept_online_mp && pm.mp_access_token);
@@ -1367,11 +1369,43 @@ export default function OrderModal({
                 const showCash = pm.accept_cash !== false;
 
                 const availableMethods = [
-                  showOnlineMp && { id: 'pix_online', label: 'PIX Online', sub: '⚡ Instantâneo', icon: Zap, color: 'sky' },
-                  showCredit && { id: 'cartao_credito', label: 'Crédito', sub: 'Maquininha', icon: CreditCard, color: 'blue' },
-                  showDebit && { id: 'cartao_debito', label: 'Débito', sub: 'Maquininha', icon: CreditCard, color: 'indigo' },
-                  showMeal && { id: 'alimentacao', label: 'Vale Refeição', sub: 'VR / VA', icon: UtensilsCrossed, color: 'amber' },
-                  showCash && { id: 'dinheiro', label: 'Dinheiro', sub: 'Com troco', icon: Banknote, color: 'emerald' },
+                  showOnlineMp && {
+                    id: 'pix_online',
+                    label: 'PIX Online (Mercado Pago)',
+                    sub: 'QR Code automático na tela com aprovação em 2 segundos',
+                    badge: '⚡ Instantâneo',
+                    icon: Zap,
+                    iconBg: 'bg-sky-100 text-sky-700',
+                  },
+                  showCredit && {
+                    id: 'cartao_credito',
+                    label: 'Cartão de Crédito',
+                    sub: 'O entregador leva a maquininha para passar no Crédito',
+                    icon: CreditCard,
+                    iconBg: 'bg-blue-100 text-blue-700',
+                  },
+                  showDebit && {
+                    id: 'cartao_debito',
+                    label: 'Cartão de Débito',
+                    sub: 'O entregador leva a maquininha para passar no Débito',
+                    icon: CreditCard,
+                    iconBg: 'bg-indigo-100 text-indigo-700',
+                  },
+                  showMeal && {
+                    id: 'alimentacao',
+                    label: 'Vale Refeição / Alimentação',
+                    sub: 'VR, VA, Alelo, Sodexo, Ticket na maquininha',
+                    badge: 'Benefício',
+                    icon: UtensilsCrossed,
+                    iconBg: 'bg-amber-100 text-amber-700',
+                  },
+                  showCash && {
+                    id: 'dinheiro',
+                    label: 'Dinheiro em Espécie',
+                    sub: 'Pagamento no ato da entrega (com opção de troco)',
+                    icon: Banknote,
+                    iconBg: 'bg-emerald-100 text-emerald-700',
+                  },
                 ].filter(Boolean);
 
                 // Auto-seleção caso o método salvo não esteja disponível ou seja inválido
@@ -1383,29 +1417,53 @@ export default function OrderModal({
 
                 return (
                   <>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+                    <div className="space-y-2">
                       {availableMethods.map((method) => {
                         const Icon = method.icon;
                         const isSelected = customerData.payment_method === method.id;
                         return (
-                          <button
+                          <div
                             key={method.id}
-                            type="button"
                             onClick={() => handleInputChange('payment_method', method.id)}
-                            className={`p-3 rounded-2xl border text-center flex flex-col items-center justify-center gap-1 min-h-[76px] transition-all cursor-pointer relative overflow-hidden ${
+                            className={`group p-3 sm:p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 select-none active:scale-[0.99] ${
                               isSelected
-                                ? 'border-red-600 bg-red-50/90 ring-2 ring-red-500/30 text-red-950 font-black shadow-sm'
-                                : 'border-stone-200 bg-white hover:border-stone-400 text-stone-700 font-bold'
+                                ? 'border-red-600 bg-red-50/70 ring-2 ring-red-500/20 shadow-xs'
+                                : 'border-stone-200 bg-white hover:border-stone-300 hover:bg-stone-50/60'
                             }`}
                           >
-                            <Icon className={`w-5 h-5 ${isSelected ? 'text-red-600' : 'text-stone-600'}`} />
-                            <span className="text-xs sm:text-sm tracking-tight font-bold">{method.label}</span>
-                            {method.sub && (
-                              <span className={`text-[10px] font-semibold ${method.id === 'pix_online' ? 'text-sky-600 font-extrabold' : 'text-stone-500'}`}>
-                                {method.sub}
-                              </span>
-                            )}
-                          </button>
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-105 ${
+                                isSelected 
+                                  ? 'bg-red-600 text-white shadow-md shadow-red-600/30' 
+                                  : (method.iconBg || 'bg-stone-100 text-stone-600')
+                              }`}>
+                                <Icon className="w-5 h-5" />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className={`text-xs sm:text-sm tracking-tight font-bold ${isSelected ? 'text-red-950 font-black' : 'text-stone-900'}`}>
+                                    {method.label}
+                                  </span>
+                                  {method.badge && (
+                                    <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded-md bg-sky-100 text-sky-800 border border-sky-200">
+                                      {method.badge}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[11px] sm:text-xs text-stone-500 font-medium truncate sm:whitespace-normal mt-0.5">
+                                  {method.sub}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${
+                              isSelected
+                                ? 'border-red-600 bg-red-600 text-white'
+                                : 'border-stone-300 bg-white group-hover:border-stone-400'
+                            }`}>
+                              {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                            </div>
+                          </div>
                         );
                       })}
                     </div>

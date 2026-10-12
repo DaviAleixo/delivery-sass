@@ -202,34 +202,46 @@ export default function MenuPage() {
       setComplementItems(itemsData || []);
       setProductComplementGroups(pcgData || []);
 
+      let currentTenant = tenant;
+      if (isSupabaseConfigured() && supabase && activeTenantId) {
+        try {
+          const { data: dbTenant } = await supabase.from("tenants").select("*").eq("id", activeTenantId).maybeSingle();
+          if (dbTenant) {
+            currentTenant = dbTenant;
+          }
+        } catch (_err) {
+          console.warn("Sync tenant in Menu:", _err);
+        }
+      }
+
       const segments = window.location.pathname.split("/").filter(Boolean);
       const RESERVED = ["menu", "dashboard", "orders", "pdv", "adminlogin", "superadmin"];
       const pathSlug = segments.length > 0 && !RESERVED.includes(segments[0].toLowerCase()) ? segments[0].toLowerCase() : null;
-      const effectiveSlug = pathSlug || tenant?.slug || localStorage.getItem("current_tenant_slug");
+      const effectiveSlug = pathSlug || currentTenant?.slug || localStorage.getItem("current_tenant_slug");
       const isVruum = effectiveSlug === "vrumm" || effectiveSlug === "vruum-burguer";
 
       const resolvedSettings = {
-        restaurant_name: tenant?.name || (isVruum ? "Vruum Burguer" : "Novo Restaurante"),
-        restaurant_logo: tenant?.logo_url || (isVruum ? settingsData[0]?.restaurant_logo : null),
-        banner_url: tenant?.banner_url || (isVruum ? settingsData[0]?.banner_url : null),
-        delivery_fee: tenant?.delivery_fee ?? (isVruum ? 6.50 : 0),
-        min_order_value: tenant?.min_order_value ?? (isVruum ? 20.00 : 0),
-        delivery_time: tenant?.delivery_time || "40-50 min",
-        delivery_fee_type: tenant?.delivery_fee_type || "fixed",
-        delivery_neighborhoods: Array.isArray(tenant?.delivery_neighborhoods) ? tenant.delivery_neighborhoods : [],
-        delivery_unlisted_policy: tenant?.delivery_unlisted_policy || "block",
-        delivery_fallback_fee: tenant?.delivery_fallback_fee ?? 10.00,
-        free_delivery_threshold: tenant?.free_delivery_threshold ?? null,
-        phone: tenant?.phone || (isVruum ? settingsData[0]?.phone : ""),
-        whatsapp: tenant?.whatsapp || (isVruum ? settingsData[0]?.whatsapp : ""),
-        address: tenant?.address || (isVruum ? settingsData[0]?.address : ""),
-        address_city: tenant?.address_city || "",
-        address_state: tenant?.address_state || "",
-        instagram: tenant?.instagram || (isVruum ? settingsData[0]?.instagram : ""),
-        opening_time: tenant?.opening_time || "18:00",
-        closing_time: tenant?.closing_time || "23:59",
-        open_days: tenant?.open_days || [],
-        payment_methods: tenant?.payment_methods || null,
+        restaurant_name: currentTenant?.name || (isVruum ? "Vruum Burguer" : "Novo Restaurante"),
+        restaurant_logo: currentTenant?.logo_url || (isVruum ? settingsData[0]?.restaurant_logo : null),
+        banner_url: currentTenant?.banner_url || (isVruum ? settingsData[0]?.banner_url : null),
+        delivery_fee: currentTenant?.delivery_fee ?? (isVruum ? 6.50 : 0),
+        min_order_value: currentTenant?.min_order_value ?? (isVruum ? 20.00 : 0),
+        delivery_time: currentTenant?.delivery_time || "40-50 min",
+        delivery_fee_type: currentTenant?.delivery_fee_type || "fixed",
+        delivery_neighborhoods: Array.isArray(currentTenant?.delivery_neighborhoods) ? currentTenant.delivery_neighborhoods : [],
+        delivery_unlisted_policy: currentTenant?.delivery_unlisted_policy || "block",
+        delivery_fallback_fee: currentTenant?.delivery_fallback_fee ?? 10.00,
+        free_delivery_threshold: currentTenant?.free_delivery_threshold ?? null,
+        phone: currentTenant?.phone || (isVruum ? settingsData[0]?.phone : ""),
+        whatsapp: currentTenant?.whatsapp || (isVruum ? settingsData[0]?.whatsapp : ""),
+        address: currentTenant?.address || (isVruum ? settingsData[0]?.address : ""),
+        address_city: currentTenant?.address_city || "",
+        address_state: currentTenant?.address_state || "",
+        instagram: currentTenant?.instagram || (isVruum ? settingsData[0]?.instagram : ""),
+        opening_time: currentTenant?.opening_time || "18:00",
+        closing_time: currentTenant?.closing_time || "23:59",
+        open_days: currentTenant?.open_days || [],
+        payment_methods: currentTenant?.payment_methods || null,
       };
 
       setSettings(resolvedSettings);
