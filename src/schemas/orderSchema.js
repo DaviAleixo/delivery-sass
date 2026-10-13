@@ -4,6 +4,8 @@ export const orderItemSchema = z.object({
   id: z.string().optional(),
   product_id: z.string().optional(),
   name: z.string().min(1, "Nome do produto é obrigatório"),
+  category_name: z.string().optional().nullable(),
+  category: z.string().optional().nullable(),
   price: z.coerce.number().min(0, "Preço do produto deve ser maior ou igual a zero"),
   quantity: z.coerce.number().int().min(1, "Quantidade mínima é 1"),
   additionals: z.array(z.any()).optional().default([]),

@@ -25,6 +25,7 @@ export function sanitizeOrderData(rawOrder = {}) {
           product_id: item.product_id ? String(item.product_id) : undefined,
           product_name: String(item.product_name || item.name || "Item sem nome").trim(),
           name: String(item.name || item.product_name || "Item sem nome").trim(),
+          category_name: item.category_name ? String(item.category_name).trim() : (item.category ? String(item.category).trim() : null),
           price: itemPrice,
           product_price: itemPrice,
           quantity: itemQty,

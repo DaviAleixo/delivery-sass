@@ -308,6 +308,13 @@ export default function MenuPage() {
   }, [products]);
 
   const addToCart = (product, selectedAdditionals = [], quantity = 1, notes = "") => {
+    const matchedCategory = categories.find(
+      (c) => c.id === product.category_id || c.id === product.category
+    );
+    const resolvedCatName =
+      matchedCategory?.name ||
+      (typeof product.category === "string" && product.category ? product.category : "Geral");
+
     setCart((prevCart) => {
       const existingItemIndex = prevCart.findIndex(
         (item) =>
@@ -327,6 +334,7 @@ export default function MenuPage() {
         {
           ...product,
           cartItemId: `${product.id || 'item'}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          category_name: resolvedCatName,
           additionals: selectedAdditionals,
           quantity,
           notes,

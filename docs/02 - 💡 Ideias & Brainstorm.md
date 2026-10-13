@@ -462,6 +462,13 @@
 * **Prestação de Contas na Volta da Rua**:
   - O sistema calcula exatamente quanto o motoboy recebeu em dinheiro vivo dos clientes e quanto deve devolver para a gaveta do caixa, descontando (ou somando) o que ele tem a receber de taxa.
 
+### 📊 34. Inteligência de Vendas, Horários de Pico e Histórico de Fechamentos
+* **O Conceito**: Transformar a aba de Relatórios em um centro de inteligência comercial com 4 pilares:
+  1. **Evolução Cronológica de Vendas (Barras por Dia)**: Exibir o faturamento e vendas dia a dia no período selecionado, sem divisão por categoria, permitindo visualizar os picos semanais (ex: sexta e sábado).
+  2. **Gráfico Redondo de Categorias com Preservação Histórica (Snapshot)**: Se uma categoria ou produto for excluído do cardápio futuramente, os pedidos antigos mantêm o nome original da categoria em vez de virar 'Outros', mantendo o relatório histórico 100% fiel e sem bugs.
+  3. **Mapa de Horários de Pico (Volume por Hora)**: Exibir distribuição das vendas das 00h às 23h, apontando o horário nobre de pedidos (ex: 19h30 - 21h30) para dimensionamento de equipe.
+  4. **Histórico Persistido de Fechamentos de Caixa**: Possibilidade de salvar o fechamento do dia/turno, mantendo um livro-caixa digital acessível a qualquer momento com reemissão de cupom térmico e reenvio no WhatsApp.
+
 ---
 
 ## 🔗 Links Relacionados

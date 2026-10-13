@@ -651,6 +651,7 @@ export default function OrderModal({
         product_id: item.id,
         product_name: item.name,
         product_price: item.price,
+        category_name: item.category_name || item.category || 'Geral',
         quantity: item.quantity,
         subtotal: (item.price + (item.additionals || []).reduce((s, a) => s + (a.price || 0), 0)) * item.quantity,
         additionals: item.additionals || [],
@@ -673,6 +674,7 @@ export default function OrderModal({
         product_id: item.id,
         name: item.name,
         price: item.price,
+        category_name: item.category_name || item.category || 'Geral',
         quantity: item.quantity,
         additionals: item.additionals || [],
         notes: item.notes || ""

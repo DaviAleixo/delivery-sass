@@ -31,6 +31,7 @@ const TABLE_COLUMNS = {
   users: "id,full_name,email,phone,role,created_date",
   user_addresses: "id,tenant_id,user_email,user_phone,name,cep,zip_code,street,number,complement,neighborhood,city,state,reference,is_default",
   admin_users: "id,tenant_id,username,role,active,permissions,created_date,updated_date",
+  shift_closings: "id,tenant_id,shift_date,period_mode,period_label,opened_at,closed_at,cashier_name,gross_revenue,net_revenue,total_orders,delivery_orders,counter_orders,dine_in_orders,average_ticket,payment_breakdown,cash_drawer,driver_settlements,raw_closing_data,created_at",
 };
 
 // Tabelas estáticas elegíveis para cache persistido em LocalStorage

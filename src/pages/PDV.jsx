@@ -110,14 +110,19 @@ export default function PDVPage() {
       payment_method: paymentMethod,
       order_type: "pickup",
       table_number: "Balcão",
-      items: cart.map((item) => ({
-        product_id: item.id,
-        product_name: item.name,
-        product_price: Number(item.price) || 0,
-        quantity: item.qty,
-        subtotal: (Number(item.price) || 0) * item.qty,
-        additionals: [],
-      })),
+      items: cart.map((item) => {
+        const cat = categories.find((c) => c.id === item.category_id || c.id === item.category);
+        const catName = cat?.name || (typeof item.category === "string" && item.category ? item.category : "Geral");
+        return {
+          product_id: item.id,
+          product_name: item.name,
+          product_price: Number(item.price) || 0,
+          category_name: item.category_name || catName,
+          quantity: item.qty,
+          subtotal: (Number(item.price) || 0) * item.qty,
+          additionals: [],
+        };
+      }),
     };
 
     const zodValidation = validateSchema(orderSchema, {
@@ -128,6 +133,7 @@ export default function PDVPage() {
         ...it,
         name: it.product_name,
         price: it.product_price,
+        category_name: it.category_name,
       }))
     });
 
