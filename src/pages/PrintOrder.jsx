@@ -217,6 +217,12 @@ export default function PrintOrderPage() {
             <p className="font-black text-[14px] leading-snug">{deliveryAddress}</p>
           </div>
         )}
+
+        {order.driver_name && (
+          <div className="pt-1 mt-1 border-t border-dashed border-black">
+            <p className="text-[12px]"><b>ENTREGADOR:</b> <span className="font-black uppercase">{order.driver_name}</span></p>
+          </div>
+        )}
       </div>
 
       {/* Seção Pagamento e Valores (na via completa) */}

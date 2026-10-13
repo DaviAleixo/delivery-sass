@@ -25,6 +25,7 @@ import DeliveryFeesTab from "@/components/admin/settings/DeliveryFeesTab";
 import AdminUsersTab from "@/components/admin/settings/AdminUsersTab";
 import SubscriptionTab from "@/components/admin/settings/SubscriptionTab";
 import PaymentMethodsTab from "@/components/admin/settings/PaymentMethodsTab";
+import DeliveryDriversTab from "@/components/admin/settings/DeliveryDriversTab";
 
 // Constantes e utilitários compartilhados
 import {
@@ -984,6 +985,19 @@ export default function SettingsPage() {
 
           <button
             type="button"
+            onClick={() => setActiveTab("entregadores")}
+            className={`flex items-center gap-2 py-3 px-4 font-bold text-xs sm:text-sm border-b-2 transition-all whitespace-nowrap cursor-pointer ${
+              activeTab === "entregadores"
+                ? "border-orange-600 text-orange-600 bg-orange-50/40 rounded-t-lg"
+                : "border-transparent text-stone-500 hover:text-stone-800"
+            }`}
+          >
+            <Bike className="w-4 h-4 text-orange-600" />
+            <span>Entregadores</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveTab("pagamentos")}
             className={`flex items-center gap-2 py-3 px-4 font-bold text-xs sm:text-sm border-b-2 transition-all whitespace-nowrap cursor-pointer ${
               activeTab === "pagamentos"
@@ -1144,6 +1158,15 @@ export default function SettingsPage() {
         {activeTab === "pagamentos" && (
           <div className="space-y-6">
             <PaymentMethodsTab 
+              tenantData={tenantDetails} 
+              onUpdateTenant={(updated) => setTenantDetails((prev) => ({ ...prev, ...updated }))}
+            />
+          </div>
+        )}
+
+        {activeTab === "entregadores" && (
+          <div className="space-y-6">
+            <DeliveryDriversTab 
               tenantData={tenantDetails} 
               onUpdateTenant={(updated) => setTenantDetails((prev) => ({ ...prev, ...updated }))}
             />

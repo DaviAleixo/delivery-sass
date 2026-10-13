@@ -10,9 +10,11 @@ import { AnimatePresence } from "framer-motion";
 import { soundAlert } from "@/utils/soundAlert";
 import TableQRCodeModal from "@/components/admin/TableQRCodeModal";
 import OrderCard from "@/components/admin/orders/OrderCard";
+import DispatchOrderModal from "@/components/admin/orders/DispatchOrderModal";
 import { getStoreStatusInfo, getTodayDateKey } from "@/utils/storeStatus";
 import { getBrasiliaParts } from "@/utils/dateTime";
 import { useOrdersRealtime } from "@/hooks/useOrdersRealtime";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { toast } from "sonner";
 
 /**
@@ -95,6 +97,11 @@ export default function OrdersPage() {
   
   const [orderLimit, setOrderLimit] = useState(35);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  // Estados para Gestão de Entregadores e Despacho
+  const [drivers, setDrivers] = useState([]);
+  const [dispatchModalOpen, setDispatchModalOpen] = useState(false);
+  const [orderToDispatch, setOrderToDispatch] = useState(null);
 
   const knownPendingIds = useRef(new Set());
   const isFirstLoad = useRef(true);
@@ -195,6 +202,21 @@ export default function OrdersPage() {
         if (settingsData[0].delivery_time) {
           setDeliveryTime(settingsData[0].delivery_time);
         }
+      }
+
+      // Carrega entregadores cadastrados
+      const currentTenantId = localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001";
+      if (isSupabaseConfigured() && supabase) {
+        try {
+          const { data: tenantRow } = await supabase
+            .from("tenants")
+            .select("delivery_drivers")
+            .eq("id", currentTenantId)
+            .maybeSingle();
+          if (tenantRow?.delivery_drivers && Array.isArray(tenantRow.delivery_drivers)) {
+            setDrivers(tenantRow.delivery_drivers);
+          }
+        } catch (_drvErr) {}
       }
 
       // Inicializa os IDs de pedidos pendentes conhecidos e ativa som contínuo se houver pendentes
@@ -336,6 +358,65 @@ export default function OrdersPage() {
     } catch (err) {
       console.error("Erro ao atualizar status do pedido:", err);
       toast.error("Erro ao atualizar status do pedido. Tente novamente.");
+    }
+  };
+
+  const handleOrderStatusClick = (orderId, newStatus) => {
+    if (newStatus === "enviado") {
+      const target = orders.find((o) => o.id === orderId);
+      // Se for pedido do tipo delivery, abre o modal de despacho com entregadores
+      if (target && target.order_type === "delivery") {
+        setOrderToDispatch(target);
+        setDispatchModalOpen(true);
+        return;
+      }
+    }
+    updateOrderStatus(orderId, newStatus);
+  };
+
+  const handleConfirmDispatch = async ({ driver, orderIds, tripId }) => {
+    const nowIso = new Date().toISOString();
+    const driverName = driver?.name || null;
+    const driverId = driver?.id || null;
+
+    setOrders((prev) =>
+      prev.map((o) => {
+        if (orderIds.includes(o.id)) {
+          return {
+            ...o,
+            status: "enviado",
+            driver_id: driverId,
+            driver_name: driverName,
+            trip_id: tripId,
+            dispatched_at: nowIso,
+          };
+        }
+        return o;
+      })
+    );
+
+    try {
+      await Promise.all(
+        orderIds.map((id) =>
+          Order.update(id, {
+            status: "enviado",
+            driver_id: driverId,
+            driver_name: driverName,
+            trip_id: tripId,
+            dispatched_at: nowIso,
+          })
+        )
+      );
+
+      toast.success(
+        `🚀 ${orderIds.length} ${orderIds.length === 1 ? "pedido despachado" : "pedidos despachados"} ${
+          driverName ? `com ${driverName}` : ""
+        }!`
+      );
+      loadOrdersOnly();
+    } catch (err) {
+      console.error("Erro ao despachar pedidos:", err);
+      toast.error("Erro ao registrar saída de entrega.");
     }
   };
 
@@ -729,7 +810,7 @@ export default function OrdersPage() {
                     order={order}
                     isExpanded={expandedOrders.has(order.id)}
                     onToggleExpansion={() => toggleOrderExpansion(order.id)}
-                    onUpdateStatus={updateOrderStatus}
+                    onUpdateStatus={handleOrderStatusClick}
                     deliveryTime={deliveryTime}
                     safeDate={safeDate}
                     safeMoney={safeMoney}
@@ -770,6 +851,24 @@ export default function OrdersPage() {
             </div>
           </TabsContent>
         </Tabs>
+
+        {/* Modal Inteligente de Despacho com Entregador */}
+        <DispatchOrderModal
+          isOpen={dispatchModalOpen}
+          onClose={() => {
+            setDispatchModalOpen(false);
+            setOrderToDispatch(null);
+          }}
+          mainOrder={orderToDispatch}
+          otherReadyOrders={orders.filter(
+            (o) =>
+              o.id !== orderToDispatch?.id &&
+              o.order_type === "delivery" &&
+              ["preparando", "confirmado"].includes(o.status)
+          )}
+          drivers={drivers}
+          onConfirmDispatch={handleConfirmDispatch}
+        />
       </div>
     </div>
   );

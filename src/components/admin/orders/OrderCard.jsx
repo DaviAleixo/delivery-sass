@@ -6,7 +6,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { 
   Phone, MapPin, CreditCard, Printer, 
-  Truck, Store, Hash
+  Truck, Store, Hash, Bike
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { createPageUrl } from "@/utils";
@@ -73,6 +73,12 @@ export default function OrderCard({
                 {order.payment_status === "paid" && (
                   <Badge className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-black shadow-sm">
                     ✓ PAGO VIA PIX
+                  </Badge>
+                )}
+                {order.driver_name && (
+                  <Badge variant="outline" className="text-xs bg-orange-50 text-orange-800 border-orange-300 font-bold">
+                    <Bike className="w-3 h-3 mr-1 text-orange-600" />
+                    {order.driver_name}
                   </Badge>
                 )}
               </div>
