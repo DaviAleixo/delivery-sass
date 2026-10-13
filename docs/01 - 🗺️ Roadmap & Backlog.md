@@ -67,7 +67,7 @@
 - [x] **PIX Dinâmico Automático**: Geração de QR Code PIX com confirmação automática de pagamento (Mercado Pago).
 - [x] **Ferramental de IA Avançado (MCPs)**: Configuração do **Sentry MCP** e **Spec Workflow MCP** no `mcp_config.json` para observabilidade de produção e metodologia Spec-Driven Development.
 - [ ] **Spooler Desktop de Impressão (.exe)**: Aplicativo local em background (Electron/Node Tray) para conectar com múltiplas impressoras térmicas via rede (TCP/IP na porta 9100) e USB, com roteamento de comandas (cozinha/bar/caixa) e impressão silenciosa sem navegador.
-- [ ] **Ajuste de Tipografia & Contraste do Cupom Térmico (`PrintOrder.jsx`)**: Substituir tons de cinza por preto puro (#000), aplicar fonte encorpada de alta legibilidade para cabeças térmicas de 80mm e 58mm.
+- [x] **Ajuste de Tipografia & Contraste do Cupom Térmico (`PrintOrder.jsx`)**: Substituído tons de cinza por preto puro (#000), aplicada fonte encorpada de alta legibilidade (`font-black`/`font-bold`), margem 0mm, `@media print` calibrado para bobinas térmicas de 80mm e 58mm e corte de 2 vias.
 
 ---
 
