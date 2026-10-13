@@ -5,7 +5,7 @@
 ---
 
 ## 🚀 Em Andamento / Foco Atual
-- [ ] 🔥 **PRIORIDADE MÁXIMA: Webhook do Asaas**: Receber notificações de pagamento (`PAYMENT_RECEIVED`, `PAYMENT_OVERDUE`) para pausar ou despausar automaticamente a loja no Supabase (`tenants.is_active`).
+- [x] 🔥 **Webhook do Asaas (Deploy Ativo & Automatizado)**: Edge Function deployed (`functions/v1/asaas`) recebendo notificações de pagamento (`PAYMENT_RECEIVED`, `PAYMENT_OVERDUE`, `PAYMENT_RESTORED`, `SUBSCRIPTION_DELETED`) pausando e despausando automaticamente a loja no Supabase (`tenants.is_active` e `subscription_status`).
 - [x] **Torre de Controle SuperAdmin de Alto Nível**: Tabela minimalista (Restaurante, Link, Plano, Status, Ações) + Drawer 360° com Raio-X Financeiro Asaas, Métricas de Vendas e Botão de Cobrança 1-Clique no WhatsApp.
 - [x] **Mecanismo Real de Pausa / Bloqueio**: Se a loja for pausada, o cardápio público sai do ar imediatamente e o painel do restaurante bloqueia exigindo regularização com botão de reativar na hora.
 - [x] **Configuração de Pagamentos (Asaas Sandbox)**: Conta conectada, API key validada e emissão de assinaturas testada.
@@ -56,7 +56,7 @@
 - [x] Adicionar coluna de Mensalidade (Asaas), status e botão de copiar fatura no Painel **SuperAdmin** do Davi.
 - [x] **Auto-Onboarding no Asaas**: Criar cliente, assinatura e link da 1ª fatura automaticamente ao cadastrar nova empresa no SuperAdmin.
 - [x] **Autoatendimento Fiscal na Loja**: Permitir que o lojista atualize seu e-mail de faturamento, WhatsApp e CPF/CNPJ em Configurações > Minha Assinatura com sincronização direta no Asaas.
-- [ ] Implementar webhook do Asaas para alterar automaticamente o status `is_active` da loja no Supabase.
+- [x] **Webhook do Asaas Ativo**: Altera automaticamente o status `is_active` e `subscription_status` da loja no Supabase em tempo real.
 - [ ] Definir régua de cobrança automática (Lembrete via WhatsApp e E-mail 3 dias antes do vencimento).
 
 ---
