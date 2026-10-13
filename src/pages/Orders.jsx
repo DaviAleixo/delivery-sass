@@ -364,8 +364,9 @@ export default function OrdersPage() {
   const handleOrderStatusClick = (orderId, newStatus) => {
     if (newStatus === "enviado") {
       const target = orders.find((o) => o.id === orderId);
-      // Se for pedido do tipo delivery, abre o modal de despacho com entregadores
-      if (target && target.order_type === "delivery") {
+      const activeDrivers = (drivers || []).filter((d) => d.active !== false);
+      // Se for pedido do tipo delivery E houver entregadores cadastrados na equipe, abre o modal de despacho
+      if (target && target.order_type === "delivery" && activeDrivers.length > 0) {
         setOrderToDispatch(target);
         setDispatchModalOpen(true);
         return;

@@ -20,7 +20,8 @@ import {
   QrCode,
   UserCheck,
   UserX,
-  Info
+  Info,
+  AlertTriangle
 } from "lucide-react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { toast } from "sonner";
@@ -264,6 +265,45 @@ export default function DeliveryDriversTab({ tenantData, onUpdateTenant }) {
         </CardContent>
       </Card>
 
+      {/* Aviso Operacional Importante */}
+      <div className="p-4 sm:p-5 rounded-2xl border border-amber-300 bg-amber-50/95 shadow-sm text-amber-950 flex flex-col md:flex-row items-start gap-4">
+        <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-700 border border-amber-300 flex items-center justify-center flex-shrink-0">
+          <AlertTriangle className="w-5 h-5 text-amber-700" />
+        </div>
+        <div className="flex-1 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <h4 className="font-black text-sm text-amber-950 uppercase tracking-wide">
+              Aviso Operacional: Como Funciona o Despacho de Pedidos
+            </h4>
+            <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300 font-extrabold text-[10px]">
+              Atenção
+            </Badge>
+          </div>
+          <p className="text-xs sm:text-sm text-amber-900 leading-relaxed font-medium">
+            Se você cadastrar entregadores na equipe, <b>sempre que clicar em "Enviar para Entrega" no painel de Pedidos</b>, o sistema exigirá selecionar <b>qual entregador está levando</b> e <b>quais outros pedidos prontos vão juntos na mesma viagem/bag</b>.
+          </p>
+          <div className="pt-1 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+            <div className="p-2.5 rounded-xl bg-white/70 border border-amber-200 flex items-start gap-2">
+              <span className="text-amber-600 font-black">✓</span>
+              <div>
+                <b className="text-amber-950">Com entregadores cadastrados:</b>
+                <p className="text-[11px] text-amber-800 mt-0.5">Permite agrupar saídas na mesma bag e calcular acerto exato de taxas por comanda ou por viagem no caixa.</p>
+              </div>
+            </div>
+            <div className="p-2.5 rounded-xl bg-white/70 border border-amber-200 flex items-start gap-2">
+              <span className="text-stone-500 font-black">•</span>
+              <div>
+                <b className="text-stone-900">Sem entregadores cadastrados:</b>
+                <p className="text-[11px] text-stone-600 mt-0.5">O pedido vai direto para "Saiu para Entrega" com 1 clique, sem pedir seleção de motoboy.</p>
+              </div>
+            </div>
+          </div>
+          <p className="text-[11px] text-amber-800 font-semibold pt-0.5">
+            💡 <i>Cadastre sua equipe apenas se você realmente deseja ter esse controle detalhado de saídas e acertos de taxas.</i>
+          </p>
+        </div>
+      </div>
+
       {/* Lista de Entregadores */}
       <Card className="border border-stone-200/80 rounded-2xl shadow-sm bg-white overflow-hidden">
         <CardHeader className="p-4 sm:p-5 border-b border-stone-100 flex flex-row items-center justify-between">
@@ -390,6 +430,18 @@ export default function DeliveryDriversTab({ tenantData, onUpdateTenant }) {
               <span>{editingDriver ? "Editar Entregador" : "Novo Entregador"}</span>
             </DialogTitle>
           </DialogHeader>
+
+          <div className="p-3 rounded-xl border border-amber-200 bg-amber-50/80 text-xs text-amber-900 flex items-start gap-2.5">
+            <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="space-y-0.5">
+              <p className="font-extrabold text-amber-950 text-[11px] uppercase tracking-wide">
+                Lembrete de Operação
+              </p>
+              <p className="text-[11px] text-amber-800 leading-snug">
+                Ao manter entregadores cadastrados, ao clicar em <b>"Enviar para Entrega"</b> no painel de Pedidos você precisará sempre selecionar o entregador e confirmar os pedidos que vão juntos na mesma viagem.
+              </p>
+            </div>
+          </div>
 
           <form onSubmit={handleSaveDriver} className="space-y-4 pt-2">
             <div>

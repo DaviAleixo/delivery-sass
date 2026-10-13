@@ -96,7 +96,7 @@ export default function DispatchOrderModal({
                 <div>
                   <p className="font-bold">Nenhum entregador cadastrado</p>
                   <p className="text-[11px] text-amber-700 mt-0.5">
-                    Você pode despachar como <b>Avulso/Terceirizado</b> agora e cadastrar seus motoboys em <b>Configurações &gt; Entregadores</b> para controlar os acertos.
+                    Você pode despachar como <b>Avulso/Terceirizado</b> agora ou cadastrar seus motoboys no <b>Menu Lateral &gt; Entregadores</b> para controlar os acertos.
                   </p>
                 </div>
               </div>
