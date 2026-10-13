@@ -108,7 +108,6 @@ export default function Layout({ children, currentPageName }) {
   const [user, setUser] = React.useState(null);
   const [settings, setSettings] = React.useState(null);
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
-  const [soundEnabled, setSoundEnabled] = React.useState(soundAlert.isEnabled());
   const [pendingOrdersCount, setPendingOrdersCount] = React.useState(0);
   
   const knownPendingIds = React.useRef(new Set());
@@ -155,14 +154,7 @@ export default function Layout({ children, currentPageName }) {
 
   // Alerta Global de Novos Pedidos para TODAS as abas do Painel Administrativo do RESTAURANTE (nunca SuperAdmin)
   React.useEffect(() => {
-    const isSuperAdmin = user?.role === "super_admin" || (typeof window !== "undefined" && (() => {
-      try {
-        const u = JSON.parse(localStorage.getItem("admin_user") || "{}");
-        return u?.role === "super_admin";
-      } catch { return false; }
-    })());
-
-    if (isPublicPage || !isAdminAuthenticated || isSuperAdmin || currentPageName === "SuperAdmin") {
+    if (isPublicPage || !isAdminAuthenticated || currentPageName === "SuperAdmin") {
       soundAlert.stopContinuousAlert();
       soundAlert.setPendingCount(0);
       return;
@@ -451,14 +443,7 @@ export default function Layout({ children, currentPageName }) {
   };
 
 
-  const toggleSoundAlert = () => {
-    const nextState = !soundEnabled;
-    soundAlert.setEnabled(nextState);
-    setSoundEnabled(nextState);
-    if (nextState) {
-      soundAlert.playOrderChime();
-    }
-  };
+
 
   // Se for página de login, impressão ou SuperAdmin, mostrar sem layout de barra lateral de loja
   if (currentPageName === "AdminLogin" || currentPageName === "PrintOrder") {
@@ -630,39 +615,7 @@ export default function Layout({ children, currentPageName }) {
               </SidebarGroup>
             </SidebarContent>
 
-            <SidebarFooter className="border-t border-stone-200 p-3 bg-stone-50/70 space-y-2">
-              {/* Status do Som de Novos Pedidos */}
-              <div className="flex items-center justify-between bg-white border border-stone-200 p-2 rounded-xl shadow-xs">
-                <button
-                  type="button"
-                  onClick={toggleSoundAlert}
-                  className="flex items-center gap-2 text-xs font-bold text-stone-700 hover:text-stone-900 transition-colors cursor-pointer"
-                  title="Ativar/Desativar som de novos pedidos"
-                >
-                  {soundEnabled ? (
-                    <>
-                      <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                      <Bell className="w-3.5 h-3.5 text-emerald-600" />
-                      <span className="text-[11px] text-emerald-800">Alerta de Pedido Ativo</span>
-                    </>
-                  ) : (
-                    <>
-                      <div className="w-2 h-2 rounded-full bg-red-400" />
-                      <BellOff className="w-3.5 h-3.5 text-red-500" />
-                      <span className="text-[11px] text-red-700">Som Mudo</span>
-                    </>
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => soundAlert.playOrderChime()}
-                  className="p-1 text-stone-400 hover:text-stone-800 hover:bg-stone-100 rounded-lg transition-colors"
-                  title="Testar Campainha"
-                >
-                  <Volume2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+            <SidebarFooter className="border-t border-stone-200 p-3 bg-stone-50/70">
 
               <div className="flex items-center justify-between pt-1">
                 <div className="flex items-center gap-2.5 min-w-0">

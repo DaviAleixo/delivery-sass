@@ -81,7 +81,12 @@ export default function OrdersPage() {
   const [deliveryTime, setDeliveryTime] = useState("40-50 min");
   const [isEditingTime, setIsEditingTime] = useState(false);
   const [customTimeInput, setCustomTimeInput] = useState("");
-  const [soundEnabled, setSoundEnabled] = useState(soundAlert.isEnabled());
+  const [soundEnabled, setSoundEnabled] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("vrumburguer_order_sound_enabled") !== "false";
+    }
+    return true;
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("pendente");
   const [timeFilter, setTimeFilter] = useState("shift"); // "shift" | "today" | "yesterday" | "week" | "all"
@@ -157,6 +162,25 @@ export default function OrdersPage() {
 
   }, [orderLimit]);
 
+  // Sincroniza ativamente o alarme sonoro com pedidos pendentes
+  // Se houver qualquer pedido pendente (mesmo antigo) e o som estiver ativado, toca a campainha!
+  useEffect(() => {
+    if (!soundEnabled) {
+      soundAlert.stopContinuousAlert();
+      soundAlert.setPendingCount(0);
+      return;
+    }
+
+    const currentPending = orders.filter((o) => o.status === "pendente");
+    soundAlert.setPendingCount(currentPending.length);
+
+    if (currentPending.length > 0) {
+      soundAlert.startContinuousAlert();
+    } else {
+      soundAlert.stopContinuousAlert();
+    }
+  }, [orders, soundEnabled]);
+
   const loadData = async () => {
     try {
       const [ordersData, settingsData] = await Promise.all([
@@ -214,8 +238,14 @@ export default function OrdersPage() {
     const nextState = !soundEnabled;
     soundAlert.setEnabled(nextState);
     setSoundEnabled(nextState);
+
     if (nextState) {
+      const currentPending = orders.filter((o) => o.status === "pendente");
+      soundAlert.setPendingCount(currentPending.length);
       soundAlert.playOrderChime();
+    } else {
+      soundAlert.stopContinuousAlert();
+      soundAlert.setPendingCount(0);
     }
   };
 
@@ -573,7 +603,7 @@ export default function OrdersPage() {
                 variant="ghost"
                 size="sm"
                 onClick={toggleSoundAlert}
-                className={`h-7 px-2.5 rounded-xl text-xs font-bold gap-1.5 ${
+                className={`h-7 px-2.5 rounded-xl text-xs font-bold gap-1.5 cursor-pointer ${
                   soundEnabled 
                     ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200" 
                     : "bg-red-50 text-red-700 hover:bg-red-100 border border-red-200"
@@ -581,11 +611,13 @@ export default function OrdersPage() {
               >
                 {soundEnabled ? (
                   <>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                     <Bell className="w-3.5 h-3.5 text-emerald-600" />
                     <span>Som Ativado</span>
                   </>
                 ) : (
                   <>
+                    <span className="w-2 h-2 rounded-full bg-red-400" />
                     <BellOff className="w-3.5 h-3.5 text-red-600" />
                     <span>Som Mudo</span>
                   </>

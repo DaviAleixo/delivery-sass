@@ -29,7 +29,7 @@
 ### 🛎️ Experiência de Pedidos & KDS
 - [x] **Ciclo de Vida de Pedidos & KDS**: Botões de "Confirmar", "Avançar Status" e "Cancelar" com persistência no Supabase, RLS ajustado e toasts instantâneos.
 - [x] **Sanitização Inteligente em Updates Parciais**: Atualizações de status não zeram campos nem mutam dados de itens/cliente.
-- [x] **Alerta Sonoro Inteligente (KDS Cozinha)**: Campainha e repetição contínua ativas exclusivamente no painel do restaurante/lojista. Silenciado 100% no SuperAdmin e com desligamento imediato ao deslogar ou sair da tela.
+- [x] **Alerta Sonoro Inteligente & Repetição Contínua (KDS & Pedidos)**: Campainha ativa por padrão. Detecção instantânea de qualquer pedido pendente existente ao carregar ou ao religar o som (mesmo pedidos antigos), liberação de áudio para inspeção de lojas em Modo SuperAdmin, e centralização exclusiva do controle no topo da tela de Pedidos (removido botão duplicado da barra lateral).
 
 - [ ] Filtro por tipo de pedido no painel de pedidos (Delivery vs Retirada no Balcão).
 - [ ] Impressão rápida do comprovante do pedido (layout otimizado para cupom não fiscal de 80mm/58mm).

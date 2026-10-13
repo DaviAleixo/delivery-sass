@@ -2,29 +2,25 @@ function canPlayStoreAudio() {
   if (typeof window === "undefined") return false;
   try {
     const path = window.location.pathname.toLowerCase();
-    // SuperAdmin ou Login Geral do SaaS nunca tocam sirene de restaurante
-    if (path.includes("/superadmin") || path.includes("/adminlogin")) {
+    // Apenas silencia estritamente na tela de gestão do SaaS (/superadmin)
+    // ou na tela de login (/adminlogin). Em qualquer tela de restaurante, o som funciona!
+    if (path === "/superadmin" || path.startsWith("/superadmin/") || path.includes("/adminlogin")) {
       return false;
     }
-    // Se o usuário for Super Admin geral da plataforma (Davi)
-    const rawUser = localStorage.getItem("admin_user");
-    if (rawUser) {
-      const user = JSON.parse(rawUser);
-      if (user?.role === "super_admin") {
-        return false;
-      }
-    }
   } catch {
-    return false;
+    return true;
   }
   return true;
 }
 
-// Utilitário de alerta sonoro potente e contínuo para novos pedidos usando Web Audio API
+// Utilitário de alerta sonoro potente e contínuo para pedidos pendentes usando Web Audio API
 class SoundAlertManager {
   constructor() {
     this.audioCtx = null;
-    this.enabled = typeof window !== "undefined" && localStorage.getItem("vrumburguer_order_sound_enabled") !== "false";
+    // Padrão sempre ativo (true), a menos que o usuário tenha explicitamente desligado salvando "false"
+    this.enabled = typeof window !== "undefined"
+      ? localStorage.getItem("vrumburguer_order_sound_enabled") !== "false"
+      : true;
     this.isPlaying = false;
     this.isLooping = false;
     this.pendingCount = 0;
@@ -41,7 +37,7 @@ class SoundAlertManager {
           this.audioCtx = new AudioContextClass();
         }
       }
-      if (this.audioCtx && this.audioCtx.state === 'suspended') {
+      if (this.audioCtx && this.audioCtx.state === "suspended") {
         this.audioCtx.resume().catch(() => {});
       }
     } catch (_e) {
@@ -77,11 +73,11 @@ class SoundAlertManager {
   }
 
   startContinuousAlert() {
-    if (!canPlayStoreAudio()) {
+    if (!canPlayStoreAudio() || !this.enabled) {
       this.stopContinuousAlert();
       return;
     }
-    if (this.isLooping || !this.enabled) return;
+    if (this.isLooping) return;
     this.isLooping = true;
     this.playLoop();
   }
@@ -92,7 +88,7 @@ class SoundAlertManager {
       clearTimeout(this.loopTimer);
       this.loopTimer = null;
     }
-    this.activeTimeouts.forEach(t => clearTimeout(t));
+    this.activeTimeouts.forEach((t) => clearTimeout(t));
     this.activeTimeouts = [];
     this.isPlaying = false;
   }
@@ -107,7 +103,7 @@ class SoundAlertManager {
       if (canPlayStoreAudio() && this.isLooping && this.enabled && this.pendingCount > 0) {
         this.loopTimer = setTimeout(() => {
           this.playLoop();
-        }, 1500); // 1.5s entre cada sequência de campainha
+        }, 1800); // 1.8s entre repetições de campainha enquanto houver pedidos pendentes
       } else {
         this.stopContinuousAlert();
       }
@@ -115,18 +111,22 @@ class SoundAlertManager {
   }
 
   // Toca um alerta sonoro potente estilo iFood/Anota AI
-  playOrderChime(onFinish) {
+  async playOrderChime(onFinish) {
     if (!canPlayStoreAudio() || !this.enabled) {
       if (onFinish) onFinish();
       return;
     }
-
 
     try {
       const ctx = this.getAudioContext();
       if (!ctx) {
         if (onFinish) onFinish();
         return;
+      }
+
+      // Garante que o contexto de áudio não esteja suspenso pelo navegador
+      if (ctx.state === "suspended") {
+        await ctx.resume().catch(() => {});
       }
 
       this.isPlaying = true;
@@ -177,8 +177,8 @@ class SoundAlertManager {
       const startBase = ctx.currentTime + 0.05;
 
       // Sequência de toques cristalinos estilo iFood/Anota AI
-      playBell(587.33, startBase + 0.00, 0.45, 0.80); // Ré5
-      playBell(783.99, startBase + 0.18, 0.50, 0.90); // Sol5
+      playBell(587.33, startBase + 0.00, 0.45, 0.85); // Ré5
+      playBell(783.99, startBase + 0.18, 0.50, 0.95); // Sol5
       playBell(1046.50, startBase + 0.38, 0.80, 1.00); // Dó6
 
       const t1 = setTimeout(() => {
@@ -197,7 +197,7 @@ class SoundAlertManager {
         playBell(1318.51, now3 + 0.16, 0.45, 0.95);
         playBell(1567.98, now3 + 0.32, 0.55, 1.00);
         playBell(2093.00, now3 + 0.48, 1.10, 1.00);
-        
+
         const t3 = setTimeout(() => {
           this.isPlaying = false;
           if (onFinish) onFinish();
@@ -216,3 +216,17 @@ class SoundAlertManager {
 
 export const soundAlert = new SoundAlertManager();
 
+// Desbloqueia o AudioContext do navegador no primeiro clique/interação na tela
+if (typeof window !== "undefined") {
+  const unlockAudio = () => {
+    try {
+      const ctx = soundAlert.getAudioContext();
+      if (ctx && ctx.state === "suspended") {
+        ctx.resume();
+      }
+    } catch (_e) {}
+  };
+  window.addEventListener("click", unlockAudio, { passive: true });
+  window.addEventListener("touchstart", unlockAudio, { passive: true });
+  window.addEventListener("keydown", unlockAudio, { passive: true });
+}
