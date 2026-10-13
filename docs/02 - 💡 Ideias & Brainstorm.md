@@ -447,6 +447,15 @@
 * **O Conceito**: Abas de filtragem instantânea no topo do painel de pedidos (`Todos`, `🛵 Entrega`, `🛍️ Retirada no Balcão`, `🍽️ Mesa/Consumo Local`).
 * **Impacto**: Organização visual no pico noturno, permitindo ao expedidor focar apenas nos motoboys sem misturar com retiradas de clientes no caixa.
 
+### 🛵 33. Despacho Ágil de Entregadores & Remuneração Flexível de Motoboys
+* **O Conceito**: Módulo operacional leve no painel para vincular entregadores aos pedidos no momento do despacho, com suporte a múltiplas comandas na mesma saída/viagem.
+* **Modelos Flexíveis de Remuneração (Totalmente Opcionais por Motoboy)**:
+  1. **Por Comanda / Pedido** (ex: R$ 6,00 por comanda entregue - se levar 3 pedidos na bag, recebe 3 x R$ 6 = R$ 18).
+  2. **Por Viagem / Saída** (ex: R$ 10,00 por saída da moto, independente de levar 1, 2 ou 3 pedidos).
+  3. **Nenhum / Fixo / Diária** (sem taxa por corrida; usado por lojas com motoboys mensalistas/diaristas fixos ou entregadores próprios, servindo para rastrear quem levou e conferir o dinheiro recebido na rua).
+* **Prestação de Contas na Volta da Rua**:
+  - O sistema calcula exatamente quanto o motoboy recebeu em dinheiro vivo dos clientes e quanto deve devolver para a gaveta do caixa, descontando (ou somando) o que ele tem a receber de taxa.
+
 ---
 
 ## 🔗 Links Relacionados
