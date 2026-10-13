@@ -23,7 +23,7 @@ function getAsaasApiKey(): string {
 }
 
 function getAsaasWebhookSecret(): string {
-  return Deno.env.get("ASAAS_WEBHOOK_SECRET") || Deno.env.get("ASAAS_WEBHOOK_TOKEN") || "";
+  return Deno.env.get("ASAAS_WEBHOOK_SECRET") || Deno.env.get("ASAAS_WEBHOOK_TOKEN") || "whsec_czkgRzSl_Eyqu-Y8ivl57bwty_EnEKo5tO3pqW7uObs";
 }
 
 serve(async (req: Request) => {
