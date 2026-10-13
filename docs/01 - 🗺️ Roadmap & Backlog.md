@@ -47,7 +47,7 @@
 - [x] **Resiliência de Checkout PIX (Máquina de Estados: Recusa, Expiração & Recuperação)**: Tratamento visual explícito no modal quando o PIX for recusado pelo banco ou quando o tempo expirar (15 min). Ocultar QR Code vencido, parar polling e dar botões de 1-clique para 'Gerar Novo PIX' ou 'Pagar na Entrega (Cartão/Dinheiro)' sem perder o carrinho ([[02 - 💡 Ideias & Brainstorm]]).
 - [x] **Padronização de Timezone Oficial (Brasília America/Sao_Paulo)**: Garantir que o cálculo de loja aberta/fechada (`isStoreOpen`) e a impressão térmica não dependam do fuso/relógio do dispositivo do cliente, e blindar o turno noturno que ultrapassa a meia-noite ([[02 - 💡 Ideias & Brainstorm]]).
 - [x] **Correção de Edição & Atualização de Produtos**: Corrigido mapeamento de coluna (`updated_date` em vez de `updated_at`) no sanitizador de produtos e propagação de erros no Supabase, garantindo que alterações de preço (ex: R$ 0,01) e dados persistam imediatamente no banco.
-- [ ] Upsell no Checkout: Sugestão de bebidas e sobremesas antes da confirmação final do pedido.
+- [x] **Upsell Inteligente no Checkout (Turbine seu Pedido)**: Carrossel com algoritmo dinâmico de sugestão em `Cart.jsx`. Detecta automaticamente se o cliente não incluiu bebidas e as prioriza com tag `🥤 Bebida Gelada`, ou prioriza sobremesas e acompanhamentos, com adição em 1-clique (`+ Pedir`), abertura assistida para itens com complementos obrigatórios, toast confirmatório e banner de lembrete no rodapé.
 - [ ] Taxa de entrega calculada por distância/bairro ou valor fixo configurável.
 
 ### 💳 Cobrança & Monetização SaaS (Asaas)

@@ -431,6 +431,22 @@
      - Se o lojista fechar na Terça, o sistema fecharia a loja na cara do cliente à 00:00 da Segunda para a Terça!
      - A lógica deve verificar se estamos na madrugada e se o dia anterior ainda está dentro do horário de fechamento estendido.
 
+### 🍔 30. Upsell Inteligente no Checkout ("Turbine seu Pedido: Que tal uma Bebida ou Sobremesa?")
+* **O Conceito**: Antes de finalizar o pedido (no modal de carrinho ou pré-checkout), exibir sugestões rápidas e atraentes de produtos de alta margem (bebidas geladas, sobremesas, batatas fritas, molhos extras).
+* **Impacto**: Aumenta o ticket médio em 15% a 25% automaticamente, sem atrito para o cliente e sem esforço da equipe da loja. Botão de 1 toque (+ R$ 6,00) adiciona diretamente ao pedido sem sair do fluxo.
+
+### 🧾 31. Fechamento de Caixa do Turno (Relatório da Noite em 1-Clique)
+* **O Conceito**: No final do expediente (madrugada), um botão rápido no painel gera um resumo fiscal/operacional completo do turno:
+  - Faturamento total líquido.
+  - Divisão por meio de pagamento (PIX Online, Cartão Maquininha, Dinheiro).
+  - Conferência de taxa de entrega e total repassado aos motoboys.
+  - Total de comandas impressas e canceladas.
+  - Opções: Imprimir na bobina térmica de 80mm/58mm para a gaveta do caixa ou copiar texto formatado para o WhatsApp do proprietário.
+
+### 🏷️ 32. Filtro Rápido no Painel de Pedidos (Delivery vs Balcão vs Salão/Mesa)
+* **O Conceito**: Abas de filtragem instantânea no topo do painel de pedidos (`Todos`, `🛵 Entrega`, `🛍️ Retirada no Balcão`, `🍽️ Mesa/Consumo Local`).
+* **Impacto**: Organização visual no pico noturno, permitindo ao expedidor focar apenas nos motoboys sem misturar com retiradas de clientes no caixa.
+
 ---
 
 ## 🔗 Links Relacionados

@@ -953,6 +953,12 @@ export default function MenuPage() {
           deliveryFee={settings?.delivery_fee || 0}
           isVisible={isCartVisible}
           onToggle={handleCartToggle}
+          products={products}
+          categories={categories}
+          onAddToCart={addToCart}
+          onSelectProduct={handleProductClick}
+          complementGroups={complementGroups}
+          productComplementGroups={productComplementGroups}
         />
       </AnimatePresence>
 
