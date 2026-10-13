@@ -29,45 +29,76 @@ export function normalizePaymentMethod(methodStr) {
 /**
  * Determina o intervalo do turno atual da loja em Brasília
  */
-export function resolveShiftBounds(tenantSettings, customRange = null) {
+export function resolveShiftBounds(tenantSettings, periodMode = "today", customRange = null) {
   if (customRange && customRange.start && customRange.end) {
+    const s = new Date(customRange.start);
+    const e = new Date(customRange.end);
     return {
-      start: new Date(customRange.start),
-      end: new Date(customRange.end),
-      label: "Período Personalizado",
-      isCustom: true,
+      start: s,
+      end: e,
+      label: `Personalizado: ${formatInBrasilia(s, { includeSeconds: false })} até ${formatInBrasilia(e, { includeSeconds: false })}`,
+      mode: "custom",
     };
-  }
-
-  let openingHour = 18;
-  let openingMinute = 0;
-
-  if (tenantSettings?.opening_time) {
-    const parts = tenantSettings.opening_time.split(":").map(Number);
-    if (!isNaN(parts[0])) openingHour = parts[0];
-    if (!isNaN(parts[1])) openingMinute = parts[1];
   }
 
   const now = new Date();
   const nowParts = getBrasiliaParts(now);
 
-  const shiftStart = new Date(now);
-  // Se estamos de madrugada antes do horário de abertura, o turno começou no dia civil anterior
-  if (nowParts.hour < openingHour) {
-    shiftStart.setDate(shiftStart.getDate() - 1);
+  if (periodMode === "yesterday") {
+    const yStart = new Date(now);
+    yStart.setDate(yStart.getDate() - 1);
+    yStart.setHours(0, 0, 0, 0);
+    const yEnd = new Date(now);
+    yEnd.setDate(yEnd.getDate() - 1);
+    yEnd.setHours(23, 59, 59, 999);
+    return {
+      start: yStart,
+      end: yEnd,
+      label: `Ontem: ${formatInBrasilia(yStart, { includeTime: false })}`,
+      mode: "yesterday",
+    };
   }
-  shiftStart.setHours(openingHour, openingMinute, 0, 0);
 
-  const shiftEnd = new Date(now);
+  if (periodMode === "shift") {
+    let openingHour = 18;
+    let openingMinute = 0;
 
-  const startFmt = formatInBrasilia(shiftStart, { includeSeconds: false });
-  const endFmt = formatInBrasilia(shiftEnd, { includeSeconds: false });
+    if (tenantSettings?.opening_time) {
+      const parts = tenantSettings.opening_time.split(":").map(Number);
+      if (!isNaN(parts[0])) openingHour = parts[0];
+      if (!isNaN(parts[1])) openingMinute = parts[1];
+    }
+
+    const shiftStart = new Date(now);
+    // Se estamos de madrugada antes do horário de abertura, o turno começou no dia civil anterior
+    if (nowParts.hour < openingHour) {
+      shiftStart.setDate(shiftStart.getDate() - 1);
+    }
+    shiftStart.setHours(openingHour, openingMinute, 0, 0);
+
+    const shiftEnd = new Date(now);
+    return {
+      start: shiftStart,
+      end: shiftEnd,
+      label: `Turno Noturno: ${formatInBrasilia(shiftStart, { includeSeconds: false })} até ${formatInBrasilia(shiftEnd, { includeSeconds: false })}`,
+      mode: "shift",
+    };
+  }
+
+  // DEFAULT: "today" (Hoje - Dia Completo desde 00:00 de hoje)
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+
+  const todayEnd = new Date(now);
+
+  const startFmt = formatInBrasilia(todayStart, { includeSeconds: false });
+  const endFmt = formatInBrasilia(todayEnd, { includeSeconds: false });
 
   return {
-    start: shiftStart,
-    end: shiftEnd,
-    label: `Turno: ${startFmt} até ${endFmt}`,
-    isCustom: false,
+    start: todayStart,
+    end: todayEnd,
+    label: `Hoje: ${startFmt} até ${endFmt}`,
+    mode: "today",
   };
 }
 
@@ -78,21 +109,22 @@ export function calculateShiftClosing({
   orders = [],
   drivers = [],
   tenantSettings = null,
+  periodMode = "today",
   customRange = null,
 }) {
-  const bounds = resolveShiftBounds(tenantSettings, customRange);
+  const bounds = resolveShiftBounds(tenantSettings, periodMode, customRange);
   const startTime = bounds.start.getTime();
   const endTime = bounds.end.getTime();
 
-  // Filtra pedidos pertencentes ao turno
+  // Filtra pedidos pertencentes ao período
   const shiftOrders = orders.filter((order) => {
     if (!order?.created_date) return false;
     const orderTime = new Date(order.created_date).getTime();
     if (isNaN(orderTime)) return false;
 
-    // Se for o turno atual ao vivo, pedidos ativos (pendente, preparando, enviado)
-    // são sempre mantidos para conferência mesmo se abertos antes
-    if (!bounds.isCustom && ["pendente", "confirmado", "preparando", "enviado"].includes(order.status)) {
+    // Se for hoje ou turno atual, pedidos ativos (pendente, preparando, enviado)
+    // são sempre mantidos para conferência
+    if (bounds.mode !== "yesterday" && bounds.mode !== "custom" && ["pendente", "confirmado", "preparando", "enviado"].includes(order.status)) {
       return true;
     }
 

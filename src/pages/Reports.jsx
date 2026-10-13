@@ -30,7 +30,8 @@ export default function ReportsPage() {
 
   // Estado para Fechamento de Turno
   const [shiftClosingOpen, setShiftClosingOpen] = useState(false);
-  const [shiftClosingData, setShiftClosingData] = useState(null);
+  const [allOrders, setAllOrders] = useState([]);
+  const [drivers, setDrivers] = useState([]);
   const [tenantSettings, setTenantSettings] = useState(null);
 
   const getDateRange = () => {
@@ -56,12 +57,12 @@ export default function ReportsPage() {
 
   const loadClosingDependencies = async () => {
     try {
-      const [allOrders, settingsList] = await Promise.all([
+      const [ordersList, settingsList] = await Promise.all([
         Order.list("-created_date", 200).catch(() => []),
         Settings.list().catch(() => []),
       ]);
       const activeTenantId = localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001";
-      let drivers = [];
+      let driversList = [];
       if (isSupabaseConfigured() && supabase) {
         try {
           const { data } = await supabase
@@ -69,17 +70,13 @@ export default function ReportsPage() {
             .select("delivery_drivers")
             .eq("id", activeTenantId)
             .maybeSingle();
-          if (data?.delivery_drivers) drivers = data.delivery_drivers;
+          if (data?.delivery_drivers) driversList = data.delivery_drivers;
         } catch {}
       }
 
+      setAllOrders(Array.isArray(ordersList) ? ordersList : []);
+      setDrivers(driversList);
       setTenantSettings(settingsList?.[0] || null);
-      const calculated = calculateShiftClosing({
-        orders: Array.isArray(allOrders) ? allOrders : [],
-        drivers,
-        tenantSettings: settingsList?.[0] || null,
-      });
-      setShiftClosingData(calculated);
     } catch {}
   };
 
@@ -384,7 +381,9 @@ export default function ReportsPage() {
       <ShiftClosingModal
         isOpen={shiftClosingOpen}
         onClose={() => setShiftClosingOpen(false)}
-        closingData={shiftClosingData}
+        orders={allOrders}
+        drivers={drivers}
+        tenantSettings={tenantSettings}
         storeName={tenantSettings?.restaurant_name || localStorage.getItem("current_tenant_name") || "Vruum Burguer"}
       />
     </div>

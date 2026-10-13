@@ -26,17 +26,34 @@ import {
   Sparkles,
 } from "lucide-react";
 import { generateWhatsAppClosingText } from "@/utils/shiftClosingWhatsAppFormatter";
+import { calculateShiftClosing } from "@/utils/shiftClosingCalculator";
 import { createPageUrl } from "@/utils";
 import { toast } from "sonner";
 
 export default function ShiftClosingModal({
   isOpen,
   onClose,
-  closingData,
+  orders = [],
+  drivers: registeredDrivers = [],
+  tenantSettings = null,
+  closingData: initialClosingData = null,
   storeName = "Restaurante",
 }) {
+  const [periodMode, setPeriodMode] = useState("today");
   const [copiedPixId, setCopiedPixId] = useState(null);
   const [copiedWhatsApp, setCopiedWhatsApp] = useState(false);
+
+  const closingData = React.useMemo(() => {
+    if (orders && orders.length > 0) {
+      return calculateShiftClosing({
+        orders,
+        drivers: registeredDrivers,
+        tenantSettings,
+        periodMode,
+      });
+    }
+    return initialClosingData;
+  }, [orders, registeredDrivers, tenantSettings, periodMode, initialClosingData]);
 
   if (!closingData) return null;
 
@@ -88,7 +105,7 @@ export default function ShiftClosingModal({
       <DialogContent className="max-w-3xl p-5 sm:p-7 rounded-3xl bg-white shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
         {/* Cabeçalho */}
         <DialogHeader className="pb-3 border-b border-stone-100 flex-shrink-0">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center justify-between gap-2">
             <DialogTitle className="text-xl font-black text-stone-900 flex items-center gap-2.5">
               <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-rose-600 to-amber-500 text-white flex items-center justify-center shadow-md">
                 <Receipt className="w-5 h-5" />
@@ -100,16 +117,55 @@ export default function ShiftClosingModal({
                 </span>
               </div>
             </DialogTitle>
-
-            <Badge
-              variant="outline"
-              className="bg-stone-100 text-stone-700 border-stone-200 text-xs font-bold px-3 py-1 self-start sm:self-auto flex items-center gap-1.5"
-            >
-              <Clock className="w-3.5 h-3.5 text-stone-500" />
-              <span>{bounds.label}</span>
-            </Badge>
           </div>
         </DialogHeader>
+
+        {/* Barra de Filtro de Período (Hoje, Turno Noturno, Ontem) */}
+        <div className="py-2.5 px-0.5 flex flex-wrap items-center justify-between gap-2 border-b border-stone-100 flex-shrink-0">
+          <div className="flex items-center gap-1 p-1 bg-stone-100 rounded-2xl border border-stone-200">
+            <button
+              type="button"
+              onClick={() => setPeriodMode("today")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                periodMode === "today"
+                  ? "bg-white text-stone-900 shadow-sm"
+                  : "text-stone-500 hover:text-stone-900"
+              }`}
+            >
+              📅 Hoje (Dia Todo)
+            </button>
+            <button
+              type="button"
+              onClick={() => setPeriodMode("shift")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                periodMode === "shift"
+                  ? "bg-white text-stone-900 shadow-sm"
+                  : "text-stone-500 hover:text-stone-900"
+              }`}
+            >
+              🌙 Turno Noturno
+            </button>
+            <button
+              type="button"
+              onClick={() => setPeriodMode("yesterday")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                periodMode === "yesterday"
+                  ? "bg-white text-stone-900 shadow-sm"
+                  : "text-stone-500 hover:text-stone-900"
+              }`}
+            >
+              🗓️ Ontem
+            </button>
+          </div>
+
+          <Badge
+            variant="outline"
+            className="bg-stone-50 text-stone-700 border-stone-200 text-[11px] font-bold px-2.5 py-1 flex items-center gap-1.5"
+          >
+            <Clock className="w-3.5 h-3.5 text-stone-500" />
+            <span>{bounds.label}</span>
+          </Badge>
+        </div>
 
         {/* Conteúdo com rolagem suave */}
         <div className="overflow-y-auto py-4 space-y-6 flex-1 pr-1">

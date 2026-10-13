@@ -903,11 +903,9 @@ export default function OrdersPage() {
         <ShiftClosingModal
           isOpen={shiftClosingOpen}
           onClose={() => setShiftClosingOpen(false)}
-          closingData={calculateShiftClosing({
-            orders,
-            drivers,
-            tenantSettings: settings,
-          })}
+          orders={orders}
+          drivers={drivers}
+          tenantSettings={settings}
           storeName={settings?.restaurant_name || localStorage.getItem("current_tenant_name") || "Vruum Burguer"}
         />
       </div>
