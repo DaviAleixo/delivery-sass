@@ -11,6 +11,9 @@ import { soundAlert } from "@/utils/soundAlert";
 import TableQRCodeModal from "@/components/admin/TableQRCodeModal";
 import OrderCard from "@/components/admin/orders/OrderCard";
 import DispatchOrderModal from "@/components/admin/orders/DispatchOrderModal";
+import ShiftClosingModal from "@/components/admin/orders/ShiftClosingModal";
+import { calculateShiftClosing } from "@/utils/shiftClosingCalculator";
+import { Receipt } from "lucide-react";
 import { getStoreStatusInfo, getTodayDateKey } from "@/utils/storeStatus";
 import { getBrasiliaParts } from "@/utils/dateTime";
 import { useOrdersRealtime } from "@/hooks/useOrdersRealtime";
@@ -102,6 +105,9 @@ export default function OrdersPage() {
   const [drivers, setDrivers] = useState([]);
   const [dispatchModalOpen, setDispatchModalOpen] = useState(false);
   const [orderToDispatch, setOrderToDispatch] = useState(null);
+
+  // Estado para Fechamento de Caixa do Turno
+  const [shiftClosingOpen, setShiftClosingOpen] = useState(false);
 
   const knownPendingIds = useRef(new Set());
   const isFirstLoad = useRef(true);
@@ -297,6 +303,17 @@ export default function OrdersPage() {
       setSettings(newSettings);
       
       window.dispatchEvent(new CustomEvent("settings_updated", { detail: newSettings }));
+
+      if (!newStatus) {
+        toast("🔴 Loja fechada com sucesso!", {
+          description: "Deseja conferir e fechar o caixa do turno agora?",
+          action: {
+            label: "🧾 Fechar Caixa",
+            onClick: () => setShiftClosingOpen(true),
+          },
+          duration: 12000,
+        });
+      }
     } catch (err) {
       console.error("Erro ao alterar status da loja:", err);
       alert("Erro ao alterar status da loja. Tente novamente.");
@@ -720,6 +737,17 @@ export default function OrdersPage() {
 
             {/* Plaquinhas QR Code das Mesas */}
             <TableQRCodeModal settings={settings} />
+
+            {/* Botão de Fechamento de Caixa do Turno */}
+            <Button
+              type="button"
+              onClick={() => setShiftClosingOpen(true)}
+              className="h-9 px-3.5 bg-gradient-to-r from-stone-900 to-stone-800 hover:from-black hover:to-stone-900 text-white rounded-2xl text-xs font-black shadow-sm flex items-center gap-2 cursor-pointer border border-stone-700 transition-all active:scale-95"
+              title="Abrir Fechamento de Caixa do Turno"
+            >
+              <Receipt className="w-4 h-4 text-amber-400" />
+              <span>Fechamento de Caixa</span>
+            </Button>
           </div>
         </div>
 
@@ -869,6 +897,18 @@ export default function OrdersPage() {
           )}
           drivers={drivers}
           onConfirmDispatch={handleConfirmDispatch}
+        />
+
+        {/* Modal de Fechamento de Caixa do Turno */}
+        <ShiftClosingModal
+          isOpen={shiftClosingOpen}
+          onClose={() => setShiftClosingOpen(false)}
+          closingData={calculateShiftClosing({
+            orders,
+            drivers,
+            tenantSettings: settings,
+          })}
+          storeName={settings?.restaurant_name || localStorage.getItem("current_tenant_name") || "Vruum Burguer"}
         />
       </div>
     </div>

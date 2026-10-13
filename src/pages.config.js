@@ -60,6 +60,7 @@ import Menu from './pages/Menu';
 import MyOrders from './pages/MyOrders';
 import Orders from './pages/Orders';
 import PrintOrder from './pages/PrintOrder';
+import PrintShiftClosing from './pages/PrintShiftClosing';
 import Products from './pages/Products';
 import Complements from './pages/Complements';
 import Reports from './pages/Reports';
@@ -87,6 +88,7 @@ export const PAGES = {
     "MyOrders": MyOrders,
     "Orders": Orders,
     "PrintOrder": PrintOrder,
+    "PrintShiftClosing": PrintShiftClosing,
     "Products": Products,
     "Complements": Complements,
     "Reports": Reports,

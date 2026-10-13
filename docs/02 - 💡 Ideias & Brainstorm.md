@@ -436,12 +436,13 @@
 * **Impacto**: Aumenta o ticket médio em 15% a 25% automaticamente, sem atrito para o cliente e sem esforço da equipe da loja. Botão de 1 toque (+ R$ 6,00) adiciona diretamente ao pedido sem sair do fluxo.
 
 ### 🧾 31. Fechamento de Caixa do Turno (Relatório da Noite em 1-Clique)
-* **O Conceito**: No final do expediente (madrugada), um botão rápido no painel gera um resumo fiscal/operacional completo do turno:
-  - Faturamento total líquido.
-  - Divisão por meio de pagamento (PIX Online, Cartão Maquininha, Dinheiro).
-  - Conferência de taxa de entrega e total repassado aos motoboys.
-  - Total de comandas impressas e canceladas.
-  - Opções: Imprimir na bobina térmica de 80mm/58mm para a gaveta do caixa ou copiar texto formatado para o WhatsApp do proprietário.
+* **O Conceito**: No final do expediente (madrugada), um botão rápido no painel gera um resumo operacional e financeiro completo do turno com base no horário de abertura da loja:
+  - **Faturamento & Vendas**: Total bruto faturado, quantidade de pedidos (Delivery vs Balcão), ticket médio e cancelados.
+  - **Divisão por Forma de Pagamento**: Dinheiro (o que deve estar na gaveta), PIX Online (confirmado em conta), Cartão de Crédito e Cartão de Débito (maquininhas), e Vale Refeição.
+  - **Diferença COM vs SEM Entregadores**:
+    - **COM Entregador**: Gera o extrato individual de cada motoboy que trabalhou na noite (quantas viagens fez, quantas comandas entregou, quanto tem a receber de taxa, quanto dinheiro em espécie recolheu e deve devolver ao caixa, e saldo líquido com chave Pix).
+    - **SEM Entregador**: Oculta o bloco de motoboys e foca 100% no caixa da loja (taxas de entrega cobradas dos clientes entram como receita da loja, sem deduções).
+  - **Impressão Térmica Reutilizada**: Utiliza o mesmo motor de impressão de cupom (`@media print` preto puro 80mm/58mm) para imprimir uma via para a gaveta do caixa, além de botão para copiar o resumo formatado em texto para o WhatsApp do proprietário.
 
 ### 🏷️ 32. Filtro Rápido no Painel de Pedidos (Delivery vs Balcão vs Salão/Mesa)
 * **O Conceito**: Abas de filtragem instantânea no topo do painel de pedidos (`Todos`, `🛵 Entrega`, `🛍️ Retirada no Balcão`, `🍽️ Mesa/Consumo Local`).

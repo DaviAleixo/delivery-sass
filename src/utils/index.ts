@@ -19,6 +19,7 @@ const RESERVED_SLUGS = new Set([
   "adminlogin",
   "myorders",
   "printorder",
+  "printshiftclosing",
   "home",
   "api",
 ]);

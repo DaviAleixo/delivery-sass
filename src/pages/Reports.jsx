@@ -8,6 +8,11 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { DollarSign, ShoppingBag, Package, TrendingUp, X } from "lucide-react";
 import { subDays, startOfMonth, endOfMonth, startOfYear, endOfYear, startOfDay, endOfDay } from "date-fns";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { Button } from "@/components/ui/button";
+import { Receipt } from "lucide-react";
+import ShiftClosingModal from "@/components/admin/orders/ShiftClosingModal";
+import { calculateShiftClosing } from "@/utils/shiftClosingCalculator";
+import { Settings } from "@/entities/Settings";
 
 export default function ReportsPage() {
   const [metrics, setMetrics] = useState({
@@ -22,6 +27,11 @@ export default function ReportsPage() {
   const [reportPeriod, setReportPeriod] = useState("last_30_days");
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
+
+  // Estado para Fechamento de Turno
+  const [shiftClosingOpen, setShiftClosingOpen] = useState(false);
+  const [shiftClosingData, setShiftClosingData] = useState(null);
+  const [tenantSettings, setTenantSettings] = useState(null);
 
   const getDateRange = () => {
     const today = new Date();
@@ -41,7 +51,37 @@ export default function ReportsPage() {
 
   useEffect(() => {
     loadData();
+    loadClosingDependencies();
   }, [reportPeriod, customStartDate, customEndDate]);
+
+  const loadClosingDependencies = async () => {
+    try {
+      const [allOrders, settingsList] = await Promise.all([
+        Order.list("-created_date", 200).catch(() => []),
+        Settings.list().catch(() => []),
+      ]);
+      const activeTenantId = localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001";
+      let drivers = [];
+      if (isSupabaseConfigured() && supabase) {
+        try {
+          const { data } = await supabase
+            .from("tenants")
+            .select("delivery_drivers")
+            .eq("id", activeTenantId)
+            .maybeSingle();
+          if (data?.delivery_drivers) drivers = data.delivery_drivers;
+        } catch {}
+      }
+
+      setTenantSettings(settingsList?.[0] || null);
+      const calculated = calculateShiftClosing({
+        orders: Array.isArray(allOrders) ? allOrders : [],
+        drivers,
+        tenantSettings: settingsList?.[0] || null,
+      });
+      setShiftClosingData(calculated);
+    } catch {}
+  };
 
   const loadData = async () => {
     setIsLoading(true);
@@ -116,9 +156,21 @@ export default function ReportsPage() {
   return (
     <div className="p-8 bg-gray-50 min-h-screen">
       <div className="max-w-7xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Relatórios de Vendas</h1>
-          <p className="text-gray-600 mt-2">Analise o desempenho do seu negócio</p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Relatórios de Vendas</h1>
+            <p className="text-gray-600 mt-2">Analise o desempenho do seu negócio</p>
+          </div>
+
+          <Button
+            type="button"
+            onClick={() => setShiftClosingOpen(true)}
+            className="h-10 px-4 bg-gradient-to-r from-stone-900 to-stone-800 hover:from-black hover:to-stone-900 text-white rounded-2xl text-xs font-black shadow-md flex items-center gap-2 cursor-pointer border border-stone-700 self-start sm:self-auto transition-all active:scale-95"
+            title="Abrir Fechamento de Caixa do Turno"
+          >
+            <Receipt className="w-4 h-4 text-amber-400" />
+            <span>Fechamento de Caixa</span>
+          </Button>
         </div>
         
         <Card className="mb-8 border-red-200">
@@ -328,6 +380,13 @@ export default function ReportsPage() {
         )}
 
       </div>
+
+      <ShiftClosingModal
+        isOpen={shiftClosingOpen}
+        onClose={() => setShiftClosingOpen(false)}
+        closingData={shiftClosingData}
+        storeName={tenantSettings?.restaurant_name || localStorage.getItem("current_tenant_name") || "Vruum Burguer"}
+      />
     </div>
   );
 }

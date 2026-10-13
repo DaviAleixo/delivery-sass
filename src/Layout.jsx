@@ -120,7 +120,7 @@ export default function Layout({ children, currentPageName }) {
   const isFirstLoad = React.useRef(true);
   const isFetchingRef = React.useRef(false);
 
-  const publicPages = ["Menu", "MyOrders", "AdminLogin", "Home", "PrintOrder", "SuperAdmin"];
+  const publicPages = ["Menu", "MyOrders", "AdminLogin", "Home", "PrintOrder", "PrintShiftClosing", "SuperAdmin"];
   const isPublicPage = publicPages.includes(currentPageName);
   const isAdminAuthenticated = isSessionAuth || (typeof window !== "undefined" && localStorage.getItem("admin_auth") === "authenticated");
 
@@ -456,7 +456,7 @@ export default function Layout({ children, currentPageName }) {
 
 
   // Se for página de login, impressão ou SuperAdmin, mostrar sem layout de barra lateral de loja
-  if (currentPageName === "AdminLogin" || currentPageName === "PrintOrder") {
+  if (currentPageName === "AdminLogin" || currentPageName === "PrintOrder" || currentPageName === "PrintShiftClosing") {
     return <div className="min-h-screen bg-white">{children}</div>;
   }
   if (currentPageName === "SuperAdmin") {
@@ -530,7 +530,7 @@ export default function Layout({ children, currentPageName }) {
   }
 
   // Se não for a página do Menu, mostrar layout admin
-  if (currentPageName !== "Menu" && currentPageName !== "MyOrders" && currentPageName !== "PrintOrder") {
+  if (currentPageName !== "Menu" && currentPageName !== "MyOrders" && currentPageName !== "PrintOrder" && currentPageName !== "PrintShiftClosing") {
     return (
       <SidebarProvider>
         <div className="min-h-screen flex w-full bg-gray-50">
