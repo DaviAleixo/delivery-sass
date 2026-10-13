@@ -392,6 +392,29 @@
      - Adicionais e Observações: Indentados, mas com fonte forte e legível (`12px - 13px`, negrito).
      - Endereço e Telefone: Linhas separadas e limpas sem poluição visual.
 
+
+### 💳 28. Ciclo Completo de Resiliência de Pagamentos Online (PIX Mercado Pago: Recusa, Expiração & Anti-Abandono)
+* **O Desafio dos Pagamentos Digitais no Delivery**:
+  - Nem todo pagamento PIX é aprovado imediatamente: o cliente pode demorar mais de 15 minutos (expiração do BACEN/Mercado Pago), a conta bancária pode ter limite PIX noturno excedido, ou o pagamento pode ser cancelado/rejeitado pelo banco.
+  - Se a interface não orientar o cliente de forma clara e amigável, o cliente fica perdido com a tela congelada e o restaurante perde a venda (abandono de carrinho).
+* **A Máquina de Estados Ideal para o Checkout**:
+  1. `waiting_payment` (Aguardando): Mostra QR Code, Copia e Cola e cronômetro regressivo de 15 minutos com polling ativo a cada 3s. O pedido fica como `aguardando_pagamento` (invisível para a cozinha).
+  2. `approved` (Aprovado): Celebração instantânea com som/animação, atualiza status para `paid` e `pendente`, toca a campainha da cozinha e redireciona para a tela de rastreamento `[[MyOrders]]`.
+  3. `rejected` (Recusado / Cancelado):
+     - Polling para imediatamente para economizar requisições.
+     - Tela de aviso claro: *"Pagamento não aprovado pela instituição financeira"*.
+     - Ações de recuperação sem atrito:
+       - 🔄 **[Gerar Novo PIX]**: Cria uma nova cobrança imediata sem precisar redigitar endereço.
+       - 💵 **[Pagar na Entrega (Cartão ou Dinheiro)]**: Converte o pedido para pagamento no recebimento sem perder os itens do carrinho.
+  4. `expired` (Expirado):
+     - Quando o cronômetro zera (15 min) ou o Mercado Pago reporta `status: cancelled` por timeout:
+     - O QR Code antigo é ocultado para evitar que o cliente pague um código inválido no app do banco.
+     - Tela de aviso: *"O tempo para pagamento deste QR Code se esgotou (15 minutos)"*.
+     - Botão 1-clique para revalidar: **[Reativar Pedido e Gerar Novo PIX]** ou **[Pagar na Entrega]**.
+* **Zero-Trust de Retaguarda**:
+  - A cozinha **nunca** inicia a produção de pedidos PIX que não estejam com `payment_status: paid`.
+  - Pedidos abandonados ou expirados permanecem fora do KDS e da fila de impressão, garantindo que o restaurante nunca gaste insumos com pedidos não pagos.
+
 ---
 
 ## 🔗 Links Relacionados
