@@ -415,6 +415,22 @@
   - A cozinha **nunca** inicia a produção de pedidos PIX que não estejam com `payment_status: paid`.
   - Pedidos abandonados ou expirados permanecem fora do KDS e da fila de impressão, garantindo que o restaurante nunca gaste insumos com pedidos não pagos.
 
+
+### ⏰ 29. Padronização de Timezone (Fuso Horário Brasil) & O 'Bug da Meia-Noite' em Deliveries
+* **O Diagnóstico da Situação Atual**:
+  - Atualmente, as datas e horas no front-end utilizam o relógio nativo do navegador do usuário (`new Date().getHours()` e `format(..., { locale: ptBR })`).
+  - Se um cliente estiver com o celular configurado em outro fuso horário (ex: aparelho importado, fuso UTC, ou cliente em Manaus UTC-4 pedindo para parente em SP), o cardápio pode aparecer erroneamente como "Fechado" ou "Aberto", pois compara com o relógio do cliente e não com o relógio da loja.
+  - No banco de dados (Supabase/PostgreSQL) e nas Edge Functions, as datas são salvas em padrão universal **UTC ISO 8601** (`Z`).
+* **Os 2 Grandes Desafios de Fuso e Horários em Delivery**:
+  1. **Fuso Horário Oficial da Loja (`America/Sao_Paulo`)**:
+     - Usar `Intl.DateTimeFormat` com `timeZone: 'America/Sao_Paulo'` (ou a timezone configurada no tenant).
+     - Isso garante que a verificação de `isStoreOpen` e a data impressa na comanda não dependem do relógio descalibrado do cliente ou do Windows da cozinha.
+  2. **O 'Bug da Meia-Noite' (Turno Noturno de Delivery)**:
+     - Restaurantes operam cruzando a meia-noite (ex: Segunda das 18:00 às 02:00).
+     - Às 01:00 da madrugada de Terça-feira, o dia da semana é Terça (2), mas o expediente de vendas é a extensão da noite de Segunda (1).
+     - Se o lojista fechar na Terça, o sistema fecharia a loja na cara do cliente à 00:00 da Segunda para a Terça!
+     - A lógica deve verificar se estamos na madrugada e se o dia anterior ainda está dentro do horário de fechamento estendido.
+
 ---
 
 ## 🔗 Links Relacionados
