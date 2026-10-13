@@ -26,7 +26,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { generateWhatsAppClosingText } from "@/utils/shiftClosingWhatsAppFormatter";
-import { calculateShiftClosing } from "@/utils/shiftClosingCalculator";
+import { calculateShiftClosing, getStoreShiftInfo } from "@/utils/shiftClosingCalculator";
 import { createPageUrl } from "@/utils";
 import { toast } from "sonner";
 
@@ -42,6 +42,11 @@ export default function ShiftClosingModal({
   const [periodMode, setPeriodMode] = useState("today");
   const [copiedPixId, setCopiedPixId] = useState(null);
   const [copiedWhatsApp, setCopiedWhatsApp] = useState(false);
+
+  const shiftInfo = React.useMemo(
+    () => getStoreShiftInfo(tenantSettings),
+    [tenantSettings]
+  );
 
   const closingData = React.useMemo(() => {
     if (orders && orders.length > 0) {
@@ -120,51 +125,63 @@ export default function ShiftClosingModal({
           </div>
         </DialogHeader>
 
-        {/* Barra de Filtro de Período (Hoje, Turno Noturno, Ontem) */}
-        <div className="py-2.5 px-0.5 flex flex-wrap items-center justify-between gap-2 border-b border-stone-100 flex-shrink-0">
-          <div className="flex items-center gap-1 p-1 bg-stone-100 rounded-2xl border border-stone-200">
-            <button
-              type="button"
-              onClick={() => setPeriodMode("today")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                periodMode === "today"
-                  ? "bg-white text-stone-900 shadow-sm"
-                  : "text-stone-500 hover:text-stone-900"
-              }`}
+        {/* Barra de Filtro de Período (Hoje, Turno da Loja, Ontem) */}
+        <div className="py-2.5 px-0.5 space-y-2 border-b border-stone-100 flex-shrink-0">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-1 p-1 bg-stone-100 rounded-2xl border border-stone-200">
+              <button
+                type="button"
+                onClick={() => setPeriodMode("today")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  periodMode === "today"
+                    ? "bg-white text-stone-900 shadow-sm"
+                    : "text-stone-500 hover:text-stone-900"
+                }`}
+                title="Padrão recomendado para lojas de turno único (só dia ou só noite). Pega 100% dos pedidos de hoje."
+              >
+                📅 Hoje (Dia Todo)
+              </button>
+              <button
+                type="button"
+                onClick={() => setPeriodMode("shift")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  periodMode === "shift"
+                    ? "bg-white text-stone-900 shadow-sm"
+                    : "text-stone-500 hover:text-stone-900"
+                }`}
+                title="Filtra a partir do horário programado de abertura para o expediente da loja."
+              >
+                {shiftInfo.label}
+              </button>
+              <button
+                type="button"
+                onClick={() => setPeriodMode("yesterday")}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  periodMode === "yesterday"
+                    ? "bg-white text-stone-900 shadow-sm"
+                    : "text-stone-500 hover:text-stone-900"
+                }`}
+                title="Caixa do dia/turno anterior"
+              >
+                🗓️ Ontem
+              </button>
+            </div>
+
+            <Badge
+              variant="outline"
+              className="bg-stone-50 text-stone-700 border-stone-200 text-[11px] font-bold px-2.5 py-1 flex items-center gap-1.5"
             >
-              📅 Hoje (Dia Todo)
-            </button>
-            <button
-              type="button"
-              onClick={() => setPeriodMode("shift")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                periodMode === "shift"
-                  ? "bg-white text-stone-900 shadow-sm"
-                  : "text-stone-500 hover:text-stone-900"
-              }`}
-            >
-              🌙 Turno Noturno
-            </button>
-            <button
-              type="button"
-              onClick={() => setPeriodMode("yesterday")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                periodMode === "yesterday"
-                  ? "bg-white text-stone-900 shadow-sm"
-                  : "text-stone-500 hover:text-stone-900"
-              }`}
-            >
-              🗓️ Ontem
-            </button>
+              <Clock className="w-3.5 h-3.5 text-stone-500" />
+              <span>{bounds.label}</span>
+            </Badge>
           </div>
 
-          <Badge
-            variant="outline"
-            className="bg-stone-50 text-stone-700 border-stone-200 text-[11px] font-bold px-2.5 py-1 flex items-center gap-1.5"
-          >
-            <Clock className="w-3.5 h-3.5 text-stone-500" />
-            <span>{bounds.label}</span>
-          </Badge>
+          <div className="flex items-center gap-1.5 text-[11px] text-stone-500 px-0.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
+            <span>
+              <b>Flexibilidade de Turno:</b> Para a maioria das lojas que trabalham em período único (só dia ou só noite), <b>Hoje (Dia Todo)</b> garante que 100% dos pedidos sejam apurados. O modo <b>{shiftInfo.label}</b> filtra a partir da abertura oficial.
+            </span>
+          </div>
         </div>
 
         {/* Conteúdo com rolagem suave */}

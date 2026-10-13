@@ -435,14 +435,19 @@
 * **O Conceito**: Antes de finalizar o pedido (no modal de carrinho ou pré-checkout), exibir sugestões rápidas e atraentes de produtos de alta margem (bebidas geladas, sobremesas, batatas fritas, molhos extras).
 * **Impacto**: Aumenta o ticket médio em 15% a 25% automaticamente, sem atrito para o cliente e sem esforço da equipe da loja. Botão de 1 toque (+ R$ 6,00) adiciona diretamente ao pedido sem sair do fluxo.
 
-### 🧾 31. Fechamento de Caixa do Turno (Relatório da Noite em 1-Clique)
-* **O Conceito**: No final do expediente (madrugada), um botão rápido no painel gera um resumo operacional e financeiro completo do turno com base no horário de abertura da loja:
+### 🧾 31. Fechamento de Caixa do Turno (Relatório do Dia / Turno em 1-Clique)
+* **O Conceito**: Ao final do expediente (seja no final da tarde ou na madrugada), um botão rápido no topo do painel gera um resumo operacional e financeiro completo com base no horário de abertura ou no dia todo:
+  - **Flexibilidade Total (Turno Único vs Turnos Múltiplos)**:
+    - Como a maioria absoluta dos restaurantes só opera em **1 único período** (ou só almoço das 11h às 15h, ou só janta das 18h às 23h30), a opção padrão é **📅 Hoje (Dia Todo)**, que calcula 100% dos pedidos do dia (00:00 até agora) sem risco de perder pedidos do meio-dia ou vendas antecipadas.
+    - O modo **⏱️ Turno da Loja** detecta dinamicamente a abertura em `open_days` ou `opening_time` (se abrir antes das 16h marca `☀️ Turno Diurno`, se abrir depois marca `🌙 Turno Noturno` com tolerância automática a turnos que cruzam a meia-noite).
+    - Opção **🗓️ Ontem** para quem confere o caixa na manhã seguinte.
+  - **Abertura / Fechamento Automático vs Manual**: Se a loja fechar pelo switch manual, o sistema dispara toast com botão direto de 1 clique para fechar o caixa. Se fechar no horário programado, o botão fica sempre acessível no cabeçalho e em Relatórios.
   - **Faturamento & Vendas**: Total bruto faturado, quantidade de pedidos (Delivery vs Balcão), ticket médio e cancelados.
   - **Divisão por Forma de Pagamento**: Dinheiro (o que deve estar na gaveta), PIX Online (confirmado em conta), Cartão de Crédito e Cartão de Débito (maquininhas), e Vale Refeição.
   - **Diferença COM vs SEM Entregadores**:
-    - **COM Entregador**: Gera o extrato individual de cada motoboy que trabalhou na noite (quantas viagens fez, quantas comandas entregou, quanto tem a receber de taxa, quanto dinheiro em espécie recolheu e deve devolver ao caixa, e saldo líquido com chave Pix).
+    - **COM Entregador**: Gera o extrato individual de cada motoboy que trabalhou no expediente (quantas viagens fez, quantas comandas entregou, quanto tem a receber de taxa, quanto dinheiro em espécie recolheu e deve devolver ao caixa, e saldo líquido com chave Pix).
     - **SEM Entregador**: Oculta o bloco de motoboys e foca 100% no caixa da loja (taxas de entrega cobradas dos clientes entram como receita da loja, sem deduções).
-  - **Impressão Térmica Reutilizada**: Utiliza o mesmo motor de impressão de cupom (`@media print` preto puro 80mm/58mm) para imprimir uma via para a gaveta do caixa, além de botão para copiar o resumo formatado em texto para o WhatsApp do proprietário.
+  - **Impressão Térmica Reutilizada**: Utiliza o mesmo motor de impressão de cupom (`@media print` preto puro 80mm/58mm via `PrintShiftClosing`) para imprimir uma via para a gaveta do caixa, além de botão para copiar o resumo formatado em texto para o WhatsApp do proprietário.
 
 ### 🏷️ 32. Filtro Rápido no Painel de Pedidos (Delivery vs Balcão vs Salão/Mesa)
 * **O Conceito**: Abas de filtragem instantânea no topo do painel de pedidos (`Todos`, `🛵 Entrega`, `🛍️ Retirada no Balcão`, `🍽️ Mesa/Consumo Local`).

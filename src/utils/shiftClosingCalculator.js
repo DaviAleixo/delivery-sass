@@ -27,6 +27,42 @@ export function normalizePaymentMethod(methodStr) {
 }
 
 /**
+ * Retorna informações resumidas sobre o turno/expediente configurado da loja
+ */
+export function getStoreShiftInfo(tenantSettings) {
+  const now = new Date();
+  const nowParts = getBrasiliaParts(now);
+  let openingHour = 18;
+  let openingMinute = 0;
+
+  // 1. Tenta pegar a programação do dia de hoje nos open_days
+  if (Array.isArray(tenantSettings?.open_days) && tenantSettings.open_days.length > 0) {
+    const currentDay = nowParts.dayOfWeek;
+    const dayConfig = tenantSettings.open_days.find((d) => d.day === currentDay && d.enabled);
+    if (dayConfig?.opening_time) {
+      const [h, m] = dayConfig.opening_time.split(":").map(Number);
+      if (!isNaN(h)) openingHour = h;
+      if (!isNaN(m)) openingMinute = m;
+    }
+  } else if (tenantSettings?.opening_time) {
+    const parts = tenantSettings.opening_time.split(":").map(Number);
+    if (!isNaN(parts[0])) openingHour = parts[0];
+    if (!isNaN(parts[1])) openingMinute = parts[1];
+  }
+
+  const isDaytime = openingHour < 16;
+  const timeStr = `${String(openingHour).padStart(2, "0")}:${String(openingMinute).padStart(2, "0")}`;
+
+  return {
+    isDaytime,
+    openingHour,
+    openingMinute,
+    timeStr,
+    label: isDaytime ? `☀️ Turno Diurno (das ${timeStr})` : `🌙 Turno Noturno (das ${timeStr})`,
+  };
+}
+
+/**
  * Determina o intervalo do turno atual da loja em Brasília
  */
 export function resolveShiftBounds(tenantSettings, periodMode = "today", customRange = null) {
@@ -60,28 +96,25 @@ export function resolveShiftBounds(tenantSettings, periodMode = "today", customR
   }
 
   if (periodMode === "shift") {
-    let openingHour = 18;
-    let openingMinute = 0;
-
-    if (tenantSettings?.opening_time) {
-      const parts = tenantSettings.opening_time.split(":").map(Number);
-      if (!isNaN(parts[0])) openingHour = parts[0];
-      if (!isNaN(parts[1])) openingMinute = parts[1];
-    }
+    const shiftInfo = getStoreShiftInfo(tenantSettings);
+    const { openingHour, openingMinute, isDaytime } = shiftInfo;
 
     const shiftStart = new Date(now);
-    // Se estamos de madrugada antes do horário de abertura, o turno começou no dia civil anterior
-    if (nowParts.hour < openingHour) {
+    // Se o turno é noturno e estamos de madrugada antes da abertura, começou ontem
+    if (!isDaytime && nowParts.hour < openingHour) {
       shiftStart.setDate(shiftStart.getDate() - 1);
     }
     shiftStart.setHours(openingHour, openingMinute, 0, 0);
 
     const shiftEnd = new Date(now);
+    const shiftPrefix = isDaytime ? "Turno Diurno" : "Turno Noturno";
+
     return {
       start: shiftStart,
       end: shiftEnd,
-      label: `Turno Noturno: ${formatInBrasilia(shiftStart, { includeSeconds: false })} até ${formatInBrasilia(shiftEnd, { includeSeconds: false })}`,
+      label: `${shiftPrefix}: ${formatInBrasilia(shiftStart, { includeSeconds: false })} até ${formatInBrasilia(shiftEnd, { includeSeconds: false })}`,
       mode: "shift",
+      shiftType: isDaytime ? "day" : "night",
     };
   }
 
