@@ -43,14 +43,24 @@ export default function PixOnlineModal({
 
     const generatePix = async () => {
       try {
+        const cleanPhone = String(order.customer_phone || "").replace(/\D/g, "");
+        const fallbackEmail = cleanPhone && cleanPhone.length >= 10
+          ? `pix.${cleanPhone}@vruum.com.br`
+          : "pix.cliente@vruum.com.br";
+
         const res = await createPixPayment({
           accessToken,
           orderId: order.id,
           orderNumber: order.order_number || order.id?.slice(-4),
           amount: order.total_amount || order.total || 0,
           description: `Pedido #${order.order_number || order.id?.slice(-4)} - Delivery`,
-          payerEmail: order.customer_email || order.user_email || "cliente@delivery.internal",
+          payerEmail: (order.customer_email && /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/.test(order.customer_email))
+            ? order.customer_email.trim().toLowerCase()
+            : (order.user_email && /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/.test(order.user_email))
+            ? order.user_email.trim().toLowerCase()
+            : fallbackEmail,
           payerName: order.customer_name || "Cliente",
+          payerPhone: cleanPhone,
         });
 
         if (!isMounted) return;
@@ -100,19 +110,20 @@ export default function PixOnlineModal({
         const checkRes = await checkPaymentStatus({
           accessToken,
           paymentId: paymentData.paymentId,
+          orderId: order?.id,
         });
 
         if (checkRes.isApproved) {
           setIsApproved(true);
           clearInterval(pollIntervalRef.current);
 
-          // Atualiza status do pedido no Supabase para 'pago' e 'confirmado'
+          // Atualiza status do pedido no Supabase para 'pago' e 'pendente' (para o restaurante aceitar no painel)
           if (isSupabaseConfigured() && supabase) {
             await supabase
               .from("orders")
               .update({
                 payment_status: "paid",
-                status: "confirmado",
+                status: "pendente",
                 updated_date: new Date().toISOString(),
               })
               .eq("id", order.id);
@@ -121,7 +132,7 @@ export default function PixOnlineModal({
           // Notifica pai após 2 segundos de celebração
           setTimeout(() => {
             if (onPaymentApproved) {
-              onPaymentApproved({ ...order, payment_status: "paid", status: "confirmado" });
+              onPaymentApproved({ ...order, payment_status: "paid", status: "pendente" });
             }
           }, 2000);
         }

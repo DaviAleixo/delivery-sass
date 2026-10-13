@@ -256,7 +256,7 @@ export const MOCK_ADDITIONALS = [
 ];
 
 export const MOCK_SETTINGS = {
-  restaurant_name: "Delivery 1.0",
+  restaurant_name: "Vruum Burguer",
   restaurant_logo: "",
   opening_time: "18:00",
   closing_time: "23:59",

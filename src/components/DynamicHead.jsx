@@ -52,7 +52,7 @@ export default function DynamicHead() {
     }
 
     // 3. Determina o nome e foto (logo) da loja ativa
-    let storeName = "Delivery 1.0";
+    let storeName = tenant?.name || "Vruum Burguer";
     let logoUrl = null;
 
     if (urlSlug) {
@@ -68,7 +68,7 @@ export default function DynamicHead() {
           .join(" ");
       }
     } else {
-      storeName = tenant?.name || localStorage.getItem("current_tenant_name") || "Delivery 1.0";
+      storeName = tenant?.name || localStorage.getItem("current_tenant_name") || "Vruum Burguer";
       logoUrl = tenant?.logo_url || null;
     }
 

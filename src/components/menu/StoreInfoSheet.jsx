@@ -46,7 +46,7 @@ export default function StoreInfoSheet({ settings }) {
                 className="text-lg sm:text-xl font-black text-white"
                 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
               >
-                {settings.restaurant_name || "Delivery 1.0"}
+                {settings.restaurant_name || "Vruum Burguer"}
               </SheetTitle>
               <p className="text-xs text-stone-400">Informações & Atendimento</p>
             </div>

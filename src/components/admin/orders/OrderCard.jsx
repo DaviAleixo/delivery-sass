@@ -70,6 +70,11 @@ export default function OrderCard({
                     Retirada (Balcão)
                   </Badge>
                 )}
+                {order.payment_status === "paid" && (
+                  <Badge className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-black shadow-sm">
+                    ✓ PAGO VIA PIX
+                  </Badge>
+                )}
               </div>
             </div>
             <div className="flex flex-wrap items-center justify-between md:justify-end gap-2.5">

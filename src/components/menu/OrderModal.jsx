@@ -277,6 +277,42 @@ export default function OrderModal({
     }
   }, [deliveryRules?.address_city, deliveryRules?.address_state]);
 
+  // Sincronização em tempo real das Formas de Pagamento
+  const [activePaymentMethods, setActivePaymentMethods] = useState(deliveryRules?.payment_methods || null);
+
+  useEffect(() => {
+    if (deliveryRules?.payment_methods) {
+      setActivePaymentMethods(deliveryRules.payment_methods);
+    }
+  }, [deliveryRules?.payment_methods]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    let isMounted = true;
+    const fetchLatestPaymentMethods = async () => {
+      const activeTenantId = getActiveTenantId() || "a0000000-0000-0000-0000-000000000001";
+      if (isSupabaseConfigured() && supabase) {
+        try {
+          const { data } = await supabase
+            .from("tenants")
+            .select("payment_methods")
+            .eq("id", activeTenantId)
+            .maybeSingle();
+
+          if (data?.payment_methods && isMounted) {
+            setActivePaymentMethods(data.payment_methods);
+          }
+        } catch (_err) {
+          console.warn("Erro ao sincronizar formas de pagamento no modal:", _err);
+        }
+      }
+    };
+
+    fetchLatestPaymentMethods();
+    return () => { isMounted = false; };
+  }, [isOpen]);
+
   const subtotal = cart.reduce((sum, item) => {
     const additionalsTotal = item.additionals.reduce((s, ad) => s + ad.price, 0);
     return sum + (item.price + additionalsTotal) * item.quantity;
@@ -552,6 +588,7 @@ export default function OrderModal({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!validateForm()) return;
 
     let deliveryAddress = "";
@@ -618,7 +655,8 @@ export default function OrderModal({
         subtotal: (item.price + (item.additionals || []).reduce((s, a) => s + (a.price || 0), 0)) * item.quantity,
         additionals: item.additionals || [],
       })),
-      status: "pendente",
+      status: customerData.payment_method === 'pix_online' ? "aguardando_pagamento" : "pendente",
+      payment_status: customerData.payment_method === 'pix_online' ? "pending" : "pending_delivery",
       coupon_code: appliedCoupon?.code,
       discount_amount: discountAmount,
       order_type: orderType === 'takeaway' ? 'pickup' : (orderType === 'dine_in' ? 'dine_in' : 'delivery'),
@@ -1361,12 +1399,12 @@ export default function OrderModal({
                 Forma de Pagamento *
               </Label>
               {(() => {
-                const pm = deliveryRules?.payment_methods || {};
+                const pm = activePaymentMethods || deliveryRules?.payment_methods || {};
                 const showOnlineMp = Boolean(pm.accept_online_mp && pm.mp_access_token);
-                const showCredit = pm.accept_card_credit !== undefined ? Boolean(pm.accept_card_credit) : (pm.accept_card_delivery !== false);
-                const showDebit = pm.accept_card_debit !== undefined ? Boolean(pm.accept_card_debit) : (pm.accept_card_delivery !== false);
-                const showMeal = Boolean(pm.accept_card_meal);
-                const showCash = pm.accept_cash !== false;
+                const showCredit = pm.accept_card_credit !== undefined ? Boolean(pm.accept_card_credit === true || pm.accept_card_credit === "true") : (pm.accept_card_delivery !== false);
+                const showDebit = pm.accept_card_debit !== undefined ? Boolean(pm.accept_card_debit === true || pm.accept_card_debit === "true") : (pm.accept_card_delivery !== false);
+                const showMeal = Boolean(pm.accept_card_meal === true || pm.accept_card_meal === "true");
+                const showCash = pm.accept_cash !== false && pm.accept_cash !== "false";
 
                 const availableMethods = [
                   showOnlineMp && {

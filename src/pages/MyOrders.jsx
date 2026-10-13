@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Order } from "@/entities/Order";
 import { Settings } from "@/entities/Settings";
 import { base44 } from "@/api/base44Client";
+import { useTenant } from "@/lib/TenantContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +10,8 @@ import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { 
   ArrowLeft, Clock, Sparkles, Truck, Store, 
-  Search, CheckCircle2, Bike, PackageCheck, RefreshCw
+  Search, CheckCircle2, Bike, PackageCheck, RefreshCw,
+  MessageCircle, ExternalLink, UtensilsCrossed, ShieldCheck
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -17,6 +19,44 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Link, useSearchParams } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import OrderCountdownTimer from "@/components/admin/OrderCountdownTimer";
+
+// --- Utilitários de Segurança e Formatação Resiliente ---
+function safeFormatCurrency(val) {
+  const num = Number(val);
+  return isNaN(num) ? "0,00" : num.toFixed(2).replace(".", ",");
+}
+
+function safeFormatDate(val, pattern = "dd 'de' MMMM 'às' HH:mm") {
+  if (!val) return "";
+  try {
+    const str = String(val).trim();
+    const isoStr = str.includes(" ") && !str.includes("T") ? str.replace(" ", "T") : str;
+    const parsed = new Date(isoStr);
+    if (isNaN(parsed.getTime())) return "";
+    return format(parsed, pattern, { locale: ptBR });
+  } catch {
+    return "";
+  }
+}
+
+function safeGetItems(items) {
+  if (!items) return [];
+  if (Array.isArray(items)) return items;
+  if (typeof items === "string") {
+    try {
+      const parsed = JSON.parse(items);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function safeOrderId(id) {
+  if (!id) return "000000";
+  return String(id).slice(-6).toUpperCase();
+}
 
 const getOrderSteps = (orderType) => [
   { status: "pendente", label: "Recebido", icon: Clock },
@@ -43,6 +83,7 @@ function getStepIndex(status) {
 export default function MyOrdersPage() {
   const [searchParams] = useSearchParams();
   const highlightOrderId = searchParams.get("id");
+  const { tenant } = useTenant();
 
   const [orders, setOrders] = useState([]);
   const [settings, setSettings] = useState(null);
@@ -51,12 +92,19 @@ export default function MyOrdersPage() {
   const [phoneSearch, setPhoneSearch] = useState("");
   const [isSearchingPhone, setIsSearchingPhone] = useState(false);
 
+  const requestNotificationPermission = async () => {
+    try {
+      if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
+        await Notification.requestPermission();
+      }
+    } catch {}
+  };
+
   useEffect(() => {
     loadOrders();
     requestNotificationPermission();
 
     // Polling inteligente e seguro a cada 15s enquanto a aba estiver visível
-    // Evita conexões WebSocket abertas desnecessárias no cliente
     const interval = setInterval(() => {
       if (typeof document !== "undefined" && document.visibilityState === "visible") {
         loadOrders(false);
@@ -95,18 +143,29 @@ export default function MyOrdersPage() {
       let filtered = [];
       if (highlightOrderId) {
         // Pedido específico vindo da URL
-        filtered = allOrders.filter(o => o.id === highlightOrderId);
+        const found = (allOrders || []).filter(o => o.id === highlightOrderId);
+        if (found.length > 0) {
+          filtered = found;
+        } else {
+          // Busca direta do pedido pelo ID se não veio na listagem geral
+          try {
+            const direct = await Order.get(highlightOrderId);
+            if (direct) {
+              filtered = [direct];
+            }
+          } catch {}
+        }
       }
 
       // Se logado, inclui os do email
       if (loggedUser?.email) {
-        const userOrders = allOrders.filter(o => o.user_email === loggedUser.email);
+        const userOrders = (allOrders || []).filter(o => o.user_email === loggedUser.email);
         filtered = [...filtered, ...userOrders];
       }
 
       // Inclui os pedidos salvos no navegador (Guest Checkout)
       if (localIds.length > 0) {
-        const guestOrders = allOrders.filter(o => localIds.includes(o.id));
+        const guestOrders = (allOrders || []).filter(o => localIds.includes(o.id));
         filtered = [...filtered, ...guestOrders];
       }
 
@@ -114,7 +173,7 @@ export default function MyOrdersPage() {
       if (savedPhone) {
         const phoneClean = savedPhone.replace(/\D/g, "");
         if (phoneClean.length >= 8) {
-          const phoneOrders = allOrders.filter(o => {
+          const phoneOrders = (allOrders || []).filter(o => {
             const op = (o.customer_phone || "").replace(/\D/g, "");
             return op === phoneClean || (op.length >= 8 && op.endsWith(phoneClean.slice(-8)));
           });
@@ -143,7 +202,7 @@ export default function MyOrdersPage() {
       localStorage.setItem("vrumburguer_customer_phone", phoneSearch);
 
       const allOrders = await Order.list("-created_date");
-      const matches = allOrders.filter(o => {
+      const matches = (allOrders || []).filter(o => {
         const orderPhoneClean = (o.customer_phone || "").replace(/\D/g, "");
         return orderPhoneClean.includes(cleanInput) || cleanInput.includes(orderPhoneClean);
       });
@@ -160,7 +219,7 @@ export default function MyOrdersPage() {
     const colors = {
       pendente: "bg-amber-100 text-amber-800 border-amber-300",
       confirmado: "bg-blue-100 text-blue-800 border-blue-300",
-      preparando: "bg-blue-100 text-blue-800 border-blue-300", // Para o cliente, exibe estilo de Confirmado
+      preparando: "bg-blue-100 text-blue-800 border-blue-300",
       enviado: "bg-indigo-100 text-indigo-800 border-indigo-300",
       entregue: "bg-emerald-100 text-emerald-800 border-emerald-300",
       cancelado: "bg-red-100 text-red-800 border-red-300"
@@ -189,12 +248,16 @@ export default function MyOrdersPage() {
   const activeOrders = orders.filter(o => ['pendente', 'confirmado', 'preparando', 'enviado'].includes(o.status));
   const completedOrders = orders.filter(o => ['entregue', 'cancelado'].includes(o.status));
 
+  // Dados do restaurante para suporte WhatsApp
+  const restaurantWhatsApp = tenant?.whatsapp || tenant?.phone || settings?.whatsapp || settings?.phone || "";
+  const cleanStorePhone = restaurantWhatsApp.replace(/\D/g, "");
+
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-amber-50/40 flex items-center justify-center">
+      <div className="min-h-screen bg-stone-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
-          <p className="text-gray-700 font-medium">Carregando status do pedido...</p>
+          <p className="text-stone-700 font-medium">Carregando status do pedido...</p>
         </div>
       </div>
     );
@@ -259,7 +322,7 @@ export default function MyOrdersPage() {
             <div className="text-6xl mb-4">🛵</div>
             <h3 className="text-xl font-bold text-stone-900 mb-2">Nenhum pedido encontrado</h3>
             <p className="text-stone-600 mb-6 max-w-md mx-auto text-sm">
-              Você ainda não tem pedidos registrados neste aparelho ou número. Que tal pedir um burger quentinho agora?
+              Você ainda não tem pedidos registrados neste aparelho ou número. Que tal pedir agora?
             </p>
             <Link to={createPageUrl("Menu")}>
               <Button className="bg-red-600 hover:bg-red-700 text-white font-semibold px-6">
@@ -280,6 +343,10 @@ export default function MyOrdersPage() {
                 <AnimatePresence>
                   {activeOrders.map((order) => {
                     const currentStep = getStepIndex(order.status);
+                    const orderItems = safeGetItems(order.items);
+                    const isHighlighted = highlightOrderId === order.id;
+                    const isPixPaid = order.payment_status === "paid" || order.status === "confirmado";
+
                     return (
                       <motion.div
                         key={order.id}
@@ -287,19 +354,44 @@ export default function MyOrdersPage() {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -15 }}
                       >
+                        {/* Banner de Celebração de Pagamento Aprovado */}
+                        {isHighlighted && isPixPaid && (
+                          <div className="mb-3 p-4 bg-emerald-500 text-white rounded-2xl shadow-md flex items-center justify-between gap-3 animate-fade-in">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+                                <ShieldCheck className="w-6 h-6 text-white" />
+                              </div>
+                              <div>
+                                <h4 className="font-extrabold text-sm sm:text-base leading-tight">
+                                  🎉 Pagamento PIX Confirmado com Sucesso!
+                                </h4>
+                                <p className="text-xs text-emerald-100 mt-0.5">
+                                  Seu pedido já foi enviado para a cozinha e está sendo preparado.
+                                </p>
+                              </div>
+                            </div>
+                            <Badge className="bg-white text-emerald-800 font-bold border-none shrink-0 shadow-sm">
+                              Pago via PIX
+                            </Badge>
+                          </div>
+                        )}
+
                         <Card className="border-red-100 shadow-lg overflow-hidden bg-white">
                           {/* Topo do Card */}
                           <div className="bg-gradient-to-r from-red-600 to-amber-600 p-4 sm:p-5 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                             <div>
                               <span className="text-xs uppercase tracking-wider text-red-100 font-semibold">Status ao Vivo</span>
-                              <h3 className="text-lg font-bold">Pedido #{order.id.slice(-6).toUpperCase()}</h3>
+                              <h3 className="text-lg font-bold">Pedido #{safeOrderId(order.id)}</h3>
                               <p className="text-xs text-red-100 mt-0.5">
-                                {format(new Date(order.created_date), "dd 'de' MMMM 'às' HH:mm", { locale: ptBR })}
+                                {safeFormatDate(order.created_date)}
                               </p>
                             </div>
                             <div className="flex items-center gap-2">
                               {/* Cronômetro de tempo restante de entrega / preparo */}
-                              <OrderCountdownTimer order={order} deliveryTimeSetting={settings?.delivery_time || "40-50 min"} />
+                              <OrderCountdownTimer 
+                                order={order} 
+                                deliveryTimeSetting={tenant?.delivery_time || settings?.delivery_time || "40-50 min"} 
+                              />
                               
                               <Badge className={`${getStatusColor(order.status)} font-semibold text-xs px-3 py-1 shadow-sm`}>
                                 {getStatusText(order.status, order)}
@@ -373,31 +465,39 @@ export default function MyOrdersPage() {
                                   </>
                                 )}
                               </div>
-                              <div className="flex items-center gap-4 text-xs text-stone-500 pt-1">
-                                <span>Cliente: <strong>{order.customer_name}</strong></span>
-                                <span>WhatsApp: <strong>{order.customer_phone}</strong></span>
+                              <div className="flex flex-wrap items-center gap-4 text-xs text-stone-500 pt-1">
+                                <span>Cliente: <strong>{order.customer_name || "Cliente"}</strong></span>
+                                <span>WhatsApp: <strong>{order.customer_phone || "Não informado"}</strong></span>
+                                {order.payment_method && (
+                                  <span>Forma de Pagamento: <strong className="capitalize">{order.payment_method}</strong></span>
+                                )}
                               </div>
                             </div>
 
-                            {/* Itens */}
+                            {/* Itens do Pedido */}
                             <div className="space-y-2">
                               <p className="text-xs font-bold uppercase text-stone-400 tracking-wider">Itens do Pedido</p>
                               <div className="divide-y divide-stone-100">
-                                {order.items?.map((item, index) => (
-                                  <div key={index} className="py-2 flex justify-between items-start text-sm">
-                                    <div>
-                                      <span className="font-semibold text-stone-800">{item.quantity}x {item.product_name || item.name}</span>
-                                      {item.additionals && item.additionals.length > 0 && (
-                                        <p className="text-xs text-stone-500">
-                                          + {item.additionals.map(a => a.name).join(', ')}
-                                        </p>
-                                      )}
+                                {orderItems.map((item, index) => {
+                                  const itemSubtotal = item.subtotal ?? (Number(item.price || 0) * Number(item.quantity || 1));
+                                  return (
+                                    <div key={index} className="py-2 flex justify-between items-start text-sm">
+                                      <div>
+                                        <span className="font-semibold text-stone-800">
+                                          {item.quantity}x {item.product_name || item.name}
+                                        </span>
+                                        {item.additionals && item.additionals.length > 0 && (
+                                          <p className="text-xs text-stone-500">
+                                            + {item.additionals.map(a => a.name).join(', ')}
+                                          </p>
+                                        )}
+                                      </div>
+                                      <span className="text-stone-700 font-medium">
+                                        R$ {safeFormatCurrency(itemSubtotal)}
+                                      </span>
                                     </div>
-                                    <span className="text-stone-700 font-medium">
-                                      R$ {(item.subtotal || (item.price * item.quantity)).toFixed(2).replace('.', ',')}
-                                    </span>
-                                  </div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             </div>
 
@@ -407,8 +507,38 @@ export default function MyOrdersPage() {
                             <div className="flex justify-between items-center">
                               <span className="text-sm font-semibold text-stone-600">Total Pago</span>
                               <span className="text-2xl font-extrabold text-red-600">
-                                R$ {order.total_amount.toFixed(2).replace('.', ',')}
+                                R$ {safeFormatCurrency(order.total_amount || order.total)}
                               </span>
+                            </div>
+
+                            {/* Ações: Contatar Loja & Novo Pedido */}
+                            <div className="pt-2 flex flex-col sm:flex-row gap-2.5">
+                              {cleanStorePhone && (
+                                <a
+                                  href={`https://wa.me/55${cleanStorePhone}?text=${encodeURIComponent(`Olá! Gostaria de acompanhar o andamento do meu pedido #${safeOrderId(order.id)}`)}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex-1"
+                                >
+                                  <Button 
+                                    variant="outline" 
+                                    className="w-full border-emerald-600 text-emerald-700 hover:bg-emerald-50 gap-2 h-10 text-xs font-semibold"
+                                  >
+                                    <MessageCircle className="w-4 h-4 text-emerald-600" />
+                                    Falar com o Restaurante no WhatsApp
+                                  </Button>
+                                </a>
+                              )}
+
+                              <Link to={createPageUrl("Menu")} className="flex-1">
+                                <Button 
+                                  variant="ghost" 
+                                  className="w-full border border-stone-200 text-stone-700 hover:bg-stone-100 gap-2 h-10 text-xs font-semibold"
+                                >
+                                  <UtensilsCrossed className="w-4 h-4 text-stone-500" />
+                                  Fazer Novo Pedido
+                                </Button>
+                              </Link>
                             </div>
                           </CardContent>
                         </Card>
@@ -428,31 +558,34 @@ export default function MyOrdersPage() {
                 </h2>
 
                 <div className="space-y-3">
-                  {completedOrders.map((order) => (
-                    <Card key={order.id} className="border-stone-200 bg-white hover:border-stone-300 transition-all shadow-sm">
-                      <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-bold text-stone-900">Pedido #{order.id.slice(-6).toUpperCase()}</span>
-                            <Badge className={`${getStatusColor(order.status)} font-medium text-[11px]`}>
-                              {getStatusText(order.status)}
-                            </Badge>
+                  {completedOrders.map((order) => {
+                    const orderItems = safeGetItems(order.items);
+                    return (
+                      <Card key={order.id} className="border-stone-200 bg-white hover:border-stone-300 transition-all shadow-sm">
+                        <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-bold text-stone-900">Pedido #{safeOrderId(order.id)}</span>
+                              <Badge className={`${getStatusColor(order.status)} font-medium text-[11px]`}>
+                                {getStatusText(order.status)}
+                              </Badge>
+                            </div>
+                            <p className="text-xs text-stone-500">
+                              {safeFormatDate(order.created_date, "dd/MM/yyyy 'às' HH:mm")}
+                            </p>
+                            <p className="text-xs text-stone-600 mt-1">
+                              {orderItems.map(i => `${i.quantity}x ${i.product_name || i.name}`).join(', ')}
+                            </p>
                           </div>
-                          <p className="text-xs text-stone-500">
-                            {format(new Date(order.created_date), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                          </p>
-                          <p className="text-xs text-stone-600 mt-1">
-                            {order.items?.map(i => `${i.quantity}x ${i.product_name || i.name}`).join(', ')}
-                          </p>
-                        </div>
-                        <div className="text-right w-full sm:w-auto border-t sm:border-t-0 pt-2 sm:pt-0">
-                          <span className="text-base font-bold text-stone-900 block">
-                            R$ {order.total_amount.toFixed(2).replace('.', ',')}
-                          </span>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                          <div className="text-right w-full sm:w-auto border-t sm:border-t-0 pt-2 sm:pt-0">
+                            <span className="text-base font-bold text-stone-900 block">
+                              R$ {safeFormatCurrency(order.total_amount || order.total)}
+                            </span>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               </div>
             )}

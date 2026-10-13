@@ -107,6 +107,11 @@ export default function OrdersPage() {
         return [newOrder, ...prev];
       });
 
+      // Se for pedido aguardando pagamento via PIX, NÃO alerta a loja ainda!
+      if (newOrder.status === "aguardando_pagamento") {
+        return;
+      }
+
       if (newOrder.status === "pendente") {
         soundAlert.playOrderChime();
         soundAlert.setPendingCount((prev) => (prev || 0) + 1);
@@ -121,9 +126,20 @@ export default function OrdersPage() {
       });
     },
     onUpdate: (updatedOrder) => {
-      setOrders((prev) =>
-        prev.map((o) => (o.id === updatedOrder.id ? { ...o, ...updatedOrder } : o))
-      );
+      setOrders((prev) => {
+        const existing = prev.find((o) => o.id === updatedOrder.id);
+        // Se mudou de 'aguardando_pagamento' para 'confirmado' ou 'pendente' (PIX pago com sucesso!):
+        if (existing?.status === "aguardando_pagamento" && ["pendente", "confirmado"].includes(updatedOrder.status)) {
+          soundAlert.playOrderChime();
+          const client = updatedOrder.customer_name || "Cliente";
+          const num = String(updatedOrder.id).slice(-4).toUpperCase();
+          toast.success(`💰 PIX Confirmado! Pedido #${num} de ${client}!`, {
+            description: `Total: R$ ${(updatedOrder.total_amount || updatedOrder.total || 0).toFixed(2).replace(".", ",")}`,
+            duration: 8000,
+          });
+        }
+        return prev.map((o) => (o.id === updatedOrder.id ? { ...o, ...updatedOrder } : o));
+      });
     },
     onDelete: (deletedOrder) => {
       setOrders((prev) => prev.filter((o) => o.id !== deletedOrder.id));
@@ -360,7 +376,7 @@ export default function OrdersPage() {
 
   // Filtro por período de tempo (Turno aberto, Hoje, Ontem, Semana, Todos)
   const timeFilteredOrders = React.useMemo(() => {
-    let list = orders || [];
+    let list = (orders || []).filter(o => o.status !== "aguardando_pagamento");
 
     if (timeFilter === "shift") {
       list = list.filter(o => isOrderInCurrentShift(o, settings));

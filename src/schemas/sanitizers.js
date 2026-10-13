@@ -69,6 +69,11 @@ export function sanitizeOrderData(rawOrder = {}) {
     total: totalAmount,
     items: cleanItems,
     status: rawOrder.status ? String(rawOrder.status).toLowerCase().trim() : "pendente",
+    print_status: ["pending", "printing", "printed", "failed"].includes(rawOrder.print_status)
+      ? rawOrder.print_status
+      : "pending",
+    printed_at: rawOrder.printed_at ? new Date(rawOrder.printed_at).toISOString() : null,
+    print_count: typeof rawOrder.print_count === "number" ? rawOrder.print_count : 0,
   };
 }
 
@@ -107,6 +112,16 @@ export function sanitizeOrderUpdateData(rawUpdate = {}) {
   }
   if (rawUpdate.subtotal !== undefined) {
     sanitized.subtotal = parseNum(rawUpdate.subtotal);
+  }
+  if (rawUpdate.print_status !== undefined) {
+    const valid = ["pending", "printing", "printed", "failed"];
+    sanitized.print_status = valid.includes(rawUpdate.print_status) ? rawUpdate.print_status : "pending";
+  }
+  if (rawUpdate.printed_at !== undefined) {
+    sanitized.printed_at = rawUpdate.printed_at ? new Date(rawUpdate.printed_at).toISOString() : null;
+  }
+  if (rawUpdate.print_count !== undefined) {
+    sanitized.print_count = parseInt(rawUpdate.print_count, 10) || 0;
   }
 
   sanitized.updated_date = new Date().toISOString();
@@ -147,7 +162,8 @@ export function sanitizeProductUpdateData(rawUpdate = {}) {
     sanitized.image_url = String(rawUpdate.image_url).trim();
   }
 
-  sanitized.updated_at = new Date().toISOString();
+  delete sanitized.updated_at;
+  sanitized.updated_date = new Date().toISOString();
   return sanitized;
 }
 
@@ -161,7 +177,7 @@ export function sanitizeProductData(rawProduct = {}) {
     return fallback;
   };
 
-  return {
+  const sanitized = {
     ...rawProduct,
     name: String(rawProduct.name || "").trim(),
     description: rawProduct.description ? String(rawProduct.description).trim() : "",
@@ -172,5 +188,7 @@ export function sanitizeProductData(rawProduct = {}) {
     available: rawProduct.available !== false,
     popular: Boolean(rawProduct.popular),
   };
+  delete sanitized.updated_at;
+  return sanitized;
 }
 

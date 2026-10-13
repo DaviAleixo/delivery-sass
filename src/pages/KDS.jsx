@@ -12,10 +12,13 @@ import {
   Flame,
   CheckCircle2,
   AlertTriangle,
-  RotateCcw
+  RotateCcw,
+  Wifi,
+  WifiOff
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useOrdersRealtime } from "@/hooks/useOrdersRealtime";
+import { useFifoPrintQueue } from "@/hooks/useFifoPrintQueue";
 import { toast } from "sonner";
 import { createPageUrl } from "@/utils";
 import { Link } from "react-router-dom";
@@ -98,13 +101,27 @@ export default function KDSPage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const knownIdsRef = useRef(new Set());
 
-  // WebSocket Realtime Instantâneo
+  // Fila Sequencial de Impressão FIFO tolerante a quedas de internet
+  const {
+    queue: printQueue,
+    isProcessing: isPrinting,
+    isOnline,
+    autoPrintEnabled,
+    setAutoPrintEnabled,
+    enqueueOrders,
+    manualPrintOrder,
+  } = useFifoPrintQueue();
+
+  // WebSocket Realtime Instantâneo com Reconciliação Automática
   useOrdersRealtime({
     onInsert: (newOrder) => {
       setOrders((prev) => {
         if (prev.some((o) => o.id === newOrder.id)) return prev;
         return [newOrder, ...prev];
       });
+
+      // Enfileira automaticamente na fila FIFO de impressão
+      enqueueOrders([newOrder]);
 
       if (soundEnabled) {
         playKitchenChime();
@@ -124,12 +141,36 @@ export default function KDSPage() {
     onDelete: (deletedOrder) => {
       setOrders((prev) => prev.filter((o) => o.id !== deletedOrder.id));
     },
+    onReconnected: () => {
+      // Reconciliação imediata quando o WebSocket restabelece conexão
+      loadOrders();
+    },
   });
 
   useEffect(() => {
     loadOrders();
     const interval = setInterval(loadOrders, 30000);
-    return () => clearInterval(interval);
+
+    // Reconciliação ativa: ao voltar para a aba ou restabelecer a rede
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        loadOrders();
+      }
+    };
+    const handleOnline = () => {
+      loadOrders();
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("focus", loadOrders);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("focus", loadOrders);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, []);
 
   const loadOrders = async () => {
@@ -188,15 +229,33 @@ export default function KDSPage() {
     });
   }, [orders, channelFilter]);
 
-  // Colunas do KDS
-  const todoOrders = activeOrders.filter((o) => o.status === "pendente" || o.status === "confirmado");
-  const preparingOrders = activeOrders.filter((o) => o.status === "preparando");
-  const readyOrders = activeOrders.filter((o) => o.status === "pronto");
+  // Colunas do KDS ordenadas cronologicamente (FIFO: O mais antigo primeiro a ser preparado!)
+  const todoOrders = useMemo(() => {
+    return activeOrders
+      .filter((o) => o.status === "pendente" || o.status === "confirmado")
+      .sort((a, b) => new Date(a.created_date || 0).getTime() - new Date(b.created_date || 0).getTime());
+  }, [activeOrders]);
+
+  const preparingOrders = useMemo(() => {
+    return activeOrders
+      .filter((o) => o.status === "preparando")
+      .sort((a, b) => new Date(a.created_date || 0).getTime() - new Date(b.created_date || 0).getTime());
+  }, [activeOrders]);
+
+  const readyOrders = useMemo(() => {
+    return activeOrders
+      .filter((o) => o.status === "pronto")
+      .sort((a, b) => new Date(b.created_date || 0).getTime() - new Date(a.created_date || 0).getTime());
+  }, [activeOrders]);
 
   const renderOrderCard = (order) => {
     const isMesa = order.order_type === "dine_in" || order.order_type === "mesa" || (order.table_number && order.table_number.toLowerCase().includes("mesa"));
     const isDelivery = order.order_type === "delivery";
     const num = String(order.id).slice(-4).toUpperCase();
+
+    const orderCreatedAt = order.created_date ? new Date(order.created_date).getTime() : Date.now();
+    const minutesDelayed = Math.floor((Date.now() - orderCreatedAt) / 60000);
+    const isDelayedOffline = minutesDelayed >= 10 && (order.status === "pendente" || order.status === "confirmado");
 
     return (
       <motion.div
@@ -204,16 +263,23 @@ export default function KDSPage() {
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.9 }}
-        className="bg-stone-900 border border-stone-800 rounded-2xl p-4 shadow-xl flex flex-col justify-between space-y-4 text-stone-100"
+        className={`bg-stone-900 border rounded-2xl p-4 shadow-xl flex flex-col justify-between space-y-4 text-stone-100 ${
+          isDelayedOffline ? "border-rose-600/80 shadow-rose-950/40 ring-1 ring-rose-500/50" : "border-stone-800"
+        }`}
       >
         {/* Topo do Card: Número, Mesa/Canal e Timer */}
         <div>
           <div className="flex items-center justify-between pb-3 border-b border-stone-800 gap-2">
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="text-lg font-black text-amber-400 font-mono tracking-wider">
                   #{num}
                 </span>
+                {isDelayedOffline && (
+                  <Badge className="bg-rose-950 text-rose-300 border border-rose-700 animate-pulse text-[10px] font-black tracking-wide">
+                    ⚠️ RETIDO ({minutesDelayed}m)
+                  </Badge>
+                )}
                 {isMesa ? (
                   <Badge className="bg-emerald-950 text-emerald-300 border-emerald-800 text-xs font-bold">
                     🍽️ {order.table_number || "Mesa"}
@@ -276,16 +342,16 @@ export default function KDSPage() {
 
         {/* Rodapé com Botões de Ação Rápida */}
         <div className="pt-3 border-t border-stone-800 flex items-center gap-2">
-          <Link to={createPageUrl(`PrintOrder?id=${order.id}`)} target="_blank" className="shrink-0">
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-10 w-10 border-stone-700 bg-stone-800/80 text-stone-300 hover:text-white hover:bg-stone-700"
-              title="Imprimir comanda"
-            >
-              <Printer className="w-4 h-4" />
-            </Button>
-          </Link>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={() => manualPrintOrder(order)}
+            className="h-10 w-10 border-stone-700 bg-stone-800/80 text-stone-300 hover:text-white hover:bg-stone-700 shrink-0 cursor-pointer"
+            title="Imprimir comanda na fila FIFO"
+          >
+            <Printer className="w-4 h-4" />
+          </Button>
 
           {order.status === "pendente" || order.status === "confirmado" ? (
             <Button
@@ -343,10 +409,23 @@ export default function KDSPage() {
               <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white uppercase">
                 Monitor KDS Cozinha
               </h1>
-              <span className="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                Realtime Ativo
-              </span>
+              {isOnline ? (
+                <span
+                  className="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1.5"
+                  title="Internet Conectada (Realtime Ativo)"
+                >
+                  <Wifi className="w-3 h-3 text-emerald-400" />
+                  Online
+                </span>
+              ) : (
+                <span
+                  className="text-[10px] bg-rose-500/30 text-rose-300 border border-rose-500/50 px-2.5 py-0.5 rounded-full font-black flex items-center gap-1.5 animate-pulse"
+                  title="Sem conexão com a internet! Pedidos sincronizarão ao reconectar."
+                >
+                  <WifiOff className="w-3 h-3 text-rose-400" />
+                  Offline
+                </span>
+              )}
             </div>
             <p className="text-xs text-stone-400">
               {activeOrders.length} pedido(s) ativos na cozinha
@@ -354,8 +433,29 @@ export default function KDSPage() {
           </div>
         </div>
 
-        {/* Controles: Filtro de Canal, Som, Fullscreen e Atualizar */}
+        {/* Controles: Auto-Imprimir, Filtro de Canal, Som, Fullscreen e Atualizar */}
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Botão de Auto-Impressão com Badge de Fila FIFO */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setAutoPrintEnabled(!autoPrintEnabled)}
+            className={`text-xs h-9 px-3 rounded-xl border flex items-center gap-1.5 transition-all cursor-pointer font-bold ${
+              autoPrintEnabled
+                ? "border-emerald-600 bg-emerald-950/70 text-emerald-300 hover:bg-emerald-900"
+                : "border-stone-800 bg-stone-900 text-stone-400 hover:text-white"
+            }`}
+            title={autoPrintEnabled ? "Auto-impressão ATIVADA: novos pedidos imprimem na fila FIFO" : "Auto-impressão DESATIVADA"}
+          >
+            <Printer className={`w-3.5 h-3.5 ${autoPrintEnabled ? "text-emerald-400" : ""}`} />
+            <span className="hidden md:inline">Auto-Imprimir</span>
+            {printQueue.length > 0 && (
+              <span className="bg-amber-500 text-stone-950 text-[10px] font-black px-1.5 py-0.2 rounded-full">
+                {printQueue.length}
+              </span>
+            )}
+          </Button>
           {/* Seletor de Canal */}
           <div className="flex items-center bg-stone-900 border border-stone-800 rounded-xl p-1 text-xs">
             <button

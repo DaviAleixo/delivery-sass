@@ -295,7 +295,7 @@ export default function ProductsPage() {
     setProductForm({
       name: product.name,
       description: product.description || "",
-      price: product.price ? formatToBRL(product.price) : "",
+      price: product.price !== undefined && product.price !== null ? formatToBRL(product.price) : "",
       category: product.category || "",
       image_url: product.image_url || "",
       available: product.available !== false

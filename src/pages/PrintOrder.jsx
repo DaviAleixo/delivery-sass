@@ -82,7 +82,7 @@ export default function PrintOrderPage() {
   const deliveryAddress = order.customer_address || order.delivery_address || "";
   const customerPhone = order.customer_phone || order.phone || "";
   const customerName = order.customer_name || order.name || "Cliente Balcão";
-  const restaurantName = settings?.restaurant_name || "Delivery 1.0";
+  const restaurantName = settings?.restaurant_name || (typeof window !== "undefined" ? localStorage.getItem("current_tenant_name") : null) || "Vruum Burguer";
   const orderNumber = order.order_number || (order.id ? order.id.slice(-4).toUpperCase() : "0000");
 
   const orderDateFormatted = order.created_date
@@ -109,26 +109,41 @@ export default function PrintOrderPage() {
       ? `PARA MESA (${order.table_number})`
       : 'PARA RETIRADA NO BALCÃO';
 
+  const orderCreatedAt = order.created_date ? new Date(order.created_date).getTime() : Date.now();
+  const minutesDelayed = Math.floor((Date.now() - orderCreatedAt) / 60000);
+  const isDelayedOffline = minutesDelayed >= 10;
+
   // Componente de Cupom Único (Reutilizado na Via 1 e Via 2)
   const ReceiptCopy = ({ isKitchenOnly = false }) => (
-    <div className="receipt-copy bg-white text-black font-mono text-[12px] leading-tight select-none">
+    <div className="receipt-copy bg-white text-black font-sans text-[13px] leading-snug select-none font-bold">
       {/* Topo / Header */}
       <div className="text-center space-y-0.5 pb-1">
-        <p className="font-extrabold text-sm tracking-widest uppercase">{orderTypeTitle}</p>
-        <p className="text-[11px] text-gray-700">{orderDateFormatted}</p>
-        <p className="text-[11px] font-bold">{restaurantName}</p>
+        <p className="font-black text-base tracking-wider uppercase text-black">{orderTypeTitle}</p>
+        <p className="text-[12px] font-bold text-black">{orderDateFormatted}</p>
+        <p className="text-[12px] font-black text-black uppercase">{restaurantName}</p>
       </div>
 
-      <div className="border-t border-b border-dashed border-black py-1.5 my-1.5 text-center">
-        <h1 className="text-xl font-black tracking-wide">
-          Pedido {orderNumber}
+      {isDelayedOffline && (
+        <div className="border-2 border-black p-1.5 my-1 text-center font-black text-[12px] bg-black text-white leading-snug">
+          ⚠️ PEDIDO RETIDO PELA REDE ({minutesDelayed} MIN ATRASO)
+          <br />
+          PRIORIDADE MÁXIMA NA COZINHA!
+        </div>
+      )}
+
+      <div className="border-t-2 border-b-2 border-dashed border-black py-2 my-2 text-center">
+        <h1 className="text-2xl font-black tracking-wide text-black uppercase">
+          PEDIDO #{orderNumber}
         </h1>
       </div>
 
       {/* Itens */}
       <div className="pt-1 pb-1">
-        <p className="font-extrabold text-[13px] mb-1.5">Itens</p>
-        <div className="space-y-2">
+        <div className="border-b-2 border-black pb-1 mb-2 flex justify-between items-center">
+          <p className="font-black text-[14px] uppercase text-black">ITENS DO PEDIDO</p>
+          <p className="text-[11px] font-bold text-black">QTD / VALOR</p>
+        </div>
+        <div className="space-y-2.5">
           {items.map((item, idx) => {
             const qty = item.quantity || item.qty || 1;
             const price = Number(item.product_price || item.price || 0);
@@ -136,13 +151,13 @@ export default function PrintOrderPage() {
             const additionals = Array.isArray(item.additionals) ? item.additionals : [];
 
             return (
-              <div key={idx} className="space-y-0.5">
-                <div className="flex justify-between items-start font-bold">
+              <div key={idx} className="space-y-1">
+                <div className="flex justify-between items-start font-black text-[14px] text-black">
                   <span className="flex-1 pr-2 leading-tight">
-                    ({qty}) {item.product_name || item.name}
+                    [{qty}x] {item.product_name || item.name}
                   </span>
                   {!isKitchenOnly && (
-                    <span className="whitespace-nowrap">
+                    <span className="whitespace-nowrap font-black">
                       R$ {itemTotal.toFixed(2).replace(".", ",")}
                     </span>
                   )}
@@ -150,11 +165,11 @@ export default function PrintOrderPage() {
 
                 {/* Adicionais / Complementos */}
                 {additionals.map((ad, adIdx) => (
-                  <div key={adIdx} className="flex justify-between text-[11px] pl-3 text-stone-800">
-                    <span className="flex-1 pr-2">({ad.quantity || 1}) {ad.name}</span>
+                  <div key={adIdx} className="flex justify-between text-[12px] font-bold pl-3 text-black">
+                    <span className="flex-1 pr-2">+ ({ad.quantity || 1}x) {ad.name}</span>
                     {!isKitchenOnly && (
                       <span className="whitespace-nowrap">
-                        {ad.price > 0 ? `R$ ${Number(ad.price).toFixed(2).replace(".", ",")}` : "-"}
+                        {ad.price > 0 ? `R$ ${Number(ad.price).toFixed(2).replace(".", ",")}` : ""}
                       </span>
                     )}
                   </div>
@@ -162,14 +177,14 @@ export default function PrintOrderPage() {
 
                 {/* Observações do Item */}
                 {item.notes && (
-                  <div className="text-[11px] pl-3 italic text-stone-800">
-                    <span>(Obs) {item.notes}</span>
+                  <div className="text-[12px] pl-3 font-black text-black bg-stone-100 p-1 border border-black my-0.5">
+                    <span>OBS ITEM: {item.notes}</span>
                   </div>
                 )}
 
                 {/* Linha separadora entre itens */}
                 {idx < items.length - 1 && (
-                  <div className="border-b border-dashed border-gray-400 my-1" />
+                  <div className="border-b border-dashed border-black my-1.5" />
                 )}
               </div>
             );
@@ -179,25 +194,26 @@ export default function PrintOrderPage() {
 
       {/* Observações Gerais do Pedido */}
       {order.notes && (
-        <div className="border-t border-dashed border-black pt-1.5 my-1.5">
-          <p className="font-extrabold text-[12px]">Observações:</p>
-          <p className="text-[11px] italic font-semibold">{order.notes}</p>
+        <div className="border-2 border-black p-2 my-2 bg-stone-100 text-black">
+          <p className="font-black text-[12px] uppercase">⚠️ OBSERVAÇÃO GERAL:</p>
+          <p className="text-[13px] font-black leading-snug">{order.notes}</p>
         </div>
       )}
 
       {/* Seção Cliente */}
-      <div className="border-t border-dashed border-black pt-1.5 my-1.5 space-y-0.5">
-        <p className="font-extrabold text-[13px] mb-1">Cliente</p>
-        <p><b>Nome:</b> {customerName}</p>
+      <div className="border-t-2 border-dashed border-black pt-2 my-2 space-y-1 text-black text-[13px]">
+        <p className="font-black text-[14px] uppercase border-b border-black pb-0.5 mb-1">DADOS DE ENTREGA</p>
+        <p className="leading-snug"><b>CLIENTE:</b> <span className="font-black">{customerName}</span></p>
         {order.cpf && <p><b>CPF/CNPJ:</b> {order.cpf}</p>}
         {customerPhone && customerPhone !== "-" && (
-          <p><b>Telefone:</b> {customerPhone}</p>
+          <p className="leading-snug"><b>WHATSAPP:</b> <span className="font-black text-[14px]">{customerPhone}</span></p>
         )}
-        <p><b>Quantidade de pedidos:</b> {String(customerOrderCount).padStart(2, "0")}</p>
+        <p className="text-[12px]"><b>TOTAL DE PEDIDOS DO CLIENTE:</b> {String(customerOrderCount).padStart(2, "0")}</p>
 
         {order.order_type === 'delivery' && deliveryAddress && (
-          <div className="pt-1 mt-1 border-t border-dotted border-gray-400 space-y-0.5">
-            <p><b>Entrega:</b> {deliveryAddress}</p>
+          <div className="pt-1.5 mt-1.5 border-t border-black space-y-1">
+            <p className="font-black text-[12px] uppercase">ENDEREÇO COMPLETO:</p>
+            <p className="font-black text-[14px] leading-snug">{deliveryAddress}</p>
           </div>
         )}
       </div>
@@ -205,39 +221,41 @@ export default function PrintOrderPage() {
       {/* Seção Pagamento e Valores (na via completa) */}
       {!isKitchenOnly && (
         <>
-          <div className="border-t border-dashed border-black pt-1.5 my-1.5 space-y-0.5">
-            <p className="font-extrabold text-[13px] mb-1">Pagamento</p>
-            <p><b>Forma de Pagamento:</b> {getPaymentMethodLabel(order.payment_method)}</p>
-            <p className="text-[11px] text-gray-800">
-              {order.order_type === 'delivery' ? "Pagar com o motorista / entregador" : "Pagamento no balcão / mesa"}
-            </p>
-
-            {/* Aviso de Cobrança para o Entregador */}
-            <div className="text-center py-1 font-extrabold text-[11px] border border-black my-1 rounded-xs">
-              <span>* Cobrar do cliente: R$ {totalAmount.toFixed(2).replace(".", ",")} *</span>
-            </div>
+          <div className="border-t-2 border-dashed border-black pt-2 my-2 space-y-1 text-black text-[13px]">
+            <p className="font-black text-[14px] uppercase border-b border-black pb-0.5 mb-1">PAGAMENTO</p>
+            <p><b>FORMA:</b> <span className="font-black uppercase">{getPaymentMethodLabel(order.payment_method)}</span></p>
+            
+            {order.payment_status === 'paid' ? (
+              <div className="text-center py-1 font-black text-[13px] border-2 border-black my-1 bg-stone-100">
+                <span>✓ JÁ PAGO (NÃO COBRAR)</span>
+              </div>
+            ) : (
+              <div className="text-center py-1.5 font-black text-[14px] border-2 border-black my-1">
+                <span>* COBRAR DO CLIENTE: R$ {totalAmount.toFixed(2).replace(".", ",")} *</span>
+              </div>
+            )}
           </div>
 
           {/* Totais */}
-          <div className="border-t border-dashed border-black pt-1.5 my-1.5 space-y-0.5">
-            <div className="flex justify-between">
+          <div className="border-t-2 border-dashed border-black pt-2 my-2 space-y-1 text-black text-[13px]">
+            <div className="flex justify-between font-bold">
               <span>Subtotal:</span>
               <span>R$ {subtotal.toFixed(2).replace(".", ",")}</span>
             </div>
             {order.order_type === 'delivery' && deliveryFee > 0 && (
-              <div className="flex justify-between">
-                <span>Taxa de entrega:</span>
+              <div className="flex justify-between font-bold">
+                <span>Taxa de Entrega:</span>
                 <span>R$ {deliveryFee.toFixed(2).replace(".", ",")}</span>
               </div>
             )}
             {discountAmount > 0 && (
-              <div className="flex justify-between text-gray-800">
+              <div className="flex justify-between font-black">
                 <span>Desconto / Cupom:</span>
                 <span>- R$ {discountAmount.toFixed(2).replace(".", ",")}</span>
               </div>
             )}
-            <div className="flex justify-between font-black text-[13px] pt-1 border-t border-black">
-              <span>Total:</span>
+            <div className="flex justify-between font-black text-lg pt-1.5 border-t-2 border-black">
+              <span>TOTAL:</span>
               <span>R$ {totalAmount.toFixed(2).replace(".", ",")}</span>
             </div>
           </div>
@@ -245,14 +263,14 @@ export default function PrintOrderPage() {
       )}
 
       {/* Rodapé */}
-      <div className="text-center pt-2 mt-2 border-t border-dashed border-black text-[10px] space-y-0.5 text-gray-700">
-        <p className="font-bold">{restaurantName}</p>
+      <div className="text-center pt-2 mt-2 border-t border-dashed border-black text-[11px] space-y-0.5 text-black font-bold">
+        <p>{restaurantName} - Delivery & Cardápio</p>
       </div>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-stone-200 py-4 px-2 print:p-0 print:bg-white print:min-h-0">
+    <div className="min-h-screen bg-stone-200 py-4 px-2 print:p-0 print:bg-white print:min-h-0 font-sans">
       <style>{`
         @page {
           margin: 0mm;
@@ -261,6 +279,8 @@ export default function PrintOrderPage() {
         @media print {
           *, *::before, *::after {
             box-sizing: border-box !important;
+            color: #000 !important;
+            border-color: #000 !important;
           }
           html, body {
             margin: 0 !important;
@@ -269,8 +289,10 @@ export default function PrintOrderPage() {
             min-width: 100% !important;
             background: #fff !important;
             color: #000 !important;
-            font-size: 11px !important;
-            line-height: 1.25 !important;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif !important;
+            font-size: 13px !important;
+            font-weight: 700 !important;
+            line-height: 1.3 !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
@@ -290,7 +312,7 @@ export default function PrintOrderPage() {
             width: 100% !important;
             max-width: 100% !important;
             margin: 0 !important;
-            padding: 2mm 5mm 8mm 5mm !important;
+            padding: 2mm 4mm 6mm 4mm !important;
             background: #fff !important;
             box-shadow: none !important;
             border: none !important;
@@ -302,6 +324,8 @@ export default function PrintOrderPage() {
             word-wrap: break-word !important;
             word-break: break-word !important;
             overflow-wrap: break-word !important;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif !important;
+            color: #000 !important;
           }
         }
       `}</style>

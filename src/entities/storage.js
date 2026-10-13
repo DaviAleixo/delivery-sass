@@ -27,7 +27,7 @@ const TABLE_COLUMNS = {
   banners: "id,tenant_id,title,image_url,order_index,active",
   coupons: "id,tenant_id,code,name,description,discount_type,discount_value,apply_to,applicable_products,min_order_value,usage_limit,start_date,end_date,active",
   coupon_usages: "id,tenant_id,coupon_id,user_email,order_id,created_date",
-  orders: "id,tenant_id,order_number,customer_name,customer_phone,customer_email,customer_address,delivery_address,total_amount,total,subtotal,delivery_fee,status,payment_method,order_type,table_number,notes,coupon_code,discount_amount,discount,user_email,items,sent_at,created_date",
+  orders: "id,tenant_id,order_number,customer_name,customer_phone,customer_email,customer_address,delivery_address,total_amount,total,subtotal,delivery_fee,status,payment_method,order_type,table_number,notes,coupon_code,discount_amount,discount,user_email,items,sent_at,created_date,print_status,printed_at,print_count",
   users: "id,full_name,email,phone,role,created_date",
   user_addresses: "id,tenant_id,user_email,user_phone,name,cep,zip_code,street,number,complement,neighborhood,city,state,reference,is_default",
   admin_users: "id,tenant_id,username,role,active,permissions,created_date,updated_date",
@@ -564,9 +564,11 @@ export function createEntityModel(collectionKey, defaultData = []) {
             return { id, ...sanitized };
           } else if (error) {
             console.error(`[Supabase] Erro ao atualizar ${collectionKey} id=${id}:`, error);
+            throw error;
           }
         } catch (_err) {
           console.warn(`[Supabase] Erro ao atualizar em ${collectionKey}:`, _err);
+          throw _err;
         }
       }
 

@@ -20,6 +20,8 @@ Plataforma SaaS multi-tenant de cardápio digital, delivery e PDV para restauran
 
 | Recurso / Benefício         | Plano Comum (Standard)                          | Plano Premium (Custom / White-Label)                     |
 | :-------------------------- | :---------------------------------------------- | :------------------------------------------------------- |
+| **Mensalidade Sugerida**    | **R$ 89,00 a R$ 129,00 / mês**                  | **R$ 199,00 a R$ 249,00 / mês**                          |
+| **Taxa de Setup (Opcional)**| R$ 150 (Cadastro completo do cardápio)          | R$ 300 (Design sob medida + Domínio configurado)         |
 | **Acesso ao Cardápio**      | URL padrão: `app.seusaas.com/:slug`             | Subdomínio ou **Domínio Próprio** (`pedir.marca.com.br`) |
 | **Interface do Cardápio**   | Layout genérico otimizado (rápido, limpo)       | **Frontend Personalizado** (layout e UX exclusivos)      |
 | **Customização de Marca**   | Logo, Banner, Nome, Contatos, Horários          | Identidade visual 100% sob medida + Assets exclusivos    |

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { Product } from "@/entities/Product";
 import { ProductAdditional } from "@/entities/ProductAdditional";
 import { Order } from "@/entities/Order";
@@ -46,9 +47,28 @@ export default function MenuPage() {
   const [searchParams] = useSearchParams();
   const urlMesa = searchParams.get("mesa");
 
+  const segments = typeof window !== "undefined" ? window.location.pathname.split("/").filter(Boolean) : [];
+  const RESERVED_SEGMENTS = ["menu", "dashboard", "orders", "pdv", "adminlogin", "superadmin"];
+  const routeSlug = segments.length > 0 && !RESERVED_SEGMENTS.includes(segments[0].toLowerCase()) ? segments[0].toLowerCase() : null;
+  const isVruumRoute = !routeSlug || routeSlug === "vrumm" || routeSlug === "vruum-burguer";
+
+  const resolvedInitialStoreName = tenant?.name
+    || (typeof window !== "undefined" ? localStorage.getItem("current_tenant_name") : null)
+    || (isVruumRoute ? "Vruum Burguer" : (routeSlug ? routeSlug.split("-").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") : "Restaurante"));
+
   const [products, setProducts] = useState([]);
   const [additionals, setAdditionals] = useState([]);
-  const [settings, setSettings] = useState(null);
+  const [settings, setSettings] = useState(() => ({
+    restaurant_name: resolvedInitialStoreName,
+    restaurant_logo: tenant?.logo_url || "",
+    opening_time: tenant?.opening_time || "18:00",
+    closing_time: tenant?.closing_time || "23:59",
+    open_days: tenant?.open_days || [],
+    delivery_fee: tenant?.delivery_fee ?? 6.50,
+    min_order_value: tenant?.min_order_value ?? 20.00,
+    delivery_time: tenant?.delivery_time || "40-50 min",
+    payment_methods: tenant?.payment_methods || null,
+  }));
   const [banners, setBanners] = useState([]);
   const [categories, setCategories] = useState([]);
   const [activeCategory, setActiveCategory] = useState("");
@@ -74,6 +94,14 @@ export default function MenuPage() {
     }
   }, [urlMesa]);
 
+  const requestNotificationPermission = async () => {
+    try {
+      if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
+        await Notification.requestPermission();
+      }
+    } catch {}
+  };
+
   useEffect(() => {
     loadData();
     checkActiveOrders();
@@ -92,12 +120,6 @@ export default function MenuPage() {
       if (typeof unsubCategories === "function") unsubCategories();
     };
   }, [tenantId, tenant]);
-
-  const requestNotificationPermission = async () => {
-    if ("Notification" in window && Notification.permission === "default") {
-      await Notification.requestPermission();
-    }
-  };
 
   const loadRecentOrders = async () => {
     try {
@@ -202,21 +224,36 @@ export default function MenuPage() {
       setComplementItems(itemsData || []);
       setProductComplementGroups(pcgData || []);
 
+      const segments = window.location.pathname.split("/").filter(Boolean);
+      const RESERVED = ["menu", "dashboard", "orders", "pdv", "adminlogin", "superadmin"];
+      const pathSlug = segments.length > 0 && !RESERVED.includes(segments[0].toLowerCase()) ? segments[0].toLowerCase() : null;
+
       let currentTenant = tenant;
-      if (isSupabaseConfigured() && supabase && activeTenantId) {
+      if (isSupabaseConfigured() && supabase) {
         try {
-          const { data: dbTenant } = await supabase.from("tenants").select("*").eq("id", activeTenantId).maybeSingle();
+          let tenantQuery = supabase.from("tenants").select("*");
+          if (pathSlug === "vrumm" || pathSlug === "vruum-burguer") {
+            tenantQuery = tenantQuery.or("slug.eq.vruum-burguer,slug.eq.vrumm,id.eq.a0000000-0000-0000-0000-000000000001");
+          } else if (pathSlug) {
+            tenantQuery = tenantQuery.eq("slug", pathSlug);
+          } else if (activeTenantId) {
+            tenantQuery = tenantQuery.eq("id", activeTenantId);
+          } else {
+            tenantQuery = tenantQuery.eq("id", "a0000000-0000-0000-0000-000000000001");
+          }
+
+          const { data: dbTenant } = await tenantQuery.maybeSingle();
           if (dbTenant) {
             currentTenant = dbTenant;
+            localStorage.setItem("current_tenant_id", dbTenant.id);
+            localStorage.setItem("current_tenant_slug", dbTenant.slug);
+            localStorage.setItem("current_tenant_name", dbTenant.name);
           }
         } catch (_err) {
           console.warn("Sync tenant in Menu:", _err);
         }
       }
 
-      const segments = window.location.pathname.split("/").filter(Boolean);
-      const RESERVED = ["menu", "dashboard", "orders", "pdv", "adminlogin", "superadmin"];
-      const pathSlug = segments.length > 0 && !RESERVED.includes(segments[0].toLowerCase()) ? segments[0].toLowerCase() : null;
       const effectiveSlug = pathSlug || currentTenant?.slug || localStorage.getItem("current_tenant_slug");
       const isVruum = effectiveSlug === "vrumm" || effectiveSlug === "vruum-burguer";
 
@@ -344,15 +381,33 @@ export default function MenuPage() {
       alert("Desculpe, o restaurante está fechado no momento para novos pedidos.");
       return;
     }
+    loadData();
     setShowOrderModal(true);
   };
 
+  const isSubmittingRef = useRef(false);
+
   const submitOrder = async (orderData) => {
+    if (isSubmittingRef.current || isSubmitting) {
+      console.warn("[Menu] Tentativa de submissão duplicada bloqueada por idempotência.");
+      return;
+    }
+    isSubmittingRef.current = true;
     setIsSubmitting(true);
     try {
-      const activeTenantId = tenantId || localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001";
+      const activeTenantId = tenantId || tenant?.id || localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001";
+      const isPixOnline = orderData.payment_method === 'pix_online';
+      
+      // Gera ID determinístico único por tentativa de checkout se não fornecido
+      const deterministicOrderId = orderData.id || (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" 
+        ? crypto.randomUUID() 
+        : undefined);
+
       const orderPayload = {
         ...orderData,
+        ...(deterministicOrderId ? { id: deterministicOrderId } : {}),
+        status: isPixOnline ? "aguardando_pagamento" : "pendente",
+        payment_status: isPixOnline ? "pending" : "pending_delivery",
         tenant_id: activeTenantId,
       };
       const createdOrder = await Order.create(orderPayload);
@@ -393,7 +448,9 @@ export default function MenuPage() {
         }
       }
       
-      setCart([]);
+      if (!isPixOnline) {
+        setCart([]);
+      }
       setShowOrderModal(false);
       setIsCartVisible(false);
       
@@ -406,17 +463,19 @@ export default function MenuPage() {
 
       // Se for PIX Online Mercado Pago e a loja tiver o Access Token configurado, abre o modal do QR Code!
       const mpToken = tenant?.payment_methods?.mp_access_token;
-      if (orderData.payment_method === 'pix_online' && mpToken) {
+      if (isPixOnline && mpToken) {
         setPixOnlineOrder(createdOrder);
-        setIsSubmitting(false);
         return;
       }
       
       navigate(`${createPageUrl("MyOrders")}?id=${createdOrder.id}`);
     } catch (_error) {
+      console.error("[Menu submitOrder error]:", _error);
       alert("Erro ao enviar pedido. Tente novamente.");
+    } finally {
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
     }
-    setIsSubmitting(false);
   };
 
   // Se a loja foi pausada pelo SuperAdmin ou por inadimplência, o cardápio sai do ar!
@@ -468,13 +527,13 @@ export default function MenuPage() {
                   <img src={settings.restaurant_logo} alt="Logo" className="w-full h-full object-contain" />
                 ) : (
                   <div className="w-10 h-10 rounded-xl bg-stone-900 border border-stone-800 flex items-center justify-center font-black text-sm text-white">
-                    {(settings?.restaurant_name || "D").substring(0, 2).toUpperCase()}
+                    {(settings?.restaurant_name || resolvedInitialStoreName).substring(0, 2).toUpperCase()}
                   </div>
                 )}
               </motion.div>
               <div>
                 <h1 className="text-base sm:text-lg font-black leading-tight text-white tracking-tight" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-                  {settings?.restaurant_name || "Delivery 1.0"}
+                  {settings?.restaurant_name || resolvedInitialStoreName}
                 </h1>
                 <div className="flex items-center gap-2 mt-0.5">
                   <div className="flex items-center gap-1.5">
@@ -797,12 +856,12 @@ export default function MenuPage() {
                   <img src={settings.restaurant_logo} alt="Logo" className="w-full h-full object-contain" />
                 ) : (
                   <div className="w-10 h-10 rounded-xl bg-stone-900 border border-stone-800 flex items-center justify-center font-black text-sm text-white">
-                    {(settings?.restaurant_name || "D").substring(0, 2).toUpperCase()}
+                    {(settings?.restaurant_name || resolvedInitialStoreName).substring(0, 2).toUpperCase()}
                   </div>
                 )}
               </div>
               <h4 className="font-black text-base text-white tracking-tight" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-                {settings?.restaurant_name || "Delivery 1.0"}
+                {settings?.restaurant_name || resolvedInitialStoreName}
               </h4>
             </div>
             <p className="text-xs text-stone-400 leading-relaxed max-w-xs font-normal">
@@ -861,7 +920,7 @@ export default function MenuPage() {
         </div>
 
         <div className="container mx-auto max-w-6xl pt-8 mt-8 border-t border-stone-800/60 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-stone-400">
-          <p>© {new Date().getFullYear()} {settings?.restaurant_name || "Delivery 1.0"}. Todos os direitos reservados.</p>
+          <p>© {new Date().getFullYear()} {settings?.restaurant_name || resolvedInitialStoreName}. Todos os direitos reservados.</p>
           <p>
             Desenvolvido por{" "}
             <a
@@ -914,15 +973,21 @@ export default function MenuPage() {
       {pixOnlineOrder && (
         <PixOnlineModal
           isOpen={Boolean(pixOnlineOrder)}
-          onClose={() => {
-            const orderId = pixOnlineOrder.id;
+          onClose={async () => {
+            // Se o usuário fechar ou clicar em "Escolher outra forma de pagamento" sem pagar:
+            try {
+              if (pixOnlineOrder?.id) {
+                await Order.delete(pixOnlineOrder.id);
+              }
+            } catch (_e) {}
             setPixOnlineOrder(null);
-            navigate(`${createPageUrl("MyOrders")}?id=${orderId}`);
+            setShowOrderModal(true);
           }}
           order={pixOnlineOrder}
           accessToken={tenant?.payment_methods?.mp_access_token}
           onPaymentApproved={(paidOrder) => {
             setPixOnlineOrder(null);
+            setCart([]);
             navigate(`${createPageUrl("MyOrders")}?id=${paidOrder.id}`);
           }}
         />

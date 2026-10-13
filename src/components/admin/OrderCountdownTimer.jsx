@@ -47,7 +47,9 @@ function OrderCountdownTimerBase({
   }
 
   const estimatedMinutes = parseEstimatedMinutes(deliveryTimeSetting, order.order_type);
-  const createdTime = new Date(order.created_date).getTime();
+  const rawDateStr = String(order.created_date || "").trim();
+  const isoDateStr = rawDateStr.includes(" ") && !rawDateStr.includes("T") ? rawDateStr.replace(" ", "T") : rawDateStr;
+  const createdTime = new Date(isoDateStr).getTime();
   if (isNaN(createdTime)) return null;
 
   const deadlineTime = createdTime + (estimatedMinutes * 60 * 1000);

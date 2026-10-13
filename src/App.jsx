@@ -11,14 +11,20 @@ import { TenantProvider } from '@/lib/TenantContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import PDVPage from './pages/PDV';
 import DynamicHead from '@/components/DynamicHead';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
 const MainPage = mainPageKey ? Pages[mainPageKey] : <></>;
 
-const LayoutWrapper = ({ children, currentPageName }) => Layout ?
-  <Layout currentPageName={currentPageName}>{children}</Layout>
-  : <>{children}</>;
+const LayoutWrapper = ({ children, currentPageName }) => {
+  const content = Layout ? (
+    <Layout currentPageName={currentPageName}>{children}</Layout>
+  ) : (
+    <>{children}</>
+  );
+  return <ErrorBoundary>{content}</ErrorBoundary>;
+};
 
 // Redireciona a raiz da loja (/:slug) para o cardápio da loja (/:slug/menu)
 const StoreRootRedirect = () => {

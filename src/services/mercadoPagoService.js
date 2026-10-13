@@ -49,10 +49,24 @@ export async function createPixPayment({
   description,
   payerEmail,
   payerName,
+  payerPhone,
 }) {
   if (!accessToken) {
     return { success: false, error: "A loja não configurou o Mercado Pago" };
   }
+
+  const cleanPhone = String(payerPhone || "").replace(/\D/g, "");
+  const fallbackEmail = cleanPhone && cleanPhone.length >= 10
+    ? `pix.${cleanPhone}@vruum.com.br`
+    : "pix.cliente@vruum.com.br";
+
+  const isValidEmail = (e) =>
+    typeof e === "string" &&
+    !e.endsWith(".internal") &&
+    !e.endsWith(".local") &&
+    /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/.test(e.trim());
+
+  const safeEmail = isValidEmail(payerEmail) ? payerEmail.trim().toLowerCase() : fallbackEmail;
 
   try {
     const res = await fetch(MP_FUNCTION_URL, {
@@ -65,8 +79,9 @@ export async function createPixPayment({
         orderNumber,
         amount,
         description,
-        payerEmail,
+        payerEmail: safeEmail,
         payerName,
+        payerPhone: cleanPhone,
       }),
     });
 
@@ -91,7 +106,7 @@ export async function createPixPayment({
 /**
  * Consulta se o pagamento PIX foi aprovado (Polling a cada 3s no checkout)
  */
-export async function checkPaymentStatus({ accessToken, paymentId }) {
+export async function checkPaymentStatus({ accessToken, paymentId, orderId }) {
   if (!accessToken || !paymentId) return { status: "pending", isApproved: false };
 
   try {
@@ -102,6 +117,7 @@ export async function checkPaymentStatus({ accessToken, paymentId }) {
         action: "check_payment_status",
         accessToken: accessToken.trim(),
         paymentId,
+        orderId,
       }),
     });
 

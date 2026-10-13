@@ -5,6 +5,7 @@
 ---
 
 ## 🚀 Em Andamento / Foco Atual
+- [ ] 🔥 **PRIORIDADE MÁXIMA: Webhook do Asaas**: Receber notificações de pagamento (`PAYMENT_RECEIVED`, `PAYMENT_OVERDUE`) para pausar ou despausar automaticamente a loja no Supabase (`tenants.is_active`).
 - [x] **Torre de Controle SuperAdmin de Alto Nível**: Tabela minimalista (Restaurante, Link, Plano, Status, Ações) + Drawer 360° com Raio-X Financeiro Asaas, Métricas de Vendas e Botão de Cobrança 1-Clique no WhatsApp.
 - [x] **Mecanismo Real de Pausa / Bloqueio**: Se a loja for pausada, o cardápio público sai do ar imediatamente e o painel do restaurante bloqueia exigindo regularização com botão de reativar na hora.
 - [x] **Configuração de Pagamentos (Asaas Sandbox)**: Conta conectada, API key validada e emissão de assinaturas testada.
@@ -32,11 +33,18 @@
 
 - [ ] Filtro por tipo de pedido no painel de pedidos (Delivery vs Retirada no Balcão).
 - [ ] Impressão rápida do comprovante do pedido (layout otimizado para cupom não fiscal de 80mm/58mm).
+- [x] **Fila Inteligente de Impressão & Tolerância a Quedas de Internet (FIFO)**: Migration aplicada no Supabase (`print_status`, `printed_at`, `print_count`), hook `useFifoPrintQueue` com sincronização automática na reconexão (`catch-up sync`), fila sequencial ordenada por `created_at ASC`, controle anti-duplicação, botão Auto-Imprimir no KDS e tarja de comanda para pedidos represados ("⚠️ PEDIDO RETIDO PELA REDE").
+- [x] **Idempotência & Reconciliação no KDS e Checkout**: Trava síncrona contra duplicação de pedidos no checkout (`useRef` + UUID determinístico por tentativa), chave de idempotência determinística na Edge Function do Mercado Pago (`ord_pix_${orderId}`) prevenindo duplicidade de QR Codes Pix, e reconciliação automática de pedidos no KDS ao reconectar WebSocket, restaurar conexão de rede (`online`) ou voltar o foco à aba (`visibilitychange`).
 - [x] Atualização em tempo real do status do pedido na tela do cliente (`Meus Pedidos`).
+- [x] **Rastreamento de Pedido & Pós-Pagamento Resiliente (`MyOrders`)**: Corrigida quebra de renderização (`.toFixed` em string numérica e permissão de notificação), adicionado `ErrorBoundary` global em `App.jsx` contra telas em branco, banner comemorativo de PIX Aprovado, stepper ao vivo (Recebido ➔ Confirmado ➔ A Caminho ➔ Entregue), cronômetro regressivo estimado e botão direto para o WhatsApp do restaurante.
 
 ### 🛍️ Cardápio & Vendas
 - [x] **Formas de Pagamento Modulares (Dinheiro, Crédito, Débito, Alimentação e PIX Online)**: Painel em Configurações para ativar Dinheiro (com troco), Cartão de Crédito, Débito e Vale Refeição na Maquininha, e PIX Online Mercado Pago com sincronização em tempo real no checkout.
-- [x] **PIX Online Automático Mercado Pago**: Edge Function `mercadopago` no Supabase com geração de QR Code Copia e Cola, polling de 3s e confirmação automática do pedido em tempo real.
+- [x] **Persistência Blindada de Formas de Pagamento**: Resolução dos problemas de RLS com RPC `update_tenant_payment_methods` e `update_tenant_settings`, unificação do alias `vruum-burguer`/`vrumm` e isolamento dos formulários de configurações para nunca perder o estado ao navegar entre abas ou telas.
+- [x] **PIX Online Automático Mercado Pago**: Edge Function `mercadopago` no Supabase com geração de QR Code Copia e Cola, polling de 3s e confirmação automática do pedido em tempo real. Sanitização rigorosa de `payer.email` com TLDs públicos válidos e mensagens amigáveis de instrução para cadastro de chave Pix.
+- [x] **Proteção de Fila para PIX Online (Sem Pedidos Fantasmas)**: Pedidos com PIX Online entram como `aguardando_pagamento` (invisíveis para a cozinha). Quando o PIX é aprovado, o pedido é atualizado para `status: "pendente"` e `payment_status: "paid"`, caindo diretamente na aba **Pendentes** do painel do restaurante com badge verde `✓ PAGO VIA PIX` e tocando o alarme sonoro para a equipe aceitar. Se o cliente fechar sem pagar, o rascunho é descartado.
+- [x] **Blindagem Zero-Trust de Pagamentos (Anti-Tampering no Servidor)**: Desenvolvido via Spec Workflow (`.specs/payment-security`). A Edge Function `mercadopago` (v5) recalcula o valor oficial consultando o catálogo do Supabase (`products`, `product_additionals`, `tenants.delivery_fee` e `coupons`). Qualquer tentativa de forjar `amount` menor via DevTools/Postman é ignorada e corrigida, e o webhook valida o valor pago no Mercado Pago antes de aprovar o pedido.
+- [x] **Correção de Edição & Atualização de Produtos**: Corrigido mapeamento de coluna (`updated_date` em vez de `updated_at`) no sanitizador de produtos e propagação de erros no Supabase, garantindo que alterações de preço (ex: R$ 0,01) e dados persistam imediatamente no banco.
 - [ ] Upsell no Checkout: Sugestão de bebidas e sobremesas antes da confirmação final do pedido.
 - [ ] Taxa de entrega calculada por distância/bairro ou valor fixo configurável.
 
@@ -53,9 +61,11 @@
 
 ## 🔮 Fase 2: Backend Dedicado & Integrações
 - [ ] **Disparador WhatsApp Automático**: Notificar o cliente quando o pedido sair para entrega ou for aprovado.
+- [ ] **Validação de Telefone / WhatsApp & Trava Anti-Trote**: Verificação de DDD + nono dígito e envio de código OTP via WhatsApp (Evolution API / Z-API) para primeiros pedidos em dinheiro, evitando pedidos falsos sem gerar custo de SMS.
 - [x] **PIX Dinâmico Automático**: Geração de QR Code PIX com confirmação automática de pagamento (Mercado Pago).
-- [ ] **Servidor Spring Boot 3**: Centralizar tarefas pesadas, filas de impressão e relatórios consolidados conectando ao Postgres do Supabase.
-- [ ] **Integração com Impressoras Térmicas**: Spooler de impressão local sem depender de diálogo do navegador.
+- [x] **Ferramental de IA Avançado (MCPs)**: Configuração do **Sentry MCP** e **Spec Workflow MCP** no `mcp_config.json` para observabilidade de produção e metodologia Spec-Driven Development.
+- [ ] **Spooler Desktop de Impressão (.exe)**: Aplicativo local em background (Electron/Node Tray) para conectar com múltiplas impressoras térmicas via rede (TCP/IP na porta 9100) e USB, com roteamento de comandas (cozinha/bar/caixa) e impressão silenciosa sem navegador.
+- [ ] **Ajuste de Tipografia & Contraste do Cupom Térmico (`PrintOrder.jsx`)**: Substituir tons de cinza por preto puro (#000), aplicar fonte encorpada de alta legibilidade para cabeças térmicas de 80mm e 58mm.
 
 ---
 

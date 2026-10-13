@@ -72,15 +72,15 @@ export function TenantProvider({ children }) {
     setIsLoadingTenant(true);
     try {
       if (isSupabaseConfigured() && supabase) {
-        // Busca o restaurante pelo slug (suporta alias vrumm / vruum-burguer)
-        const targetSlug = slugToSearch === "vruum-burguer" ? "vrumm" : slugToSearch;
+        // Busca o restaurante pelo slug ou id (suporta alias vrumm / vruum-burguer)
+        let query = supabase.from("tenants").select("*");
+        if (slugToSearch === "vrumm" || slugToSearch === "vruum-burguer") {
+          query = query.or("slug.eq.vruum-burguer,slug.eq.vrumm,id.eq.a0000000-0000-0000-0000-000000000001");
+        } else {
+          query = query.eq("slug", slugToSearch);
+        }
 
-        // 1. Tenta buscar pelo slug exato da URL / sessão
-        let { data, error } = await supabase
-          .from("tenants")
-          .select("*")
-          .eq("slug", targetSlug)
-          .maybeSingle();
+        let { data, error } = await query.maybeSingle();
 
         if (!error && data) {
           setTenant(data);
@@ -100,7 +100,7 @@ export function TenantProvider({ children }) {
       if (slugToSearch === "vrumm" || slugToSearch === "vruum-burguer") {
         const fallbackTenant = {
           id: "a0000000-0000-0000-0000-000000000001",
-          slug: "vrumm",
+          slug: "vruum-burguer",
           name: "Vruum Burguer",
           plan: "basic",
           logo_url: "https://images.unsplash.com/photo-1550547660-d9450f859349?w=300&h=300&fit=crop",
@@ -115,6 +115,14 @@ export function TenantProvider({ children }) {
           closing_time: "23:59",
           open_days: ["segunda","terca","quarta","quinta","sexta","sabado","domingo"],
           theme_config: { primary_color: "#E11D48", secondary_color: "#111827" },
+          payment_methods: {
+            accept_cash: true,
+            accept_card_credit: true,
+            accept_card_debit: true,
+            accept_card_meal: true,
+            accept_online_mp: false,
+            mp_access_token: "",
+          },
           is_active: true,
         };
         setTenant(fallbackTenant);

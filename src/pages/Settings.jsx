@@ -140,16 +140,30 @@ export default function SettingsPage() {
       if (isSupabaseConfigured() && supabase) {
         let tenantData = null;
         if (currentTenantId) {
-          const { data } = await supabase.from("tenants").select("*").eq("id", currentTenantId).single();
+          const { data } = await supabase.from("tenants").select("*").eq("id", currentTenantId).maybeSingle();
           tenantData = data;
-        } else if (currentSlug) {
-          const { data } = await supabase.from("tenants").select("*").eq("slug", currentSlug).single();
+        }
+        if (!tenantData && currentSlug) {
+          let slugQuery = supabase.from("tenants").select("*");
+          if (currentSlug === "vrumm" || currentSlug === "vruum-burguer") {
+            slugQuery = slugQuery.or("slug.eq.vruum-burguer,slug.eq.vrumm,id.eq.a0000000-0000-0000-0000-000000000001");
+          } else {
+            slugQuery = slugQuery.eq("slug", currentSlug);
+          }
+          const { data } = await slugQuery.maybeSingle();
+          tenantData = data;
+        }
+        if (!tenantData && isVruum) {
+          const { data } = await supabase.from("tenants").select("*").eq("id", "a0000000-0000-0000-0000-000000000001").maybeSingle();
           tenantData = data;
         }
 
         if (tenantData) {
           setSettingsId(tenantData.id);
           setTenantDetails(tenantData);
+          localStorage.setItem("current_tenant_id", tenantData.id);
+          localStorage.setItem("current_tenant_slug", tenantData.slug);
+          localStorage.setItem("current_tenant_name", tenantData.name);
           const loadedOpenDays = normalizeOpenDays(tenantData.open_days, tenantData.opening_time || "18:00", tenantData.closing_time || "23:00");
           const firstOpen = loadedOpenDays.find(d => d.enabled && d.opening_time);
 
@@ -786,7 +800,7 @@ export default function SettingsPage() {
       const clTime = settings.closing_time || firstEnabledDay?.closing_time || "23:00";
 
       if (isSupabaseConfigured() && supabase) {
-        let updateQuery = supabase.from("tenants").update({
+        const payloadData = {
           name: settings.restaurant_name,
           logo_url: settings.restaurant_logo || null,
           opening_time: opTime,
@@ -809,25 +823,46 @@ export default function SettingsPage() {
           delivery_unlisted_policy: settings.delivery_unlisted_policy || 'block',
           delivery_fallback_fee: fallbackFeeNum,
           free_delivery_threshold: freeThresholdNum,
-          ...(tenantDetails?.payment_methods ? { payment_methods: tenantDetails.payment_methods } : {}),
-          updated_date: new Date().toISOString(),
-        });
+          payment_methods: tenantDetails?.payment_methods || null,
+        };
 
-        if (targetTenantId) {
-          updateQuery = updateQuery.eq("id", targetTenantId);
-        } else if (currentSlug) {
-          updateQuery = updateQuery.eq("slug", currentSlug);
+        const resolvedId = targetTenantId || (isVruum ? "a0000000-0000-0000-0000-000000000001" : null);
+
+        let savedTenant = null;
+        if (resolvedId) {
+          const { data: rpcTenant, error: rpcError } = await supabase.rpc("update_tenant_settings", {
+            p_tenant_id: resolvedId,
+            p_data: payloadData,
+          });
+          if (!rpcError && rpcTenant) {
+            savedTenant = rpcTenant;
+          }
         }
 
-        const { data: updatedTenants, error: tenantError } = await updateQuery.select();
-        if (tenantError) throw tenantError;
+        if (!savedTenant) {
+          let updateQuery = supabase.from("tenants").update({
+            ...payloadData,
+            updated_date: new Date().toISOString(),
+          });
 
-        if (updatedTenants && updatedTenants.length > 0) {
-          const t = updatedTenants[0];
-          setSettingsId(t.id);
-          localStorage.setItem("current_tenant_id", t.id);
-          localStorage.setItem("current_tenant_slug", t.slug);
-          localStorage.setItem("current_tenant_name", t.name);
+          if (resolvedId) {
+            updateQuery = updateQuery.eq("id", resolvedId);
+          } else if (currentSlug) {
+            updateQuery = updateQuery.eq("slug", currentSlug);
+          }
+
+          const { data: updatedTenants } = await updateQuery.select();
+          if (updatedTenants && updatedTenants.length > 0) {
+            savedTenant = updatedTenants[0];
+          }
+        }
+
+        if (savedTenant) {
+          setSettingsId(savedTenant.id);
+          setTenantDetails(savedTenant);
+          localStorage.setItem("current_tenant_id", savedTenant.id);
+          localStorage.setItem("current_tenant_slug", savedTenant.slug);
+          localStorage.setItem("current_tenant_name", savedTenant.name);
         }
       }
 
@@ -990,73 +1025,99 @@ export default function SettingsPage() {
           </button>
         </div>
 
-        {/* Conteúdo das Abas */}
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {activeTab === "geral" && (
-            <GeneralSettingsTab
-              settings={settings}
-              handleInputChange={handleInputChange}
-              handleAddressFieldChange={handleAddressFieldChange}
-              handleCepChange={handleCepChange}
-              handleLogoUpload={handleLogoUpload}
-              isUploadingLogo={isUploadingLogo}
-              isFetchingCep={isFetchingCep}
-              cepError={cepError}
-            />
-          )}
+        {/* Conteúdo das Abas Gerais (com formulário) */}
+        {["geral", "horarios", "entregas"].includes(activeTab) && (
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {activeTab === "geral" && (
+              <GeneralSettingsTab
+                settings={settings}
+                handleInputChange={handleInputChange}
+                handleAddressFieldChange={handleAddressFieldChange}
+                handleCepChange={handleCepChange}
+                handleLogoUpload={handleLogoUpload}
+                isUploadingLogo={isUploadingLogo}
+                isFetchingCep={isFetchingCep}
+                cepError={cepError}
+              />
+            )}
 
-          {activeTab === "horarios" && (
-            <HoursTab
-              settings={settings}
-              handleToggleAllDays={handleToggleAllDays}
-              handleToggleDay={handleToggleDay}
-              handleDayTime={handleDayTime}
-              handleCopyDayTimeToAll={handleCopyDayTimeToAll}
-            />
-          )}
+            {activeTab === "horarios" && (
+              <HoursTab
+                settings={settings}
+                handleToggleAllDays={handleToggleAllDays}
+                handleToggleDay={handleToggleDay}
+                handleDayTime={handleDayTime}
+                handleCopyDayTimeToAll={handleCopyDayTimeToAll}
+              />
+            )}
 
-          {activeTab === "entregas" && (
-            <DeliveryFeesTab
-              settings={settings}
-              handleInputChange={handleInputChange}
-              newNeighborhood={newNeighborhood}
-              setNewNeighborhood={setNewNeighborhood}
-              handleAddNeighborhood={handleAddNeighborhood}
-              handleRemoveNeighborhood={handleRemoveNeighborhood}
-              handleToggleNeighborhood={handleToggleNeighborhood}
-              editingNeighborhoodId={editingNeighborhoodId}
-              setEditingNeighborhoodId={setEditingNeighborhoodId}
-              editingNeighborhoodFee={editingNeighborhoodFee}
-              setEditingNeighborhoodFee={setEditingNeighborhoodFee}
-              handleSaveInlineFee={handleSaveInlineFee}
-              neighborhoodSearchTerm={neighborhoodSearchTerm}
-              setNeighborhoodSearchTerm={setNeighborhoodSearchTerm}
-              selectedNeighborhoodIds={selectedNeighborhoodIds}
-              handleToggleSelectNeighborhood={handleToggleSelectNeighborhood}
-              handleToggleSelectAllFiltered={handleToggleSelectAllFiltered}
-              bulkApplyFee={bulkApplyFee}
-              setBulkApplyFee={setBulkApplyFee}
-              handleApplyBulkFee={handleApplyBulkFee}
-              cityNeighborhoodsList={cityNeighborhoodsList}
-              isFetchingCityNeighborhoods={isFetchingCityNeighborhoods}
-              cityNeighborhoodsError={cityNeighborhoodsError}
-              handleFetchOfficialNeighborhoods={handleFetchOfficialNeighborhoods}
-              showNeighborhoodSuggestions={showNeighborhoodSuggestions}
-              setShowNeighborhoodSuggestions={setShowNeighborhoodSuggestions}
-              isImportModalOpen={isImportModalOpen}
-              setIsImportModalOpen={setIsImportModalOpen}
-              importSearchTerm={importSearchTerm}
-              setImportSearchTerm={setImportSearchTerm}
-              selectedNeighborhoodToImport={selectedNeighborhoodsToImport}
-              handleToggleImportSelection={handleToggleImportSelection}
-              handleSelectAllImport={handleSelectAllImport}
-              batchFee={batchFee}
-              setBatchFee={setBatchFee}
-              handleBatchImportNeighborhoods={handleBatchImportNeighborhoods}
-            />
-          )}
+            {activeTab === "entregas" && (
+              <DeliveryFeesTab
+                settings={settings}
+                handleInputChange={handleInputChange}
+                newNeighborhood={newNeighborhood}
+                setNewNeighborhood={setNewNeighborhood}
+                handleAddNeighborhood={handleAddNeighborhood}
+                handleRemoveNeighborhood={handleRemoveNeighborhood}
+                handleToggleNeighborhood={handleToggleNeighborhood}
+                editingNeighborhoodId={editingNeighborhoodId}
+                setEditingNeighborhoodId={setEditingNeighborhoodId}
+                editingNeighborhoodFee={editingNeighborhoodFee}
+                setEditingNeighborhoodFee={setEditingNeighborhoodFee}
+                handleSaveInlineFee={handleSaveInlineFee}
+                neighborhoodSearchTerm={neighborhoodSearchTerm}
+                setNeighborhoodSearchTerm={setNeighborhoodSearchTerm}
+                selectedNeighborhoodIds={selectedNeighborhoodIds}
+                handleToggleSelectNeighborhood={handleToggleSelectNeighborhood}
+                handleToggleSelectAllFiltered={handleToggleSelectAllFiltered}
+                bulkApplyFee={bulkApplyFee}
+                setBulkApplyFee={setBulkApplyFee}
+                handleApplyBulkFee={handleApplyBulkFee}
+                cityNeighborhoodsList={cityNeighborhoodsList}
+                isFetchingCityNeighborhoods={isFetchingCityNeighborhoods}
+                cityNeighborhoodsError={cityNeighborhoodsError}
+                handleFetchOfficialNeighborhoods={handleFetchOfficialNeighborhoods}
+                showNeighborhoodSuggestions={showNeighborhoodSuggestions}
+                setShowNeighborhoodSuggestions={setShowNeighborhoodSuggestions}
+                isImportModalOpen={isImportModalOpen}
+                setIsImportModalOpen={setIsImportModalOpen}
+                importSearchTerm={importSearchTerm}
+                setImportSearchTerm={setImportSearchTerm}
+                selectedNeighborhoodToImport={selectedNeighborhoodsToImport}
+                handleToggleImportSelection={handleToggleImportSelection}
+                handleSelectAllImport={handleSelectAllImport}
+                batchFee={batchFee}
+                setBatchFee={setBatchFee}
+                handleBatchImportNeighborhoods={handleBatchImportNeighborhoods}
+              />
+            )}
 
-          {activeTab === "usuarios" && (
+            {/* Botão Inferior de Salvar */}
+            <div className="flex justify-end pt-4 border-t border-stone-200">
+              <Button
+                type="submit"
+                disabled={isSaving}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm h-11 px-8 rounded-2xl shadow-md flex items-center gap-2 cursor-pointer"
+              >
+                {isSaving ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                    <span>Salvando Alterações...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    <span>Salvar Configurações</span>
+                  </>
+                )}
+              </Button>
+            </div>
+          </form>
+        )}
+
+        {/* Abas com Gestão Própria (Fora de qualquer form) */}
+        {activeTab === "usuarios" && (
+          <div className="space-y-6">
             <AdminUsersTab
               storeCode={tenantDetails?.code || 1}
               storeSlug={tenantDetails?.slug || localStorage.getItem("current_tenant_slug") || "vruum-burguer"}
@@ -1077,45 +1138,26 @@ export default function SettingsPage() {
               handleDeselectAllScreens={handleDeselectAllScreens}
               toggleScreenPermission={toggleScreenPermission}
             />
-          )}
+          </div>
+        )}
 
-          {activeTab === "pagamentos" && (
+        {activeTab === "pagamentos" && (
+          <div className="space-y-6">
             <PaymentMethodsTab 
               tenantData={tenantDetails} 
               onUpdateTenant={(updated) => setTenantDetails((prev) => ({ ...prev, ...updated }))}
             />
-          )}
+          </div>
+        )}
 
-          {activeTab === "assinatura" && (
+        {activeTab === "assinatura" && (
+          <div className="space-y-6">
             <SubscriptionTab 
               tenantData={tenantDetails} 
               onUpdateTenant={(updated) => setTenantDetails((prev) => ({ ...prev, ...updated }))}
             />
-          )}
-
-          {/* Botão Inferior de Salvar (oculto nas abas com botão próprio) */}
-          {!["assinatura", "pagamentos"].includes(activeTab) && (
-            <div className="flex justify-end pt-4 border-t border-stone-200">
-              <Button
-                type="submit"
-                disabled={isSaving}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm h-11 px-8 rounded-2xl shadow-md flex items-center gap-2 cursor-pointer"
-              >
-                {isSaving ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
-                    <span>Salvando Alterações...</span>
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4" />
-                    <span>Salvar Configurações</span>
-                  </>
-                )}
-              </Button>
-            </div>
-          )}
-        </form>
+          </div>
+        )}
       </div>
     </div>
   );

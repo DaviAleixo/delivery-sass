@@ -17,16 +17,19 @@ export function useOrdersRealtime({
   onInsert,
   onUpdate,
   onDelete,
+  onReconnected,
 } = {}) {
   const onInsertRef = useRef(onInsert);
   const onUpdateRef = useRef(onUpdate);
   const onDeleteRef = useRef(onDelete);
+  const onReconnectedRef = useRef(onReconnected);
 
   useEffect(() => {
     onInsertRef.current = onInsert;
     onUpdateRef.current = onUpdate;
     onDeleteRef.current = onDelete;
-  }, [onInsert, onUpdate, onDelete]);
+    onReconnectedRef.current = onReconnected;
+  }, [onInsert, onUpdate, onDelete, onReconnected]);
 
   useEffect(() => {
     const activeTenantId =
@@ -105,7 +108,10 @@ export function useOrdersRealtime({
       )
       .subscribe((status) => {
         if (status === "SUBSCRIBED") {
-          // Conectado com sucesso ao WebSocket
+          // Conectado com sucesso ao WebSocket - dispara reconciliação para fechar brechas
+          if (onReconnectedRef.current) {
+            onReconnectedRef.current();
+          }
         }
       });
 

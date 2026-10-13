@@ -136,7 +136,9 @@ export default function Layout({ children, currentPageName }) {
   const routeStoreSlug = pathSegments.length > 0 && !RESERVED_LIST.has(pathSegments[0].toLowerCase()) ? pathSegments[0].toLowerCase() : null;
   const prettySlugName = routeStoreSlug ? routeStoreSlug.split("-").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") : null;
 
-  const currentStoreName = settings?.restaurant_name || (routeStoreSlug ? prettySlugName : (typeof window !== "undefined" ? localStorage.getItem("current_tenant_name") : null)) || 'Delivery 1.0';
+  const currentStoreName = settings?.restaurant_name 
+    || (routeStoreSlug ? (routeStoreSlug === "vrumm" || routeStoreSlug === "vruum-burguer" ? "Vruum Burguer" : prettySlugName) : (typeof window !== "undefined" ? localStorage.getItem("current_tenant_name") : null)) 
+    || 'Vruum Burguer';
 
   // Se estiver na página de Pedidos, limpa o contador de não lidos
   React.useEffect(() => {
@@ -396,7 +398,7 @@ export default function Layout({ children, currentPageName }) {
 
         if (tenantData) {
           setSettings({
-            restaurant_name: tenantData.name || currentTenantName || "Delivery 1.0",
+            restaurant_name: tenantData.name || currentTenantName || "Vruum Burguer",
             restaurant_logo: tenantData.logo_url || null,
             ...tenantData,
           });
@@ -559,12 +561,12 @@ export default function Layout({ children, currentPageName }) {
                   />
                 ) : (
                   <div className="w-10 h-10 bg-slate-900 text-white rounded-xl flex items-center justify-center font-black text-sm shadow-sm border border-slate-800">
-                    {(settings?.restaurant_name || "D").substring(0, 2).toUpperCase()}
+                    {(settings?.restaurant_name || currentStoreName).substring(0, 2).toUpperCase()}
                   </div>
                 )}
                 <div>
                   <h2 className="font-extrabold text-base text-stone-950 leading-tight" style={{ letterSpacing: '-0.02em' }}>
-                    {settings?.restaurant_name || 'Delivery 1.0'}
+                    {settings?.restaurant_name || currentStoreName}
                   </h2>
                   <p className="text-xs font-bold text-red-600 mt-0.5">Painel Administrativo</p>
                 </div>

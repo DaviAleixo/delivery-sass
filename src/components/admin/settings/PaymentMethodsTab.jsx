@@ -27,38 +27,64 @@ export default function PaymentMethodsTab({ tenantData, onUpdateTenant }) {
   const [mpAccountName, setMpAccountName] = useState(null);
   const [mpError, setMpError] = useState(null);
 
-  // Estado das Formas de Pagamento
-  const [config, setConfig] = useState({
-    accept_cash: true,
-    accept_card_credit: true,
-    accept_card_debit: true,
-    accept_card_meal: false,
-    accept_online_mp: false,
-    mp_access_token: "",
+  // Estado das Formas de Pagamento (inicializado diretamente com os dados recebidos do tenant)
+  const [config, setConfig] = useState(() => {
+    const pm = tenantData?.payment_methods || {};
+    return {
+      accept_cash: pm.accept_cash !== false,
+      accept_card_credit: pm.accept_card_credit !== undefined ? Boolean(pm.accept_card_credit) : (pm.accept_card_delivery !== false),
+      accept_card_debit: pm.accept_card_debit !== undefined ? Boolean(pm.accept_card_debit) : (pm.accept_card_delivery !== false),
+      accept_card_meal: Boolean(pm.accept_card_meal),
+      accept_online_mp: Boolean(pm.accept_online_mp),
+      mp_access_token: pm.mp_access_token || "",
+    };
   });
 
   useEffect(() => {
-    if (tenantData) {
-      const pm = tenantData.payment_methods || {};
-      setConfig({
-        accept_cash: pm.accept_cash !== false,
-        accept_card_credit: pm.accept_card_credit !== undefined ? Boolean(pm.accept_card_credit) : (pm.accept_card_delivery !== false),
-        accept_card_debit: pm.accept_card_debit !== undefined ? Boolean(pm.accept_card_debit) : (pm.accept_card_delivery !== false),
-        accept_card_meal: Boolean(pm.accept_card_meal),
-        accept_online_mp: Boolean(pm.accept_online_mp),
-        mp_access_token: pm.mp_access_token || "",
-      });
-
-      // Se já houver token salvo, testar rapidamente para mostrar nome da conta
-      if (pm.mp_access_token && (pm.mp_access_token.startsWith("APP_USR-") || pm.mp_access_token.startsWith("TEST-"))) {
-        testMercadoPagoCredentials(pm.mp_access_token).then((res) => {
-          if (res.success) {
-            setMpAccountName(res.nickname);
+    let isMounted = true;
+    const fetchFreshData = async () => {
+      const activeId = tenantData?.id || localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001";
+      if (isSupabaseConfigured() && supabase) {
+        try {
+          const { data } = await supabase.from("tenants").select("*").eq("id", activeId).maybeSingle();
+          if (data && data.payment_methods && isMounted) {
+            const pm = data.payment_methods;
+            setConfig({
+              accept_cash: pm.accept_cash !== false,
+              accept_card_credit: pm.accept_card_credit !== undefined ? Boolean(pm.accept_card_credit) : (pm.accept_card_delivery !== false),
+              accept_card_debit: pm.accept_card_debit !== undefined ? Boolean(pm.accept_card_debit) : (pm.accept_card_delivery !== false),
+              accept_card_meal: Boolean(pm.accept_card_meal),
+              accept_online_mp: Boolean(pm.accept_online_mp),
+              mp_access_token: pm.mp_access_token || "",
+            });
+            if (pm.mp_access_token && (pm.mp_access_token.startsWith("APP_USR-") || pm.mp_access_token.startsWith("TEST-"))) {
+              testMercadoPagoCredentials(pm.mp_access_token).then((res) => {
+                if (res.success && isMounted) setMpAccountName(res.nickname);
+              });
+            }
+            return;
           }
+        } catch (_err) {
+          console.warn("Erro ao buscar formas de pagamento:", _err);
+        }
+      }
+
+      if (tenantData?.payment_methods && isMounted) {
+        const pm = tenantData.payment_methods;
+        setConfig({
+          accept_cash: pm.accept_cash !== false,
+          accept_card_credit: pm.accept_card_credit !== undefined ? Boolean(pm.accept_card_credit) : (pm.accept_card_delivery !== false),
+          accept_card_debit: pm.accept_card_debit !== undefined ? Boolean(pm.accept_card_debit) : (pm.accept_card_delivery !== false),
+          accept_card_meal: Boolean(pm.accept_card_meal),
+          accept_online_mp: Boolean(pm.accept_online_mp),
+          mp_access_token: pm.mp_access_token || "",
         });
       }
-    }
-  }, [tenantData]);
+    };
+
+    fetchFreshData();
+    return () => { isMounted = false; };
+  }, [tenantData?.id, tenantData?.payment_methods]);
 
   const handleTestMP = async () => {
     if (!config.mp_access_token) {
@@ -86,27 +112,43 @@ export default function PaymentMethodsTab({ tenantData, onUpdateTenant }) {
     }
   };
 
-  const updateSetting = (key, val) => {
+  const updateSetting = async (key, val) => {
     const updated = {
       ...config,
       [key]: val,
     };
     setConfig(updated);
+
+    const payload = {
+      ...updated,
+      accept_card_delivery: Boolean(
+        (key === "accept_card_credit" ? val : updated.accept_card_credit) ||
+        (key === "accept_card_debit" ? val : updated.accept_card_debit)
+      ),
+    };
+
     if (onUpdateTenant) {
       onUpdateTenant({
-        payment_methods: {
-          ...updated,
-          accept_card_delivery: Boolean(
-            (key === "accept_card_credit" ? val : updated.accept_card_credit) ||
-            (key === "accept_card_debit" ? val : updated.accept_card_debit)
-          ),
-        },
+        payment_methods: payload,
       });
+    }
+
+    // Auto-salva imediatamente no banco para nunca perder o estado se trocar de aba!
+    const targetTenantId = tenantData?.id || localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001";
+    if (isSupabaseConfigured() && supabase) {
+      try {
+        await supabase.rpc("update_tenant_payment_methods", {
+          p_tenant_id: targetTenantId,
+          p_payment_methods: payload,
+        });
+      } catch (_e) {
+        console.warn("Falha no auto-save imediato:", _e);
+      }
     }
   };
 
   const handleSave = async (e) => {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
     const targetTenantId = tenantData?.id || localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001";
 
     // Se ativou Mercado Pago, garantir que tem token
@@ -159,7 +201,7 @@ export default function PaymentMethodsTab({ tenantData, onUpdateTenant }) {
   };
 
   return (
-    <form onSubmit={handleSave} className="space-y-6">
+    <div className="space-y-6">
       {/* Bloco 1: Pagamento na Entrega & Balcão (Maquininha e Dinheiro) */}
       <Card className="border-0 shadow-md bg-white">
         <CardHeader className="pb-3">
@@ -388,7 +430,8 @@ export default function PaymentMethodsTab({ tenantData, onUpdateTenant }) {
       {/* Botão de Salvar */}
       <div className="flex justify-end pt-2">
         <Button
-          type="submit"
+          type="button"
+          onClick={handleSave}
           disabled={isSaving}
           className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm h-11 px-8 rounded-xl shadow-md flex items-center gap-2 cursor-pointer"
         >
@@ -405,6 +448,6 @@ export default function PaymentMethodsTab({ tenantData, onUpdateTenant }) {
           )}
         </Button>
       </div>
-    </form>
+    </div>
   );
 }
