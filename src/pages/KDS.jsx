@@ -20,8 +20,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useOrdersRealtime } from "@/hooks/useOrdersRealtime";
 import { useFifoPrintQueue } from "@/hooks/useFifoPrintQueue";
 import { toast } from "sonner";
-import { createPageUrl } from "@/utils";
-import { Link } from "react-router-dom";
 
 // Som de sino de cozinha sintético via Web Audio API
 const playKitchenChime = () => {

@@ -9,7 +9,6 @@ import {
   Power,
   RefreshCw,
   DollarSign,
-  TrendingUp,
   ShoppingBag,
   Store,
   CheckCircle2,

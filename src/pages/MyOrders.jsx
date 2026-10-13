@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { 
   ArrowLeft, Clock, Sparkles, Truck, Store, 
   Search, CheckCircle2, Bike, PackageCheck, RefreshCw,
-  MessageCircle, ExternalLink, UtensilsCrossed, ShieldCheck
+  MessageCircle, UtensilsCrossed, ShieldCheck
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
