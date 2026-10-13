@@ -3,6 +3,7 @@ import { Order } from "@/entities/Order";
 import { Settings } from "@/entities/Settings";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { formatInBrasilia } from "@/utils/dateTime";
 
 export default function PrintOrderPage() {
   const [order, setOrder] = useState(null);
@@ -86,8 +87,8 @@ export default function PrintOrderPage() {
   const orderNumber = order.order_number || (order.id ? order.id.slice(-4).toUpperCase() : "0000");
 
   const orderDateFormatted = order.created_date
-    ? format(new Date(order.created_date), "dd/MM/yyyy HH:mm", { locale: ptBR })
-    : format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR });
+    ? formatInBrasilia(order.created_date)
+    : formatInBrasilia(new Date());
 
   const items = Array.isArray(order.items) ? order.items : [];
   

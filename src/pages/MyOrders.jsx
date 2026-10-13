@@ -18,6 +18,7 @@ import { ptBR } from "date-fns/locale";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link, useSearchParams } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { formatInBrasilia } from "@/utils/dateTime";
 import OrderCountdownTimer from "@/components/admin/OrderCountdownTimer";
 
 // --- Utilitários de Segurança e Formatação Resiliente ---
@@ -26,14 +27,14 @@ function safeFormatCurrency(val) {
   return isNaN(num) ? "0,00" : num.toFixed(2).replace(".", ",");
 }
 
-function safeFormatDate(val, pattern = "dd 'de' MMMM 'às' HH:mm") {
+function safeFormatDate(val) {
   if (!val) return "";
   try {
     const str = String(val).trim();
     const isoStr = str.includes(" ") && !str.includes("T") ? str.replace(" ", "T") : str;
     const parsed = new Date(isoStr);
     if (isNaN(parsed.getTime())) return "";
-    return format(parsed, pattern, { locale: ptBR });
+    return formatInBrasilia(parsed, { separator: " às " });
   } catch {
     return "";
   }

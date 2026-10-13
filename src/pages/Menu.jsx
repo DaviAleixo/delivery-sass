@@ -985,10 +985,16 @@ export default function MenuPage() {
           }}
           order={pixOnlineOrder}
           accessToken={tenant?.payment_methods?.mp_access_token}
+          tenant={tenant}
           onPaymentApproved={(paidOrder) => {
             setPixOnlineOrder(null);
             setCart([]);
             navigate(`${createPageUrl("MyOrders")}?id=${paidOrder.id}`);
+          }}
+          onPaymentConvertedToDelivery={(convertedOrder) => {
+            setPixOnlineOrder(null);
+            setCart([]);
+            navigate(`${createPageUrl("MyOrders")}?id=${convertedOrder.id}`);
           }}
         />
       )}

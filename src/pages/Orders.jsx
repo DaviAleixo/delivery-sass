@@ -11,6 +11,7 @@ import { soundAlert } from "@/utils/soundAlert";
 import TableQRCodeModal from "@/components/admin/TableQRCodeModal";
 import OrderCard from "@/components/admin/orders/OrderCard";
 import { getStoreStatusInfo, getTodayDateKey } from "@/utils/storeStatus";
+import { getBrasiliaParts } from "@/utils/dateTime";
 import { useOrdersRealtime } from "@/hooks/useOrdersRealtime";
 import { toast } from "sonner";
 
@@ -30,7 +31,7 @@ function isOrderInCurrentShift(order, settings) {
   const d = new Date(order.created_date);
   if (isNaN(d.getTime())) return false;
 
-  const now = new Date();
+  const nowParts = getBrasiliaParts(new Date());
   let openingHour = 18;
   let openingMinute = 0;
 
@@ -40,9 +41,9 @@ function isOrderInCurrentShift(order, settings) {
     if (!isNaN(parts[1])) openingMinute = parts[1];
   }
 
-  const shiftStart = new Date(now);
-  // Se o horário atual for de madrugada antes da abertura, o turno começou no dia anterior
-  if (now.getHours() < openingHour) {
+  const shiftStart = new Date();
+  // Se o horário atual em Brasília for de madrugada antes da abertura, o turno começou no dia anterior
+  if (nowParts.hour < openingHour) {
     shiftStart.setDate(shiftStart.getDate() - 1);
   }
   shiftStart.setHours(openingHour, openingMinute, 0, 0);
@@ -52,23 +53,18 @@ function isOrderInCurrentShift(order, settings) {
 
 function isDateToday(dateStr) {
   if (!dateStr) return false;
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return false;
-  const now = new Date();
-  return d.getDate() === now.getDate() &&
-         d.getMonth() === now.getMonth() &&
-         d.getFullYear() === now.getFullYear();
+  const orderParts = getBrasiliaParts(dateStr);
+  const nowParts = getBrasiliaParts(new Date());
+  return orderParts.dateKey === nowParts.dateKey;
 }
 
 function isDateYesterday(dateStr) {
   if (!dateStr) return false;
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return false;
+  const orderParts = getBrasiliaParts(dateStr);
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
-  return d.getDate() === yesterday.getDate() &&
-         d.getMonth() === yesterday.getMonth() &&
-         d.getFullYear() === yesterday.getFullYear();
+  const yParts = getBrasiliaParts(yesterday);
+  return orderParts.dateKey === yParts.dateKey;
 }
 
 function isDateWithinDays(dateStr, days = 7) {
