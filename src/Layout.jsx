@@ -1,7 +1,7 @@
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { LayoutDashboard, Package, ShoppingBag, Settings, LogOut, Image as ImageIcon, Tag, BarChart, Folder, Users, Monitor, Layers, Flame, Lock, CreditCard, ExternalLink, RefreshCw } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingBag, Settings, LogOut, Image as ImageIcon, Tag, BarChart, Folder, Users, Monitor, Layers, Flame, Lock, CreditCard, ExternalLink, RefreshCw, Bike } from "lucide-react";
 import { Settings as SettingsEntity } from "@/entities/Settings";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useAuth } from "@/lib/AuthContext";
@@ -44,6 +44,12 @@ const navigationItems = [
     pageKey: "PDV",
     url: createPageUrl("PDV"),
     icon: Monitor,
+  },
+  {
+    title: "Entregadores",
+    pageKey: "DeliveryDrivers",
+    url: createPageUrl("DeliveryDrivers"),
+    icon: Bike,
   },
   {
     title: "Clientes",
@@ -131,7 +137,7 @@ export default function Layout({ children, currentPageName }) {
   }, [location.pathname, currentPageName]);
 
   const pathSegments = location.pathname.split("/").filter(Boolean);
-  const RESERVED_LIST = new Set(["menu", "dashboard", "orders", "pedidos", "pdv", "clients", "products", "categories", "banners", "coupons", "complements", "reports", "settings", "superadmin", "adminlogin", "myorders", "printorder", "home", "api"]);
+  const RESERVED_LIST = new Set(["menu", "dashboard", "orders", "pedidos", "pdv", "kds", "deliverydrivers", "clients", "products", "categories", "banners", "coupons", "complements", "reports", "settings", "superadmin", "adminlogin", "myorders", "printorder", "home", "api"]);
   const routeStoreSlug = pathSegments.length > 0 && !RESERVED_LIST.has(pathSegments[0].toLowerCase()) ? pathSegments[0].toLowerCase() : null;
   const prettySlugName = routeStoreSlug ? routeStoreSlug.split("-").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") : null;
 
@@ -328,7 +334,7 @@ export default function Layout({ children, currentPageName }) {
 
   const userPermissions = React.useMemo(() => {
     if (!user) return ["*"];
-    if (user.role === "admin") return ["*"];
+    if (user.role === "admin" || user.role === "super_admin" || user.role === "owner") return ["*"];
     if (Array.isArray(user.permissions) && user.permissions.length > 0) {
       return user.permissions;
     }
@@ -338,7 +344,11 @@ export default function Layout({ children, currentPageName }) {
   const hasPermission = React.useCallback((pageKey) => {
     if (!pageKey) return true;
     if (userPermissions.includes("*")) return true;
-    return userPermissions.includes(pageKey);
+    if (userPermissions.includes(pageKey)) return true;
+    if (pageKey === "DeliveryDrivers" && (userPermissions.includes("Orders") || userPermissions.includes("Settings") || userPermissions.includes("PDV"))) {
+      return true;
+    }
+    return false;
   }, [userPermissions]);
 
   const activeSlug = routeStoreSlug || (typeof window !== "undefined" ? localStorage.getItem("current_tenant_slug") : null) || "vrumm";
@@ -372,7 +382,7 @@ export default function Layout({ children, currentPageName }) {
   const loadSettings = async () => {
     try {
       const segments = location.pathname.split("/").filter(Boolean);
-      const RESERVED = new Set(["menu", "dashboard", "orders", "pedidos", "pdv", "clients", "products", "categories", "banners", "coupons", "complements", "reports", "settings", "superadmin", "adminlogin", "myorders", "printorder", "home", "api"]);
+      const RESERVED = new Set(["menu", "dashboard", "orders", "pedidos", "pdv", "kds", "deliverydrivers", "clients", "products", "categories", "banners", "coupons", "complements", "reports", "settings", "superadmin", "adminlogin", "myorders", "printorder", "home", "api"]);
       const slugFromPath = segments.length > 0 && !RESERVED.has(segments[0].toLowerCase()) ? segments[0].toLowerCase() : null;
       const targetSlug = slugFromPath || localStorage.getItem("current_tenant_slug");
       const currentTenantId = localStorage.getItem("current_tenant_id");

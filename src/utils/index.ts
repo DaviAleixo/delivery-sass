@@ -5,6 +5,8 @@ const RESERVED_SLUGS = new Set([
   "pedidos",
   "pdv",
   "pdvorders",
+  "kds",
+  "deliverydrivers",
   "clients",
   "products",
   "categories",

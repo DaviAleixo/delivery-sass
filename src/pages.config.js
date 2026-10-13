@@ -66,6 +66,7 @@ import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import SuperAdmin from './pages/SuperAdmin';
 import KDS from './pages/KDS';
+import DeliveryDrivers from './pages/DeliveryDrivers';
 import __Layout from './Layout.jsx';
 
 
@@ -75,6 +76,7 @@ export const PAGES = {
     "PDV": PDV,
     "PDVOrders": PDVOrders,
     "KDS": KDS,
+    "DeliveryDrivers": DeliveryDrivers,
     "Banners": Banners,
     "Categories": Categories,
     "Clients": Clients,

@@ -121,6 +121,7 @@ export const ALL_ADMIN_SCREENS = [
   { key: "Orders", label: "Pedidos / Gestor" },
   { key: "KDS", label: "KDS Cozinha" },
   { key: "PDV", label: "PDV Balcão" },
+  { key: "DeliveryDrivers", label: "Entregadores & Motoboys" },
   { key: "Clients", label: "Clientes" },
   { key: "Products", label: "Produtos & Cardápio" },
   { key: "Categories", label: "Categorias" },
