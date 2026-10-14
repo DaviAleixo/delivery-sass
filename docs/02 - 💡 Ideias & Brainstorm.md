@@ -469,6 +469,190 @@
   3. **Mapa de Horários de Pico (Volume por Hora)**: Exibir distribuição das vendas das 00h às 23h, apontando o horário nobre de pedidos (ex: 19h30 - 21h30) para dimensionamento de equipe.
   4. **Histórico Persistido de Fechamentos de Caixa**: Possibilidade de salvar o fechamento do dia/turno, mantendo um livro-caixa digital acessível a qualquer momento com reemissão de cupom térmico e reenvio no WhatsApp.
 
+### 🌐 35. Domínio Próprio para Restaurantes (Custom Domains & Cloudflare for SaaS)
+* **O Conceito**: Permitir que o restaurante use seu próprio domínio ou subdomínio personalizado (ex: `cardapio.pizzariadojoao.com.br` ou `pizzariadojoao.com.br`) apontando para o seu cardápio, mantendo a marca 100% própria (White-label) sem expor a URL padrão do SaaS.
+* **Por que é um Diferencial Poderoso (SaaS & Vendas)**:
+  - **Autoridade e Confiança**: Restaurantes consolidados adoram estampar `cardapio.minhaloja.com.br` no Instagram, caixas e panfletos.
+  - **Upsell Natural (Plano Pro/Premium)**: Recurso ideal para diferenciar o plano básico (R$ 89/mês - link padrão) do plano avançado (R$ 149/mês - com domínio próprio incluso ou taxa de ativação).
+  - **Retenção Extrema (Anti-Churn)**: Uma vez impresso o domínio próprio em embalagens e divulgado aos clientes, a taxa de cancelamento do restaurante despenca.
+* **Arquitetura Técnica Recomendada (Custo R$ 0,00 e SSL Automático)**:
+  1. **Cloudflare for SaaS (Custom Hostnames)**:
+     - O Cloudflare oferece gratuitamente até **100 domínios personalizados** por zona (`Cloudflare for SaaS`).
+     - Emite e renova certificados SSL (HTTPS Let's Encrypt / Google Trust) de forma 100% automática, sem gerenciar servidores Nginx ou Caddy.
+     - Proteção DDoS e CDN global de alta performance.
+  2. **Apontamento pelo Restaurante (Simples e Rápido)**:
+     - O lojista compra ou já possui o domínio no Registro.br, GoDaddy ou Hostinger.
+     - Cria apenas 1 entrada **CNAME** simples:
+       - **Tipo**: `CNAME`
+       - **Nome**: `cardapio` (ou `@`)
+       - **Destino**: `domains.seusaas.com.br` (apontando para o CNAME de fallback configurado no Cloudflare Pages).
+  3. **Identificação Dinâmica do Tenant no Frontend (`TenantContext.jsx`)**:
+     - No carregamento inicial, o sistema inspeciona `window.location.hostname`.
+     - Se o hostname não for o domínio principal (`app.vrumm.com.br` ou `localhost`), consulta o Supabase: `supabase.from('tenants').select('*').eq('custom_domain', hostname)`.
+     - Se encontrar o restaurante, carrega seus dados e renderiza o cardápio diretamente na rota raiz (`/` ou `/menu`), sem necessidade de expor o slug na URL.
+  4. **Camada de Banco de Dados (`tenants`)**:
+     - Campos sugeridos: `custom_domain` (VARCHAR único, ex: `cardapio.vruumburguer.com.br`), `custom_domain_status` (`pending`, `active`, `error`) e `custom_domain_ssl_status`.
+* **Fluxo de Ativação no Painel**:
+  - Aba em *Configurações > Domínio Próprio* (ou gerenciado via painel *SuperAdmin* pelo Davi como serviço VIP).
+  - O lojista insere o domínio desejado, o sistema exibe os dados de CNAME e disponibiliza o botão: *"Verificar Apontamento DNS"*.
+
+### 🚨 36. Central de Pendências & Observabilidade com Sentry no SuperAdmin
+* **O Conceito**: Uma tela/aba dedicada no painel SuperAdmin do Davi ("Central de Pendências / Alertas") que monitora a saúde operacional de todos os restaurantes em tempo real.
+* **Pontos de Monitoramento Críticos**:
+  - **Erros em Pedidos**: Rastrear via Sentry falhas de criação de pedidos no Supabase, estouros de validação de schema ou erros de rede no checkout.
+  - **Webhooks & Pagamentos**: Listar pagamentos de clientes (Mercado Pago PIX) ou de assinaturas (Asaas) que falharam ou tiveram webhook rejeitado.
+  - **Impressão Térmica Represada**: Lojas com mais de 5 pedidos marcados como `pending` na fila de impressão por mais de 10 minutos (indício de impressora desconectada ou computador desligado).
+* **Integração com Sentry**:
+  - Capturar exceções silenciosas do frontend e das Edge Functions do Supabase com contexto enriquecido: `tenant_id`, `tenant_slug`, `order_id` e rota do usuário.
+  - Visualização direta no SuperAdmin com link para o Issue no Sentry ou status consolidado via Sentry API.
+
+### 📑 37. Módulo Fiscal para Restaurantes (NFC-e / SAT / Cupom Fiscal Eletrônico)
+* **O Desafio**: Restaurantes que faturam acima do MEI (Simples Nacional / Lucro Presumido) são obrigados por lei a emitir NFC-e (ou SAT em SP/CE) para cada pedido entregue ou retirado.
+* **Arquitetura Recomendada (APIs Fiscais Prontas)**:
+  - Não desenvolver motor fiscal do zero (a burocracia tributária brasileira de SEFAZ muda constantemente).
+  - Integrar com gateways fiscais especialistas via API:
+    - **Focus NFe**, **PlugNotas (TecnoSpeed)** ou **Nuvem Fiscal**.
+* **Como Funciona na Prática**:
+  - O restaurante faz upload do seu **Certificado Digital A1 (.pfx)** e cadastra seu CSC (Código de Segurança do Contribuinte) em *Configurações > Módulo Fiscal*.
+  - Configuração simples de tributação padrão por categoria/produto (NCM, CFOP, CSOSN).
+  - **Emissão**: Botão no painel de pedidos: *"Emitir NFC-e"* (ou emissão automática quando o pedido for para status `saiu_para_entrega`/`entregue`).
+  - Geração do DANFE simplificado em 80mm e envio automático do XML/PDF para o e-mail ou WhatsApp do cliente final.
+* **Monetização**: Pode ser vendido como um **Addon Fiscal** (ex: + R$ 49/mês por loja) cobrindo os custos da API e gerando lucro recorrente extra.
+
+### 🎨 38. Fim do Cardápio Genérico: Motor de Temas & Layouts Visuais
+* **O Conceito**: Permitir que cada restaurante tenha uma identidade visual marcante e única, fugindo da sensação de "cardápio pronto/padrão".
+* **Modelos de Layout Selecionáveis pelo Lojista**:
+  1. **Visual / Fotográfico (Destaque para Imagens)**:
+     - Focado em hamburguerias, docerias e sushis.
+     - Cards grandes, fotos em alta definição em proporção 16:9, carrossel de adicionais bem visual.
+  2. **Fast-Food / Compacto (Foco em Agilidade)**:
+     - Estilo iFood / Daki: lista rápida, foto lateral redonda ou quadrada pequena, botão de `+` direto no card.
+  3. **Clássico / Cardápio Tradicional**:
+     - Estilo pizzaria tradicional: itens divididos em colunas limpas, ótimo para leitura rápida de ingredientes sem poluição visual.
+* **Customizações de Marca**:
+  - Seleção de fontes tipográficas modernas (Inter, Poppins, Outfit, Montserrat via Google Fonts).
+  - Estilo de bordas (redondas/pills vs retas elegantes).
+  - Banner principal dinâmico (com suporte a vídeo curto ou carrossel animado).
+  - Modo Dark / Light ou cores personalizadas com pré-visualização em tempo real no painel do lojista.
+
+### 🏢 39. Arquitetura para Venda de Projetos Personalizados (Enterprise / Dedicado)
+* **O Conceito**: Estratégia técnica e comercial para atender restaurantes de grande porte, franquias ou clientes dispostos a pagar um valor alto (R$ 3.000 a R$ 10.000 de setup) por uma versão exclusiva.
+* **Estratégia de Código (Como Manter a Sanidade)**:
+  - **Evitar o "Frankenstein de código"**: Não criar forks desorganizados que nunca mais recebem atualizações.
+  - **Abordagem White-Label Dedicado (Instância Isolada)**:
+    - O core do código continua sendo o mesmo motor React + Supabase.
+    - Provisiona-se um projeto Supabase dedicado e um repositório clonado com as customizações de frontend exigidas pelo cliente.
+    - Se a customização for apenas visual/fluxo, utiliza-se **Feature Flags** baseadas no `tenant.plan` ou `tenant.features`.
+* **Modelo Comercial Enterprise**:
+  - **Setup Inicial**: R$ 2.500 a R$ 5.000 (taxa de customização, design exclusivo e integração com domínio próprio).
+  - **Mensalidade de Suporte / Infra**: R$ 290 a R$ 490/mês (garante receita recorrente contínua do cliente VIP).
+
+### 🚀 40. Landing Page (LP) de Alta Conversão do SaaS
+* **O Objetivo**: Página comercial moderna voltada a transformar donos de restaurantes que sofrem com as taxas do iFood em assinantes do seu software.
+* **Estrutura Recomendada da LP**:
+  1. **Dobra Principal (Hero)**:
+     - Título direto e doloroso: *"Chega de deixar 27% do seu faturamento para o iFood. Tenha seu próprio cardápio digital sem taxas por pedido."*
+     - Botão CTA pulsante: *"Quero Testar 7 Dias Grátis"* / *"Falar com Consultor no WhatsApp"*.
+     - Mockup 3D interativo do cardápio no smartphone e painel de pedidos no computador.
+  2. **Calculadora Interativa de Economia**:
+     - O lojista move uma barra deslizante com quanto fatura no delivery (ex: R$ 20.000/mês).
+     - A calculadora mostra: *"Você deixa cerca de R$ 5.400/mês no iFood. Com o nosso sistema você economiza R$ 60.000+ por ano!"*
+  3. **Vitrine dos Recursos-Chave**:
+     - Impressão térmica automática, KDS de cozinha, PIX dinâmico com confirmação na hora, controle de motoboys e fechamento de caixa em 1 clique.
+  4. **Tabela de Planos Transparente**:
+     - Plano Básico (R$ 89) vs Plano Pro com Domínio Próprio (R$ 149).
+  5. **FAQ & Prova Social**:
+     - Dúvidas frequentes de lojistas (precisa de computador potente? funciona no celular? tem fidelidade?).
+
+### 🖥️ 41. Aplicativo Desktop (.exe) para o Painel da Loja (Electron / Tauri)
+* **A Dor do Lojista**: O dono do restaurante ou operador do caixa abre o navegador, fecha a aba sem querer, perde a conexão ou o som para de tocar porque a aba foi suspensa pelo Chrome em segundo plano.
+* **A Solução Desktop (.exe)**:
+  - Empacotar o painel administrativo e a tela de Pedidos/KDS em um aplicativo nativo para Windows usando **Tauri** (ultraleve, consome menos de 40MB de RAM) ou **Electron**.
+* **Superpoderes do App Desktop**:
+  - **Inicialização com o Windows**: Liga o computador da loja e o painel já abre automaticamente na tela cheia.
+  - **Impressão Direta e Silenciosa (Silent Print)**: O Windows imprime o cupom na impressora térmica sem abrir a caixa de diálogo do navegador (`window.print()`).
+  - **Ícone na Bandeja (System Tray)**: Fica rodando no cantinho perto do relógio do Windows; se chegar pedido novo, pisca o ícone e toca o alarme mesmo se a janela estiver minimizada.
+
+### 🖼️ 42. Armazenamento de Fotos e Banners no Cloudflare (R2 / Cloudflare Images)
+* **A Dor Atual**: O Supabase Storage gratuito tem limites de cota e pode gerar cobrança extra quando dezenas de lojas começarem a subir fotos pesadas de hambúrgueres e pizzas.
+* **A Solução Cloudflare R2**:
+  - **Zero Custo de Egress**: O Cloudflare R2 não cobra taxa de tráfego de dados para download de imagens (ao contrário de AWS S3 e Supabase).
+  - **Custo Quase Zero**: Os primeiros 10GB de arquivos e 10 milhões de requisições por mês são 100% gratuitos.
+  - **Cloudflare Images / Resizing**: Redimensiona e comprime automaticamente as fotos dos lanches em formato WebP moderno, fazendo o cardápio carregar instantaneamente no 4G dos clientes.
+
+### ☁️ 43. Deploy e Hospedagem Completa no Cloudflare Pages
+* **Migração de Hospedagem**:
+  - Configurar pipeline de deploy contínuo (CI/CD) conectando o repositório GitHub ao **Cloudflare Pages**.
+* **Benefícios Práticos para o SaaS**:
+  - Tráfego e acessos 100% ilimitados e gratuitos para uso comercial (sem surpresas no cartão).
+  - Deploy em rede Anycast global com latência mínima no Brasil (São Paulo, Rio de Janeiro, Fortaleza).
+  - Integração perfeita e transparente com o recurso de **Custom Hostnames (Cloudflare for SaaS)** para os domínios próprios das lojas.
+
+### 🏷️ 44. Naming & Branding do SaaS (Identidade Visual da Empresa)
+* **O Objetivo**: Criar uma marca proprietária marcante, comercial, curta e profissional para a sua empresa de tecnologia para delivery.
+* **Critérios para um Grande Nome de SaaS**:
+  - Fácil de pronunciar e soletrar no telefone/WhatsApp.
+  - Disponibilidade de domínio `.com.br` e arroba no Instagram (`@seunome`).
+  - Associação com agilidade, pedidos, comida ou atendimento rápido.
+* **Linhas de Brainstorm de Nomes**:
+  - *Linha Ágil / Velocidade*: **Vrumm** (já adotado), **Velô Delivery**, **ProntoPed**, **FastMesa**.
+  - *Linha Gastronomia / Cardápio*: **Cardapiou**, **MenuAki**, **ChefHub**, **GulaDigital**.
+  - *Linha Conexão / Direto*: **ZapMenu**, **DirectFood**, **ComandaJá**.
+* **Kit de Identidade Visual**:
+  - Logo horizontal (para cabeçalhos de tela e faturas) e ícone/isotipo quadrado (para favicon, app de celular e WhatsApp).
+  - Paleta com cor de ação de alta energia (Laranja Elétrico, Vermelho Intenso ou Roxo Tecnológico).
+
+### 💰 45. Módulo Financeiro do SaaS no Painel SuperAdmin
+* **O Conceito**: Transformar o painel SuperAdmin do Davi em uma verdadeira torre de gestão financeira e saúde do negócio (Health SaaS Dashboard).
+* **Métricas Executivas em Tempo Real**:
+  - **MRR (Monthly Recurring Revenue)**: Soma exata do valor de todas as mensalidades ativas do mês.
+  - **Taxa de Inadimplência**: Lista de lojas com faturas vencidas no Asaas há mais de 3, 5 ou 10 dias.
+  - **Taxa de Churn (Cancelamentos)**: Quantidade de restaurantes que deixaram o sistema no período.
+  - **Volume Transacionado pelas Lojas (GMV)**: Total em R$ de lanches vendidos pelos clientes na plataforma (excelente métrica para marketing: *"Nossos clientes já venderam mais de R$ 1 milhão pelo sistema"*).
+### 🎨 46. Arquitetura Multi-Template para Cardápios VIP Personalizados (Modo A)
+* **O Desafio**:
+  - Como vender cardápios com designs 100% exclusivos sob medida para clientes de ticket alto (hamburguerias temáticas, sushibars de luxo, restaurantes gourmet) sem precisar clonar repositórios, manter múltiplos servidores ou duplicar regras de banco e checkout.
+* **A Solução Arquitetural ("Modo A - Single Repo Multi-Template Engine")**:
+  - **Coluna no Banco de Dados**: `tenants.custom_template` armazena a chave do layout customizado da loja.
+  - **Registro Central Desacoplado (`src/custom-menus/registry.js`)**: Lista todos os front-ends VIP compilados e indexados no sistema.
+  - **Vendas Imediatas sem Atrito**: No dia 1 da assinatura, o cliente usa o cardápio padrão da plataforma (`Menu.jsx`) e já começa a vender e faturar.
+  - **Ativação em 1-Clique no SuperAdmin**: Quando o front-end sob medida fica pronto e registrado, o Davi abre o SuperAdmin, edita a empresa e seleciona o template no dropdown. Instantaneamente o cardápio público passa a renderizar o novo design VIP!
+  - **Fallback Zero-Crash**: Se um identificador de template for inválido, inexistente ou estiver em manutenção, o sistema renderiza o cardápio padrão oficial sem interromper nenhuma venda.
+* **Estratégia Comercial & Precificação VIP**:
+  - **Taxa de Criação do Design Exclusivo (Setup)**: **R$ 500 a R$ 1.500** de entrada para desenhar e programar a identidade visual do cliente.
+  - **Mensalidade VIP**: **R$ 249 a R$ 299/mês** no Asaas (margem altíssima por loja).
+
+### 🏷️ 47. Plano de Entrada: Cardápio Digital Vitrine / QR Code na Mesa (Sem Delivery)
+* **O Conceito da Isca Digital**:
+  - Existem muitos estabelecimentos que **não fazem delivery** (ex: bares, espetinhos, cafeterias, buffets, restaurantes por quilo, açougues, padarias) ou que já têm garçons e só precisam de um **cardápio em QR Code nas mesas** para não gastar dinheiro reimprimindo folhas de papel a cada troca de preço.
+* **Preço Estratégico**:
+  - **R$ 39,00 a R$ 49,00 / mês** (Plano "Vitrine / QR Code").
+  - Barreira de entrada praticamente zero: qualquer comerciante aceita pagar esse valor sem nem pestanejar.
+* **Vantagens Brutais para o Davi (SaaS)**:
+  1. **Zero Suporte aos Fins de Semana**: O cliente não opera delivery, não tem impressora térmica conectada nem motoboys rodando. Custo operacional e de atendimento = **ZERO**.
+  2. **Isca Perfeita de Upsell**: Quando a loja cresce ou decide abrir entregas no WhatsApp, você faz o upgrade para o plano Pro de R$ 149/mês em 1 clique!
+* **Matriz de Funcionalidades & As 2 Modalidades de Mesa**:
+  * **Opção 1: Modo Apenas Visual / Informativo (Sem Carrinho)**:
+    - O cliente lê o QR Code da mesa, visualiza as fotos, ingredientes e preços no celular.
+    - Chama o garçom e pede verbalmente.
+    - No painel da loja: tela de Pedidos e som de campainha ficam ocultos para simplificar a vida do lojista.
+  * **Opção 2: Modo Autoatendimento na Mesa (Com Pedidos & Impressão no Caixa)**:
+    - O cliente senta na Mesa 4, lê o QR Code `?mesa=4` gerado no sistema.
+    - O cardápio reconhece automaticamente a Mesa 4 e libera o carrinho.
+    - O cliente monta os lanches e clica em **"Enviar Pedido"**.
+    - **Sem endereço, sem CEP, sem taxa de frete e sem motoboy**.
+    - O pedido cai com alarme sonoro na tela de **Pedidos** do caixa e imprime na impressora térmica: `PARA MESA (Mesa 4)`.
+    - A cozinha já começa a preparar sem o garçom precisar ir na mesa anotar!
+  * **O que CONTINUA BLOQUEADO nas duas opções (Zero complexidade de Delivery)**:
+    - 🚫 **Sem Módulo de Entregadores**: Sem tela de motoboys, sem despacho de saídas.
+    - 🚫 **Sem Frete / Bairros / CEP**: Salão físico não tem taxa de entrega.
+    - 🚫 **Sem Cadastro de Clientes de Rua**: Foco 100% nas mesas do restaurante.
+* **Flexibilidade Total (Escolha do Lojista em Configurações)**:
+  - O lojista pode alternar com um switch em Configurações:
+    - `[ ] Permitir que clientes enviem pedidos diretamente da mesa pelo QR Code`
+    - Se ativado: ativa o carrinho de mesa e a tela de Pedidos com impressão.
+    - Se desativado: vira cardápio 100% visual informativo.
+
 ---
 
 ## 🔗 Links Relacionados

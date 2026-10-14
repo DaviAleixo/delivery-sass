@@ -25,6 +25,7 @@
 - [x] **Acesso SuperAdmin Invisível e Seguro**: Removida flag pública de SuperAdmin. O Davi acessa informando 'superadmin' como identificador da loja, mantendo o formulário unificado, limpo e sigiloso.
 - [x] **Blindagem e Isolamento Absoluto no Login**: Resolução do email de autenticação estritamente restrita ao slug da loja especificado, impedindo vazamento ou colisão com contas de SuperAdmin.
 - [x] **Criptografia Blowfish (bcrypt) & Eliminação de Senhas em Aberto**: Coluna `initial_password` excluída do banco de dados. Todas as senhas na tabela `admin_users` e `auth.users` criptografadas com hash irreversível Blowfish/bcrypt, com exibição de senha estritamente mascarada (`••••••••`) no painel.
+- [x] **Isolamento Absoluto de Cache Multi-Tenant & Lojas Zeradas**: Resolução síncrona de tenant pela rota URL (`getRouteTenantSlug`), limpeza imediata de cache em memória (`memoryCache.clear()`) em trocas de loja, pré-inicialização zerada (`[]`) ao cadastrar empresas no SuperAdmin, blindagem do `useTenant()` contra vazamento de `tenant_id` da loja anterior e chaveamento de ciclo de vida (`key={slug}`) garantindo que uma nova empresa nunca mostre produtos ou categorias de outra loja nem por 1 milissegundo.
 
 ### 🛎️ Experiência de Pedidos & KDS
 - [x] **Ciclo de Vida de Pedidos & KDS**: Botões de "Confirmar", "Avançar Status" e "Cancelar" com persistência no Supabase, RLS ajustado e toasts instantâneos.
@@ -44,6 +45,7 @@
   - Gráfico Donut de categorias blindado: preserva o nome original da categoria mesmo se ela for excluída do cardápio futuramente (via snapshot de categoria no pedido).
   - Mapa de Horários de Pico com volume de clientes por hora do dia (00h às 23h BRT) e identificação do pico de movimento.
   - Histórico persistido de Fechamentos de Caixa por Dia/Turno (salvar, consultar dias anteriores, reimprimir e reenviar no WhatsApp).
+- [x] **Abertura/Fechamento Manual da Loja Blindada**: Corrigido erro PGRST205 (tabela `public.settings` inexistente no Supabase) mapeando transparentemente para a tabela `public.tenants` e atualizando a RPC `update_tenant_settings` para suportar `manual_store_open`, `manual_override_date` e `delivery_time`, sincronizando instantaneamente o status com o cardápio dos clientes.
 
 ### 🛍️ Cardápio & Vendas
 - [x] **Formas de Pagamento Modulares (Dinheiro, Crédito, Débito, Alimentação e PIX Online)**: Painel em Configurações para ativar Dinheiro (com troco), Cartão de Crédito, Débito e Vale Refeição na Maquininha, e PIX Online Mercado Pago com sincronização em tempo real no checkout.
@@ -54,8 +56,11 @@
 - [x] **Resiliência de Checkout PIX (Máquina de Estados: Recusa, Expiração & Recuperação)**: Tratamento visual explícito no modal quando o PIX for recusado pelo banco ou quando o tempo expirar (15 min). Ocultar QR Code vencido, parar polling e dar botões de 1-clique para 'Gerar Novo PIX' ou 'Pagar na Entrega (Cartão/Dinheiro)' sem perder o carrinho ([[02 - 💡 Ideias & Brainstorm]]).
 - [x] **Padronização de Timezone Oficial (Brasília America/Sao_Paulo)**: Garantir que o cálculo de loja aberta/fechada (`isStoreOpen`) e a impressão térmica não dependam do fuso/relógio do dispositivo do cliente, e blindar o turno noturno que ultrapassa a meia-noite ([[02 - 💡 Ideias & Brainstorm]]).
 - [x] **Correção de Edição & Atualização de Produtos**: Corrigido mapeamento de coluna (`updated_date` em vez de `updated_at`) no sanitizador de produtos e propagação de erros no Supabase, garantindo que alterações de preço (ex: R$ 0,01) e dados persistam imediatamente no banco.
-- [x] **Upsell Inteligente no Checkout (Turbine seu Pedido)**: Carrossel com algoritmo dinâmico de sugestão em `Cart.jsx`. Detecta automaticamente se o cliente não incluiu bebidas e as prioriza com tag `🥤 Bebida Gelada`, ou prioriza sobremesas e acompanhamentos, com adição em 1-clique (`+ Pedir`), abertura assistida para itens com complementos obrigatórios, toast confirmatório e banner de lembrete no rodapé.
-- [ ] Taxa de entrega calculada por distância/bairro ou valor fixo configurável.
+- [x] **Plano Vitrine & Autoatendimento de Salão / Mesas (Sem Delivery & Sem Motoboys)**:
+  - **Plano Vitrine QR Code (R$ 49/mês)**: Cardápio digital informativo (sem carrinho/pedidos). Oculta carrinho, botões de adicionar e abas operacionais de entrega no painel (Pedidos, KDS, Entregadores, PDV, Relatórios, Clientes, Cupons). Permite cadastrar produtos, categorias e grupos de complementos/adicionais normalmente.
+  - **Isolamento de Cache de Complementos**: Blindagem rigorosa de `ComplementGroup` e `ProductComplementGroup` no `storage.js`, garantindo que uma nova empresa comece 100% zerada (`[]`) e que grupos como "EXTRA" criados em outra empresa nunca vazem nem temporariamente.
+  - **Plano Salão & Mesas (R$ 79/mês)**: Autoatendimento exclusivo via QR Code na mesa (`?mesa=X`), dispensando entregadores, taxas de entrega e endereços de clientes. O pedido cai direto no caixa/KDS com campainha e impressão térmica `PARA MESA (Mesa X)`.
+  - **Seletor de Modo no Painel**: Aba Geral de Configurações permite alternar entre Vitrine Informativa, Autoatendimento de Mesas ou Completo com Delivery ([[02 - 💡 Ideias & Brainstorm]]).
 
 ### 💳 Cobrança & Monetização SaaS (Asaas)
 - [x] Criar conta/ambiente Sandbox no Asaas e validar chave de API.
@@ -65,6 +70,7 @@
 - [x] **Autoatendimento Fiscal na Loja**: Permitir que o lojista atualize seu e-mail de faturamento, WhatsApp e CPF/CNPJ em Configurações > Minha Assinatura com sincronização direta no Asaas.
 - [x] **Webhook do Asaas Ativo**: Altera automaticamente o status `is_active` e `subscription_status` da loja no Supabase em tempo real.
 - [ ] Definir régua de cobrança automática (Lembrete via WhatsApp e E-mail 3 dias antes do vencimento).
+- [ ] **Módulo Financeiro SaaS no SuperAdmin**: Dashboard executivo com MRR, ARR, inadimplência Asaas e lucro líquido em tempo real ([[02 - 💡 Ideias & Brainstorm]]).
 
 ---
 
@@ -73,8 +79,17 @@
 - [ ] **Validação de Telefone / WhatsApp & Trava Anti-Trote**: Verificação de DDD + nono dígito e envio de código OTP via WhatsApp (Evolution API / Z-API) para primeiros pedidos em dinheiro, evitando pedidos falsos sem gerar custo de SMS.
 - [x] **PIX Dinâmico Automático**: Geração de QR Code PIX com confirmação automática de pagamento (Mercado Pago).
 - [x] **Ferramental de IA Avançado (MCPs)**: Configuração do **Sentry MCP** e **Spec Workflow MCP** no `mcp_config.json` para observabilidade de produção e metodologia Spec-Driven Development.
-- [ ] **Spooler Desktop de Impressão (.exe)**: Aplicativo local em background (Electron/Node Tray) para conectar com múltiplas impressoras térmicas via rede (TCP/IP na porta 9100) e USB, com roteamento de comandas (cozinha/bar/caixa) e impressão silenciosa sem navegador.
+- [x] **Central de Pendências & Observabilidade com Sentry no SuperAdmin**: Painel de alertas consolidado com pedidos com falha, webhooks com erro e exceções capturadas pelo Sentry, cadastro manual de pendências (com status de urgente, título, descrição, rota opcional e seleção de loja) e captura automática via Sentry beforeSend ([[02 - 💡 Ideias & Brainstorm]]).
+- [ ] **Módulo Fiscal para Restaurantes (NFC-e / SAT)**: Integração com API especializada (Focus NFe / PlugNotas / Nuvem Fiscal) para emissão de cupom fiscal com certificado A1 (.pfx) ([[02 - 💡 Ideias & Brainstorm]]).
+- [ ] **Customização Visual & Temas do Cardápio**: Opções de layouts pré-definidos (Visual/Fotográfico, Fast-Food e Clássico) e tipografia para eliminar visual genérico ([[02 - 💡 Ideias & Brainstorm]]).
+- [ ] **Spooler & App Desktop (.exe) do Painel (Tauri / Electron)**: Aplicativo local com inicialização automática no Windows, impressão térmica silenciosa sem navegador e notificações na bandeja ([[02 - 💡 Ideias & Brainstorm]]).
+- [ ] **Armazenamento de Mídia no Cloudflare R2**: Upload de fotos de produtos e banners com tráfego ilimitado (zero egress) e conversão WebP ([[02 - 💡 Ideias & Brainstorm]]).
+- [ ] **Hospedagem & Deploy no Cloudflare Pages**: Deploy contínuo (CI/CD) do frontend com tráfego comercial ilimitado ([[02 - 💡 Ideias & Brainstorm]]).
+- [ ] **Landing Page (LP) de Vendas de Alta Conversão**: Página comercial com calculadora de economia vs iFood e tabela de planos ([[02 - 💡 Ideias & Brainstorm]]).
+- [ ] **Branding, Naming & Identidade Visual do SaaS**: Definição do nome comercial definitivo, registro de domínio e logotipo oficial ([[02 - 💡 Ideias & Brainstorm]]).
+- [x] **Base Arquitetural de Cardápios VIP Personalizados (Modo A - Multi-Template Engine)**: Coluna `custom_template` no banco Supabase (`tenants`), RPCs `get_master_tenants` e `update_tenant_info`, registro central de templates (`src/custom-menus/registry.js`), despacho dinâmico no `Menu.jsx` com fallback transparente para o cardápio padrão genérico e seleção em 1-clique no SuperAdmin com plano VIP Personalizado ([[02 - 💡 Ideias & Brainstorm]]).
 - [x] **Ajuste de Tipografia & Contraste do Cupom Térmico (`PrintOrder.jsx`)**: Substituído tons de cinza por preto puro (#000), aplicada fonte encorpada de alta legibilidade (`font-black`/`font-bold`), margem 0mm, `@media print` calibrado para bobinas térmicas de 80mm e 58mm e corte de 2 vias.
+- [ ] **Domínio Próprio para Restaurantes (Cloudflare for SaaS)**: Suporte a domínio/subdomínio personalizado do cliente (ex: `cardapio.pizzaria.com.br`) com SSL HTTPS automático (Cloudflare Custom Hostnames) e resolução direta por hostname no `TenantContext.jsx` ([[02 - 💡 Ideias & Brainstorm]]).
 
 ---
 

@@ -20,6 +20,17 @@ if (import.meta.env.VITE_SENTRY_DSN) {
     // Replay de sessões em caso de erro
     replaysSessionSampleRate: 0.1,
     replaysOnErrorSampleRate: 1.0,
+    beforeSend(event, hint) {
+      // Captura automática de exceções para a Central de Pendências do SuperAdmin
+      if (hint?.originalException) {
+        import('@/services/issueTracker')
+          .then(({ autoCaptureSentryEvent }) => {
+            autoCaptureSentryEvent(event, hint);
+          })
+          .catch(() => {});
+      }
+      return event;
+    },
   });
 }
 

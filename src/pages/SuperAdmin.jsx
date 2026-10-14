@@ -29,7 +29,9 @@ import {
   X,
   ArrowUpRight,
   Mail,
-  FileText
+  FileText,
+  ShieldAlert,
+  Bug
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,6 +40,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
 import { createAsaasCustomerAndSubscription } from "@/services/asaasService";
+import IssuesCenter from "@/components/superadmin/IssuesCenter";
+import { listAvailableTemplates } from "@/custom-menus/registry";
 
 import {
   Select,
@@ -46,11 +50,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { invalidateCache } from "@/entities/storage";
+import { invalidateCache, clearAllTenantCaches } from "@/entities/storage";
 
 export default function SuperAdminPage() {
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  const [activeTab, setActiveTab] = useState("tenants"); // 'tenants' | 'issues'
+  const [urgentIssuesCount, setUrgentIssuesCount] = useState(0);
+
+  const availableTemplates = listAvailableTemplates();
 
   const [tenants, setTenants] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -63,6 +72,7 @@ export default function SuperAdminPage() {
     name: "",
     slug: "",
     plan: "basic",
+    custom_template: "default",
     email: "",
     phone: "",
     cpf_cnpj: "",
@@ -78,6 +88,7 @@ export default function SuperAdminPage() {
     name: "",
     slug: "",
     plan: "basic",
+    custom_template: "default",
     logo_url: "",
     admin_username: "admin",
     admin_password: "",
@@ -169,10 +180,16 @@ export default function SuperAdminPage() {
 
       if (isMounted) {
         loadTenants();
+        loadUrgentCount();
       }
     };
 
     checkSuperAdminAuth();
+
+    const handleIssueReported = () => {
+      if (isMounted) loadUrgentCount();
+    };
+    window.addEventListener("system_issue_reported", handleIssueReported);
 
     // Listener reativo do Supabase para encerrar a sessão imediatamente em caso de logout
     const { data: authListener } = isSupabaseConfigured() && supabase
@@ -185,18 +202,42 @@ export default function SuperAdminPage() {
 
     return () => {
       isMounted = false;
+      window.removeEventListener("system_issue_reported", handleIssueReported);
       authListener?.subscription?.unsubscribe();
     };
   }, [navigate]);
 
+  const loadUrgentCount = async () => {
+    if (isSupabaseConfigured() && supabase) {
+      try {
+        const { count, error } = await supabase
+          .from("system_issues")
+          .select("*", { count: "exact", head: true })
+          .eq("severity", "urgent")
+          .neq("status", "resolved");
+        if (!error && count !== null) {
+          setUrgentIssuesCount(count);
+        }
+      } catch {}
+    }
+  };
+
   // 2. Carrega lista de tenants do Supabase
   const loadTenants = async () => {
     setIsLoading(true);
+    loadUrgentCount();
     try {
       if (isSupabaseConfigured() && supabase) {
         const { data, error } = await supabase.rpc("get_master_tenants");
         if (error) throw error;
-        setTenants(Array.isArray(data) ? data : []);
+        const tenantList = Array.isArray(data) ? data : [];
+        setTenants(tenantList);
+        tenantList.forEach((t) => {
+          if (t.slug && t.id) {
+            localStorage.setItem(`tenant_id_by_slug_${t.slug}`, t.id);
+            localStorage.setItem(`tenant_name_by_slug_${t.slug}`, t.name);
+          }
+        });
       } else {
         // Mock de demonstração caso offline
         setTenants([
@@ -257,7 +298,12 @@ export default function SuperAdminPage() {
     setIsSubmitting(true);
     try {
       if (isSupabaseConfigured() && supabase) {
-        const monthlyPrice = newTenant.plan === "premium" ? 149.00 : 89.00;
+        const monthlyPrice = 
+          newTenant.plan === "custom" ? 249.00 : 
+          newTenant.plan === "showcase" || newTenant.plan === "table" ? 49.00 : 89.00;
+
+        const defaultSalonMode = 
+          newTenant.plan === "showcase" || newTenant.plan === "table" ? "showcase" : "full";
 
         // 1. Cria a loja no Supabase com novo código sequencial e credenciais de login
         const { data, error } = await supabase.rpc("create_new_tenant", {
@@ -287,7 +333,9 @@ export default function SuperAdminPage() {
             email: newTenant.email.trim() || undefined,
             phone: newTenant.phone.trim() || undefined,
             cpfCnpj: newTenant.cpf_cnpj.trim() || undefined,
-            plan: newTenant.plan === "premium" ? "pro" : "start",
+            plan: 
+              newTenant.plan === "custom" ? "custom_vip" : 
+              newTenant.plan === "showcase" || newTenant.plan === "table" ? "showcase_salon" : "standard_delivery",
             monthlyPrice: monthlyPrice,
             dueDays: 3,
           });
@@ -308,6 +356,8 @@ export default function SuperAdminPage() {
                 next_due_date: asaasRes.nextDueDate,
                 monthly_price: monthlyPrice,
                 subscription_status: "pending",
+                custom_template: newTenant.custom_template && newTenant.custom_template !== "default" ? newTenant.custom_template : null,
+                salon_mode: defaultSalonMode,
               })
               .eq("id", newTenantId);
           } else {
@@ -320,12 +370,30 @@ export default function SuperAdminPage() {
                 whatsapp: newTenant.phone.trim() || null,
                 cpf_cnpj: newTenant.cpf_cnpj.trim() || null,
                 monthly_price: monthlyPrice,
+                custom_template: newTenant.custom_template && newTenant.custom_template !== "default" ? newTenant.custom_template : null,
+                salon_mode: defaultSalonMode,
               })
               .eq("id", newTenantId);
           }
         } catch (asErr) {
           console.error("[Asaas] Erro ao integrar:", asErr);
         }
+
+        // Registra mapeamento rápido imediato e pre-inicializa cache do novo restaurante 100% zerado
+        localStorage.setItem(`tenant_id_by_slug_${newSlug}`, newTenantId);
+        localStorage.setItem(`tenant_name_by_slug_${newSlug}`, newName);
+
+        const emptyCollections = [
+          "categories", "products", "complement_groups", "complement_items",
+          "product_complement_groups", "product_additionals", "banners", "banner_images",
+          "coupons", "orders"
+        ];
+        emptyCollections.forEach((col) => {
+          localStorage.setItem(`vrumburguer_db_${newTenantId}_${col}`, "[]");
+          localStorage.setItem(`vrumburguer_db_${newTenantId}_cache_ts_${col}`, String(Date.now()));
+        });
+
+        clearAllTenantCaches();
 
         // Limpa caches locais de entidades
         ["categories", "products", "banners", "banner_images", "orders", "settings", "admin_users"].forEach((k) => {
@@ -347,6 +415,7 @@ export default function SuperAdminPage() {
           name: "",
           slug: "",
           plan: "basic",
+          custom_template: "default",
           email: "",
           phone: "",
           cpf_cnpj: "",
@@ -401,6 +470,10 @@ export default function SuperAdminPage() {
     localStorage.setItem("current_tenant_id", tenant.id);
     localStorage.setItem("current_tenant_slug", tenant.slug);
     localStorage.setItem("current_tenant_name", tenant.name);
+    localStorage.setItem(`tenant_id_by_slug_${tenant.slug}`, tenant.id);
+    localStorage.setItem(`tenant_name_by_slug_${tenant.slug}`, tenant.name);
+
+    clearAllTenantCaches();
 
     ["categories", "products", "banners", "banner_images", "orders", "settings", "admin_users"].forEach((k) => {
       invalidateCache(k);
@@ -421,6 +494,7 @@ export default function SuperAdminPage() {
       name: tenant.name || "",
       slug: tenant.slug || "",
       plan: tenant.plan || "basic",
+      custom_template: tenant.custom_template || "default",
       logo_url: tenant.logo_url || "",
       admin_username: tenant.admin_username || "admin",
       admin_password: "",
@@ -451,12 +525,21 @@ export default function SuperAdminPage() {
           p_logo_url: editForm.logo_url.trim() || null,
           p_admin_username: editForm.admin_username.trim() || "admin",
           p_admin_password: editForm.admin_password ? editForm.admin_password : null,
+          p_custom_template: editForm.custom_template === "default" ? null : editForm.custom_template,
         });
 
         if (error) throw error;
         if (data && data.success === false) {
           throw new Error(data.message || "Erro ao atualizar empresa.");
         }
+
+        // Atualização adicional direta para o custom_template (garantia de sincronismo)
+        await supabase
+          .from("tenants")
+          .update({
+            custom_template: editForm.custom_template === "default" ? null : editForm.custom_template,
+          })
+          .eq("id", editingTenant.id);
 
         // Se o tenant editado for o ativo no momento, atualiza o localStorage
         if (localStorage.getItem("current_tenant_id") === editingTenant.id) {
@@ -466,7 +549,7 @@ export default function SuperAdminPage() {
 
         toast({
           title: "Restaurante Atualizado!",
-          description: `Os dados de ${editForm.name} foram atualizados com sucesso.`,
+          description: `Os dados e layout de ${editForm.name} foram atualizados com sucesso.`,
         });
 
         setIsEditModalOpen(false);
@@ -553,7 +636,10 @@ export default function SuperAdminPage() {
   const totalOrdersProcessed = tenants.reduce((acc, t) => acc + (parseInt(t.total_orders) || 0), 0);
   const estimatedMRR = tenants.reduce((acc, t) => {
     if (!t.is_active) return acc;
-    return acc + (parseFloat(t.monthly_price) || (t.plan === "premium" ? 149.00 : 89.00));
+    const defaultPrice = 
+      t.plan === "custom" ? 249.00 : 
+      t.plan === "showcase" || t.plan === "table" ? 49.00 : 89.00;
+    return acc + (parseFloat(t.monthly_price) || defaultPrice);
   }, 0);
   const pendingInvoicesCount = tenants.filter((t) => t.subscription_status === "pending" || t.subscription_status === "overdue").length;
 
@@ -614,8 +700,49 @@ export default function SuperAdminPage() {
         </div>
       </div>
 
-      {/* Grid de Métricas do Negócio */}
-      <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 my-8">
+      {/* Navegação entre Módulos: Lojas vs Central de Pendências */}
+      <div className="max-w-7xl mx-auto flex items-center gap-2 mt-6 mb-2 border-b border-slate-800 pb-3">
+        <button
+          onClick={() => setActiveTab("tenants")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all cursor-pointer ${
+            activeTab === "tenants"
+              ? "bg-slate-900 text-white border border-slate-700 shadow-md"
+              : "text-slate-400 hover:text-white hover:bg-slate-900/40"
+          }`}
+        >
+          <Store className="h-4 w-4 text-rose-500" />
+          Restaurantes & Clientes
+          <Badge variant="outline" className="text-xs bg-slate-950 border-slate-800 text-slate-400 ml-1">
+            {tenants.length}
+          </Badge>
+        </button>
+
+        <button
+          onClick={() => setActiveTab("issues")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all cursor-pointer relative ${
+            activeTab === "issues"
+              ? "bg-slate-900 text-white border border-slate-700 shadow-md"
+              : "text-slate-400 hover:text-white hover:bg-slate-900/40"
+          }`}
+        >
+          <ShieldAlert className={`h-4 w-4 ${urgentIssuesCount > 0 ? "text-rose-500 animate-pulse" : "text-amber-400"}`} />
+          Central de Pendências & Sentry
+          {urgentIssuesCount > 0 ? (
+            <Badge className="bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full animate-bounce">
+              {urgentIssuesCount} {urgentIssuesCount === 1 ? "urgente" : "urgentes"}
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="text-[10px] bg-slate-950 border-slate-800 text-emerald-400 ml-1">
+              ✓ Tudo OK
+            </Badge>
+          )}
+        </button>
+      </div>
+
+      {activeTab === "tenants" ? (
+        <>
+          {/* Grid de Métricas do Negócio */}
+          <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 my-8">
         <Card className="bg-slate-900/50 border-slate-800 backdrop-blur-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-slate-400">Restaurantes Ativos</CardTitle>
@@ -779,15 +906,30 @@ export default function SuperAdminPage() {
                       </td>
 
                       <td className="py-4 px-4">
-                        <Badge
-                          className={
-                            t.plan === "premium"
-                              ? "bg-amber-950/60 border-amber-800 text-amber-300"
-                              : "bg-slate-800 border-slate-700 text-slate-300"
-                          }
-                        >
-                          {t.plan === "premium" ? "Premium (Custom)" : "Comum (Básico)"}
-                        </Badge>
+                        {t.plan === "custom" || t.custom_template ? (
+                          <div className="flex flex-col gap-1 items-start">
+                            <Badge className="bg-gradient-to-r from-purple-900/80 to-pink-900/80 border-purple-600 text-purple-200 font-bold shadow-xs">
+                              👑 VIP Personalizado
+                            </Badge>
+                            {t.custom_template ? (
+                              <span className="text-[10px] text-purple-300/90 font-mono">
+                                Tmpl: {t.custom_template}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-slate-500 italic">
+                                (Cardápio padrão ativo)
+                              </span>
+                            )}
+                          </div>
+                        ) : t.plan === "showcase" || t.plan === "table" ? (
+                          <Badge className="bg-amber-950/60 border-amber-700 text-amber-300">
+                            📱 Vitrine / Salão
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-slate-800 border-slate-700 text-slate-300">
+                            🛵 Delivery Normal
+                          </Badge>
+                        )}
                       </td>
 
                       <td className="py-4 px-4">
@@ -891,6 +1033,30 @@ export default function SuperAdminPage() {
                   >
                     <X className="h-5 w-5" />
                   </Button>
+                </div>
+
+                {/* Bloco VIP / Front-End Ativo */}
+                <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5 text-purple-400" />
+                      Front-End & Template:
+                    </span>
+                    {selectedTenantDrawer.custom_template ? (
+                      <Badge className="bg-purple-950/90 border-purple-600 text-purple-200 text-xs font-mono">
+                        👑 {selectedTenantDrawer.custom_template}
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-slate-400 text-xs">
+                        Padrão da Plataforma
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    {selectedTenantDrawer.custom_template
+                      ? "Esta empresa está renderizando um layout exclusivo sob medida."
+                      : "Renderizando o cardápio oficial de alta conversão. Você pode associar um template exclusivo a qualquer momento."}
+                  </p>
                 </div>
 
                 {/* Botões de WhatsApp 1-Clique */}
@@ -1030,6 +1196,19 @@ export default function SuperAdminPage() {
                   <ArrowUpRight className="h-4 w-4" />
                 </Button>
 
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    const t = selectedTenantDrawer;
+                    setSelectedTenantDrawer(null);
+                    handleOpenEditModal(t);
+                  }}
+                  className="w-full border-sky-800/60 bg-sky-950/30 hover:bg-sky-900/50 text-sky-300 font-bold text-xs h-10 rounded-xl flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Pencil className="h-4 w-4" />
+                  Editar Dados & Trocar Template
+                </Button>
+
                 <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
@@ -1065,6 +1244,12 @@ export default function SuperAdminPage() {
           </div>
         )}
       </div>
+      </>
+    ) : (
+      <div className="max-w-7xl mx-auto my-6">
+        <IssuesCenter tenants={tenants} />
+      </div>
+    )}
 
       {/* Modal de Criação de Nova Empresa */}
       {isCreateModalOpen && (
@@ -1122,10 +1307,34 @@ export default function SuperAdminPage() {
                   onChange={(e) => setNewTenant({ ...newTenant, plan: e.target.value })}
                   className="mt-1 w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
                 >
-                  <option value="basic">Plano Start (R$ 89,00/mês — Layout Padrão)</option>
-                  <option value="premium">Plano Pro (R$ 149,00/mês — Personalizado)</option>
+                  <option value="showcase">Plano Vitrine / Salão (R$ 49,00/mês — QR Code & Mesas)</option>
+                  <option value="basic">Plano Normal (R$ 89,00/mês — Delivery Completo)</option>
+                  <option value="custom">Plano Personalizado (R$ 249,00/mês — Front-End Exclusivo)</option>
                 </select>
               </div>
+
+              {newTenant.plan === "custom" && (
+                <div>
+                  <Label className="text-slate-300 text-xs flex items-center gap-1.5">
+                    <Sparkles className="h-3.5 w-3.5 text-purple-400" />
+                    Template Inicial de Cardápio VIP
+                  </Label>
+                  <select
+                    value={newTenant.custom_template || "default"}
+                    onChange={(e) => setNewTenant({ ...newTenant, custom_template: e.target.value })}
+                    className="w-full mt-1 px-3 py-2 bg-slate-950 border border-purple-800/60 rounded-lg text-white text-xs focus:outline-hidden"
+                  >
+                    {availableTemplates.map((tmpl) => (
+                      <option key={tmpl.id} value={tmpl.id}>
+                        {tmpl.name} {tmpl.badge ? `(${tmpl.badge})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-purple-300/70 mt-1">
+                    💡 Dica: Se o front-end exclusivo ainda estiver em desenvolvimento, mantenha &quot;Padrão da Plataforma&quot;. O cliente já poderá vender normalmente!
+                  </p>
+                </div>
+              )}
 
               {/* Bloco de Faturamento & Asaas */}
               <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-3">
@@ -1301,10 +1510,45 @@ export default function SuperAdminPage() {
                     <SelectValue placeholder="Selecione o plano" />
                   </SelectTrigger>
                   <SelectContent className="bg-slate-900 border-slate-800 text-white">
-                    <SelectItem value="basic">Comum (Plano Básico)</SelectItem>
-                    <SelectItem value="premium">Premium (Plano Customizado)</SelectItem>
+                    <SelectItem value="showcase">Vitrine / Salão (R$ 49/mês — QR Code & Mesas)</SelectItem>
+                    <SelectItem value="basic">Normal (R$ 89/mês — Delivery Completo)</SelectItem>
+                    <SelectItem value="custom">Personalizado (R$ 249/mês — Front-End Exclusivo)</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between">
+                  <Label className="text-slate-300 text-xs flex items-center gap-1.5">
+                    <Sparkles className="h-3.5 w-3.5 text-purple-400" />
+                    Template do Cardápio
+                  </Label>
+                  {editForm.custom_template && editForm.custom_template !== "default" ? (
+                    <Badge className="bg-purple-950/80 border-purple-700 text-purple-300 text-[10px]">
+                      Front-End VIP Ativo
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-slate-400 text-[10px]">
+                      Padrão Oficial
+                    </Badge>
+                  )}
+                </div>
+                <select
+                  value={editForm.custom_template || "default"}
+                  onChange={(e) => setEditForm({ ...editForm, custom_template: e.target.value })}
+                  className="w-full mt-1.5 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-xs focus:outline-hidden focus:border-rose-500"
+                >
+                  {availableTemplates.map((tmpl) => (
+                    <option key={tmpl.id} value={tmpl.id}>
+                      {tmpl.name} {tmpl.badge ? `(${tmpl.badge})` : ""}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  {editForm.custom_template && editForm.custom_template !== "default"
+                    ? "Este cliente carregará o front-end exclusivo cadastrado no código."
+                    : "Se nenhum template customizado for escolhido, carrega o cardápio padrão sem interrupção de vendas."}
+                </p>
               </div>
 
               <div>

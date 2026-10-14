@@ -16,30 +16,26 @@ Plataforma SaaS multi-tenant de cardápio digital, delivery e PDV para restauran
 
 ---
 
-## 2. Estrutura de Planos e Monetização
+## 2. Estrutura Oficial de Planos (3 Planos)
 
-| Recurso / Benefício         | Plano Comum (Standard)                          | Plano Premium (Custom / White-Label)                     |
-| :-------------------------- | :---------------------------------------------- | :------------------------------------------------------- |
-| **Mensalidade Sugerida**    | **R$ 89,00 a R$ 129,00 / mês**                  | **R$ 199,00 a R$ 249,00 / mês**                          |
-| **Taxa de Setup (Opcional)**| R$ 150 (Cadastro completo do cardápio)          | R$ 300 (Design sob medida + Domínio configurado)         |
-| **Acesso ao Cardápio**      | URL padrão: `app.seusaas.com/:slug`             | Subdomínio ou **Domínio Próprio** (`pedir.marca.com.br`) |
-| **Interface do Cardápio**   | Layout genérico otimizado (rápido, limpo)       | **Frontend Personalizado** (layout e UX exclusivos)      |
-| **Customização de Marca**   | Logo, Banner, Nome, Contatos, Horários          | Identidade visual 100% sob medida + Assets exclusivos    |
-| **Cardápio & Produtos**     | Categorias, Produtos, Grupos de Complementos    | Categorias, Produtos, Grupos de Complementos             |
-| **Painel de Pedidos (KDS)** | Sim (Tempo Real + Alerta Sonoro + Kanban)       | Sim (Tempo Real + Alerta Sonoro + Kanban)                |
-| **PDV Balcão & Relatórios** | Sim (Dashboard de Vendas e Clientes)            | Sim (Dashboard Avançado e Métricas)                      |
-| **Base de Dados**           | Compartilhada (`tenant_id` isolado no Supabase) | Mesma base de dados (`tenant_id` isolado)                |
-| **Comissão por Pedido**     | **R$ 0,00 (ZERO taxa)**                         | **R$ 0,00 (ZERO taxa)**                                  |
+| Recurso / Benefício          | 1. Plano Vitrine / Salão                         | 2. Plano Normal (Delivery Completo)             | 3. Plano Personalizado (VIP)                             |
+| :--------------------------- | :----------------------------------------------- | :---------------------------------------------- | :------------------------------------------------------- |
+| **Mensalidade Fixa**         | **R$ 49,00 / mês**                               | **R$ 89,00 / mês**                              | **R$ 249,00 / mês**                                      |
+| **Foco de Atendimento**      | QR Code de Mesa & Salão (Visual ou Autoatend.)   | Delivery na Rua, KDS, PDV Balcão e Entregadores | Identidade Visual & Front-End 100% Exclusivo             |
+| **Interface do Cardápio**    | Padrão (Sem carrinho no modo visual; ou mesa)    | Layout padrão de alta conversão para delivery   | **Front-End sob medida** (design e animações exclusivas) |
+| **Painel do Lojista**        | Limpo (apenas Produtos, Banners e QR Codes)      | Completo (Pedidos, KDS, Entregadores, PDV)      | Completo + Seletor de Template VIP                       |
+| **Escolha em Configurações** | Lojista escolhe se quer apenas visual ou pedidos | Salão, Retirada no Balcão e Delivery            | Salão, Retirada e Delivery                               |
+| **Comissão por Pedido**      | **R$ 0,00 (ZERO taxa)**                          | **R$ 0,00 (ZERO taxa)**                         | **R$ 0,00 (ZERO taxa)**                                  |
 
 ---
 
 ## 3. Credenciais de Demonstração & Acessos
 
-| Perfil | Usuário | Senha Inicial | Destino após Login | O que enxerga |
-| :--- | :--- | :--- | :--- | :--- |
-| **👑 Super Admin (Davi)** | `davi` | `davi123` | `/SuperAdmin` | Todas as empresas, faturamento MRR, criar lojas, pausar lojas |
-| **🍔 Vruum Burguer (Piloto)** | `vrumm` | `vrumm123` | `/vrumm/Dashboard` | Somente a operação da Vruum Burguer (pedidos, lanches, vendas) |
-| **✨ Novas Lojas Criadas** | Definido no cadastro | Definida no cadastro | `/:slug/Dashboard` | **100% Zerada**: loja limpa para cadastro inicial |
+| Perfil                        | Usuário              | Senha Inicial        | Destino após Login | O que enxerga                                                  |
+| :---------------------------- | :------------------- | :------------------- | :----------------- | :------------------------------------------------------------- |
+| **👑 Super Admin (Davi)**     | `davi`               | `davi123`            | `/SuperAdmin`      | Todas as empresas, faturamento MRR, criar lojas, pausar lojas  |
+| **🍔 Vruum Burguer (Piloto)** | `vrumm`              | `vrumm123`           | `/vrumm/Dashboard` | Somente a operação da Vruum Burguer (pedidos, lanches, vendas) |
+| **✨ Novas Lojas Criadas**     | Definido no cadastro | Definida no cadastro | `/:slug/Dashboard` | **100% Zerada**: loja limpa para cadastro inicial              |
 
 ---
 

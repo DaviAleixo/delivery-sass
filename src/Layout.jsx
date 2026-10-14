@@ -354,13 +354,28 @@ export default function Layout({ children, currentPageName }) {
   const activeSlug = routeStoreSlug || (typeof window !== "undefined" ? localStorage.getItem("current_tenant_slug") : null) || "vrumm";
 
   const allowedNavigationItems = React.useMemo(() => {
+    const plan = settings?.plan;
+    const salonMode = settings?.salon_mode || (plan === "showcase" || plan === "table" ? "showcase" : "full");
+    const isVisualOnly = salonMode === "showcase";
+    const isTableOnly = salonMode === "table_only";
+
     return navigationItems
-      .filter(item => hasPermission(item.pageKey))
+      .filter(item => {
+        if (!hasPermission(item.pageKey)) return false;
+        if (isVisualOnly) {
+          const hiddenInShowcase = ["Orders", "KDS", "PDV", "DeliveryDrivers", "Clients", "Coupons", "Reports"];
+          if (hiddenInShowcase.includes(item.pageKey)) return false;
+        } else if (isTableOnly) {
+          const hiddenInTableOnly = ["DeliveryDrivers", "Clients"];
+          if (hiddenInTableOnly.includes(item.pageKey)) return false;
+        }
+        return true;
+      })
       .map(item => ({
         ...item,
         url: `/${activeSlug}/${item.pageKey}`
       }));
-  }, [hasPermission, activeSlug]);
+  }, [hasPermission, activeSlug, settings?.plan, settings?.salon_mode]);
 
   // Se o usuário tentar acessar uma tela para a qual não tem permissão, redireciona
   React.useEffect(() => {
@@ -370,7 +385,7 @@ export default function Layout({ children, currentPageName }) {
         if (firstAllowed) {
           toast({
             title: "Acesso Não Permitido",
-            description: `Seu usuário não possui permissão para acessar a tela "${currentPageName}".`,
+            description: `Seu plano não possui acesso à tela "${currentPageName}".`,
             variant: "destructive",
           });
           navigate(firstAllowed.url, { replace: true });
@@ -388,8 +403,20 @@ export default function Layout({ children, currentPageName }) {
       const currentTenantId = localStorage.getItem("current_tenant_id");
       const currentTenantName = localStorage.getItem("current_tenant_name");
 
+      if (slugFromPath && typeof window !== "undefined" && slugFromPath !== localStorage.getItem("current_tenant_slug")) {
+        localStorage.setItem("current_tenant_slug", slugFromPath);
+        const fastId = localStorage.getItem(`tenant_id_by_slug_${slugFromPath}`);
+        if (fastId) {
+          localStorage.setItem("current_tenant_id", fastId);
+        } else if (slugFromPath === "vrumm" || slugFromPath === "vruum-burguer") {
+          localStorage.setItem("current_tenant_id", "a0000000-0000-0000-0000-000000000001");
+        } else {
+          localStorage.removeItem("current_tenant_id");
+        }
+      }
+
       if (isSupabaseConfigured() && supabase) {
-        let query = supabase.from("tenants").select("id, name, slug, logo_url, banner_url, opening_time, closing_time, open_days, phone, address, whatsapp, instagram, delivery_fee, min_order_value, delivery_fee_type, delivery_neighborhoods, delivery_unlisted_policy, delivery_fallback_fee, free_delivery_threshold, address_city, address_state, address_neighborhood, cep");
+        let query = supabase.from("tenants").select("id, name, slug, plan, salon_mode, logo_url, banner_url, opening_time, closing_time, open_days, phone, address, whatsapp, instagram, delivery_fee, min_order_value, delivery_fee_type, delivery_neighborhoods, delivery_unlisted_policy, delivery_fallback_fee, free_delivery_threshold, address_city, address_state, address_neighborhood, cep");
         if (targetSlug) {
           query = query.eq("slug", targetSlug);
         } else if (currentTenantId) {
@@ -407,6 +434,8 @@ export default function Layout({ children, currentPageName }) {
           localStorage.setItem("current_tenant_id", tenantData.id);
           localStorage.setItem("current_tenant_slug", tenantData.slug);
           localStorage.setItem("current_tenant_name", tenantData.name);
+          localStorage.setItem(`tenant_id_by_slug_${tenantData.slug}`, tenantData.id);
+          localStorage.setItem(`tenant_name_by_slug_${tenantData.slug}`, tenantData.name);
           return;
         }
       }

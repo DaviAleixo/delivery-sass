@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useLocation, useParams } from "react-router-dom";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { clearAllTenantCaches } from "@/entities/storage";
 
 const TenantContext = createContext({
   tenant: null,
@@ -59,6 +60,9 @@ export function TenantProvider({ children }) {
   const currentSlug = extractSlugFromPath();
 
   useEffect(() => {
+    if (currentSlug && currentSlug !== "vrumm" && currentSlug !== "vruum-burguer" && currentSlug !== localStorage.getItem("current_tenant_slug")) {
+      clearAllTenantCaches();
+    }
     loadTenantData(currentSlug);
   }, [currentSlug, location.pathname]);
 
@@ -87,6 +91,8 @@ export function TenantProvider({ children }) {
           localStorage.setItem("current_tenant_id", data.id);
           localStorage.setItem("current_tenant_slug", data.slug);
           localStorage.setItem("current_tenant_name", data.name);
+          localStorage.setItem(`tenant_id_by_slug_${data.slug}`, data.id);
+          localStorage.setItem(`tenant_name_by_slug_${data.slug}`, data.name);
 
           // Injeta a cor primária dinâmica da marca no CSS
           if (data.theme_config?.primary_color) {
@@ -133,9 +139,9 @@ export function TenantProvider({ children }) {
         // Se for uma nova loja, NUNCA herda dados da Vruum Burguer: tudo 100% limpo!
         const cleanName = slugToSearch.split("-").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
         const cleanTenant = {
-          id: localStorage.getItem("current_tenant_id") || null,
+          id: localStorage.getItem(`tenant_id_by_slug_${slugToSearch}`) || null,
           slug: slugToSearch,
-          name: localStorage.getItem("current_tenant_name") || cleanName,
+          name: localStorage.getItem(`tenant_name_by_slug_${slugToSearch}`) || cleanName,
           plan: "basic",
           logo_url: null,
           banner_url: null,
@@ -161,9 +167,23 @@ export function TenantProvider({ children }) {
     }
   };
 
+  const resolvedTenantId = (() => {
+    if (tenant?.id) return tenant.id;
+    if (currentSlug === "vrumm" || currentSlug === "vruum-burguer") return "a0000000-0000-0000-0000-000000000001";
+    if (currentSlug) {
+      const cachedBySlug = localStorage.getItem(`tenant_id_by_slug_${currentSlug}`);
+      if (cachedBySlug) return cachedBySlug;
+      if (localStorage.getItem("current_tenant_slug") === currentSlug) {
+        return localStorage.getItem("current_tenant_id") || null;
+      }
+      return null; // NUNCA retorna o tenant_id de outra empresa!
+    }
+    return localStorage.getItem("current_tenant_id") || null;
+  })();
+
   const value = {
     tenant,
-    tenantId: tenant?.id || localStorage.getItem("current_tenant_id") || null,
+    tenantId: resolvedTenantId,
     tenantSlug: tenant?.slug || currentSlug || null,
     isLoadingTenant,
     themeConfig: tenant?.theme_config || null,

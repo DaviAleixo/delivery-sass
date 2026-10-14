@@ -31,10 +31,11 @@ import {
   Package, 
   X
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useParams, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
+import { useTenant } from "@/lib/TenantContext";
 
 // New AdditionalsManager component
 function AdditionalsManager({ productId, initialAdditionals = [] }) {
@@ -135,9 +136,20 @@ export default function ProductsPage() {
     available: true
   });
 
+  const { slug } = useParams();
+  const location = useLocation();
+  const { tenant } = useTenant();
+  const salonMode = tenant?.salon_mode || (tenant?.plan === 'showcase' ? 'showcase' : (tenant?.plan === 'table' ? 'table_only' : 'full'));
+  const isVisualOnly = salonMode === 'showcase';
+
   useEffect(() => {
+    setProducts([]);
+    setAllAdditionals([]);
+    setCategories([]);
+    setComplementGroups([]);
+    setProductComplementGroups([]);
     loadProducts();
-  }, []);
+  }, [slug, location.pathname, tenant?.id, tenant?.salon_mode, tenant?.plan]);
 
   const loadProducts = async () => {
     setIsLoading(true);

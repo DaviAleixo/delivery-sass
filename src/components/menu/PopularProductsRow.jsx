@@ -2,7 +2,7 @@ import React, { useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Plus } from "lucide-react";
 
-function PopularProductCard({ product, index, hasMoved, onProductClick }) {
+function PopularProductCard({ product, index, hasMoved, onProductClick, isVisualOnly = false }) {
   const [imageError, setImageError] = useState(false);
   const isTop1 = index === 0;
   const isTop3 = index < 3;
@@ -58,9 +58,11 @@ function PopularProductCard({ product, index, hasMoved, onProductClick }) {
           </div>
 
           {/* Botão flutuante rápido */}
-          <div className="absolute bottom-2 right-2 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-r from-red-600 to-red-500 group-hover:from-red-500 group-hover:to-amber-500 text-white flex items-center justify-center shadow-lg transition-transform active:scale-90">
-            <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[3]" />
-          </div>
+          {!isVisualOnly && (
+            <div className="absolute bottom-2 right-2 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-r from-red-600 to-red-500 group-hover:from-red-500 group-hover:to-amber-500 text-white flex items-center justify-center shadow-lg transition-transform active:scale-90">
+              <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[3]" />
+            </div>
+          )}
         </div>
 
         {/* Informações */}
@@ -91,7 +93,7 @@ function PopularProductCard({ product, index, hasMoved, onProductClick }) {
   );
 }
 
-export default function PopularProductsRow({ products = [], onProductClick, _isStoreOpen = true }) {
+export default function PopularProductsRow({ products = [], onProductClick, _isStoreOpen = true, isVisualOnly = false }) {
   const scrollRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
   const [startX, setStartX] = useState(0);
@@ -168,6 +170,7 @@ export default function PopularProductsRow({ products = [], onProductClick, _isS
             index={index}
             hasMoved={hasMoved}
             onProductClick={onProductClick}
+            isVisualOnly={isVisualOnly}
           />
         ))}
       </div>

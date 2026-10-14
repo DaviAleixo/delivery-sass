@@ -18,10 +18,11 @@ const mainPageKey = mainPage ?? Object.keys(Pages)[0];
 const MainPage = mainPageKey ? Pages[mainPageKey] : <></>;
 
 const LayoutWrapper = ({ children, currentPageName }) => {
+  const { slug } = useParams();
   const content = Layout ? (
-    <Layout currentPageName={currentPageName}>{children}</Layout>
+    <Layout currentPageName={currentPageName} key={slug || 'root'}>{children}</Layout>
   ) : (
-    <>{children}</>
+    <React.Fragment key={slug || 'root'}>{children}</React.Fragment>
   );
   return <ErrorBoundary>{content}</ErrorBoundary>;
 };

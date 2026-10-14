@@ -74,7 +74,8 @@ export default function SettingsPage() {
     delivery_neighborhoods: [],
     delivery_unlisted_policy: "block",
     delivery_fallback_fee: "10.00",
-    free_delivery_threshold: ""
+    free_delivery_threshold: "",
+    salon_mode: "full"
   });
 
   const [newNeighborhood, setNewNeighborhood] = useState({
@@ -189,7 +190,8 @@ export default function SettingsPage() {
             delivery_neighborhoods: Array.isArray(tenantData.delivery_neighborhoods) ? tenantData.delivery_neighborhoods : [],
             delivery_unlisted_policy: tenantData.delivery_unlisted_policy || "block",
             delivery_fallback_fee: tenantData.delivery_fallback_fee?.toString() || "10.00",
-            free_delivery_threshold: tenantData.free_delivery_threshold?.toString() || ""
+            free_delivery_threshold: tenantData.free_delivery_threshold?.toString() || "",
+            salon_mode: tenantData.salon_mode || (tenantData.plan === "showcase" ? "showcase" : (tenantData.plan === "table" ? "table_only" : "full")),
           });
           setIsLoading(false);
           return;
@@ -823,6 +825,7 @@ export default function SettingsPage() {
           delivery_unlisted_policy: settings.delivery_unlisted_policy || 'block',
           delivery_fallback_fee: fallbackFeeNum,
           free_delivery_threshold: freeThresholdNum,
+          salon_mode: settings.salon_mode || 'full',
           payment_methods: tenantDetails?.payment_methods || null,
         };
 

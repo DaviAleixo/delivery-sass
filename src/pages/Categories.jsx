@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useParams, useLocation } from "react-router-dom";
 import { Category } from "@/entities/Category";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,6 +11,8 @@ import { Plus, Edit, Trash2, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function CategoriesPage() {
+  const { slug } = useParams();
+  const location = useLocation();
   const [categories, setCategories] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -22,13 +25,14 @@ export default function CategoriesPage() {
   });
 
   useEffect(() => {
+    setCategories([]);
     loadData();
-  }, []);
+  }, [slug, location.pathname]);
 
   const loadData = async () => {
     setIsLoading(true);
     const categoriesData = await Category.list("order_index");
-    setCategories(categoriesData);
+    setCategories(Array.isArray(categoriesData) ? categoriesData : []);
     setIsLoading(false);
   };
 

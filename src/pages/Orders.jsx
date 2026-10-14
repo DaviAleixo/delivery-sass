@@ -210,19 +210,40 @@ export default function OrdersPage() {
         }
       }
 
-      // Carrega entregadores cadastrados
+      // Carrega dados completos do restaurante diretamente do Supabase (tenants)
       const currentTenantId = localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001";
+      let resolvedTenant = null;
       if (isSupabaseConfigured() && supabase) {
         try {
           const { data: tenantRow } = await supabase
             .from("tenants")
-            .select("delivery_drivers")
+            .select("*")
             .eq("id", currentTenantId)
             .maybeSingle();
-          if (tenantRow?.delivery_drivers && Array.isArray(tenantRow.delivery_drivers)) {
-            setDrivers(tenantRow.delivery_drivers);
+          if (tenantRow) {
+            resolvedTenant = tenantRow;
+            if (tenantRow.delivery_drivers && Array.isArray(tenantRow.delivery_drivers)) {
+              setDrivers(tenantRow.delivery_drivers);
+            }
           }
         } catch (_drvErr) {}
+      }
+
+      if (resolvedTenant) {
+        const formattedSettings = {
+          ...resolvedTenant,
+          restaurant_name: resolvedTenant.name,
+          restaurant_logo: resolvedTenant.logo_url,
+        };
+        setSettings(formattedSettings);
+        if (resolvedTenant.delivery_time) {
+          setDeliveryTime(resolvedTenant.delivery_time);
+        }
+      } else if (settingsData && settingsData.length > 0) {
+        setSettings(settingsData[0]);
+        if (settingsData[0].delivery_time) {
+          setDeliveryTime(settingsData[0].delivery_time);
+        }
       }
 
       // Inicializa os IDs de pedidos pendentes conhecidos e ativa som contínuo se houver pendentes
@@ -286,7 +307,7 @@ export default function OrdersPage() {
   const storeStatus = getStoreStatusInfo(settings);
 
   const handleToggleStoreStatus = async () => {
-    if (!settings?.id) return;
+    const targetTenantId = settings?.id || localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001";
     setIsTogglingStore(true);
     try {
       const todayKey = getTodayDateKey();
@@ -297,15 +318,15 @@ export default function OrdersPage() {
         manual_override_date: todayKey,
       };
 
-      await Settings.update(settings.id, updatedData);
+      await Settings.update(targetTenantId, updatedData);
       
-      const newSettings = { ...settings, ...updatedData };
+      const newSettings = { ...settings, ...updatedData, id: targetTenantId };
       setSettings(newSettings);
       
       window.dispatchEvent(new CustomEvent("settings_updated", { detail: newSettings }));
 
       if (!newStatus) {
-        toast("🔴 Loja fechada com sucesso!", {
+        toast("🔴 Loja fechada manualmente!", {
           description: "Deseja conferir e fechar o caixa do turno agora?",
           action: {
             label: "🧾 Fechar Caixa",
@@ -313,17 +334,19 @@ export default function OrdersPage() {
           },
           duration: 12000,
         });
+      } else {
+        toast.success("🟢 Loja aberta manualmente!");
       }
     } catch (err) {
       console.error("Erro ao alterar status da loja:", err);
-      alert("Erro ao alterar status da loja. Tente novamente.");
+      toast.error("Erro ao alterar status da loja. Tente novamente.");
     } finally {
       setIsTogglingStore(false);
     }
   };
 
   const handleResetToAuto = async () => {
-    if (!settings?.id) return;
+    const targetTenantId = settings?.id || localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001";
     setIsTogglingStore(true);
     try {
       const updatedData = {
@@ -331,14 +354,16 @@ export default function OrdersPage() {
         manual_override_date: null,
       };
 
-      await Settings.update(settings.id, updatedData);
+      await Settings.update(targetTenantId, updatedData);
       
-      const newSettings = { ...settings, ...updatedData };
+      const newSettings = { ...settings, ...updatedData, id: targetTenantId };
       setSettings(newSettings);
       
       window.dispatchEvent(new CustomEvent("settings_updated", { detail: newSettings }));
+      toast.info("⏱️ Horário resetado para a programação semanal!");
     } catch (err) {
       console.error("Erro ao resetar status da loja:", err);
+      toast.error("Erro ao resetar status da loja.");
     } finally {
       setIsTogglingStore(false);
     }
@@ -347,9 +372,10 @@ export default function OrdersPage() {
   const handleSetDeliveryTime = async (newTime) => {
     setDeliveryTime(newTime);
     setIsEditingTime(false);
-    if (!settings?.id) return;
+    const targetTenantId = settings?.id || localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001";
     try {
-      await Settings.update(settings.id, { delivery_time: newTime });
+      await Settings.update(targetTenantId, { delivery_time: newTime });
+      toast.success("Tempo de entrega atualizado!");
     } catch (err) {
       console.error("Erro ao atualizar tempo de entrega:", err);
     }

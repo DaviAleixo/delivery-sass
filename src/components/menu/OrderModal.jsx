@@ -235,8 +235,9 @@ export default function OrderModal({
   const [manualAddress, setManualAddress] = useState("");
   const nameInputRef = useRef(null);
   
+  const isTableOnlyStore = deliveryRules?.salon_mode === 'table_only';
   const savedMesa = initialTableNumber || (typeof window !== "undefined" ? localStorage.getItem("vrumburguer_table_number") || "" : "");
-  const [orderType, setOrderType] = useState(savedMesa ? "dine_in" : "delivery");
+  const [orderType, setOrderType] = useState(isTableOnlyStore || savedMesa ? "dine_in" : "delivery");
   const [tableNumber, setTableNumber] = useState(savedMesa);
   const [customerData, setCustomerData] = useState({
     customer_name: "",
@@ -258,8 +259,10 @@ export default function OrderModal({
     if (savedMesa) {
       setOrderType("dine_in");
       setTableNumber(savedMesa);
+    } else if (isTableOnlyStore && orderType === "delivery") {
+      setOrderType("dine_in");
     }
-  }, [savedMesa]);
+  }, [savedMesa, isTableOnlyStore]);
 
   // Sincroniza cidade base do restaurante quando carregada
   useEffect(() => {
@@ -578,8 +581,8 @@ export default function OrderModal({
     if (!customerData.payment_method) {
       newErrors.payment_method = "Selecione a forma de pagamento.";
     }
-    if (finalTotal < minOrderValue) {
-      newErrors.total = `O valor mínimo do pedido é de R$ ${minOrderValue.toFixed(2).replace('.', ',')}.`;
+    if (orderType === 'delivery' && minOrderValue > 0 && finalTotal < minOrderValue) {
+      newErrors.total = `O valor mínimo para entrega é de R$ ${minOrderValue.toFixed(2).replace('.', ',')}.`;
     }
 
     setErrors(newErrors);
@@ -1017,15 +1020,17 @@ export default function OrderModal({
             setOrderType(val);
             if (errors.table_number) setErrors(prev => ({ ...prev, table_number: "" }));
           }} className="w-full">
-            <TabsList className="grid w-full grid-cols-3 rounded-2xl p-1 bg-stone-100 h-auto gap-1">
-              <TabsTrigger value="delivery" className="rounded-xl font-bold text-xs sm:text-sm py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-red-600">
-                <Truck className="w-4 h-4 mr-1.5 shrink-0"/>Delivery
+            <TabsList className={`grid w-full ${isTableOnlyStore ? 'grid-cols-2' : 'grid-cols-3'} rounded-2xl p-1 bg-stone-100 h-auto gap-1`}>
+              {!isTableOnlyStore && (
+                <TabsTrigger value="delivery" className="rounded-xl font-bold text-xs sm:text-sm py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-red-600">
+                  <Truck className="w-4 h-4 mr-1.5 shrink-0"/>Delivery
+                </TabsTrigger>
+              )}
+              <TabsTrigger value="dine_in" className="rounded-xl font-bold text-xs sm:text-sm py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-emerald-700">
+                <span className="text-sm mr-1">🍽️</span>Na Mesa
               </TabsTrigger>
               <TabsTrigger value="takeaway" className="rounded-xl font-bold text-xs sm:text-sm py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-amber-700">
                 <Store className="w-4 h-4 mr-1.5 shrink-0"/>Retirada
-              </TabsTrigger>
-              <TabsTrigger value="dine_in" className="rounded-xl font-bold text-xs sm:text-sm py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-emerald-700">
-                <span className="text-sm mr-1">🍽️</span>Na Mesa
               </TabsTrigger>
             </TabsList>
 

@@ -89,8 +89,77 @@ const MULTI_TENANT_COLLECTIONS = new Set([
   "customers",
 ]);
 
+const RESERVED_ROUTE_SLUGS = new Set([
+  "menu", "dashboard", "orders", "pedidos", "pdv", "pdvorders",
+  "clients", "products", "categories", "banners", "coupons",
+  "complements", "reports", "settings", "superadmin", "adminlogin",
+  "myorders", "printorder", "printshiftclosing", "home", "api"
+]);
+
+export function getRouteTenantSlug() {
+  if (typeof window === "undefined") return null;
+  const segments = window.location.pathname.split("/").filter(Boolean);
+  if (segments.length === 0) return null;
+  const first = segments[0].toLowerCase();
+  if (RESERVED_ROUTE_SLUGS.has(first)) return null;
+  return first;
+}
+
+export function clearAllTenantCaches() {
+  memoryCache.clear();
+  inFlightPromises.clear();
+  MULTI_TENANT_COLLECTIONS.forEach(col => {
+    invalidateCache(col);
+  });
+}
+
+let lastTrackedSlug = null;
+
 export function getActiveTenantId() {
   if (typeof window === "undefined") return null;
+
+  const routeSlug = getRouteTenantSlug();
+  const isSuperAdmin = window.location.pathname.toLowerCase().includes("superadmin");
+
+  if (isSuperAdmin) {
+    return null;
+  }
+
+  // Se a rota mudou de loja, limpa caches em memória instantaneamente
+  if (routeSlug && lastTrackedSlug !== null && lastTrackedSlug !== routeSlug) {
+    memoryCache.clear();
+    inFlightPromises.clear();
+  }
+  if (routeSlug) {
+    lastTrackedSlug = routeSlug;
+  }
+
+  if (routeSlug) {
+    if (routeSlug === "vrumm" || routeSlug === "vruum-burguer") {
+      return "a0000000-0000-0000-0000-000000000001";
+    }
+
+    // 1. Tenta mapa rápido de slug para ID (evita qualquer race condition)
+    const fastId = localStorage.getItem(`tenant_id_by_slug_${routeSlug}`);
+    if (fastId) {
+      if (localStorage.getItem("current_tenant_id") !== fastId) {
+        localStorage.setItem("current_tenant_id", fastId);
+        localStorage.setItem("current_tenant_slug", routeSlug);
+      }
+      return fastId;
+    }
+
+    // 2. Se o current_tenant_slug gravado corresponder exatamente à URL
+    const storedSlug = localStorage.getItem("current_tenant_slug");
+    if (storedSlug === routeSlug) {
+      return localStorage.getItem("current_tenant_id") || null;
+    }
+
+    // 3. O slug da URL é de outro restaurante e ainda não temos seu ID:
+    // NUNCA retorna o ID de outra empresa!
+    return null;
+  }
+
   return localStorage.getItem("current_tenant_id") || null;
 }
 
@@ -182,6 +251,11 @@ function getStoragePrefixForCollection(collectionKey) {
   if (MULTI_TENANT_COLLECTIONS.has(collectionKey)) {
     const tenantId = getActiveTenantId();
     if (tenantId) return `${STORAGE_PREFIX}${tenantId}_`;
+
+    const routeSlug = getRouteTenantSlug();
+    if (routeSlug && routeSlug !== "vrumm" && routeSlug !== "vruum-burguer") {
+      return `${STORAGE_PREFIX}tenant_pending_`;
+    }
   }
   return STORAGE_PREFIX;
 }
@@ -189,6 +263,20 @@ function getStoragePrefixForCollection(collectionKey) {
 function getStoredLocalCache(collectionKey, ttl) {
   if (typeof window === "undefined" || !PERSISTENT_CACHE_TABLES.has(collectionKey)) return null;
   try {
+    const routeSlug = getRouteTenantSlug();
+    const isVruum = routeSlug === "vrumm" || routeSlug === "vruum-burguer";
+
+    if (MULTI_TENANT_COLLECTIONS.has(collectionKey)) {
+      const tenantId = getActiveTenantId();
+      // Em rota com slug específico mas sem tenantId resolvido: não carrega cache de outra loja
+      if (!tenantId && routeSlug && !isVruum) {
+        return [];
+      }
+      if (!tenantId && !isVruum) {
+        return null;
+      }
+    }
+
     const prefix = getStoragePrefixForCollection(collectionKey);
     const rawTs = localStorage.getItem(`${prefix}cache_ts_${collectionKey}`);
     if (!rawTs) return null;
@@ -197,7 +285,28 @@ function getStoredLocalCache(collectionKey, ttl) {
 
     const rawData = localStorage.getItem(`${prefix}${collectionKey}`);
     if (!rawData) return null;
-    return JSON.parse(rawData);
+    const parsed = JSON.parse(rawData);
+    if (!Array.isArray(parsed)) return null;
+
+    if (MULTI_TENANT_COLLECTIONS.has(collectionKey)) {
+      const tenantId = getActiveTenantId();
+      if (tenantId) {
+        // Validação estrita: descarta qualquer item pertencente a outro tenant
+        const filtered = parsed.filter(item => {
+          if (!item) return false;
+          if (isVruum) return !item.tenant_id || item.tenant_id === tenantId;
+          return item.tenant_id === tenantId;
+        });
+        if (filtered.length !== parsed.length) {
+          localStorage.setItem(`${prefix}${collectionKey}`, JSON.stringify(filtered));
+        }
+        return filtered;
+      }
+      if (!isVruum) {
+        return [];
+      }
+    }
+    return parsed;
   } catch {
     return null;
   }
@@ -216,18 +325,34 @@ function getCollection(collectionKey, defaultData = []) {
   if (typeof window === "undefined") return defaultData;
   const prefix = getStoragePrefixForCollection(collectionKey);
   const tenantId = getActiveTenantId();
-  // Se for uma nova empresa que não seja a Vruum ("a0000000-0000-0000-0000-000000000001"), o defaultData deve ser zerado []
-  const effectiveDefault = MULTI_TENANT_COLLECTIONS.has(collectionKey) && tenantId && tenantId !== "a0000000-0000-0000-0000-000000000001"
+  const routeSlug = getRouteTenantSlug();
+  const isVruum = (tenantId === "a0000000-0000-0000-0000-000000000001") || (routeSlug === "vrumm" || routeSlug === "vruum-burguer");
+
+  // Nenhuma loja além da loja piloto oficial (Vruum Burguer) herda defaultData.
+  // Qualquer outro restaurante SEMPRE começa estritamente zerado []
+  const effectiveDefault = MULTI_TENANT_COLLECTIONS.has(collectionKey) && !isVruum
     ? []
     : defaultData;
 
   try {
     const raw = localStorage.getItem(prefix + collectionKey);
     if (!raw) {
+      if (prefix.includes("tenant_pending_") && MULTI_TENANT_COLLECTIONS.has(collectionKey)) {
+        return [];
+      }
       localStorage.setItem(prefix + collectionKey, JSON.stringify(effectiveDefault));
       return effectiveDefault;
     }
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    if (MULTI_TENANT_COLLECTIONS.has(collectionKey) && Array.isArray(parsed)) {
+      if (!tenantId && !isVruum) return [];
+      return parsed.filter(item => {
+        if (!item) return false;
+        if (isVruum) return !item.tenant_id || item.tenant_id === tenantId;
+        return item.tenant_id === tenantId;
+      });
+    }
+    return parsed;
   } catch (_e) {
     return effectiveDefault;
   }
@@ -326,10 +451,39 @@ export function createEntityModel(collectionKey, defaultData = []) {
       const fetchPromise = (async () => {
         if (isSupabaseConfigured() && supabase) {
           try {
+            // Suporte transparente para 'settings' consultando a tabela 'tenants'
+            if (collectionKey === "settings") {
+              const activeTenantId = getActiveTenantId() || "a0000000-0000-0000-0000-000000000001";
+              const { data: tenantData, error: tenantErr } = await supabase
+                .from("tenants")
+                .select("*")
+                .eq("id", activeTenantId)
+                .maybeSingle();
+
+              if (!tenantErr && tenantData) {
+                const mapped = [{
+                  ...tenantData,
+                  restaurant_name: tenantData.name,
+                  restaurant_logo: tenantData.logo_url,
+                }];
+                memoryCache.set(cacheKey, { timestamp: Date.now(), data: mapped });
+                setStoredLocalCache(collectionKey, mapped);
+                setCollection(collectionKey, mapped);
+                return mapped;
+              }
+            }
+
             let q = supabase.from(collectionKey).select(projection);
             const activeTenantId = getActiveTenantId();
-            if (MULTI_TENANT_COLLECTIONS.has(collectionKey) && activeTenantId) {
-              q = q.eq("tenant_id", activeTenantId);
+            if (MULTI_TENANT_COLLECTIONS.has(collectionKey)) {
+              if (activeTenantId) {
+                q = q.eq("tenant_id", activeTenantId);
+              } else {
+                const routeSlug = getRouteTenantSlug();
+                if (routeSlug && routeSlug !== "vrumm" && routeSlug !== "vruum-burguer") {
+                  return [];
+                }
+              }
             }
             if (sort) {
               const isDesc = sort.startsWith("-");
@@ -362,6 +516,20 @@ export function createEntityModel(collectionKey, defaultData = []) {
             }
 
             if (!error && data !== null && data !== undefined) {
+              if (MULTI_TENANT_COLLECTIONS.has(collectionKey) && Array.isArray(data)) {
+                if (activeTenantId) {
+                  const isVruum = activeTenantId === "a0000000-0000-0000-0000-000000000001";
+                  data = data.filter(item => {
+                    if (!item) return false;
+                    if (isVruum) return !item.tenant_id || item.tenant_id === activeTenantId;
+                    return item.tenant_id === activeTenantId;
+                  });
+                } else {
+                  const routeSlug = getRouteTenantSlug();
+                  const isVruum = routeSlug === "vrumm" || routeSlug === "vruum-burguer";
+                  if (!isVruum) data = [];
+                }
+              }
               memoryCache.set(cacheKey, { timestamp: Date.now(), data });
               setStoredLocalCache(collectionKey, data);
               setCollection(collectionKey, data);
@@ -402,11 +570,38 @@ export function createEntityModel(collectionKey, defaultData = []) {
       const fetchPromise = (async () => {
         if (isSupabaseConfigured() && supabase) {
           try {
+            // Suporte transparente para 'settings' consultando a tabela 'tenants'
+            if (collectionKey === "settings") {
+              const activeTenantId = getActiveTenantId() || "a0000000-0000-0000-0000-000000000001";
+              const { data: tenantData, error: tenantErr } = await supabase
+                .from("tenants")
+                .select("*")
+                .eq("id", activeTenantId)
+                .maybeSingle();
+
+              if (!tenantErr && tenantData) {
+                const mapped = [{
+                  ...tenantData,
+                  restaurant_name: tenantData.name,
+                  restaurant_logo: tenantData.logo_url,
+                }];
+                memoryCache.set(cacheKey, { timestamp: Date.now(), data: mapped });
+                return mapped;
+              }
+            }
+
             let q = supabase.from(collectionKey).select(projection);
             const activeTenantId = getActiveTenantId();
             const filterQuery = { ...(query || {}) };
-            if (MULTI_TENANT_COLLECTIONS.has(collectionKey) && activeTenantId && !filterQuery.tenant_id) {
-              filterQuery.tenant_id = activeTenantId;
+            if (MULTI_TENANT_COLLECTIONS.has(collectionKey)) {
+              if (activeTenantId && !filterQuery.tenant_id) {
+                filterQuery.tenant_id = activeTenantId;
+              } else if (!activeTenantId && !filterQuery.tenant_id) {
+                const routeSlug = getRouteTenantSlug();
+                if (routeSlug && routeSlug !== "vrumm" && routeSlug !== "vruum-burguer") {
+                  return [];
+                }
+              }
             }
             if (Object.keys(filterQuery).length > 0) {
               q = q.match(filterQuery);
@@ -442,6 +637,20 @@ export function createEntityModel(collectionKey, defaultData = []) {
             }
 
             if (!error && data !== null && data !== undefined) {
+              if (MULTI_TENANT_COLLECTIONS.has(collectionKey) && Array.isArray(data)) {
+                if (activeTenantId) {
+                  const isVruum = activeTenantId === "a0000000-0000-0000-0000-000000000001";
+                  data = data.filter(item => {
+                    if (!item) return false;
+                    if (isVruum) return !item.tenant_id || item.tenant_id === activeTenantId;
+                    return item.tenant_id === activeTenantId;
+                  });
+                } else {
+                  const routeSlug = getRouteTenantSlug();
+                  const isVruum = routeSlug === "vrumm" || routeSlug === "vruum-burguer";
+                  if (!isVruum) data = [];
+                }
+              }
               memoryCache.set(cacheKey, { timestamp: Date.now(), data });
               return data;
             }
@@ -467,6 +676,20 @@ export function createEntityModel(collectionKey, defaultData = []) {
     async get(id) {
       if (isSupabaseConfigured() && supabase) {
         try {
+          if (collectionKey === "settings") {
+            const targetId = (id && id !== "settings-main" && id !== "a1b2c3d4-e5f6-7890-abcd-111122223333") 
+              ? id 
+              : (getActiveTenantId() || "a0000000-0000-0000-0000-000000000001");
+            const { data: tenantData } = await supabase.from("tenants").select("*").eq("id", targetId).maybeSingle();
+            if (tenantData) {
+              return {
+                ...tenantData,
+                restaurant_name: tenantData.name,
+                restaurant_logo: tenantData.logo_url,
+              };
+            }
+          }
+
           const { data, error } = await supabase
             .from(collectionKey)
             .select(projection)
@@ -543,6 +766,43 @@ export function createEntityModel(collectionKey, defaultData = []) {
       }
 
       if (isSupabaseConfigured() && supabase) {
+        // Redireciona updates de 'settings' para a tabela 'tenants' (RPC update_tenant_settings)
+        if (collectionKey === "settings") {
+          const targetTenantId = (id && id !== "settings-main" && id !== "a1b2c3d4-e5f6-7890-abcd-111122223333") 
+            ? id 
+            : (getActiveTenantId() || "a0000000-0000-0000-0000-000000000001");
+
+          let saved = false;
+          try {
+            const { data: rpcRes, error: rpcErr } = await supabase.rpc("update_tenant_settings", {
+              p_tenant_id: targetTenantId,
+              p_data: sanitized,
+            });
+            if (!rpcErr && rpcRes) saved = true;
+          } catch {}
+
+          if (!saved) {
+            try {
+              const { error: directErr } = await supabase
+                .from("tenants")
+                .update({
+                  ...sanitized,
+                  updated_date: new Date().toISOString()
+                })
+                .eq("id", targetTenantId);
+              if (!directErr) saved = true;
+            } catch {}
+          }
+
+          invalidateCache("settings");
+          const items = getCollection("settings", defaultData);
+          const updatedItems = items.map((item) => ({ ...item, ...sanitized }));
+          setCollection("settings", updatedItems);
+          setStoredLocalCache("settings", updatedItems);
+          notifySubscribers("settings", "update", { id: targetTenantId, ...sanitized }, targetTenantId);
+          return { id: targetTenantId, ...sanitized };
+        }
+
         try {
           const { data: updated, error } = await supabase
             .from(collectionKey)

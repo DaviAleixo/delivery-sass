@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useParams, useLocation } from "react-router-dom";
 import { ComplementGroup, ComplementItem, ProductComplementGroup, Product, Category } from "@/entities";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -57,9 +58,17 @@ export default function ComplementsPage() {
   const [filterCategory, setFilterCategory] = useState("all");
   const [isSaving, setIsSaving] = useState(false);
 
+  const { slug } = useParams();
+  const location = useLocation();
+
   useEffect(() => {
+    setGroups([]);
+    setItems([]);
+    setProductGroups([]);
+    setProducts([]);
+    setCategories([]);
     loadAllData();
-  }, []);
+  }, [slug, location.pathname]);
 
   const loadAllData = async () => {
     setIsLoading(true);

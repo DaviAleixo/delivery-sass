@@ -40,12 +40,18 @@ import { createPageUrl } from "@/utils";
 import { Button } from "@/components/ui/button";
 import { isStoreOpen } from "@/utils/storeStatus";
 import { useTenant } from "@/lib/TenantContext";
+import { getCustomMenuTemplate } from "@/custom-menus/registry";
 
 export default function MenuPage() {
   const navigate = useNavigate();
   const { tenant, tenantId } = useTenant();
   const [searchParams] = useSearchParams();
   const urlMesa = searchParams.get("mesa");
+
+  const salonMode = tenant?.salon_mode || (tenant?.plan === 'showcase' ? 'showcase' : (tenant?.plan === 'table' ? 'table_only' : 'full'));
+  const isVisualOnly = salonMode === 'showcase';
+  const isTableOnly = salonMode === 'table_only';
+  const hasTopNotice = Boolean(urlMesa || (isTableOnly && !urlMesa));
 
   const segments = typeof window !== "undefined" ? window.location.pathname.split("/").filter(Boolean) : [];
   const RESERVED_SEGMENTS = ["menu", "dashboard", "orders", "pdv", "adminlogin", "superadmin"];
@@ -103,6 +109,16 @@ export default function MenuPage() {
   };
 
   useEffect(() => {
+    if (!isVruumRoute && !tenantId) {
+      setProducts([]);
+      setCategories([]);
+      setAdditionals([]);
+      setComplementGroups([]);
+      setComplementItems([]);
+      setBanners([]);
+      return;
+    }
+
     loadData();
     checkActiveOrders();
     loadRecentOrders();
@@ -119,7 +135,7 @@ export default function MenuPage() {
       if (typeof unsubProducts === "function") unsubProducts();
       if (typeof unsubCategories === "function") unsubCategories();
     };
-  }, [tenantId, tenant]);
+  }, [tenantId, tenant, routeSlug]);
 
   const loadRecentOrders = async () => {
     try {
@@ -205,7 +221,14 @@ export default function MenuPage() {
 
   const loadData = async () => {
     try {
-      const activeTenantId = tenantId || localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001";
+      const activeTenantId = tenantId 
+        || (isVruumRoute ? "a0000000-0000-0000-0000-000000000001" : (routeSlug ? localStorage.getItem(`tenant_id_by_slug_${routeSlug}`) : null));
+
+      if (!activeTenantId) {
+        setProducts([]);
+        setCategories([]);
+        return;
+      }
 
       const [productsData, additionalsData, settingsData, bannerData, categoryData, groupsData, itemsData, pcgData] = await Promise.all([
         Product.filter({ tenant_id: activeTenantId, available: true }, "-created_date"),
@@ -279,6 +302,8 @@ export default function MenuPage() {
         closing_time: currentTenant?.closing_time || "23:59",
         open_days: currentTenant?.open_days || [],
         payment_methods: currentTenant?.payment_methods || null,
+        manual_store_open: currentTenant?.manual_store_open ?? null,
+        manual_override_date: currentTenant?.manual_override_date ?? null,
       };
 
       setSettings(resolvedSettings);
@@ -519,6 +544,34 @@ export default function MenuPage() {
     );
   }
 
+  // Despacho de Template VIP Personalizado (Modo A)
+  const CustomMenuTemplate = getCustomMenuTemplate(tenant?.custom_template);
+  if (CustomMenuTemplate) {
+    return (
+      <CustomMenuTemplate
+        tenant={tenant}
+        tenantId={tenantId}
+        settings={settings}
+        products={products}
+        categories={categories}
+        banners={banners}
+        cart={cart}
+        storeIsOpen={storeIsOpen}
+        activeCategory={activeCategory}
+        setActiveCategory={setActiveCategory}
+        handleAddToCart={handleAddToCart}
+        handleCartToggle={handleCartToggle}
+        setIsCartVisible={setIsCartVisible}
+        setShowOrderModal={setShowOrderModal}
+        setSelectedProduct={setSelectedProduct}
+        urlMesa={urlMesa}
+        salonMode={salonMode}
+        isVisualOnly={isVisualOnly}
+        isTableOnly={isTableOnly}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#0d0a09] text-stone-100 selection:bg-red-600 selection:text-white">
       {/* Header Dark Glass Moderno */}
@@ -560,27 +613,29 @@ export default function MenuPage() {
 
             {/* Ações Topo */}
             <div className="flex items-center gap-1.5">
-              <motion.div whileTap={{ scale: 0.9 }}>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleCartToggle}
-                  title="Carrinho"
-                  className="relative text-stone-300 hover:text-white hover:bg-stone-800/80 rounded-full h-9 w-9 cursor-pointer"
-                >
-                  <ShoppingBag className="w-4 h-4 text-red-400" />
-                  {cart.reduce((total, item) => total + item.quantity, 0) > 0 && (
-                    <motion.span 
-                      key={cart.reduce((total, item) => total + item.quantity, 0)}
-                      initial={{ scale: 0.5 }}
-                      animate={{ scale: 1 }}
-                      className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-bold rounded-full w-4 h-4 min-w-4 min-h-4 flex items-center justify-center shadow-sm border border-[#120e0d] leading-none"
-                    >
-                      {cart.reduce((total, item) => total + item.quantity, 0)}
-                    </motion.span>
-                  )}
-                </Button>
-              </motion.div>
+              {!isVisualOnly && (
+                <motion.div whileTap={{ scale: 0.9 }}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleCartToggle}
+                    title="Carrinho"
+                    className="relative text-stone-300 hover:text-white hover:bg-stone-800/80 rounded-full h-9 w-9 cursor-pointer"
+                  >
+                    <ShoppingBag className="w-4 h-4 text-red-400" />
+                    {cart.reduce((total, item) => total + item.quantity, 0) > 0 && (
+                      <motion.span 
+                        key={cart.reduce((total, item) => total + item.quantity, 0)}
+                        initial={{ scale: 0.5 }}
+                        animate={{ scale: 1 }}
+                        className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-bold rounded-full w-4 h-4 min-w-4 min-h-4 flex items-center justify-center shadow-sm border border-[#120e0d] leading-none"
+                      >
+                        {cart.reduce((total, item) => total + item.quantity, 0)}
+                      </motion.span>
+                    )}
+                  </Button>
+                </motion.div>
+              )}
               <StoreInfoSheet settings={settings} />
               <UserProfileSheet />
             </div>
@@ -588,8 +643,9 @@ export default function MenuPage() {
         </div>
       </header>
 
+
       {/* Banner de Mesa Conectada via QR Code */}
-      {urlMesa && (
+      {!isVisualOnly && urlMesa && (
         <div className="pt-20 container mx-auto px-4 max-w-6xl">
           <div className="bg-emerald-950/80 border border-emerald-500/40 text-emerald-200 rounded-2xl p-3.5 flex items-center justify-between shadow-lg">
             <div className="flex items-center gap-2.5">
@@ -606,9 +662,27 @@ export default function MenuPage() {
         </div>
       )}
 
+      {/* Banner de Salão quando loja é mesa-only mas cliente abriu sem QR Code da mesa */}
+      {!isVisualOnly && isTableOnly && !urlMesa && (
+        <div className="pt-20 container mx-auto px-4 max-w-6xl">
+          <div className="bg-gradient-to-r from-blue-950/80 via-[#10141c] to-blue-950/80 border border-blue-500/40 text-blue-200 rounded-2xl p-3.5 flex items-center justify-between shadow-lg">
+            <div className="flex items-center gap-2.5">
+              <span className="text-xl">🍽️</span>
+              <div>
+                <p className="text-[11px] font-black uppercase text-blue-300">Autoatendimento nas Mesas</p>
+                <p className="text-xs sm:text-sm font-semibold text-stone-200">Aponte a câmera para o QR Code da sua mesa para enviar seu pedido direto para a cozinha</p>
+              </div>
+            </div>
+            <span className="text-[11px] bg-blue-900/80 border border-blue-400/40 text-blue-200 px-3 py-1 rounded-xl font-bold whitespace-nowrap">
+              Salão & Mesas
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Banner de Pedido em Andamento */}
-      {activeGuestOrder && (
-        <div className={`${urlMesa ? 'pt-3' : 'pt-20'} container mx-auto px-4 max-w-6xl`}>
+      {!isVisualOnly && activeGuestOrder && (
+        <div className={`${hasTopNotice ? 'pt-3' : 'pt-20'} container mx-auto px-4 max-w-6xl`}>
           <div className="relative">
             <Link to={`${createPageUrl("MyOrders")}?id=${activeGuestOrder.id}`}>
               <motion.div 
@@ -658,7 +732,7 @@ export default function MenuPage() {
       )}
 
       {!storeIsOpen && (
-        <div className={`${activeGuestOrder ? 'pt-3' : 'pt-20'} container mx-auto px-4 max-w-6xl`}>
+        <div className={`${activeGuestOrder || hasTopNotice ? 'pt-3' : 'pt-20'} container mx-auto px-4 max-w-6xl`}>
           <div className="rounded-2xl border p-4 bg-red-950/40 border-red-500/30 text-red-200 flex items-start gap-3 shadow-lg">
             <XCircle className="h-5 w-5 mt-0.5 text-red-400 flex-shrink-0" />
             <div>
@@ -673,11 +747,11 @@ export default function MenuPage() {
 
       {/* Banners Carrossel */}
       {banners && banners.length > 0 ? (
-        <div className={!activeGuestOrder && storeIsOpen ? "pt-[60px]" : "pt-2"}>
+        <div className={!activeGuestOrder && !hasTopNotice && storeIsOpen ? "pt-[60px]" : "pt-2"}>
           <BannerCarousel banners={banners} />
         </div>
       ) : (
-        !activeGuestOrder && storeIsOpen && <div className="h-[60px]" />
+        !activeGuestOrder && !hasTopNotice && storeIsOpen && <div className="h-[60px]" />
       )}
 
       {/* Barra de Categorias Pills com layoutId Framer Motion */}
@@ -721,11 +795,12 @@ export default function MenuPage() {
             products={popularRankedProducts}
             onProductClick={handleProductClick}
             isStoreOpen={storeIsOpen}
+            isVisualOnly={isVisualOnly}
           />
         )}
 
         {/* Carrossel dos Últimos Pedidos (com suporte a múltiplos itens e repetição de pedidos) */}
-        {!searchQuery.trim() && recentOrders.length > 0 && (
+        {!isVisualOnly && !searchQuery.trim() && recentOrders.length > 0 && (
           <RecentOrdersRow
             orders={recentOrders}
             products={products}
@@ -784,6 +859,7 @@ export default function MenuPage() {
                 onProductClick={handleProductClick}
                 isStoreOpen={storeIsOpen}
                 isPopular={idx === 0}
+                isVisualOnly={isVisualOnly}
               />
             ))}
           </AnimatePresence>
@@ -953,22 +1029,24 @@ export default function MenuPage() {
       </footer>
 
       {/* Carrinho flutuante */}
-      <AnimatePresence>
-        <Cart
-          cart={cart}
-          updateQuantity={updateCartQuantity}
-          onCheckout={handleCheckout}
-          deliveryFee={settings?.delivery_fee || 0}
-          isVisible={isCartVisible}
-          onToggle={handleCartToggle}
-          products={products}
-          categories={categories}
-          onAddToCart={addToCart}
-          onSelectProduct={handleProductClick}
-          complementGroups={complementGroups}
-          productComplementGroups={productComplementGroups}
-        />
-      </AnimatePresence>
+      {!isVisualOnly && (
+        <AnimatePresence>
+          <Cart
+            cart={cart}
+            updateQuantity={updateCartQuantity}
+            onCheckout={handleCheckout}
+            deliveryFee={settings?.delivery_fee || 0}
+            isVisible={isCartVisible}
+            onToggle={handleCartToggle}
+            products={products}
+            categories={categories}
+            onAddToCart={addToCart}
+            onSelectProduct={handleProductClick}
+            complementGroups={complementGroups}
+            productComplementGroups={productComplementGroups}
+          />
+        </AnimatePresence>
+      )}
 
       <OrderModal
         isOpen={showOrderModal}
@@ -1035,6 +1113,7 @@ export default function MenuPage() {
           isOpen={!!selectedProduct}
           onClose={() => setSelectedProduct(null)}
           onAddToCart={addToCart}
+          isVisualOnly={isVisualOnly}
         />
       )}
     </div>

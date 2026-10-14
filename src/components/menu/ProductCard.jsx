@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { Plus } from "lucide-react";
 
 const ProductCard = forwardRef(function ProductCard(
-  { product, onProductClick, _isStoreOpen = true, _isPopular = false },
+  { product, onProductClick, _isStoreOpen = true, _isPopular = false, isVisualOnly = false },
   ref
 ) {
   const [imageError, setImageError] = useState(false);
@@ -63,8 +63,8 @@ const ProductCard = forwardRef(function ProductCard(
               )}
             </div>
 
-            {/* Botão + visível no rodapé quando não há foto */}
-            {!hasValidImage && (
+            {/* Botão + visível no rodapé quando não há foto e não é apenas visual */}
+            {!hasValidImage && !isVisualOnly && (
               <motion.button
                 type="button"
                 whileHover={{ scale: 1.12 }}
@@ -90,15 +90,17 @@ const ProductCard = forwardRef(function ProductCard(
             />
 
             {/* Botão flutuante + sobre a imagem */}
-            <motion.button
-              type="button"
-              whileHover={{ scale: 1.12 }}
-              whileTap={{ scale: 0.9 }}
-              className="absolute bottom-1.5 right-1.5 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-r from-red-600 to-red-500 group-hover:from-red-500 group-hover:to-amber-500 text-white flex items-center justify-center transition-all duration-300 shadow-md shadow-red-950/70 pointer-events-none"
-              aria-label="Adicionar produto"
-            >
-              <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[3]" />
-            </motion.button>
+            {!isVisualOnly && (
+              <motion.button
+                type="button"
+                whileHover={{ scale: 1.12 }}
+                whileTap={{ scale: 0.9 }}
+                className="absolute bottom-1.5 right-1.5 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-r from-red-600 to-red-500 group-hover:from-red-500 group-hover:to-amber-500 text-white flex items-center justify-center transition-all duration-300 shadow-md shadow-red-950/70 pointer-events-none"
+                aria-label="Adicionar produto"
+              >
+                <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[3]" />
+              </motion.button>
+            )}
           </div>
         )}
       </div>
