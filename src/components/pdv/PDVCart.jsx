@@ -1,12 +1,14 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { Trash2, Plus, Minus, ShoppingCart, CheckCircle, Printer, X, Users, User, Sparkles } from "lucide-react";
+import { Trash2, Plus, Minus, ShoppingCart, CheckCircle, Printer, X, Users, User, Sparkles, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import PDVClientSelectModal from "./PDVClientSelectModal";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { getActiveTenantId } from "@/entities/storage";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 export default function PDVCart({
   cart,
@@ -27,7 +29,34 @@ export default function PDVCart({
 }) {
   const [showClientModal, setShowClientModal] = useState(false);
   const [isSearchingPhone, setIsSearchingPhone] = useState(false);
+  const [hasAttemptedFinalize, setHasAttemptedFinalize] = useState(false);
   const itemCount = cart.reduce((sum, item) => sum + item.qty, 0);
+
+  const cleanPhone = (customerPhone || "").replace(/\D/g, "");
+  const trimmedName = (customerName || "").trim();
+  const isCustomerValid = trimmedName.length >= 2 && cleanPhone.length >= 10;
+
+  const handleFinalizeClick = () => {
+    if (cart.length === 0) {
+      toast.error("O carrinho está vazio.");
+      return;
+    }
+
+    if (!isCustomerValid) {
+      setHasAttemptedFinalize(true);
+      if (!trimmedName && cleanPhone.length < 10) {
+        toast.error("Informe o nome e o telefone do cliente (ou selecione um salvo) para finalizar.");
+      } else if (!trimmedName) {
+        toast.error("Informe o nome do cliente para finalizar.");
+      } else {
+        toast.error("Informe um telefone válido com DDD (mínimo 10 dígitos).");
+      }
+      return;
+    }
+
+    setHasAttemptedFinalize(false);
+    onFinalize();
+  };
 
   const formatPhone = (val) => {
     const raw = val.replace(/\D/g, "").slice(0, 11);
@@ -177,10 +206,16 @@ export default function PDVCart({
         <div className="space-y-1.5">
           <div className="relative">
             <Input
-              placeholder="Telefone: (00) 00000-0000"
+              placeholder="Telefone / WhatsApp *"
               value={customerPhone || ""}
-              onChange={handlePhoneChange}
-              className="h-8 text-xs bg-white rounded-lg pr-7 focus-visible:ring-[#047857]"
+              onChange={(e) => {
+                handlePhoneChange(e);
+                if (hasAttemptedFinalize) setHasAttemptedFinalize(false);
+              }}
+              className={cn(
+                "h-8 text-xs bg-white rounded-lg pr-7 focus-visible:ring-[#047857]",
+                hasAttemptedFinalize && cleanPhone.length < 10 && "border-rose-400 ring-1 ring-rose-400 bg-rose-50/30 placeholder:text-rose-400"
+              )}
             />
             {isSearchingPhone && (
               <div className="absolute right-2 top-1/2 -translate-y-1/2">
@@ -191,18 +226,38 @@ export default function PDVCart({
 
           <div>
             <Input
-              placeholder="Nome do Cliente (opcional)"
+              placeholder="Nome do Cliente *"
               value={customerName || ""}
-              onChange={(e) => onCustomerNameChange(e.target.value)}
-              className="h-8 text-xs bg-white rounded-lg"
+              onChange={(e) => {
+                onCustomerNameChange(e.target.value);
+                if (hasAttemptedFinalize) setHasAttemptedFinalize(false);
+              }}
+              className={cn(
+                "h-8 text-xs bg-white rounded-lg focus-visible:ring-[#047857]",
+                hasAttemptedFinalize && trimmedName.length < 2 && "border-rose-400 ring-1 ring-rose-400 bg-rose-50/30 placeholder:text-rose-400"
+              )}
             />
           </div>
         </div>
 
-        {customerName && customerPhone && (
+        {isCustomerValid ? (
           <div className="bg-emerald-50 text-emerald-800 text-[11px] font-semibold px-2 py-1 rounded-md border border-emerald-200 flex items-center gap-1">
             <Sparkles className="w-3 h-3 text-emerald-600 shrink-0" />
-            <span className="truncate">Vinculado: <b>{customerName}</b> ({customerPhone})</span>
+            <span className="truncate">Cliente: <b>{trimmedName}</b> ({customerPhone})</span>
+          </div>
+        ) : (
+          <div className={cn(
+            "text-[10.5px] rounded-md px-2 py-1 flex items-center gap-1.5 transition-colors",
+            hasAttemptedFinalize
+              ? "bg-rose-50 text-rose-700 border border-rose-200 font-semibold"
+              : "bg-amber-50/70 text-amber-700 border border-amber-200/70"
+          )}>
+            <AlertCircle className={cn("w-3.5 h-3.5 shrink-0", hasAttemptedFinalize ? "text-rose-500" : "text-amber-500")} />
+            <span className="leading-tight">
+              {hasAttemptedFinalize 
+                ? "Nome e telefone obrigatórios para finalizar." 
+                : "Informe nome e telefone (ou escolha em Salvos)."}
+            </span>
           </div>
         )}
       </div>
@@ -283,9 +338,14 @@ export default function PDVCart({
           </span>
         </div>
         <Button
-          onClick={onFinalize}
+          onClick={handleFinalizeClick}
           disabled={cart.length === 0}
-          className="w-full h-11 sm:h-12 text-sm sm:text-base font-bold bg-[#047857] hover:bg-[#065f46] text-white disabled:opacity-40 disabled:cursor-not-allowed shadow-md rounded-xl cursor-pointer"
+          className={cn(
+            "w-full h-11 sm:h-12 text-sm sm:text-base font-bold text-white shadow-md rounded-xl cursor-pointer transition-all active:scale-[0.99]",
+            !isCustomerValid && cart.length > 0
+              ? "bg-[#047857]/90 hover:bg-[#047857]"
+              : "bg-[#047857] hover:bg-[#065f46]"
+          )}
         >
           ✓ Finalizar Pedido
         </Button>

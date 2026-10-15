@@ -100,10 +100,41 @@ export default function PDVPage() {
   const total = cart.reduce((sum, item) => sum + (Number(item.price) || 0) * item.qty, 0);
   const totalItemsCount = cart.reduce((sum, item) => sum + item.qty, 0);
 
+  const handleOpenPayment = () => {
+    if (cart.length === 0) {
+      toast.error("O carrinho está vazio.");
+      return;
+    }
+
+    const trimmedName = customerName.trim();
+    const rawPhone = customerPhone.replace(/\D/g, "");
+
+    if (!trimmedName || rawPhone.length < 10) {
+      if (!trimmedName && rawPhone.length < 10) {
+        toast.error("Informe o nome e o telefone do cliente (ou selecione um cliente salvo) para continuar.");
+      } else if (!trimmedName) {
+        toast.error("Informe o nome do cliente para continuar.");
+      } else {
+        toast.error("Informe um telefone válido com DDD (mínimo 10 dígitos) para continuar.");
+      }
+      return;
+    }
+
+    setShowPayment(true);
+  };
+
   const handleFinalize = async (paymentMethod) => {
+    const trimmedName = customerName.trim();
+    const rawPhone = customerPhone.replace(/\D/g, "");
+
+    if (!trimmedName || rawPhone.length < 10) {
+      toast.error("Nome e telefone do cliente são obrigatórios no PDV.");
+      return;
+    }
+
     const orderData = {
-      customer_name: customerName.trim() || "Balcão",
-      customer_phone: customerPhone.trim() || "-",
+      customer_name: trimmedName,
+      customer_phone: customerPhone.trim(),
       customer_email: customerEmail.trim() || "",
       total_amount: total,
       status: "confirmado",
@@ -127,7 +158,7 @@ export default function PDVPage() {
 
     const zodValidation = validateSchema(orderSchema, {
       ...orderData,
-      customer_phone: orderData.customer_phone === "-" ? "00000000" : orderData.customer_phone,
+      customer_phone: orderData.customer_phone,
       order_type: "balcao",
       items: orderData.items.map(it => ({
         ...it,
@@ -141,12 +172,17 @@ export default function PDVPage() {
       console.warn("Aviso de validação Zod (PDV):", zodValidation.errorList);
     }
 
-    const created = await Order.create(orderData);
-    toast.success("Pedido finalizado com sucesso!");
-    setLastOrder(created);
-    clearCart();
-    setShowPayment(false);
-    setIsMobileCartOpen(false);
+    try {
+      const created = await Order.create(orderData);
+      toast.success("Pedido finalizado com sucesso!");
+      setLastOrder(created);
+      clearCart();
+      setShowPayment(false);
+      setIsMobileCartOpen(false);
+    } catch (err) {
+      console.error("Erro ao finalizar pedido no PDV:", err);
+      toast.error("Erro ao salvar pedido no PDV. Tente novamente.");
+    }
   };
 
   if (isLoading) {
@@ -218,7 +254,7 @@ export default function PDVPage() {
               onUpdateQty={updateQty}
               onRemoveItem={removeItem}
               onClearCart={clearCart}
-              onFinalize={() => setShowPayment(true)}
+              onFinalize={handleOpenPayment}
               total={total}
               lastOrder={lastOrder}
               onDismissSuccess={() => setLastOrder(null)}
@@ -241,7 +277,7 @@ export default function PDVPage() {
           onUpdateQty={updateQty}
           onRemoveItem={removeItem}
           onClearCart={clearCart}
-          onFinalize={() => setShowPayment(true)}
+          onFinalize={handleOpenPayment}
           total={total}
           lastOrder={lastOrder}
           onDismissSuccess={() => setLastOrder(null)}
@@ -252,6 +288,8 @@ export default function PDVPage() {
       {showPayment && (
         <PDVPaymentModal
           total={total}
+          customerName={customerName}
+          customerPhone={customerPhone}
           onConfirm={handleFinalize}
           onClose={() => setShowPayment(false)}
         />

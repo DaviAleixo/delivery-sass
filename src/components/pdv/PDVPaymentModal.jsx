@@ -30,7 +30,7 @@ const PAYMENT_METHODS = [
   },
 ];
 
-export default function PDVPaymentModal({ total, onConfirm, onClose }) {
+export default function PDVPaymentModal({ total, customerName, customerPhone, onConfirm, onClose }) {
   const [paymentMethod, setPaymentMethod] = useState(null);
   const [receivedAmount, setReceivedAmount] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -77,6 +77,13 @@ export default function PDVPaymentModal({ total, onConfirm, onClose }) {
         <div className="space-y-5">
           {/* Valor total destacado */}
           <div className="bg-gray-900 rounded-2xl p-5 text-center">
+            {customerName && (
+              <div className="inline-flex items-center gap-1.5 bg-gray-800/90 text-emerald-300 text-xs px-3 py-1 rounded-full mb-3 font-semibold border border-gray-700 max-w-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                <span className="truncate">{customerName}</span>
+                {customerPhone && <span className="text-gray-400 font-normal shrink-0">({customerPhone})</span>}
+              </div>
+            )}
             <p className="text-sm text-gray-400 mb-1">Valor a pagar</p>
             <p className="text-4xl font-bold text-white">
               R$ {total.toFixed(2).replace(".", ",")}
