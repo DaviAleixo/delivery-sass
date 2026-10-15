@@ -251,7 +251,7 @@ export default function ReportsPage() {
                 : "text-stone-600 hover:text-stone-900"
             }`}
           >
-            <TrendingUp className="w-4 h-4 text-rose-600" />
+            <TrendingUp className="w-4 h-4 text-[#047857]" />
             <span>📊 Vendas & Análise</span>
           </button>
           <button
@@ -277,7 +277,7 @@ export default function ReportsPage() {
         {activeTab === "sales" && (
           <div className="space-y-6">
             {/* Filtro de Período */}
-            <Card className="border-red-200 shadow-sm bg-white">
+            <Card className="border-stone-200 shadow-sm bg-white">
               <CardContent className="p-4 sm:p-5">
                 <div className="flex flex-wrap gap-4 items-end">
                   <div className="flex-1 min-w-[200px]">
@@ -285,7 +285,7 @@ export default function ReportsPage() {
                       Período de Análise
                     </Label>
                     <Select value={reportPeriod} onValueChange={setReportPeriod}>
-                      <SelectTrigger className="border-red-200 focus:border-red-600 rounded-xl mt-1 text-xs font-semibold">
+                      <SelectTrigger className="border-stone-200 focus:border-[#047857] rounded-xl mt-1 text-xs font-semibold">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="rounded-xl">
@@ -310,7 +310,7 @@ export default function ReportsPage() {
                           type="date"
                           value={customStartDate}
                           onChange={(e) => setCustomStartDate(e.target.value)}
-                          className="border-red-200 focus:border-red-600 rounded-xl mt-1 text-xs"
+                          className="border-stone-200 focus:border-[#047857] rounded-xl mt-1 text-xs"
                         />
                       </div>
                       <div>
@@ -322,7 +322,7 @@ export default function ReportsPage() {
                           type="date"
                           value={customEndDate}
                           onChange={(e) => setCustomEndDate(e.target.value)}
-                          className="border-red-200 focus:border-red-600 rounded-xl mt-1 text-xs"
+                          className="border-stone-200 focus:border-[#047857] rounded-xl mt-1 text-xs"
                         />
                       </div>
                     </>

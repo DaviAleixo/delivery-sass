@@ -75,7 +75,9 @@ export default function SettingsPage() {
     delivery_unlisted_policy: "block",
     delivery_fallback_fee: "10.00",
     free_delivery_threshold: "",
-    salon_mode: "full"
+    salon_mode: "full",
+    accepts_delivery: true,
+    accepts_takeaway: true
   });
 
   const [newNeighborhood, setNewNeighborhood] = useState({
@@ -192,6 +194,8 @@ export default function SettingsPage() {
             delivery_fallback_fee: tenantData.delivery_fallback_fee?.toString() || "10.00",
             free_delivery_threshold: tenantData.free_delivery_threshold?.toString() || "",
             salon_mode: tenantData.salon_mode || (tenantData.plan === "showcase" ? "showcase" : (tenantData.plan === "table" ? "table_only" : "full")),
+            accepts_delivery: tenantData.accepts_delivery !== false,
+            accepts_takeaway: tenantData.accepts_takeaway !== false,
           });
           setIsLoading(false);
           return;
@@ -228,7 +232,10 @@ export default function SettingsPage() {
             delivery_neighborhoods: [],
             delivery_unlisted_policy: "block",
             delivery_fallback_fee: "10.00",
-            free_delivery_threshold: ""
+            free_delivery_threshold: "",
+            salon_mode: "full",
+            accepts_delivery: true,
+            accepts_takeaway: true
           });
         }
       } else {
@@ -255,7 +262,10 @@ export default function SettingsPage() {
           delivery_neighborhoods: [],
           delivery_unlisted_policy: "block",
           delivery_fallback_fee: "10.00",
-          free_delivery_threshold: ""
+          free_delivery_threshold: "",
+          salon_mode: "full",
+          accepts_delivery: true,
+          accepts_takeaway: true
         });
       }
     } finally {
@@ -349,11 +359,11 @@ export default function SettingsPage() {
     if (file) {
       setIsUploadingLogo(true);
       try {
-        const { file_url } = await UploadFile({ file, maxDimension: 800 });
+        const currentTenantId = localStorage.getItem("current_tenant_id") || "global";
+        const { file_url } = await UploadFile({ file, maxDimension: 500, tenantId: currentTenantId });
         setSettings((prev) => ({ ...prev, restaurant_logo: file_url }));
 
-        const currentTenantId = localStorage.getItem("current_tenant_id");
-        if (isSupabaseConfigured() && supabase && currentTenantId) {
+        if (isSupabaseConfigured() && supabase && currentTenantId && currentTenantId !== "global") {
           await supabase
             .from("tenants")
             .update({ logo_url: file_url, updated_date: new Date().toISOString() })
@@ -780,7 +790,10 @@ export default function SettingsPage() {
         free_delivery_threshold: freeThresholdNum,
         delivery_fallback_fee: fallbackFeeNum,
         delivery_unlisted_policy: settings.delivery_unlisted_policy || "block",
-        delivery_neighborhoods: settings.delivery_neighborhoods || []
+        delivery_neighborhoods: settings.delivery_neighborhoods || [],
+        accepts_delivery: settings.accepts_delivery !== false,
+        accepts_takeaway: settings.accepts_takeaway !== false,
+        salon_mode: settings.salon_mode || "full"
       };
 
       const zodValidation = validateSchema(settingsSchema, validationPayload);
@@ -826,6 +839,8 @@ export default function SettingsPage() {
           delivery_fallback_fee: fallbackFeeNum,
           free_delivery_threshold: freeThresholdNum,
           salon_mode: settings.salon_mode || 'full',
+          accepts_delivery: settings.accepts_delivery !== false,
+          accepts_takeaway: settings.accepts_takeaway !== false,
           payment_methods: tenantDetails?.payment_methods || null,
         };
 

@@ -73,6 +73,8 @@ export default function SuperAdminPage() {
     slug: "",
     plan: "basic",
     custom_template: "default",
+    accepts_delivery: true,
+    accepts_takeaway: true,
     email: "",
     phone: "",
     cpf_cnpj: "",
@@ -89,6 +91,8 @@ export default function SuperAdminPage() {
     slug: "",
     plan: "basic",
     custom_template: "default",
+    accepts_delivery: true,
+    accepts_takeaway: true,
     logo_url: "",
     admin_username: "admin",
     admin_password: "",
@@ -358,6 +362,8 @@ export default function SuperAdminPage() {
                 subscription_status: "pending",
                 custom_template: newTenant.custom_template && newTenant.custom_template !== "default" ? newTenant.custom_template : null,
                 salon_mode: defaultSalonMode,
+                accepts_delivery: newTenant.accepts_delivery !== false,
+                accepts_takeaway: newTenant.accepts_takeaway !== false,
               })
               .eq("id", newTenantId);
           } else {
@@ -372,6 +378,8 @@ export default function SuperAdminPage() {
                 monthly_price: monthlyPrice,
                 custom_template: newTenant.custom_template && newTenant.custom_template !== "default" ? newTenant.custom_template : null,
                 salon_mode: defaultSalonMode,
+                accepts_delivery: newTenant.accepts_delivery !== false,
+                accepts_takeaway: newTenant.accepts_takeaway !== false,
               })
               .eq("id", newTenantId);
           }
@@ -495,6 +503,8 @@ export default function SuperAdminPage() {
       slug: tenant.slug || "",
       plan: tenant.plan || "basic",
       custom_template: tenant.custom_template || "default",
+      accepts_delivery: tenant.accepts_delivery !== false,
+      accepts_takeaway: tenant.accepts_takeaway !== false,
       logo_url: tenant.logo_url || "",
       admin_username: tenant.admin_username || "admin",
       admin_password: "",
@@ -533,11 +543,13 @@ export default function SuperAdminPage() {
           throw new Error(data.message || "Erro ao atualizar empresa.");
         }
 
-        // Atualização adicional direta para o custom_template (garantia de sincronismo)
+        // Atualização adicional direta para o custom_template e canais de atendimento (garantia de sincronismo)
         await supabase
           .from("tenants")
           .update({
             custom_template: editForm.custom_template === "default" ? null : editForm.custom_template,
+            accepts_delivery: editForm.accepts_delivery !== false,
+            accepts_takeaway: editForm.accepts_takeaway !== false,
           })
           .eq("id", editingTenant.id);
 
@@ -926,9 +938,15 @@ export default function SuperAdminPage() {
                             📱 Vitrine / Salão
                           </Badge>
                         ) : (
-                          <Badge className="bg-slate-800 border-slate-700 text-slate-300">
-                            🛵 Delivery Normal
-                          </Badge>
+                          <div className="flex flex-col gap-1 items-start">
+                            <Badge className="bg-slate-800 border-slate-700 text-slate-300">
+                              {t.accepts_delivery === false && t.accepts_takeaway !== false
+                                ? "🛍️ Só Retirada"
+                                : t.accepts_delivery !== false && t.accepts_takeaway === false
+                                ? "🛵 Só Delivery"
+                                : "🛵 Delivery & Retirada"}
+                            </Badge>
+                          </div>
                         )}
                       </td>
 
@@ -1057,6 +1075,28 @@ export default function SuperAdminPage() {
                       ? "Esta empresa está renderizando um layout exclusivo sob medida."
                       : "Renderizando o cardápio oficial de alta conversão. Você pode associar um template exclusivo a qualquer momento."}
                   </p>
+                </div>
+
+                {/* Canais de Atendimento */}
+                <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 flex items-center justify-between text-xs">
+                  <span className="text-slate-400 font-medium">Canais de Pedido:</span>
+                  <div className="flex items-center gap-1.5">
+                    {selectedTenantDrawer.accepts_delivery !== false && (
+                      <Badge className="bg-emerald-950/80 border-emerald-800 text-emerald-300 text-[10px]">
+                        🛵 Delivery
+                      </Badge>
+                    )}
+                    {selectedTenantDrawer.accepts_takeaway !== false && (
+                      <Badge className="bg-amber-950/80 border-amber-800 text-amber-300 text-[10px]">
+                        🛍️ Retirada
+                      </Badge>
+                    )}
+                    {selectedTenantDrawer.accepts_delivery === false && selectedTenantDrawer.accepts_takeaway === false && (
+                      <Badge className="bg-rose-950/80 border-rose-800 text-rose-300 text-[10px]">
+                        Nenhum canal ativo
+                      </Badge>
+                    )}
+                  </div>
                 </div>
 
                 {/* Botões de WhatsApp 1-Clique */}
@@ -1336,6 +1376,40 @@ export default function SuperAdminPage() {
                 </div>
               )}
 
+              {/* Canais de Atendimento Iniciais */}
+              <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-2.5">
+                <Label className="text-slate-300 text-xs font-bold uppercase tracking-wider block">
+                  Canais de Atendimento do Cardápio
+                </Label>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <label className="flex items-center gap-2 p-2.5 rounded-lg border border-slate-800 bg-slate-900/60 cursor-pointer hover:border-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={newTenant.accepts_delivery !== false}
+                      onChange={(e) => setNewTenant({ ...newTenant, accepts_delivery: e.target.checked })}
+                      className="accent-rose-500 h-4 w-4 rounded"
+                    />
+                    <div className="text-xs">
+                      <p className="font-bold text-white">🛵 Delivery</p>
+                      <p className="text-[10px] text-slate-400">Entrega no endereço</p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-2 p-2.5 rounded-lg border border-slate-800 bg-slate-900/60 cursor-pointer hover:border-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={newTenant.accepts_takeaway !== false}
+                      onChange={(e) => setNewTenant({ ...newTenant, accepts_takeaway: e.target.checked })}
+                      className="accent-rose-500 h-4 w-4 rounded"
+                    />
+                    <div className="text-xs">
+                      <p className="font-bold text-white">🛍️ Retirada</p>
+                      <p className="text-[10px] text-slate-400">Busca no balcão</p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
               {/* Bloco de Faturamento & Asaas */}
               <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-3">
                 <div className="flex items-center justify-between">
@@ -1570,6 +1644,40 @@ export default function SuperAdminPage() {
                     <span className="text-[11px] text-slate-400">Prévia do logo da empresa</span>
                   </div>
                 )}
+              </div>
+
+              {/* Canais de Atendimento */}
+              <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-2.5">
+                <Label className="text-slate-300 text-xs font-bold uppercase tracking-wider block">
+                  Canais de Atendimento do Cardápio
+                </Label>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <label className="flex items-center gap-2 p-2.5 rounded-lg border border-slate-800 bg-slate-900/60 cursor-pointer hover:border-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={editForm.accepts_delivery !== false}
+                      onChange={(e) => setEditForm({ ...editForm, accepts_delivery: e.target.checked })}
+                      className="accent-rose-500 h-4 w-4 rounded"
+                    />
+                    <div className="text-xs">
+                      <p className="font-bold text-white">🛵 Delivery</p>
+                      <p className="text-[10px] text-slate-400">Entrega no endereço</p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-2 p-2.5 rounded-lg border border-slate-800 bg-slate-900/60 cursor-pointer hover:border-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={editForm.accepts_takeaway !== false}
+                      onChange={(e) => setEditForm({ ...editForm, accepts_takeaway: e.target.checked })}
+                      className="accent-rose-500 h-4 w-4 rounded"
+                    />
+                    <div className="text-xs">
+                      <p className="font-bold text-white">🛍️ Retirada</p>
+                      <p className="text-[10px] text-slate-400">Busca no balcão</p>
+                    </div>
+                  </label>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-800/80">

@@ -25,6 +25,14 @@
 ### 🔔 5. Notificação Sonora Persistente na Cozinha
 * **Ideia**: No painel do restaurante (KDS), o alerta sonoro tocar em loop até que o atendente clique em "Aceitar Pedido", garantindo que nenhum pedido passe despercebido em horários de pico barulhentos.
 
+### 🛍️ 6. Canais de Atendimento Customizáveis (Delivery vs. Retirada no Balcão)
+* **Contexto**: Diversos estabelecimentos (ex: confeitarias, cozinhas artesanais, marmitarias de bairro, dark kitchens com retirada) operam estritamente com retirada no balcão, sem motoboys ou serviço de delivery próprio.
+* **Problema Atual**: O checkout exibe opções fixas (Delivery, Na Mesa, Retirada). Clientes remotos veem "Na Mesa" sem estar no restaurante, e clientes de lojas sem entrega são forçados a passar por opções de frete desnecessárias.
+* **Solução Proposta**:
+  1. **Configuração da Loja**: Toggles no painel (`accepts_delivery` e `accepts_takeaway`) permitindo ao lojista ativar/desativar cada modalidade.
+  2. **Regra de Mesa via QR Code**: "Na Mesa" é 100% omitida do fluxo de delivery normal. Só é ativada se o cliente entrar com `?mesa=X` (escaneando a plaquinha física na mesa) ou em planos exclusivos de salão.
+  3. **Checkout Adaptativo**: Se a loja só aceita Retirada, o modal de pedido já abre direto em Retirada, ocultando campos de endereço, CEP e taxa de entrega, gerando uma experiência de compra ultra rápida (15 segundos).
+
 ---
 
 ## 📝 Anotações Rápidas de Discussões Recentes
@@ -54,6 +62,17 @@
   - Servidor dedicado por ~R$ 30 a R$ 40/mês para rodar tanto o frontend quanto o backend Java/Spring Boot quando for lançado.
 
 ### 👑 8. Torre de Controle SuperAdmin de Alto Nível ("Estrutura Cabulosa")
+### 🎨 9. Arquitetura Visual: Clean Retail SaaS vs. Template VIP Vrumm
+* **Problema Identificado**: O tema atual "escuro com vermelho" (Dark & Red) é perfeito para a Vrumm Burguer, mas como padrão genérico de uma plataforma de delivery afasta clientes de outros nichos (sushi, docerias, padarias, açaí, marmitaria).
+* **Solução com o Multi-Template Engine (Modo A)**:
+  - **Preservação 100% da Vrumm**: O cardápio atual com paleta dark `#0d0a09`, vinho e detalhes vermelhos é encapsulado em `src/custom-menus/vrumm/VrummMenu.jsx` e registrado no `registry.js`. Zero alterações visuais ou funcionais na Vrumm.
+  - **Novo Cardápio Padrão da Plataforma (`Menu.jsx`)**: Desenvolvido na estética **Clean Retail** (inspirado em Toast POS, Shopify e Square):
+    - Fundo off-white suave (`#F8F9FA` / `#FAFAFA`) que destaca as fotos coloridas de qualquer culinária.
+    - Cards brancos com bordas milimétricas cinza (`#E5E7EB`), sem sombras pesadas ou clichês de IA (sem blur exagerado, sem neons roxos).
+    - Tipografia sólida em grafite carvão de alta legibilidade sob luz solar no celular.
+    - Botões de adicionar objetivos e alta conversão de checkout.
+  - **Roteamento Automático**: Restaurantes sem template customizado ou recém-criados abrem no Clean Retail; a rota `/vrumm` ou tenants com `custom_template: 'vrumm'` abrem no tema dark da Vrumm.
+
 * **Tabela Principal Minimalista**:
   - Apenas as colunas essenciais: `Restaurante`, `Link Público`, `Plano` e `Ações`.
   - Zero poluição visual na listagem inicial.
@@ -652,6 +671,13 @@
     - `[ ] Permitir que clientes enviem pedidos diretamente da mesa pelo QR Code`
     - Se ativado: ativa o carrinho de mesa e a tela de Pedidos com impressão.
     - Se desativado: vira cardápio 100% visual informativo.
+
+### 🏷️ 45. Branding & Naming Oficial do SaaS: PedeMuleke
+* **O Nome Escolhido**: **PedeMuleke** (trocadilho carismático, popular e memorável com *"Pede Muleke"* / *"Pé de moleque"*).
+* **Posicionamento**:
+  - Extremamente sonoro, divertido, direto ao ponto e que gruda na cabeça do consumidor e do lojista.
+  - Substitui o antigo codinome técnico `Delivery 1.0` por uma marca comercial autêntica, descontraída e pronta para tração, marketing e vendas.
+  - Slogan / Tagline sugerida: *"Bateu a fome? PedeMuleke!"* ou *"O delivery sem taxa abusiva que seu restaurante merece."*
 
 ---
 

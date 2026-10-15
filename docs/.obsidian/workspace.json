@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "01 - 🗺️ Roadmap & Backlog.md",
+                "file": "DOCUMENTATION.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "01 - 🗺️ Roadmap & Backlog"
+              "title": "DOCUMENTATION"
             }
           }
         ]
@@ -190,8 +190,8 @@
   },
   "active": "8539b039560b17ce",
   "lastOpenFiles": [
-    "02 - 💡 Ideias & Brainstorm.md",
     "01 - 🗺️ Roadmap & Backlog.md",
+    "02 - 💡 Ideias & Brainstorm.md",
     "03 - 🚀 Especificacao SaaS.md",
     "05 - 🖥️ Modulos do Sistema.md",
     "04 - 🗄️ Modelagem & Supabase.md",

@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS public.users (
 -- ========================= SETTINGS ==================================
 CREATE TABLE IF NOT EXISTS public.settings (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    restaurant_name     TEXT DEFAULT 'Delivery 1.0',
+    restaurant_name     TEXT DEFAULT 'PedeMuleke',
     restaurant_logo     TEXT,
     opening_time        TEXT DEFAULT '18:00',
     closing_time        TEXT DEFAULT '23:59',
@@ -494,7 +494,7 @@ INSERT INTO public.settings (
     phone, address, instagram, whatsapp, delivery_fee, min_order_value, open_days
 ) VALUES (
     'a1b2c3d4-e5f6-7890-abcd-111122223333',
-    'Delivery 1.0',
+    'PedeMuleke',
     NULL,
     '18:00',
     '23:59',

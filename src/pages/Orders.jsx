@@ -581,17 +581,17 @@ export default function OrdersPage() {
 
   if (isLoading && orders.length === 0) {
     return (
-      <div className="p-8 bg-gray-50 min-h-screen flex items-center justify-center">
+      <div className="p-8 bg-[#F7F9F8] min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Carregando pedidos...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#047857] mx-auto mb-4"></div>
+          <p className="text-stone-600">Carregando pedidos...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-4 md:p-8 bg-gray-50 min-h-screen">
+    <div className="p-4 md:p-8 bg-[#F7F9F8] min-h-screen">
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
@@ -800,7 +800,7 @@ export default function OrdersPage() {
                   onClick={() => setTimeFilter(p.id)}
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
                     isSelected
-                      ? "bg-red-600 text-white shadow-sm scale-102"
+                      ? "bg-[#047857] text-white shadow-sm scale-102"
                       : "bg-stone-100 text-stone-700 hover:bg-stone-200"
                   }`}
                 >

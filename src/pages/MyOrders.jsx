@@ -309,7 +309,7 @@ export default function MyOrdersPage() {
                     onChange={(e) => setPhoneSearch(e.target.value)}
                     className="bg-white max-w-xs h-9 text-sm"
                   />
-                  <Button type="submit" size="sm" disabled={isSearchingPhone} className="bg-red-600 hover:bg-red-700 text-white shrink-0 h-9">
+                  <Button type="submit" size="sm" disabled={isSearchingPhone} className="bg-[#047857] hover:bg-[#065f46] text-white shrink-0 h-9 font-bold">
                     {isSearchingPhone ? "Buscando..." : "Buscar"}
                   </Button>
                 </div>
@@ -326,7 +326,7 @@ export default function MyOrdersPage() {
               Você ainda não tem pedidos registrados neste aparelho ou número. Que tal pedir agora?
             </p>
             <Link to={createPageUrl("Menu")}>
-              <Button className="bg-red-600 hover:bg-red-700 text-white font-semibold px-6">
+              <Button className="bg-[#047857] hover:bg-[#065f46] text-white font-bold px-6">
                 Abrir Cardápio
               </Button>
             </Link>
@@ -337,7 +337,7 @@ export default function MyOrdersPage() {
             {activeOrders.length > 0 && (
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-red-600 animate-pulse" />
+                  <Sparkles className="w-5 h-5 text-[#047857] animate-pulse" />
                   <h2 className="text-lg sm:text-xl font-bold text-stone-900">Pedidos em Andamento</h2>
                 </div>
 
@@ -377,13 +377,13 @@ export default function MyOrdersPage() {
                           </div>
                         )}
 
-                        <Card className="border-red-100 shadow-lg overflow-hidden bg-white">
+                        <Card className="border-[#D1E9DF] shadow-lg overflow-hidden bg-white">
                           {/* Topo do Card */}
-                          <div className="bg-gradient-to-r from-red-600 to-amber-600 p-4 sm:p-5 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="bg-gradient-to-r from-[#064e3b] to-[#047857] p-4 sm:p-5 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                             <div>
-                              <span className="text-xs uppercase tracking-wider text-red-100 font-semibold">Status ao Vivo</span>
+                              <span className="text-xs uppercase tracking-wider text-emerald-100 font-semibold">Status ao Vivo</span>
                               <h3 className="text-lg font-bold">Pedido #{safeOrderId(order.id)}</h3>
-                              <p className="text-xs text-red-100 mt-0.5">
+                              <p className="text-xs text-emerald-100 mt-0.5">
                                 {safeFormatDate(order.created_date)}
                               </p>
                             </div>
@@ -409,7 +409,7 @@ export default function MyOrdersPage() {
                                   <div className="absolute top-1/2 left-0 right-0 h-1 bg-stone-200 -translate-y-1/2 z-0"></div>
                                   {/* Linha de progresso */}
                                   <div 
-                                    className="absolute top-1/2 left-0 h-1 bg-red-600 -translate-y-1/2 z-0 transition-all duration-500"
+                                    className="absolute top-1/2 left-0 h-1 bg-[#047857] -translate-y-1/2 z-0 transition-all duration-500"
                                     style={{ width: `${(Math.max(0, currentStep) / (getOrderSteps(order.order_type).length - 1)) * 100}%` }}
                                   ></div>
 
@@ -422,7 +422,7 @@ export default function MyOrdersPage() {
                                       <div key={step.status} className="relative z-10 flex flex-col items-center">
                                         <div className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300 ${
                                           isPassed 
-                                            ? 'bg-red-600 text-white shadow-md ring-4 ring-red-100' 
+                                            ? 'bg-[#047857] text-white shadow-md ring-4 ring-[#D1E9DF]' 
                                             : 'bg-stone-200 text-stone-400'
                                         } ${isCurrent ? 'scale-110 animate-bounce' : ''}`}>
                                           <StepIcon className="w-4 h-4" />
@@ -507,7 +507,7 @@ export default function MyOrdersPage() {
                             {/* Totais */}
                             <div className="flex justify-between items-center">
                               <span className="text-sm font-semibold text-stone-600">Total Pago</span>
-                              <span className="text-2xl font-extrabold text-red-600">
+                              <span className="text-2xl font-extrabold text-[#171717]">
                                 R$ {safeFormatCurrency(order.total_amount || order.total)}
                               </span>
                             </div>

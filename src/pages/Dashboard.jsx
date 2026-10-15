@@ -94,17 +94,17 @@ export default function DashboardPage() {
 
   if (isLoading) {
     return (
-      <div className="p-8 bg-gray-50 min-h-screen flex items-center justify-center">
+      <div className="p-8 bg-[#F7F9F8] min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Carregando painel...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#047857] mx-auto mb-4"></div>
+          <p className="text-stone-600">Carregando painel...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-8 bg-gray-50 min-h-screen">
+    <div className="p-8 bg-[#F7F9F8] min-h-screen">
       {/* Audio de notificação - oculto */}
       <audio ref={audioRef} preload="auto">
         <source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" type="audio/mpeg" />
@@ -231,7 +231,7 @@ export default function DashboardPage() {
           <Card className="border-0 shadow-md">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle>Produtos Mais Vendidos</CardTitle>
-              <Badge variant="outline" className="text-xs bg-red-50 text-red-700 border-red-200">
+              <Badge variant="outline" className="text-xs bg-[#D1E9DF]/40 text-[#047857] border-[#D1E9DF] font-bold">
                 Top Vendas
               </Badge>
             </CardHeader>
@@ -279,7 +279,7 @@ export default function DashboardPage() {
                             <p className="text-xs text-gray-500 capitalize">
                               {getCategoryNameById(product.category || product.category_id)}
                               {product.salesCount > 0 && (
-                                <span className="ml-2 font-bold text-red-600">• {product.salesCount} vendidos</span>
+                                <span className="ml-2 font-bold text-[#047857]">• {product.salesCount} vendidos</span>
                               )}
                             </p>
                           </div>

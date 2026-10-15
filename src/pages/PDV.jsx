@@ -151,9 +151,9 @@ export default function PDVPage() {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-gray-100">
+      <div className="flex h-screen items-center justify-center bg-[#F7F9F8]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#047857] mx-auto mb-4"></div>
           <p className="text-gray-600 font-medium">Carregando PDV...</p>
         </div>
       </div>
@@ -161,7 +161,7 @@ export default function PDVPage() {
   }
 
   return (
-    <div className="relative flex flex-col lg:flex-row h-full min-h-0 min-w-0 bg-gray-100 overflow-hidden w-full">
+    <div className="relative flex flex-col lg:flex-row h-full min-h-0 min-w-0 bg-[#F7F9F8] overflow-hidden w-full">
       {/* Grade de Produtos */}
       <div className="flex-1 overflow-hidden flex flex-col min-h-0 min-w-0">
         <PDVProductGrid
@@ -177,7 +177,7 @@ export default function PDVPage() {
       {cart.length > 0 && !isMobileCartOpen && (
         <div className="lg:hidden absolute bottom-3 left-3 right-3 z-20 bg-gray-900 text-white rounded-2xl p-3 shadow-2xl flex items-center justify-between border border-gray-800 animate-in fade-in slide-in-from-bottom-2">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-red-600 flex items-center justify-center font-black text-sm text-white">
+            <div className="w-10 h-10 rounded-xl bg-[#047857] flex items-center justify-center font-black text-sm text-white">
               {totalItemsCount}
             </div>
             <div>
@@ -189,7 +189,7 @@ export default function PDVPage() {
           </div>
           <Button
             onClick={() => setIsMobileCartOpen(true)}
-            className="bg-red-600 hover:bg-red-700 text-white font-bold h-10 px-4 rounded-xl gap-1.5 shadow-md cursor-pointer"
+            className="bg-[#047857] hover:bg-[#065f46] text-white font-bold h-10 px-4 rounded-xl gap-1.5 shadow-md cursor-pointer"
           >
             <span>Ver Carrinho</span>
             <ArrowRight className="w-4 h-4" />

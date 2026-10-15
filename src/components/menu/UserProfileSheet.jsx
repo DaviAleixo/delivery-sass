@@ -29,7 +29,7 @@ import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
-function AddressForm({ address, onSave, onCancel }) {
+function AddressForm({ address, onSave, onCancel, dark = false }) {
   const [formData, setFormData] = useState(
     address || { name: "", cep: "", street: "", number: "", complement: "", neighborhood: "", city: "", state: "" }
   );
@@ -72,96 +72,146 @@ function AddressForm({ address, onSave, onCancel }) {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4 p-4 bg-stone-900/90 rounded-2xl border border-stone-800 text-stone-100">
-      <h4 className="font-bold text-base text-white">{address ? 'Editar Endereço' : 'Novo Endereço'}</h4>
+    <form onSubmit={handleSubmit} className={`space-y-4 p-4.5 rounded-2xl border transition-all ${
+      dark 
+        ? "bg-stone-900/90 border-stone-800 text-stone-100" 
+        : "bg-[#F7F9F8] border-[#E5EAE7] text-[#171717] shadow-xs"
+    }`}>
+      <h4 className={`font-black text-base ${dark ? "text-white" : "text-[#171717]"}`}>
+        {address ? 'Editar Endereço' : 'Novo Endereço'}
+      </h4>
       
       <div className="space-y-3">
         <div>
-          <Label htmlFor="name" className="text-xs font-bold uppercase text-stone-400">Identificação do endereço</Label>
+          <Label htmlFor="name" className={`text-xs font-bold uppercase tracking-wider ${dark ? "text-stone-400" : "text-stone-600"}`}>
+            Identificação do endereço
+          </Label>
           <Input 
             id="name" 
             value={formData.name} 
             onChange={handleInputChange} 
             placeholder="Ex: Casa, Trabalho"
             required 
-            className="mt-1 bg-stone-950 border-stone-800 text-white placeholder:text-stone-500 rounded-xl"
+            className={`mt-1 rounded-xl text-sm ${
+              dark 
+                ? "bg-stone-950 border-stone-800 text-white placeholder:text-stone-500" 
+                : "bg-white border-stone-200 text-[#171717] placeholder:text-stone-400 focus-visible:ring-[#047857]"
+            }`}
           />
         </div>
         
         <div>
-          <Label htmlFor="cep" className="text-xs font-bold uppercase text-stone-400">CEP</Label>
+          <Label htmlFor="cep" className={`text-xs font-bold uppercase tracking-wider ${dark ? "text-stone-400" : "text-stone-600"}`}>
+            CEP
+          </Label>
           <Input 
             id="cep" 
             value={formData.cep} 
             onChange={handleCepChange} 
             placeholder="00000-000"
             required 
-            className="mt-1 bg-stone-950 border-stone-800 text-white placeholder:text-stone-500 rounded-xl"
+            className={`mt-1 rounded-xl text-sm ${
+              dark 
+                ? "bg-stone-950 border-stone-800 text-white placeholder:text-stone-500" 
+                : "bg-white border-stone-200 text-[#171717] placeholder:text-stone-400 focus-visible:ring-[#047857]"
+            }`}
           />
         </div>
         
         <div>
-          <Label htmlFor="street" className="text-xs font-bold uppercase text-stone-400">Rua / Logradouro</Label>
+          <Label htmlFor="street" className={`text-xs font-bold uppercase tracking-wider ${dark ? "text-stone-400" : "text-stone-600"}`}>
+            Rua / Logradouro
+          </Label>
           <Input 
             id="street" 
             value={formData.street} 
             onChange={handleInputChange} 
             required 
             disabled={isFetchingCep} 
-            className="mt-1 bg-stone-950 border-stone-800 text-white placeholder:text-stone-500 rounded-xl"
+            className={`mt-1 rounded-xl text-sm ${
+              dark 
+                ? "bg-stone-950 border-stone-800 text-white placeholder:text-stone-500" 
+                : "bg-white border-stone-200 text-[#171717] placeholder:text-stone-400 focus-visible:ring-[#047857]"
+            }`}
           />
         </div>
         
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <Label htmlFor="number" className="text-xs font-bold uppercase text-stone-400">Número</Label>
+            <Label htmlFor="number" className={`text-xs font-bold uppercase tracking-wider ${dark ? "text-stone-400" : "text-stone-600"}`}>
+              Número
+            </Label>
             <Input 
               id="number" 
               value={formData.number} 
               onChange={handleInputChange} 
               placeholder="123"
               required 
-              className="mt-1 bg-stone-950 border-stone-800 text-white placeholder:text-stone-500 rounded-xl"
+              className={`mt-1 rounded-xl text-sm ${
+                dark 
+                  ? "bg-stone-950 border-stone-800 text-white placeholder:text-stone-500" 
+                  : "bg-white border-stone-200 text-[#171717] placeholder:text-stone-400 focus-visible:ring-[#047857]"
+              }`}
             />
           </div>
           <div>
-            <Label htmlFor="complement" className="text-xs font-bold uppercase text-stone-400">Complemento</Label>
+            <Label htmlFor="complement" className={`text-xs font-bold uppercase tracking-wider ${dark ? "text-stone-400" : "text-stone-600"}`}>
+              Complemento
+            </Label>
             <Input 
               id="complement" 
               value={formData.complement} 
               onChange={handleInputChange} 
               placeholder="Apto 45"
-              className="mt-1 bg-stone-950 border-stone-800 text-white placeholder:text-stone-500 rounded-xl"
+              className={`mt-1 rounded-xl text-sm ${
+                dark 
+                  ? "bg-stone-950 border-stone-800 text-white placeholder:text-stone-500" 
+                  : "bg-white border-stone-200 text-[#171717] placeholder:text-stone-400 focus-visible:ring-[#047857]"
+              }`}
             />
           </div>
         </div>
         
         <div>
-          <Label htmlFor="neighborhood" className="text-xs font-bold uppercase text-stone-400">Bairro</Label>
+          <Label htmlFor="neighborhood" className={`text-xs font-bold uppercase tracking-wider ${dark ? "text-stone-400" : "text-stone-600"}`}>
+            Bairro
+          </Label>
           <Input 
             id="neighborhood" 
             value={formData.neighborhood} 
             onChange={handleInputChange} 
             required 
             disabled={isFetchingCep} 
-            className="mt-1 bg-stone-950 border-stone-800 text-white placeholder:text-stone-500 rounded-xl"
+            className={`mt-1 rounded-xl text-sm ${
+              dark 
+                ? "bg-stone-950 border-stone-800 text-white placeholder:text-stone-500" 
+                : "bg-white border-stone-200 text-[#171717] placeholder:text-stone-400 focus-visible:ring-[#047857]"
+            }`}
           />
         </div>
         
         <div className="grid grid-cols-3 gap-3">
           <div className="col-span-2">
-            <Label htmlFor="city" className="text-xs font-bold uppercase text-stone-400">Cidade</Label>
+            <Label htmlFor="city" className={`text-xs font-bold uppercase tracking-wider ${dark ? "text-stone-400" : "text-stone-600"}`}>
+              Cidade
+            </Label>
             <Input 
               id="city" 
               value={formData.city} 
               onChange={handleInputChange} 
               required 
               disabled={isFetchingCep} 
-              className="mt-1 bg-stone-950 border-stone-800 text-white placeholder:text-stone-500 rounded-xl"
+              className={`mt-1 rounded-xl text-sm ${
+                dark 
+                  ? "bg-stone-950 border-stone-800 text-white placeholder:text-stone-500" 
+                  : "bg-white border-stone-200 text-[#171717] placeholder:text-stone-400 focus-visible:ring-[#047857]"
+              }`}
             />
           </div>
           <div>
-            <Label htmlFor="state" className="text-xs font-bold uppercase text-stone-400">UF</Label>
+            <Label htmlFor="state" className={`text-xs font-bold uppercase tracking-wider ${dark ? "text-stone-400" : "text-stone-600"}`}>
+              UF
+            </Label>
             <Input 
               id="state" 
               value={formData.state} 
@@ -170,7 +220,11 @@ function AddressForm({ address, onSave, onCancel }) {
               placeholder="MG"
               required 
               disabled={isFetchingCep} 
-              className="mt-1 bg-stone-950 border-stone-800 text-white placeholder:text-stone-500 rounded-xl uppercase"
+              className={`mt-1 rounded-xl uppercase text-sm ${
+                dark 
+                  ? "bg-stone-950 border-stone-800 text-white placeholder:text-stone-500" 
+                  : "bg-white border-stone-200 text-[#171717] placeholder:text-stone-400 focus-visible:ring-[#047857]"
+              }`}
             />
           </div>
         </div>
@@ -181,13 +235,21 @@ function AddressForm({ address, onSave, onCancel }) {
           type="button" 
           variant="outline" 
           onClick={onCancel} 
-          className="rounded-xl bg-stone-950 border-stone-800 text-stone-300 hover:bg-stone-800"
+          className={`rounded-xl text-xs font-bold ${
+            dark 
+              ? "bg-stone-950 border-stone-800 text-stone-300 hover:bg-stone-800" 
+              : "bg-white border-stone-200 text-stone-700 hover:bg-stone-100"
+          }`}
         >
           Cancelar
         </Button>
         <Button 
           type="submit" 
-          className="bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold"
+          className={`rounded-xl text-xs font-bold ${
+            dark 
+              ? "bg-red-600 hover:bg-red-500 text-white" 
+              : "bg-[#047857] hover:bg-[#065f46] text-white shadow-sm"
+          }`}
         >
           Salvar endereço
         </Button>
@@ -196,7 +258,7 @@ function AddressForm({ address, onSave, onCancel }) {
   );
 }
 
-export default function UserProfileSheet() {
+export default function UserProfileSheet({ dark = false }) {
   const [user, setUser] = useState(null);
   const [addresses, setAddresses] = useState([]);
   const [availableCoupons, setAvailableCoupons] = useState([]);
@@ -463,28 +525,56 @@ export default function UserProfileSheet() {
         <Button 
           variant="ghost" 
           size="icon" 
-          className="text-stone-300 hover:text-white hover:bg-stone-800/80 rounded-full h-9 w-9 cursor-pointer transition-colors"
+          className={`rounded-full h-9 w-9 cursor-pointer transition-colors ${
+            dark 
+              ? "text-stone-300 hover:text-white hover:bg-stone-800/80" 
+              : "text-[#171717] hover:text-[#047857] hover:bg-[#D1E9DF]/40"
+          }`}
           title="Meu Perfil"
         >
-          <UserIcon className="w-4 h-4 text-stone-300" />
+          <UserIcon className="w-4 h-4" />
         </Button>
       </SheetTrigger>
-      <SheetContent className="overflow-y-auto bg-[#14100e] text-stone-100 border-l border-stone-800 p-6 scrollbar-hide">
-        <SheetHeader className="pb-3 border-b border-stone-800">
-          <SheetTitle 
-            className="text-xl sm:text-2xl font-black text-white"
-            style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
-          >
-            {user ? "Meu Perfil" : "Acessar Conta"}
-          </SheetTitle>
+      <SheetContent className={`overflow-y-auto p-6 scrollbar-hide ${
+        dark 
+          ? "bg-[#14100e] text-stone-100 border-l border-stone-800" 
+          : "bg-white text-[#171717] border-l border-[#E5EAE7]"
+      }`}>
+        <SheetHeader className={`pb-3.5 border-b ${dark ? "border-stone-800" : "border-[#E5EAE7]"}`}>
+          <div className="flex items-center justify-between pr-8">
+            <SheetTitle 
+              className={`text-xl sm:text-2xl font-black ${dark ? "text-white" : "text-[#171717]"}`}
+              style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
+            >
+              {user ? "Meu Perfil" : "Acessar Conta"}
+            </SheetTitle>
+            {user && (
+              <span className={`inline-flex items-center gap-1.5 text-[11px] font-black px-2.5 py-0.5 rounded-full border ${
+                dark 
+                  ? "bg-emerald-950/60 border-emerald-500/40 text-emerald-400" 
+                  : "bg-[#D1E9DF]/70 border-[#D1E9DF] text-[#047857]"
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${dark ? "bg-emerald-400" : "bg-[#047857]"}`} />
+                Conectado
+              </span>
+            )}
+          </div>
         </SheetHeader>
 
         <div className="py-6">
           {user ? (
             <div className="space-y-6">
               {/* Card do Usuário Logado */}
-              <div className="flex items-center gap-4 bg-stone-900/90 p-4 rounded-2xl border border-stone-800 shadow-md">
-                <div className="w-12 h-12 bg-red-950/80 border border-red-500/40 text-red-400 rounded-2xl flex items-center justify-center font-black text-xl shadow-inner shrink-0">
+              <div className={`p-4.5 rounded-3xl border transition-all flex items-center gap-4 ${
+                dark 
+                  ? "bg-stone-900/90 border-stone-800 shadow-md" 
+                  : "bg-gradient-to-br from-[#F7F9F8] to-[#EBF3EF] border-[#D1E9DF] shadow-2xs"
+              }`}>
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-2xl shrink-0 ${
+                  dark 
+                    ? "bg-red-950/80 border border-red-500/40 text-red-400 shadow-inner" 
+                    : "bg-[#047857] text-white shadow-md shadow-[#047857]/20 ring-4 ring-white"
+                }`}>
                   {user.full_name?.charAt(0)?.toUpperCase() || "C"}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -496,13 +586,21 @@ export default function UserProfileSheet() {
                           onChange={(e) => setNewName(e.target.value)}
                           placeholder="Seu nome"
                           autoFocus
-                          className="h-8 text-sm bg-stone-950 border-stone-700 text-white rounded-xl px-2.5"
+                          className={`h-8 text-sm rounded-xl px-2.5 ${
+                            dark 
+                              ? "bg-stone-950 border-stone-700 text-white" 
+                              : "bg-white border-stone-200 text-[#171717] focus-visible:ring-[#047857]"
+                          }`}
                         />
                         <Button
                           type="submit"
                           size="sm"
                           disabled={isSavingName}
-                          className="h-8 px-2.5 bg-red-600 hover:bg-red-500 text-white rounded-xl shrink-0"
+                          className={`h-8 px-2.5 rounded-xl shrink-0 cursor-pointer ${
+                            dark 
+                              ? "bg-red-600 hover:bg-red-500 text-white" 
+                              : "bg-[#047857] hover:bg-[#065f46] text-white shadow-2xs"
+                          }`}
                           title="Salvar nome"
                         >
                           {isSavingName ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
@@ -512,7 +610,9 @@ export default function UserProfileSheet() {
                           variant="ghost"
                           size="sm"
                           onClick={() => setIsEditingName(false)}
-                          className="h-8 px-2 text-stone-400 hover:text-white rounded-xl shrink-0"
+                          className={`h-8 px-2 rounded-xl shrink-0 cursor-pointer ${
+                            dark ? "text-stone-400 hover:text-white" : "text-stone-400 hover:text-stone-700"
+                          }`}
                           title="Cancelar"
                         >
                           <X className="w-3.5 h-3.5" />
@@ -521,8 +621,10 @@ export default function UserProfileSheet() {
                     </form>
                   ) : (
                     <div>
-                      <div className="flex items-center gap-2">
-                        <p className="font-extrabold text-white text-base truncate">{user.full_name || "Cliente"}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className={`font-black text-lg leading-tight truncate ${dark ? "text-white" : "text-[#171717]"}`}>
+                          {user.full_name || "Cliente"}
+                        </p>
                         <button
                           type="button"
                           onClick={() => {
@@ -530,13 +632,21 @@ export default function UserProfileSheet() {
                             setIsEditingName(true);
                           }}
                           title="Alterar nome"
-                          className="p-1 text-stone-400 hover:text-red-400 rounded-md transition-colors"
+                          className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                            dark 
+                              ? "text-stone-400 hover:text-red-400" 
+                              : "text-stone-400 hover:text-[#047857] hover:bg-[#D1E9DF]/40"
+                          }`}
                         >
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
                       </div>
-                      <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-bold mt-0.5">
-                        <PhoneCall className="w-3.5 h-3.5" />
+                      <div className={`inline-flex items-center gap-1.5 text-xs font-bold mt-1.5 px-2.5 py-0.5 rounded-full ${
+                        dark 
+                          ? "text-emerald-400 bg-stone-950/80 border border-stone-800" 
+                          : "text-[#047857] bg-white/90 border border-[#D1E9DF] shadow-2xs"
+                      }`}>
+                        <PhoneCall className="w-3 h-3" />
                         <span>{user.phone || "WhatsApp Conectado"}</span>
                       </div>
                     </div>
@@ -544,39 +654,80 @@ export default function UserProfileSheet() {
                 </div>
               </div>
 
-              <Separator className="bg-stone-800" />
+              <Separator className={dark ? "bg-stone-800" : "bg-stone-100"} />
 
               {/* Seção de Endereços */}
               <div>
                 <div className="flex justify-between items-center mb-3">
-                  <h3 className="font-black text-sm text-stone-200 uppercase tracking-wider">Meus Endereços</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className={`font-black text-xs uppercase tracking-wider ${dark ? "text-stone-300" : "text-stone-600"}`}>
+                      Meus Endereços
+                    </h3>
+                    {addresses.length > 0 && (
+                      <span className={`text-[11px] font-bold px-2 py-0.2 rounded-full ${
+                        dark ? "bg-stone-800 text-stone-300" : "bg-[#D1E9DF]/60 text-[#047857]"
+                      }`}>
+                        {addresses.length}
+                      </span>
+                    )}
+                  </div>
                   <Button 
                     variant="outline" 
                     size="sm" 
                     onClick={() => { setIsEditingAddress(null); setShowAddressForm(true); }}
-                    className="rounded-xl bg-stone-900 border-stone-800 text-stone-200 hover:bg-stone-800 text-xs font-bold"
+                    className={`rounded-xl text-xs font-bold gap-1 cursor-pointer transition-all ${
+                      dark 
+                        ? "bg-stone-900 border-stone-800 text-stone-200 hover:bg-stone-800" 
+                        : "bg-[#047857] hover:bg-[#065f46] text-white border-transparent shadow-xs"
+                    }`}
                   >
-                    <Plus className="w-3.5 h-3.5 mr-1" />
+                    <Plus className="w-3.5 h-3.5" />
                     Adicionar
                   </Button>
                 </div>
 
                 {showAddressForm && (
-                  <AddressForm 
-                    address={isEditingAddress}
-                    onSave={handleSaveAddress}
-                    onCancel={() => { setShowAddressForm(false); setIsEditingAddress(null); }}
-                  />
+                  <div className="mb-3">
+                    <AddressForm 
+                      address={isEditingAddress}
+                      dark={dark}
+                      onSave={handleSaveAddress}
+                      onCancel={() => { setShowAddressForm(false); setIsEditingAddress(null); }}
+                    />
+                  </div>
                 )}
 
-                <div className="space-y-2.5 mt-3">
+                <div className="space-y-2.5">
+                  {addresses.length === 0 && !showAddressForm && (
+                    <div className={`p-6 border border-dashed rounded-2xl text-center ${
+                      dark ? "border-stone-800 bg-stone-900/40 text-stone-400" : "border-stone-200 bg-[#F7F9F8] text-stone-500"
+                    }`}>
+                      <MapPin className="w-6 h-6 mx-auto mb-1.5 opacity-40 text-stone-400" />
+                      <p className="text-xs font-bold">Nenhum endereço cadastrado</p>
+                      <p className="text-[11px] text-stone-400 mt-0.5">Toque em Adicionar para salvar seu endereço.</p>
+                    </div>
+                  )}
+
                   {addresses.map(addr => (
-                    <div key={addr.id} className="p-3.5 bg-stone-900/80 border border-stone-800 rounded-2xl flex justify-between items-start">
-                      <div className="flex gap-3">
-                        <MapPin className="w-4 h-4 text-red-500 mt-1 flex-shrink-0" />
-                        <div>
-                          <p className="font-bold text-sm text-white">{addr.name}</p>
-                          <p className="text-xs text-stone-400 mt-0.5">
+                    <div 
+                      key={addr.id} 
+                      className={`p-3.5 rounded-2xl border transition-all flex justify-between items-start gap-3 ${
+                        dark 
+                          ? "bg-stone-900/80 border-stone-800" 
+                          : "bg-white border-stone-200 hover:border-[#D1E9DF] shadow-2xs hover:shadow-xs"
+                      }`}
+                    >
+                      <div className="flex gap-3 min-w-0">
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
+                          dark ? "bg-stone-800 text-red-400" : "bg-[#D1E9DF]/60 text-[#047857]"
+                        }`}>
+                          <MapPin className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className={`font-black text-sm truncate ${dark ? "text-white" : "text-[#171717]"}`}>
+                            {addr.name}
+                          </p>
+                          <p className={`text-xs mt-0.5 leading-relaxed line-clamp-2 ${dark ? "text-stone-400" : "text-stone-500"}`}>
                             {`${addr.street}, ${addr.number}${addr.complement ? ` (${addr.complement})` : ''} - ${addr.neighborhood}, ${addr.city}`}
                           </p>
                         </div>
@@ -585,16 +736,26 @@ export default function UserProfileSheet() {
                         <Button 
                           variant="ghost" 
                           size="icon" 
-                          className="w-7 h-7 text-stone-400 hover:text-white" 
+                          className={`w-7 h-7 rounded-lg cursor-pointer transition-colors ${
+                            dark 
+                              ? "text-stone-400 hover:text-white hover:bg-stone-800" 
+                              : "text-stone-400 hover:text-[#047857] hover:bg-[#D1E9DF]/40"
+                          }`}
                           onClick={() => { setIsEditingAddress(addr); setShowAddressForm(true); }}
+                          title="Editar endereço"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </Button>
                         <Button 
                           variant="ghost" 
                           size="icon" 
-                          className="w-7 h-7 text-stone-400 hover:text-red-400" 
+                          className={`w-7 h-7 rounded-lg cursor-pointer transition-colors ${
+                            dark 
+                              ? "text-stone-400 hover:text-rose-400 hover:bg-rose-950/30" 
+                              : "text-stone-400 hover:text-rose-600 hover:bg-rose-50"
+                          }`}
                           onClick={() => handleDeleteAddress(addr.id)}
+                          title="Excluir endereço"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
@@ -604,21 +765,37 @@ export default function UserProfileSheet() {
                 </div>
               </div>
 
-              <Separator className="bg-stone-800" />
+              <Separator className={dark ? "bg-stone-800" : "bg-stone-100"} />
 
               {/* Botão Meus Pedidos */}
               <Link to={createPageUrl("MyOrders")} className="block">
-                <Button className="w-full bg-stone-900 hover:bg-stone-800 border border-stone-800 text-white font-bold rounded-2xl h-11">
-                  <ShoppingBag className="w-4 h-4 mr-2 text-red-500" />
-                  Ver Histórico de Pedidos
+                <Button className={`w-full font-black rounded-2xl h-12 shadow-sm flex items-center justify-center gap-2.5 transition-all active:scale-[0.99] cursor-pointer ${
+                  dark 
+                    ? "bg-stone-900 hover:bg-stone-800 border border-stone-800 text-white" 
+                    : "bg-[#171717] hover:bg-black text-white shadow-md shadow-stone-900/10"
+                }`}>
+                  <ShoppingBag className={`w-4 h-4 ${dark ? "text-red-500" : "text-[#D1E9DF]"}`} />
+                  <span>Ver Histórico de Pedidos</span>
                 </Button>
               </Link>
 
-              <Separator className="bg-stone-800" />
+              <Separator className={dark ? "bg-stone-800" : "bg-stone-100"} />
 
               {/* Cupons Disponíveis */}
               <div>
-                <h3 className="font-black text-sm text-stone-200 uppercase tracking-wider mb-3">Cupons Disponíveis</h3>
+                <div className="flex items-center gap-2 mb-3">
+                  <h3 className={`font-black text-xs uppercase tracking-wider ${dark ? "text-stone-300" : "text-stone-600"}`}>
+                    Cupons Disponíveis
+                  </h3>
+                  {availableCoupons.length > 0 && (
+                    <span className={`text-[11px] font-bold px-2 py-0.2 rounded-full ${
+                      dark ? "bg-stone-800 text-stone-300" : "bg-[#D1E9DF]/60 text-[#047857]"
+                    }`}>
+                      {availableCoupons.length}
+                    </span>
+                  )}
+                </div>
+
                 {availableCoupons.length > 0 ? (
                   <div className="space-y-3">
                     {availableCoupons.map(coupon => {
@@ -637,46 +814,67 @@ export default function UserProfileSheet() {
                       return (
                         <div 
                           key={coupon.id} 
-                          className={`p-3.5 border border-dashed rounded-2xl transition-all ${
-                            canUse 
-                              ? 'border-red-500/50 bg-stone-900/90' 
-                              : 'border-stone-800 bg-stone-950 opacity-60'
+                          className={`p-3.5 border-2 border-dashed rounded-2xl transition-all ${
+                            dark
+                              ? (canUse ? 'border-red-500/50 bg-stone-900/90' : 'border-stone-800 bg-stone-950 opacity-60')
+                              : (canUse 
+                                  ? 'border-[#D1E9DF] hover:border-[#047857] bg-gradient-to-br from-white to-[#F7F9F8] shadow-2xs hover:shadow-xs' 
+                                  : 'border-stone-200 bg-stone-50 opacity-60')
                           }`}
                         >
                           <div className="flex justify-between items-start gap-3">
-                            <div className="flex items-start gap-3 flex-1">
-                              <Ticket className={`w-5 h-5 mt-0.5 ${canUse ? 'text-red-500' : 'text-stone-500'}`} />
+                            <div className="flex items-start gap-3 flex-1 min-w-0">
+                              <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
+                                dark ? "bg-stone-800 text-red-400" : "bg-[#D1E9DF]/60 text-[#047857]"
+                              }`}>
+                                <Ticket className="w-4 h-4" />
+                              </div>
                               <div className="flex-1 min-w-0">
-                                <p className={`font-black text-sm ${canUse ? 'text-white' : 'text-stone-400'}`}>
+                                <p className={`font-black text-sm truncate ${
+                                  dark ? (canUse ? 'text-white' : 'text-stone-400') : 'text-[#171717]'
+                                }`}>
                                   {coupon.name}
                                 </p>
-                                <p className="text-xs text-stone-400 mt-0.5">{coupon.description}</p>
-                                <div className="mt-2 space-y-1 text-xs">
-                                  {coupon.min_order_value > 0 && (
-                                    <p className="text-stone-400">
-                                      Pedido mínimo: R$ {coupon.min_order_value.toFixed(2).replace('.', ',')}
-                                    </p>
-                                  )}
-                                  <span className="inline-block bg-red-950/80 border border-red-500/40 text-red-400 font-extrabold text-[10px] px-2 py-0.5 rounded-md mt-1">
+                                {coupon.description && (
+                                  <p className={`text-xs mt-0.5 line-clamp-2 ${dark ? "text-stone-400" : "text-stone-500"}`}>
+                                    {coupon.description}
+                                  </p>
+                                )}
+                                <div className="mt-2 flex flex-wrap items-center gap-2">
+                                  <span className={`inline-flex items-center font-black text-[11px] px-2 py-0.5 rounded-md ${
+                                    dark 
+                                      ? "bg-red-950/80 border border-red-500/40 text-red-400" 
+                                      : "bg-[#D1E9DF]/80 border border-[#047857]/30 text-[#047857]"
+                                  }`}>
                                     {coupon.discount_type === 'percentage' 
                                       ? `${coupon.discount_value}% OFF` 
                                       : `R$ ${coupon.discount_value.toFixed(2)} OFF`}
                                   </span>
+                                  {coupon.min_order_value > 0 && (
+                                    <span className={`text-[11px] ${dark ? "text-stone-400" : "text-stone-500"}`}>
+                                      Mínimo: R$ {coupon.min_order_value.toFixed(2).replace('.', ',')}
+                                    </span>
+                                  )}
                                 </div>
                               </div>
                             </div>
+
                             {canUse && (
                               <Button 
                                 variant="outline" 
                                 size="sm" 
                                 onClick={() => {
                                   navigator.clipboard.writeText(coupon.code);
-                                  toast.success('Código copiado!');
+                                  toast.success('Cupom ' + coupon.code + ' copiado!');
                                 }}
-                                className="flex items-center gap-1.5 shrink-0 bg-stone-950 border-stone-800 text-stone-200 hover:text-white hover:bg-stone-800 rounded-xl text-xs font-bold"
+                                className={`flex items-center gap-1.5 shrink-0 rounded-xl text-xs font-black h-8 px-3 cursor-pointer transition-all ${
+                                  dark 
+                                    ? "bg-stone-950 border-stone-800 text-stone-200 hover:text-white hover:bg-stone-800" 
+                                    : "bg-[#047857] hover:bg-[#065f46] text-white border-transparent shadow-xs"
+                                }`}
                               >
-                                <Copy className="w-3.5 h-3.5"/>
-                                {coupon.code}
+                                <Copy className="w-3 h-3"/>
+                                <span>{coupon.code}</span>
                               </Button>
                             )}
                           </div>
@@ -685,47 +883,61 @@ export default function UserProfileSheet() {
                     })}
                   </div>
                 ) : (
-                  <p className="text-xs text-stone-500 text-center py-4">Nenhum cupom disponível no momento.</p>
+                  <p className={`text-xs text-center py-4 ${dark ? "text-stone-500" : "text-stone-400"}`}>
+                    Nenhum cupom disponível no momento.
+                  </p>
                 )}
               </div>
               
-              <Separator className="bg-stone-800" />
+              <Separator className={dark ? "bg-stone-800" : "bg-stone-100"} />
 
               <Button 
                 onClick={handleLogout} 
                 variant="outline" 
-                className="w-full bg-stone-900/80 hover:bg-red-950/40 hover:text-red-400 border border-stone-800 text-stone-400 font-bold rounded-2xl h-11"
+                className={`w-full font-bold rounded-2xl h-11 text-xs cursor-pointer transition-all flex items-center justify-center gap-2 ${
+                  dark 
+                    ? "bg-stone-900/80 hover:bg-rose-950/40 hover:text-rose-400 border border-stone-800 text-stone-400" 
+                    : "bg-white hover:bg-rose-50 border border-stone-200 hover:border-rose-200 text-stone-600 hover:text-rose-600 shadow-2xs"
+                }`}
               >
-                <LogOut className="w-4 h-4 mr-2" />
-                Sair da Conta
+                <LogOut className="w-4 h-4" />
+                <span>Sair da Conta</span>
               </Button>
             </div>
           ) : (
             /* Formulário de Identificação Rápida / Acessar Conta */
             <div className="space-y-4">
               <div className="text-center pb-2">
-                <div className="w-14 h-14 bg-red-950/80 border border-red-500/40 text-red-400 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-inner">
+                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-sm ${
+                  dark 
+                    ? "bg-red-950/80 border border-red-500/40 text-red-400" 
+                    : "bg-[#D1E9DF]/60 border border-[#D1E9DF] text-[#047857]"
+                }`}>
                   <PhoneCall className="w-7 h-7" />
                 </div>
                 <h3 
-                  className="font-black text-xl text-white tracking-tight"
+                  className={`font-black text-xl tracking-tight ${dark ? "text-white" : "text-[#171717]"}`}
                   style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
                 >
                   Identificação Rápida
                 </h3>
-                <p className="text-xs text-stone-400 mt-1 max-w-[280px] mx-auto leading-relaxed">
+                <p className={`text-xs mt-1 max-w-[280px] mx-auto leading-relaxed ${dark ? "text-stone-400" : "text-stone-500"}`}>
                   Digite seu WhatsApp para carregar seus endereços e agilizar seus pedidos.
                 </p>
               </div>
 
-              <form onSubmit={handlePhoneLogin} className="space-y-3.5 bg-stone-900/90 p-4 rounded-2xl border border-stone-800">
+              <form onSubmit={handlePhoneLogin} className={`space-y-3.5 p-4.5 rounded-2xl border ${
+                dark 
+                  ? "bg-stone-900/90 border-stone-800" 
+                  : "bg-[#F7F9F8] border-[#E5EAE7] shadow-2xs"
+              }`}>
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <Label htmlFor="phone" className="text-xs font-bold uppercase text-stone-300">
+                    <Label htmlFor="phone" className={`text-xs font-bold uppercase tracking-wider ${dark ? "text-stone-300" : "text-stone-700"}`}>
                       Seu WhatsApp / Celular *
                     </Label>
                     {isLookingUpPhone && (
-                      <span className="text-[10px] text-amber-400 font-semibold flex items-center gap-1 animate-pulse">
+                      <span className="text-[10px] text-amber-600 font-semibold flex items-center gap-1 animate-pulse">
                         <Loader2 className="w-2.5 h-2.5 animate-spin" /> Buscando cadastro...
                       </span>
                     )}
@@ -736,19 +948,23 @@ export default function UserProfileSheet() {
                     placeholder="(11) 99999-9999"
                     value={phoneInput}
                     onChange={(e) => handlePhoneInputChange(e.target.value)}
-                    className={`bg-stone-950 border-stone-800 text-white placeholder:text-stone-600 rounded-xl h-11 text-base sm:text-sm font-medium ${phoneError ? 'border-red-500' : ''}`}
+                    className={`rounded-xl h-11 text-base sm:text-sm font-medium ${
+                      dark 
+                        ? "bg-stone-950 border-stone-800 text-white placeholder:text-stone-600" 
+                        : "bg-white border-stone-200 text-[#171717] placeholder:text-stone-400 focus-visible:ring-[#047857]"
+                    } ${phoneError ? 'border-red-500' : ''}`}
                     required
                   />
-                  {phoneError && <p className="text-xs text-red-400 mt-1 font-semibold">{phoneError}</p>}
+                  {phoneError && <p className="text-xs text-red-500 mt-1 font-semibold">{phoneError}</p>}
                 </div>
 
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <Label htmlFor="name" className="text-xs font-bold uppercase text-stone-300">
+                    <Label htmlFor="name" className={`text-xs font-bold uppercase tracking-wider ${dark ? "text-stone-300" : "text-stone-700"}`}>
                       Seu Nome Completo
                     </Label>
                     {foundNameMessage && (
-                      <span className="text-[10px] text-emerald-400 font-bold">
+                      <span className="text-[10px] text-[#047857] font-bold">
                         {foundNameMessage}
                       </span>
                     )}
@@ -762,9 +978,13 @@ export default function UserProfileSheet() {
                       setNameInput(e.target.value);
                       if (foundNameMessage) setFoundNameMessage("");
                     }}
-                    className={`bg-stone-950 border-stone-800 text-white placeholder:text-stone-600 rounded-xl h-11 text-base sm:text-sm ${foundNameMessage ? 'border-emerald-500' : ''}`}
+                    className={`rounded-xl h-11 text-base sm:text-sm ${
+                      dark 
+                        ? "bg-stone-950 border-stone-800 text-white placeholder:text-stone-600" 
+                        : "bg-white border-stone-200 text-[#171717] placeholder:text-stone-400 focus-visible:ring-[#047857]"
+                    } ${foundNameMessage ? 'border-[#047857]' : ''}`}
                   />
-                  <p className="text-[11px] text-stone-500 mt-1">
+                  <p className={`text-[11px] mt-1 ${dark ? "text-stone-500" : "text-stone-400"}`}>
                     {foundNameMessage ? "Preenchido automaticamente a partir do seu histórico." : "Se já pediu antes, seu nome é recuperado automaticamente."}
                   </p>
                 </div>
@@ -772,14 +992,18 @@ export default function UserProfileSheet() {
                 <Button
                   type="submit"
                   disabled={isSubmittingPhone || isLookingUpPhone}
-                  className="w-full bg-red-600 hover:bg-red-500 text-white font-extrabold h-11 rounded-xl shadow-lg flex items-center justify-center gap-2 mt-2 cursor-pointer transition-all"
+                  className={`w-full font-extrabold h-11 rounded-xl shadow-md flex items-center justify-center gap-2 mt-2 cursor-pointer transition-all ${
+                    dark 
+                      ? "bg-red-600 hover:bg-red-500 text-white" 
+                      : "bg-[#047857] hover:bg-[#065f46] text-white"
+                  }`}
                 >
                   <PhoneCall className="w-4 h-4" />
-                  {isSubmittingPhone ? "Identificando..." : "Entrar com WhatsApp"}
+                  <span>{isSubmittingPhone ? "Identificando..." : "Entrar com WhatsApp"}</span>
                 </Button>
               </form>
 
-              <p className="text-[11px] text-stone-500 text-center">
+              <p className={`text-[11px] text-center ${dark ? "text-stone-500" : "text-stone-400"}`}>
                 🔒 Sem senhas chatas. Seus endereços ficam salvos com segurança.
               </p>
             </div>

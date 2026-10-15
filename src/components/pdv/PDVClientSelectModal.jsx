@@ -115,7 +115,7 @@ export default function PDVClientSelectModal({ isOpen, onClose, onSelectClient }
       <DialogContent className="sm:max-w-lg p-0 overflow-hidden rounded-2xl border-stone-200">
         <DialogHeader className="p-4 bg-gray-900 text-white flex flex-row items-center justify-between">
           <div className="flex items-center gap-2">
-            <User className="w-5 h-5 text-red-400" />
+            <User className="w-5 h-5 text-[#D1E9DF]" />
             <DialogTitle className="text-base font-bold text-white">
               Selecionar Cliente Cadastrado
             </DialogTitle>
@@ -131,7 +131,7 @@ export default function PDVClientSelectModal({ isOpen, onClose, onSelectClient }
               placeholder="Buscar por nome ou telefone..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 bg-white border-gray-200 text-sm h-10 rounded-xl"
+              className="pl-9 bg-white border-gray-200 text-sm h-10 rounded-xl focus-visible:ring-[#047857]"
               autoFocus
             />
             {search && (
@@ -150,7 +150,7 @@ export default function PDVClientSelectModal({ isOpen, onClose, onSelectClient }
         <div className="max-h-80 overflow-y-auto p-3 space-y-1.5 divide-y divide-gray-50">
           {isLoading ? (
             <div className="py-12 flex flex-col items-center justify-center text-gray-400 gap-2">
-              <Loader2 className="w-6 h-6 animate-spin text-red-600" />
+              <Loader2 className="w-6 h-6 animate-spin text-[#047857]" />
               <p className="text-xs font-medium">Carregando clientes...</p>
             </div>
           ) : filteredClients.length === 0 ? (
@@ -170,14 +170,14 @@ export default function PDVClientSelectModal({ isOpen, onClose, onSelectClient }
                   onSelectClient(client);
                   onClose();
                 }}
-                className="w-full text-left p-3 rounded-xl hover:bg-red-50/60 hover:border-red-200 border border-transparent transition-all flex items-center justify-between group cursor-pointer"
+                className="w-full text-left p-3 rounded-xl hover:bg-[#D1E9DF]/20 hover:border-[#D1E9DF] border border-transparent transition-all flex items-center justify-between group cursor-pointer"
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-full bg-red-100 text-red-700 font-extrabold flex items-center justify-center text-sm flex-shrink-0 transition-colors shadow-2xs">
+                  <div className="w-10 h-10 rounded-full bg-[#D1E9DF]/60 text-[#047857] font-extrabold flex items-center justify-center text-sm flex-shrink-0 transition-colors shadow-2xs">
                     {client.name.charAt(0).toUpperCase()}
                   </div>
                   <div className="min-w-0">
-                    <p className="font-extrabold text-sm text-gray-900 truncate group-hover:text-red-700 capitalize">
+                    <p className="font-extrabold text-sm text-gray-900 truncate group-hover:text-[#047857] capitalize">
                       {client.name}
                     </p>
                     <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500 mt-1">
@@ -199,7 +199,7 @@ export default function PDVClientSelectModal({ isOpen, onClose, onSelectClient }
                 </div>
 
                 <div className="text-right flex-shrink-0 pl-2">
-                  <span className="text-xs font-bold text-red-600 group-hover:underline flex items-center gap-1">
+                  <span className="text-xs font-bold text-[#047857] group-hover:underline flex items-center gap-1">
                     Selecionar →
                   </span>
                 </div>

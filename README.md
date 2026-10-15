@@ -1,6 +1,6 @@
-# 🛵 Delivery 1.0
+# 🚀 PedeMuleke
 
-Plataforma moderna de delivery e cardápio digital com painel administrativo e PDV.
+Plataforma SaaS moderna de delivery, cardápio digital multi-tenant, painel administrativo e PDV.
 
 ---
 

@@ -148,7 +148,7 @@ export default function PrintShiftClosingPage() {
         <div className="flex gap-2">
           <button
             onClick={() => window.print()}
-            className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow transition-all active:scale-95 cursor-pointer"
+            className="flex-1 bg-[#047857] hover:bg-[#065f46] text-white font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow transition-all active:scale-95 cursor-pointer"
           >
             🖨️ Imprimir Cupom
           </button>

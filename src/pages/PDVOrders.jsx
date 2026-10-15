@@ -43,7 +43,7 @@ export default function PDVOrdersPage() {
   const todayTotal = filteredOrders.reduce((s, o) => s + Number(o.total_amount || o.total || 0), 0);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#F7F9F8]">
       {/* Header */}
       <header className="bg-gray-900 text-white px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -60,7 +60,7 @@ export default function PDVOrdersPage() {
         <div className="flex items-center gap-2">
           <div className="text-right mr-2">
             <p className="text-xs text-gray-400">{filter === "today" ? "Total hoje" : "Total geral"}</p>
-            <p className="text-xl font-black text-green-400">
+            <p className="text-xl font-black text-[#D1E9DF]">
               R$ {todayTotal.toFixed(2).replace(".", ",")}
             </p>
           </div>
@@ -68,7 +68,7 @@ export default function PDVOrdersPage() {
             variant="outline"
             size="icon"
             onClick={loadOrders}
-            className="text-black border-gray-600 hover:bg-gray-700 hover:text-white"
+            className="text-white border-gray-700 bg-gray-800 hover:bg-gray-700 hover:text-white"
           >
             <RefreshCw className="w-4 h-4" />
           </Button>
@@ -76,14 +76,14 @@ export default function PDVOrdersPage() {
       </header>
 
       {/* Filtros */}
-      <div className="bg-white border-b px-4 py-2 flex gap-2">
+      <div className="bg-white border-b border-stone-200 px-4 py-2 flex gap-2">
         {["today", "all"].map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+            className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors cursor-pointer ${
               filter === f
-                ? "bg-red-600 text-white"
+                ? "bg-[#047857] text-white shadow-xs"
                 : "bg-gray-100 text-gray-700 hover:bg-gray-200"
             }`}
           >
@@ -135,7 +135,7 @@ export default function PDVOrdersPage() {
                 )}
               </div>
               <div className="text-right shrink-0 flex flex-col items-end gap-2">
-                <p className="text-xl font-black text-red-600">
+                <p className="text-xl font-black text-[#171717]">
                   R$ {order.total_amount.toFixed(2).replace(".", ",")}
                 </p>
                 <Link to={createPageUrl(`PrintOrder?id=${order.id}`)} target="_blank">

@@ -15,7 +15,6 @@ function RecentOrderCard({
   const firstItem = resolvedItems[0] || {};
   const displayImage = firstItem.image_url || null;
 
-  // Formatar data/hora amigável
   const orderDate = order.created_date ? new Date(order.created_date) : null;
   const formattedDate = orderDate
     ? orderDate.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
@@ -26,53 +25,50 @@ function RecentOrderCard({
   return (
     <motion.div
       key={order.id}
-      initial={{ opacity: 0, y: 15 }}
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: index * 0.04, ease: [0.25, 1, 0.5, 1] }}
-      whileHover={{ y: -4 }}
+      transition={{ duration: 0.25, delay: index * 0.03, ease: [0.25, 1, 0.5, 1] }}
+      whileHover={{ y: -3 }}
       whileTap={{ scale: 0.97 }}
-      className="flex-shrink-0 w-44 sm:w-52 group cursor-pointer"
+      className="flex-shrink-0 w-32 sm:w-36 group cursor-pointer"
       onClick={() => {
         if (!hasMoved) {
           onViewDetails(order, resolvedItems);
         }
       }}
     >
-      <div className="relative flex flex-col h-full rounded-2xl sm:rounded-3xl overflow-hidden border border-stone-800/90 group-hover:border-red-500/60 transition-all duration-300 shadow-md group-hover:shadow-2xl group-hover:shadow-red-950/40 p-2 sm:p-2.5 bg-gradient-to-b from-[#191311] via-[#140f0e] to-[#110d0c]">
-        {/* Glow sutil */}
-        <div className="absolute inset-0 bg-gradient-to-b from-red-500/0 via-red-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-
+      <div className="relative flex flex-col h-full">
         {/* Imagem / Collage com Badge */}
-        <div className="relative w-full aspect-square rounded-xl sm:rounded-2xl overflow-hidden bg-stone-900/90 border border-stone-800/60 shadow-inner">
+        <div className="relative w-full aspect-square rounded-2xl overflow-hidden bg-[#F7F9F8] border border-[#E5EAE7]">
           {displayImage && !imageError ? (
             <img
               src={displayImage}
               alt={firstItem.product_name || "Produto"}
               onError={() => setImageError(true)}
-              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
               loading="lazy"
               draggable={false}
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-3xl bg-stone-900">
+            <div className="w-full h-full flex items-center justify-center text-3xl bg-[#F7F9F8]">
               🍽️
             </div>
           )}
 
           {/* Badge de Data / Pedido */}
-          <div className="absolute top-2 left-2 backdrop-blur-md bg-stone-950/85 border border-stone-800/80 text-stone-300 text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded-lg shadow-lg flex items-center gap-1">
-            <History className="w-3 h-3 text-red-400" />
+          <div className="absolute top-2 left-2 bg-[#171717]/90 text-white text-[10px] sm:text-[11px] font-bold px-1.5 py-0.5 rounded-md shadow-xs flex items-center gap-1">
+            <History className="w-3 h-3 text-stone-300" />
             <span>{formattedDate || `#${(order.id || "").slice(-4)}`}</span>
           </div>
 
           {/* Badge de múltiplos itens */}
           {resolvedItems.length > 1 && (
-            <div className="absolute top-2 right-2 backdrop-blur-md bg-red-950/90 border border-red-500/40 text-red-300 text-[10px] font-black px-1.5 py-0.5 rounded-lg shadow-lg flex items-center gap-0.5">
-              <span>+{resolvedItems.length - 1} {resolvedItems.length - 1 === 1 ? "item" : "itens"}</span>
+            <div className="absolute top-2 right-2 bg-[#D1E9DF] border border-[#047857]/20 text-[#047857] text-[10px] font-black px-1.5 py-0.5 rounded-md shadow-xs flex items-center gap-0.5">
+              <span>+{resolvedItems.length - 1}</span>
             </div>
           )}
 
-          {/* Botão de Repetir Pedido Rápido */}
+          {/* Botão de Repetir Pedido Rápido sobre a imagem */}
           <button
             type="button"
             title="Repetir este pedido"
@@ -80,16 +76,16 @@ function RecentOrderCard({
               e.stopPropagation();
               onReorder(order, resolvedItems);
             }}
-            className="absolute bottom-2 right-2 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-r from-red-600 to-red-500 group-hover:from-red-500 group-hover:to-amber-500 text-white flex items-center justify-center shadow-lg transition-transform active:scale-90 hover:scale-105"
+            className="absolute bottom-2 right-2 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#047857] hover:bg-[#036348] text-white flex items-center justify-center shadow-md transition-transform active:scale-90 hover:scale-105"
           >
             <RotateCcw className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5]" />
           </button>
         </div>
 
-        {/* Informações dos Itens (Exibe o nome atualizado do produto cadastrado) */}
-        <div className="pt-2 sm:pt-2.5 px-1 flex flex-col flex-1 justify-between relative z-10">
+        {/* Informações dos Itens - Proporções idênticas a Mais Pedidos */}
+        <div className="pt-2 px-0.5 flex flex-col flex-1 justify-between">
           <div>
-            <div className="text-[11px] sm:text-xs text-stone-300 font-bold line-clamp-2 leading-tight group-hover:text-red-300 transition-colors">
+            <div className="font-bold text-xs sm:text-sm text-[#171717] group-hover:text-[#047857] transition-colors line-clamp-1 leading-snug tracking-tight">
               {resolvedItems.map((item, idx) => (
                 <span key={idx}>
                   {item.quantity}x {item.product_name}
@@ -97,23 +93,16 @@ function RecentOrderCard({
                 </span>
               ))}
             </div>
-
-            {/* Primeiro adicional/complemento do primeiro item se houver */}
-            {firstItem.additionals && firstItem.additionals.length > 0 && (
-              <p className="text-[10px] text-stone-500 line-clamp-1 mt-0.5">
-                +{firstItem.additionals.map((a) => a.name).join(", ")}
-              </p>
-            )}
           </div>
 
-          <div className="mt-2 flex items-center justify-between border-t border-stone-800/60 pt-1.5">
+          <div className="mt-1 flex items-baseline justify-between gap-1">
             <span
-              className="font-black text-xs sm:text-sm text-red-500 tracking-tight"
+              className="font-black text-xs sm:text-sm text-[#171717] tracking-tight"
               style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}
             >
               R$ {totalAmount.toFixed(2).replace(".", ",")}
             </span>
-            <span className="text-[10px] text-stone-400 font-medium group-hover:text-stone-200 transition-colors flex items-center gap-0.5">
+            <span className="text-[10px] text-[#047857] font-bold group-hover:text-[#036348] transition-colors flex items-center gap-0.5">
               Pedir <ArrowRight className="w-2.5 h-2.5" />
             </span>
           </div>
@@ -134,10 +123,9 @@ export default function RecentOrdersRow({
   const [startX, setStartX] = useState(0);
   const [scrollLeftState, setScrollLeftState] = useState(0);
   const [hasMoved, setHasMoved] = useState(false);
-  const [modalState, setModalState] = useState(null); // { order, items }
+  const [modalState, setModalState] = useState(null);
   const [reorderedSuccess, setReorderedSuccess] = useState(false);
 
-  // Mapear produtos para rápido acesso por ID e por Nome
   const { productsById, productsByName } = useMemo(() => {
     const byId = new Map();
     const byName = new Map();
@@ -148,8 +136,6 @@ export default function RecentOrdersRow({
     return { productsById: byId, productsByName: byName };
   }, [products]);
 
-  // Filtrar pedidos: APENAS pedidos cujos produtos ainda existem e estão cadastrados
-  // Se o nome foi editado, exibe com o nome editado; se foi excluído, oculta o pedido.
   const validRecentOrders = useMemo(() => {
     if (!Array.isArray(orders) || orders.length === 0 || products.length === 0) return [];
 
@@ -173,15 +159,11 @@ export default function RecentOrdersRow({
         const prodId = item.product_id || item.id;
         const prodName = (item.product_name || item.name || "").trim().toLowerCase();
 
-        // 1. Tenta achar por ID
         let matchedProduct = prodId ? productsById.get(prodId) : null;
-
-        // 2. Se não achou por ID, tenta achar pelo nome
         if (!matchedProduct && prodName) {
           matchedProduct = productsByName.get(prodName);
         }
 
-        // Se o produto foi excluído / não existe no cadastro atual, descarta este pedido
         if (!matchedProduct) {
           allItemsExist = false;
           break;
@@ -190,14 +172,13 @@ export default function RecentOrdersRow({
         resolvedItems.push({
           ...item,
           product_id: matchedProduct.id,
-          product_name: matchedProduct.name, // Nome atualizado do cadastro
+          product_name: matchedProduct.name,
           product_price: Number(matchedProduct.price || item.product_price || 0),
           image_url: matchedProduct.image_url || item.image_url,
           currentProduct: matchedProduct,
         });
       }
 
-      // Só inclui se TODOS os itens do pedido ainda existem no cadastro
       if (allItemsExist && resolvedItems.length > 0) {
         validList.push({
           order,
@@ -213,7 +194,6 @@ export default function RecentOrdersRow({
 
   if (validRecentOrders.length === 0) return null;
 
-  // Função para reordenar (adicionar todos os itens válidos ao carrinho)
   const handleReorder = (order, resolvedItems) => {
     resolvedItems.forEach((item) => {
       const product = item.currentProduct;
@@ -239,7 +219,6 @@ export default function RecentOrdersRow({
     }, 1200);
   };
 
-  // Mouse Drag handlers
   const handleMouseDown = (e) => {
     if (!scrollRef.current) return;
     setIsDragging(true);
@@ -268,33 +247,30 @@ export default function RecentOrdersRow({
   };
 
   return (
-    <section className="space-y-3.5">
+    <section className="bg-white rounded-2xl sm:rounded-3xl border border-[#E5EAE7] shadow-xs p-3.5 sm:p-5 space-y-3">
       {/* Cabeçalho */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-amber-600/20 to-red-600/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
-            <RotateCcw className="w-4 h-4" />
-          </div>
           <h2
-            className="text-lg sm:text-2xl font-black text-white tracking-tight flex items-center gap-2"
+            className="text-base sm:text-lg font-black text-[#171717] tracking-tight flex items-center gap-2"
             style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}
           >
             <span>Últimos Pedidos</span>
-            <span className="text-stone-500 text-xs sm:text-sm font-bold bg-stone-900 border border-stone-800 px-2 py-0.5 rounded-full">
+            <span className="text-[#047857] text-[11px] font-bold bg-[#D1E9DF]/60 border border-[#D1E9DF] px-2 py-0.5 rounded-full">
               Últimos {validRecentOrders.length}
             </span>
           </h2>
         </div>
       </div>
 
-      {/* Fileira com arrastar fluido no mouse e touch */}
+      {/* Fileira */}
       <div
         ref={scrollRef}
         onMouseDown={handleMouseDown}
         onMouseLeave={handleMouseLeave}
         onMouseUp={handleMouseUp}
         onMouseMove={handleMouseMove}
-        className={`flex gap-3.5 sm:gap-4 overflow-x-auto scrollbar-hide py-2 -mx-4 px-4 sm:mx-0 sm:px-0 scroll-smooth select-none ${
+        className={`flex gap-3 sm:gap-4 overflow-x-auto scrollbar-hide py-1 -mx-1 px-1 scroll-smooth select-none ${
           isDragging ? "cursor-grabbing" : "cursor-grab"
         }`}
       >
@@ -314,29 +290,28 @@ export default function RecentOrdersRow({
       {/* Modal Detalhado do Pedido */}
       <AnimatePresence>
         {modalState && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
             <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
+              initial={{ scale: 0.96, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-stone-900 border border-stone-800 rounded-3xl p-5 sm:p-6 w-full max-w-md shadow-2xl text-white relative overflow-hidden"
+              exit={{ scale: 0.96, opacity: 0 }}
+              className="bg-white border border-stone-200 rounded-3xl p-5 sm:p-6 w-full max-w-md shadow-2xl text-stone-900 relative overflow-hidden"
             >
-              {/* Fechar */}
               <button
                 type="button"
                 onClick={() => setModalState(null)}
-                className="absolute top-4 right-4 p-2 rounded-full bg-stone-800 text-stone-400 hover:text-white hover:bg-stone-700 transition-colors"
+                className="absolute top-4 right-4 p-2 rounded-full bg-stone-100 text-stone-500 hover:text-stone-900 hover:bg-stone-200 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
 
               <div className="flex items-center gap-2 mb-4">
-                <div className="p-2 rounded-xl bg-red-950/80 border border-red-500/30 text-red-400">
+                <div className="p-2 rounded-xl bg-stone-100 border border-stone-200 text-stone-800">
                   <ShoppingBag className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-black text-lg text-white">Detalhes do Pedido</h3>
-                  <p className="text-xs text-stone-400">
+                  <h3 className="font-black text-lg text-stone-900">Detalhes do Pedido</h3>
+                  <p className="text-xs text-stone-500">
                     Pedido #{modalState.order.id?.slice(-6)} •{" "}
                     {modalState.order.created_date
                       ? new Date(modalState.order.created_date).toLocaleString("pt-BR", {
@@ -350,18 +325,18 @@ export default function RecentOrdersRow({
                 </div>
               </div>
 
-              {/* Lista dos Itens do Pedido */}
+              {/* Lista dos Itens */}
               <div className="max-h-60 overflow-y-auto space-y-2.5 my-4 pr-1 scrollbar-thin">
                 {modalState.items.map((item, idx) => (
                   <div
                     key={idx}
-                    className="p-3 bg-stone-950/80 rounded-2xl border border-stone-800/80 flex flex-col gap-1"
+                    className="p-3 bg-stone-50 rounded-2xl border border-stone-200/80 flex flex-col gap-1"
                   >
                     <div className="flex justify-between items-start">
-                      <span className="font-bold text-sm text-stone-200">
+                      <span className="font-bold text-sm text-stone-900">
                         {item.quantity}x {item.product_name}
                       </span>
-                      <span className="font-bold text-sm text-red-400">
+                      <span className="font-bold text-sm text-stone-900">
                         R${" "}
                         {Number(item.subtotal || item.product_price || 0)
                           .toFixed(2)
@@ -369,9 +344,8 @@ export default function RecentOrdersRow({
                       </span>
                     </div>
 
-                    {/* Adicionais */}
                     {item.additionals && item.additionals.length > 0 && (
-                      <div className="text-xs text-stone-400 pl-2 border-l-2 border-stone-800 space-y-0.5">
+                      <div className="text-xs text-stone-500 pl-2 border-l-2 border-stone-200 space-y-0.5">
                         {item.additionals.map((add, addIdx) => (
                           <div key={addIdx} className="flex justify-between">
                             <span>• {add.name}</span>
@@ -384,7 +358,7 @@ export default function RecentOrdersRow({
                     )}
 
                     {item.notes && (
-                      <p className="text-[11px] text-amber-400/80 italic">
+                      <p className="text-[11px] text-amber-600 italic">
                         Obs: {item.notes}
                       </p>
                     )}
@@ -393,10 +367,10 @@ export default function RecentOrdersRow({
               </div>
 
               {/* Total e Ação */}
-              <div className="pt-3 border-t border-stone-800 flex items-center justify-between">
+              <div className="pt-3 border-t border-stone-200 flex items-center justify-between">
                 <div>
-                  <span className="text-xs text-stone-400 block">Total do Pedido</span>
-                  <span className="text-xl font-black text-red-500">
+                  <span className="text-xs text-stone-500 block">Total do Pedido</span>
+                  <span className="text-xl font-black text-stone-900">
                     R${" "}
                     {Number(modalState.order.total_amount || modalState.order.total || 0)
                       .toFixed(2)
@@ -408,10 +382,10 @@ export default function RecentOrdersRow({
                   type="button"
                   onClick={() => handleReorder(modalState.order, modalState.items)}
                   disabled={reorderedSuccess}
-                  className={`px-5 py-3 rounded-2xl font-black text-sm flex items-center gap-2 shadow-lg transition-all ${
+                  className={`px-5 py-3 rounded-2xl font-black text-sm flex items-center gap-2 shadow-sm transition-all ${
                     reorderedSuccess
-                      ? "bg-emerald-600 text-white"
-                      : "bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-amber-500 text-white active:scale-95"
+                      ? "bg-[#047857] text-white"
+                      : "bg-[#047857] hover:bg-[#036348] text-white active:scale-95 shadow-md shadow-[#047857]/20"
                   }`}
                 >
                   {reorderedSuccess ? (

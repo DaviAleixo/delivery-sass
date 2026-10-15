@@ -100,7 +100,7 @@ export default function BannersPage() {
   };
 
   return (
-    <div className="p-8 bg-gray-50 min-h-screen">
+    <div className="p-8 bg-[#F7F9F8] min-h-screen">
       <div className="max-w-6xl mx-auto">
         <div className="flex justify-between items-center mb-8">
           <div>
@@ -109,7 +109,7 @@ export default function BannersPage() {
           </div>
           <Button 
             onClick={() => setShowModal(true)}
-            className="bg-red-500 hover:bg-red-600 text-white"
+            className="bg-[#047857] hover:bg-[#065f46] text-white font-bold shadow-sm cursor-pointer"
           >
             <Plus className="w-4 h-4 mr-2" />
             Novo Banner
@@ -158,7 +158,7 @@ export default function BannersPage() {
                           await BannerImage.update(banner.id, { ...banner, active: checked });
                           loadBanners();
                         }}
-                        className="data-[state=checked]:bg-red-500"
+                        className="data-[state=checked]:bg-[#047857]"
                       />
                     </div>
                     
@@ -167,7 +167,7 @@ export default function BannersPage() {
                         variant="outline"
                         size="sm"
                         onClick={() => openEditModal(banner)}
-                        className="flex-1"
+                        className="flex-1 border-stone-200 text-[#047857] hover:bg-[#D1E9DF]/30 cursor-pointer"
                       >
                         <Edit className="w-4 h-4 mr-1" />
                         Editar
@@ -176,7 +176,7 @@ export default function BannersPage() {
                         variant="outline"
                         size="sm"
                         onClick={() => handleDelete(banner.id)}
-                        className="flex-1 text-red-600 hover:text-red-700"
+                        className="flex-1 text-rose-600 hover:text-rose-700 border-rose-200 hover:bg-rose-50 cursor-pointer"
                       >
                         <Trash2 className="w-4 h-4 mr-1" />
                         Excluir
@@ -283,7 +283,7 @@ export default function BannersPage() {
                   id="active"
                   checked={bannerForm.active}
                   onCheckedChange={(checked) => setBannerForm({...bannerForm, active: checked})}
-                  className="data-[state=checked]:bg-red-500"
+                  className="data-[state=checked]:bg-[#047857]"
                 />
                 <Label htmlFor="active">Banner ativo</Label>
               </div>
@@ -300,7 +300,7 @@ export default function BannersPage() {
                 <Button
                   type="submit"
                   disabled={isSubmitting || isUploading}
-                  className="flex-1 bg-red-500 hover:bg-red-600"
+                  className="flex-1 bg-[#047857] hover:bg-[#065f46] text-white font-bold cursor-pointer"
                 >
                   {isSubmitting ? "Salvando..." : (isUploading ? "Enviando foto..." : "Salvar")}
                 </Button>

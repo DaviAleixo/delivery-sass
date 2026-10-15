@@ -36,5 +36,9 @@ export const settingsSchema = z.object({
   free_delivery_threshold: z.coerce.number().optional().nullable(),
   delivery_fallback_fee: z.coerce.number().min(0).default(10),
   delivery_unlisted_policy: z.enum(["block", "fallback"]).default("block"),
-  delivery_neighborhoods: z.array(neighborhoodItemSchema).optional().default([])
+  delivery_neighborhoods: z.array(neighborhoodItemSchema).optional().default([]),
+  accepts_delivery: z.boolean().optional().default(true),
+  accepts_takeaway: z.boolean().optional().default(true),
+  salon_mode: z.string().optional().default("full")
 });
+

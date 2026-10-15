@@ -16,8 +16,8 @@
     --popover: 0 0% 100%;
     --popover-foreground: 20 10% 10%;
 
-    /* Primary = vermelho profundo e rico */
-    --primary: 4 80% 42%;
+    /* Primary = Emerald #047857 */
+    --primary: 162 94% 24%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 36 18% 94%;
@@ -34,9 +34,9 @@
 
     --border: 36 12% 88%;
     --input: 36 12% 88%;
-    --ring: 4 80% 42%;
+    --ring: 162 94% 24%;
 
-    --chart-1: 4 80% 42%;
+    --chart-1: 162 94% 24%;
     --chart-2: 173 58% 39%;
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 58%;
@@ -46,12 +46,12 @@
 
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 20 10% 15%;
-    --sidebar-primary: 4 80% 42%;
+    --sidebar-primary: 162 94% 24%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 36 20% 95%;
-    --sidebar-accent-foreground: 4 80% 42%;
+    --sidebar-accent: 162 40% 95%;
+    --sidebar-accent-foreground: 162 94% 24%;
     --sidebar-border: 36 12% 90%;
-    --sidebar-ring: 4 80% 42%;
+    --sidebar-ring: 162 94% 24%;
 
     --font-body: 'Plus Jakarta Sans', sans-serif;
     --font-display: 'Playfair Display', serif;

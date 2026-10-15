@@ -47,7 +47,7 @@ export default function TableQRCodeModal({ settings }) {
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Plaquinhas de Mesa com QR Code - ${settings?.restaurant_name || "Delivery 1.0"}</title>
+          <title>Plaquinhas de Mesa com QR Code - ${settings?.restaurant_name || "PedeMuleke"}</title>
           <style>
             @page {
               size: A4;
@@ -78,7 +78,7 @@ export default function TableQRCodeModal({ settings }) {
             .brand-name {
               font-size: 20px;
               font-weight: 900;
-              color: #dc2626;
+              color: #047857;
               text-transform: uppercase;
               letter-spacing: 1px;
               margin-bottom: 4px;
@@ -134,7 +134,7 @@ export default function TableQRCodeModal({ settings }) {
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" className="gap-2 rounded-xl text-xs font-bold border-stone-300 hover:bg-stone-100 shadow-sm">
-          <QrCode className="w-4 h-4 text-red-600" />
+          <QrCode className="w-4 h-4 text-[#047857]" />
           <span>QR Code das Mesas</span>
         </Button>
       </DialogTrigger>
@@ -142,7 +142,7 @@ export default function TableQRCodeModal({ settings }) {
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl p-6">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold flex items-center gap-2 text-stone-900">
-            <QrCode className="w-5 h-5 text-red-600" />
+            <QrCode className="w-5 h-5 text-[#047857]" />
             <span>Gerador de Plaquinhas QR Code para Mesas</span>
           </DialogTitle>
         </DialogHeader>
@@ -188,8 +188,8 @@ export default function TableQRCodeModal({ settings }) {
             <span className="text-xs font-bold uppercase tracking-wider text-stone-500 mb-3">Prévia da Plaquinha</span>
             
             <div className="bg-white border-2 border-stone-900 rounded-2xl p-6 text-center shadow-xl w-full max-w-xs flex flex-col items-center">
-              <span className="text-base font-black text-red-600 tracking-wide uppercase">
-                {settings?.restaurant_name || "Delivery 1.0"}
+              <span className="text-base font-black text-[#047857] tracking-wide uppercase">
+                {settings?.restaurant_name || "PedeMuleke"}
               </span>
               
               <div className="bg-stone-900 text-white font-black text-xl px-5 py-1 rounded-full my-2">
@@ -222,7 +222,7 @@ export default function TableQRCodeModal({ settings }) {
                   onClick={() => setSelectedMesa(t)}
                   className={`px-3 py-1 rounded-xl text-xs font-bold cursor-pointer transition-all ${
                     selectedMesa === t 
-                      ? "bg-red-600 text-white shadow-md scale-105" 
+                      ? "bg-[#047857] text-white shadow-md scale-105" 
                       : "bg-white text-stone-700 hover:bg-stone-200 border border-stone-300"
                   }`}
                 >
@@ -245,7 +245,7 @@ export default function TableQRCodeModal({ settings }) {
             <Button
               type="button"
               onClick={handlePrint}
-              className="bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl gap-2 shadow-lg shadow-red-950/20"
+              className="bg-[#047857] hover:bg-[#065f46] text-white font-bold rounded-xl gap-2 shadow-lg shadow-emerald-950/20"
             >
               <Printer className="w-4 h-4" />
               <span>Imprimir {tables.length} Plaquinhas</span>
@@ -256,7 +256,7 @@ export default function TableQRCodeModal({ settings }) {
           <div id="table-qr-print-area" style={{ display: "none" }}>
             {tables.map(tableNum => (
               <div key={tableNum} className="card">
-                <div className="brand-name">{settings?.restaurant_name || "Delivery 1.0"}</div>
+                <div className="brand-name">{settings?.restaurant_name || "PedeMuleke"}</div>
                 <div className="table-badge">MESA {tableNum}</div>
                 <div className="qr-wrapper">
                   <QRCodeSVG

@@ -346,7 +346,7 @@ export default function PrintOrderPage() {
               type="checkbox"
               checked={printTwoCopies}
               onChange={(e) => setPrintTwoCopies(e.target.checked)}
-              className="rounded text-red-600 focus:ring-red-500"
+              className="rounded text-[#047857] focus:ring-[#047857]"
             />
             <span className="text-[11px] font-semibold">2 Vias (Completa)</span>
           </label>
@@ -355,7 +355,7 @@ export default function PrintOrderPage() {
         <div className="flex gap-2">
           <button
             onClick={() => window.print()}
-            className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow transition-all active:scale-95 cursor-pointer"
+            className="flex-1 bg-[#047857] hover:bg-[#065f46] text-white font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow transition-all active:scale-95 cursor-pointer"
           >
             🖨️ Imprimir Cupom
           </button>

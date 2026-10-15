@@ -203,7 +203,7 @@ export default function AdminLoginPage() {
     <div className="min-h-screen bg-gradient-to-br from-stone-950 via-stone-900 to-stone-950 flex items-center justify-center p-4">
       <Card className="w-full max-w-md border border-stone-800 bg-stone-900/95 backdrop-blur-xl shadow-2xl text-stone-100">
         <CardHeader className="space-y-3 text-center pb-5">
-          <div className="mx-auto w-14 h-14 bg-gradient-to-tr from-rose-600 to-red-500 rounded-2xl flex items-center justify-center shadow-lg shadow-rose-950/50">
+          <div className="mx-auto w-14 h-14 bg-gradient-to-tr from-[#065f46] to-[#047857] rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-950/50">
             <Store className="w-7 h-7 text-white" />
           </div>
           <div>
@@ -228,7 +228,7 @@ export default function AdminLoginPage() {
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label htmlFor="storeSlug" className="text-xs font-semibold text-stone-300 flex items-center gap-1.5">
-                  <Store className="w-3.5 h-3.5 text-rose-400" />
+                  <Store className="w-3.5 h-3.5 text-emerald-400" />
                   <span>Código da Loja</span>
                 </Label>
                 <span className="text-[10px] text-stone-500 font-mono">Ex: 1, 2, 3...</span>
@@ -240,7 +240,7 @@ export default function AdminLoginPage() {
                   placeholder="ex: 1, 2 ou superadmin"
                   value={storeSlug}
                   onChange={(e) => setStoreSlug(e.target.value.toLowerCase().trim())}
-                  className="bg-stone-800/60 border-stone-700 text-stone-100 placeholder:text-stone-500 focus-visible:ring-rose-500 font-mono text-sm h-10"
+                  className="bg-stone-800/60 border-stone-700 text-stone-100 placeholder:text-stone-500 focus-visible:ring-[#047857] font-mono text-sm h-10"
                   required
                 />
               </div>
@@ -260,7 +260,7 @@ export default function AdminLoginPage() {
                   placeholder="ex: gerente, caixa, admin"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="bg-stone-800/60 border-stone-700 text-stone-100 placeholder:text-stone-500 focus-visible:ring-rose-500 text-xs h-10"
+                  className="bg-stone-800/60 border-stone-700 text-stone-100 placeholder:text-stone-500 focus-visible:ring-[#047857] text-xs h-10"
                   required
                 />
               </div>
@@ -279,7 +279,7 @@ export default function AdminLoginPage() {
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="bg-stone-800/60 border-stone-700 text-stone-100 placeholder:text-stone-500 focus-visible:ring-rose-500 text-xs h-10 pr-10"
+                  className="bg-stone-800/60 border-stone-700 text-stone-100 placeholder:text-stone-500 focus-visible:ring-[#047857] text-xs h-10 pr-10"
                   required
                 />
                 <button
@@ -295,7 +295,7 @@ export default function AdminLoginPage() {
 
             <Button
               type="submit"
-              className="w-full bg-rose-600 hover:bg-rose-500 text-white font-bold h-11 text-sm rounded-xl shadow-lg shadow-rose-950/40 transition-all flex items-center justify-center gap-2 cursor-pointer mt-2"
+              className="w-full bg-[#047857] hover:bg-[#065f46] text-white font-bold h-11 text-sm rounded-xl shadow-lg shadow-emerald-950/40 transition-all flex items-center justify-center gap-2 cursor-pointer mt-2"
               disabled={isLoading}
             >
               {isLoading ? (

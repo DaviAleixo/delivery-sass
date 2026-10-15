@@ -78,7 +78,7 @@ export default function PDVProductGrid({
             {/* Botão Carrinho para telas pequenas */}
             <button
               onClick={onOpenMobileCart}
-              className="lg:hidden relative flex items-center justify-center p-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors shrink-0 shadow-xs cursor-pointer"
+              className="lg:hidden relative flex items-center justify-center p-1.5 rounded-lg bg-[#047857] text-white hover:bg-[#065f46] transition-colors shrink-0 shadow-xs cursor-pointer"
               title="Abrir Carrinho"
             >
               <ShoppingCart className="w-4 h-4" />
@@ -97,7 +97,7 @@ export default function PDVProductGrid({
             onClick={() => setActiveCategory("all")}
             className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer shrink-0 ${
               activeCategory === "all"
-                ? "bg-red-600 text-white shadow-xs"
+                ? "bg-[#047857] text-white shadow-xs"
                 : "bg-gray-100 text-gray-700 hover:bg-gray-200"
             }`}
           >
@@ -109,7 +109,7 @@ export default function PDVProductGrid({
               onClick={() => setActiveCategory(cat.id)}
               className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer shrink-0 ${
                 activeCategory === cat.id
-                  ? "bg-red-600 text-white shadow-xs"
+                  ? "bg-[#047857] text-white shadow-xs"
                   : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}
             >
@@ -132,7 +132,7 @@ export default function PDVProductGrid({
                 className={`bg-white rounded-xl text-left shadow-2xs border transition-all duration-150 hover:shadow-md overflow-hidden flex flex-col cursor-pointer ${
                   isFlashing
                     ? "border-emerald-500 bg-emerald-50 shadow-emerald-200 shadow-md ring-2 ring-emerald-400"
-                    : "border-gray-200 hover:border-red-300"
+                    : "border-gray-200 hover:border-[#047857]/40"
                 }`}
               >
                 {product.image_url ? (
@@ -142,7 +142,7 @@ export default function PDVProductGrid({
                     className="w-full h-24 sm:h-28 object-cover shrink-0"
                   />
                 ) : (
-                  <div className="w-full h-24 sm:h-28 bg-gradient-to-br from-red-50 to-orange-50 flex items-center justify-center text-3xl shrink-0">
+                  <div className="w-full h-24 sm:h-28 bg-gradient-to-br from-[#D1E9DF]/30 to-emerald-50 flex items-center justify-center text-3xl shrink-0">
                     🍽️
                   </div>
                 )}
@@ -151,7 +151,7 @@ export default function PDVProductGrid({
                     {product.name}
                   </p>
                   <div className="mt-1.5 flex items-center justify-between gap-1">
-                    <p className="text-red-600 font-black text-xs sm:text-sm">
+                    <p className="text-[#047857] font-black text-xs sm:text-sm">
                       R$ {Number(product.price || 0).toFixed(2).replace(".", ",")}
                     </p>
                     {isFlashing && (

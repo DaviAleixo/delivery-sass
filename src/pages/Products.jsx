@@ -280,7 +280,8 @@ export default function ProductsPage() {
     const file = e.target.files[0];
     if (file) {
       try {
-        const { file_url } = await UploadFile({ file });
+        const activeTenant = slug || localStorage.getItem("current_tenant_id") || "global";
+        const { file_url } = await UploadFile({ file, maxDimension: 800, tenantId: activeTenant });
         setProductForm(prev => ({ ...prev, image_url: file_url }));
         toast.success("Imagem enviada com sucesso!");
       } catch (error) {
@@ -355,7 +356,7 @@ export default function ProductsPage() {
               resetForm();
               setShowModal(true);
             }}
-            className="bg-red-600 hover:bg-red-700 text-white font-bold shadow-md shadow-red-950/10"
+            className="bg-[#047857] hover:bg-[#065f46] text-white font-bold shadow-sm cursor-pointer"
           >
             <Plus className="w-4 h-4 mr-1.5" />
             Novo Produto
@@ -369,7 +370,7 @@ export default function ProductsPage() {
             onClick={() => setFilterStatus("all")}
             className={`p-3 sm:p-4 rounded-xl border text-left transition-all ${
               filterStatus === "all" 
-                ? "bg-white border-red-500 ring-2 ring-red-500/20 shadow-sm" 
+                ? "bg-white border-[#047857] ring-2 ring-[#047857]/20 shadow-sm" 
                 : "bg-white border-gray-200 hover:border-gray-300"
             }`}
           >
@@ -549,7 +550,7 @@ export default function ProductsPage() {
                       <div className="space-y-3 pt-2 border-t border-gray-100">
                         {/* Preço e Ações Principais */}
                         <div className="flex items-center justify-between">
-                          <span className="text-lg font-extrabold text-red-600">
+                          <span className="text-lg font-black text-[#171717]">
                             R$ {Number(product.price || 0).toFixed(2).replace('.', ',')}
                           </span>
 
@@ -568,7 +569,7 @@ export default function ProductsPage() {
                               variant="ghost"
                               size="icon"
                               onClick={() => handleDelete(product.id)}
-                              className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                              className="h-8 w-8 text-rose-600 hover:text-rose-700 hover:bg-rose-50 cursor-pointer"
                               title="Excluir produto"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -805,13 +806,13 @@ export default function ProductsPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h4 className="font-bold text-sm text-gray-900 flex items-center gap-1.5">
-                      <Layers className="w-4 h-4 text-red-600" /> Grupos de Adicionais & Complementos
+                      <Layers className="w-4 h-4 text-[#047857]" /> Grupos de Adicionais & Complementos
                     </h4>
                     <p className="text-xs text-gray-500">Selecione quais grupos de opções este produto possui</p>
                   </div>
                   <Link 
                     to={createPageUrl("Complements")} 
-                    className="text-xs text-red-600 hover:underline font-semibold flex items-center gap-1"
+                    className="text-xs text-[#047857] hover:underline font-semibold flex items-center gap-1"
                   >
                     Gerenciar Grupos <ExternalLink className="w-3 h-3" />
                   </Link>
@@ -829,7 +830,7 @@ export default function ProductsPage() {
                         <label 
                           key={grp.id} 
                           className={`flex items-start gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-all ${
-                            isSelected ? 'bg-red-50/70 border-red-300 shadow-xs' : 'bg-white border-gray-200 hover:border-gray-300'
+                            isSelected ? 'bg-[#D1E9DF]/40 border-[#047857] shadow-xs' : 'bg-white border-gray-200 hover:border-gray-300'
                           }`}
                         >
                           <Checkbox 
@@ -841,7 +842,7 @@ export default function ProductsPage() {
                                 setSelectedGroupIds(selectedGroupIds.filter(id => id !== grp.id));
                               }
                             }}
-                            className="mt-0.5 data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"
+                            className="mt-0.5 data-[state=checked]:bg-[#047857] data-[state=checked]:border-[#047857]"
                           />
                           <div className="min-w-0 flex-1 text-xs">
                             <span className="font-semibold text-gray-800 block truncate">{grp.name}</span>
@@ -875,7 +876,7 @@ export default function ProductsPage() {
                 <Button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold"
+                  className="flex-1 bg-[#047857] hover:bg-[#065f46] text-white font-bold cursor-pointer"
                 >
                   {isSubmitting ? "Salvando..." : "Salvar Produto"}
                 </Button>

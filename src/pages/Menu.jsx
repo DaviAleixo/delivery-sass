@@ -24,6 +24,7 @@ import BannerCarousel from "../components/menu/BannerCarousel";
 import UserProfileSheet from "../components/menu/UserProfileSheet";
 import StoreInfoSheet from "../components/menu/StoreInfoSheet";
 import ProductDetailModal from "../components/menu/ProductDetailModal";
+import BrushCategoryStroke from "../components/menu/BrushCategoryStroke";
 import { 
   XCircle, 
   ShoppingBag, 
@@ -33,7 +34,9 @@ import {
   MapPin, 
   Phone, 
   ArrowRight,
-  Instagram
+  Instagram,
+  Clock,
+  Store
 } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -294,9 +297,12 @@ export default function MenuPage() {
         free_delivery_threshold: currentTenant?.free_delivery_threshold ?? null,
         phone: currentTenant?.phone || (isVruum ? settingsData[0]?.phone : ""),
         whatsapp: currentTenant?.whatsapp || (isVruum ? settingsData[0]?.whatsapp : ""),
-        address: currentTenant?.address || (isVruum ? settingsData[0]?.address : ""),
-        address_city: currentTenant?.address_city || "",
-        address_state: currentTenant?.address_state || "",
+        address: currentTenant?.address || settingsData[0]?.address || "Rua das Flores, 123 - Centro",
+        address_street: currentTenant?.address_street || settingsData[0]?.address_street || "",
+        address_number: currentTenant?.address_number || settingsData[0]?.address_number || "",
+        address_neighborhood: currentTenant?.address_neighborhood || settingsData[0]?.address_neighborhood || "",
+        address_city: currentTenant?.address_city || settingsData[0]?.address_city || "",
+        address_state: currentTenant?.address_state || settingsData[0]?.address_state || "",
         instagram: currentTenant?.instagram || (isVruum ? settingsData[0]?.instagram : ""),
         opening_time: currentTenant?.opening_time || "18:00",
         closing_time: currentTenant?.closing_time || "23:59",
@@ -304,6 +310,9 @@ export default function MenuPage() {
         payment_methods: currentTenant?.payment_methods || null,
         manual_store_open: currentTenant?.manual_store_open ?? null,
         manual_override_date: currentTenant?.manual_override_date ?? null,
+        salon_mode: currentTenant?.salon_mode || "full",
+        accepts_delivery: currentTenant?.accepts_delivery !== false,
+        accepts_takeaway: currentTenant?.accepts_takeaway !== false,
       };
 
       setSettings(resolvedSettings);
@@ -311,8 +320,8 @@ export default function MenuPage() {
       setBanners(bannerData || []);
       setCategories(categoryData || []);
       
-      if (categoryData && categoryData.length > 0 && !activeCategory) {
-        setActiveCategory(categoryData[0].id);
+      if (!activeCategory) {
+        setActiveCategory("all");
       }
     } catch (_error) {
       console.error("Erro ao carregar dados:", _error);
@@ -395,15 +404,78 @@ export default function MenuPage() {
 
   const isSearching = Boolean(searchQuery.trim());
   const filteredProducts = products.filter(product => {
-    const matchesCategory = isSearching || !activeCategory || product.category === activeCategory;
+    const matchesCategory = isSearching || !activeCategory || activeCategory === "all" || product.category === activeCategory || product.category_id === activeCategory;
     const matchesSearch = !isSearching || 
       product.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
       (product.description && product.description.toLowerCase().includes(searchQuery.toLowerCase()));
     return matchesCategory && matchesSearch;
   });
 
-  const activeCategoryObj = categories.find(c => c.id === activeCategory);
+  const displayCategories = React.useMemo(() => {
+    if (!categories || categories.length === 0) return [{ id: "all", name: "Todos" }];
+    const hasAll = categories.some(c => c.id === "all" || c.name?.toLowerCase() === "todos");
+    if (hasAll) return categories;
+    return [{ id: "all", name: "Todos" }, ...categories];
+  }, [categories]);
+
+  const activeCategoryObj = activeCategory === "all"
+    ? { id: "all", name: "Todos", description: "Todos os produtos disponíveis no cardápio" }
+    : categories.find(c => c.id === activeCategory);
   const comboCategory = categories.find(c => c.is_combo);
+
+  // Agrupamento por categorias para renderização em componentes grandes (Inspirado na Foto 1)
+  const categorizedSections = React.useMemo(() => {
+    if (isSearching || (activeCategory && activeCategory !== "all")) {
+      return [
+        {
+          id: activeCategory || "filtered",
+          name: isSearching ? `Resultados da Busca` : (activeCategoryObj?.name || "Cardápio"),
+          description: isSearching ? `${filteredProducts.length} itens encontrados` : (activeCategoryObj?.description || ""),
+          products: filteredProducts,
+        }
+      ];
+    }
+
+    const realCategories = (categories || []).filter(c => c.id !== "all");
+    const sections = [];
+    const usedProductIds = new Set();
+
+    realCategories.forEach(cat => {
+      const catProducts = products.filter(p => 
+        p.available !== false && (p.category === cat.id || p.category_id === cat.id)
+      );
+      if (catProducts.length > 0) {
+        catProducts.forEach(p => usedProductIds.add(p.id));
+        sections.push({
+          id: cat.id,
+          name: cat.name,
+          description: cat.description,
+          products: catProducts,
+        });
+      }
+    });
+
+    const uncategorized = products.filter(p => p.available !== false && !usedProductIds.has(p.id));
+    if (uncategorized.length > 0) {
+      sections.push({
+        id: "uncategorized",
+        name: "Outros Produtos",
+        description: "",
+        products: uncategorized,
+      });
+    }
+
+    if (sections.length === 0 && filteredProducts.length > 0) {
+      sections.push({
+        id: "all",
+        name: "Nosso Cardápio",
+        description: "",
+        products: filteredProducts,
+      });
+    }
+
+    return sections;
+  }, [isSearching, activeCategory, activeCategoryObj, filteredProducts, categories, products]);
 
   const handleCartToggle = () => {
     setIsCartVisible(!isCartVisible);
@@ -545,13 +617,17 @@ export default function MenuPage() {
   }
 
   // Despacho de Template VIP Personalizado (Modo A)
-  const CustomMenuTemplate = getCustomMenuTemplate(tenant?.custom_template);
+  const isVrummStore = isVruumRoute || tenant?.slug === "vrumm" || tenant?.slug === "vruum-burguer";
+  const effectiveTemplateKey = tenant?.custom_template || (isVrummStore ? "vrumm" : null);
+  const CustomMenuTemplate = getCustomMenuTemplate(effectiveTemplateKey);
+
   if (CustomMenuTemplate) {
     return (
       <CustomMenuTemplate
         tenant={tenant}
         tenantId={tenantId}
         settings={settings}
+        resolvedInitialStoreName={resolvedInitialStoreName}
         products={products}
         categories={categories}
         banners={banners}
@@ -559,7 +635,7 @@ export default function MenuPage() {
         storeIsOpen={storeIsOpen}
         activeCategory={activeCategory}
         setActiveCategory={setActiveCategory}
-        handleAddToCart={handleAddToCart}
+        handleAddToCart={addToCart}
         handleCartToggle={handleCartToggle}
         setIsCartVisible={setIsCartVisible}
         setShowOrderModal={setShowOrderModal}
@@ -568,15 +644,139 @@ export default function MenuPage() {
         salonMode={salonMode}
         isVisualOnly={isVisualOnly}
         isTableOnly={isTableOnly}
+        hasTopNotice={hasTopNotice}
+        activeGuestOrder={activeGuestOrder}
+        setActiveGuestOrder={setActiveGuestOrder}
+        popularRankedProducts={popularRankedProducts}
+        handleProductClick={handleProductClick}
+        recentOrders={recentOrders}
+        addToCart={addToCart}
+        isSearching={isSearching}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        activeCategoryObj={activeCategoryObj}
+        filteredProducts={filteredProducts}
+        comboCategory={comboCategory}
+        updateCartQuantity={updateCartQuantity}
+        handleCheckout={handleCheckout}
+        complementGroups={complementGroups}
+        productComplementGroups={productComplementGroups}
+        complementItems={complementItems}
+        additionals={additionals}
+        showOrderModal={showOrderModal}
+        getCartTotal={getCartTotal}
+        submitOrder={submitOrder}
+        isSubmitting={isSubmitting}
+        pixOnlineOrder={pixOnlineOrder}
+        setPixOnlineOrder={setPixOnlineOrder}
+        selectedProduct={selectedProduct}
+        isCartVisible={isCartVisible}
+        navigate={navigate}
       />
     );
   }
 
+  const formattedStoreAddress = (() => {
+    if (!settings) return "Rua das Flores, 123 - Centro";
+    if (settings.address_street) {
+      return [
+        settings.address_street,
+        settings.address_number ? `, ${settings.address_number}` : "",
+        settings.address_neighborhood ? ` - ${settings.address_neighborhood}` : ""
+      ].join("");
+    }
+    return settings.address || "Rua das Flores, 123 - Centro";
+  })();
+
   return (
-    <div className="min-h-screen bg-[#0d0a09] text-stone-100 selection:bg-red-600 selection:text-white">
-      {/* Header Dark Glass Moderno */}
-      <header className="fixed top-0 left-0 right-0 z-40 bg-[#120e0d]/90 backdrop-blur-xl border-b border-stone-800/80 transition-all">
-        <div className="container mx-auto px-4 sm:px-6 py-2.5 max-w-6xl">
+    <div className="min-h-screen bg-[#F7F9F8] text-[#171717] selection:bg-[#047857] selection:text-white">
+      {/* Header Clean Retail Moderno com Barra Superior */}
+      <header className="fixed top-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-b border-[#E5EAE7] transition-all shadow-xs">
+        {/* Barra Superior Dinâmica (Verde quando Aberto, Vermelha quando Fechado) */}
+        <div className={`w-full py-1.5 sm:py-2 px-3 sm:px-4 transition-colors duration-200 border-b ${
+          storeIsOpen 
+            ? 'bg-[#064e3b] text-white border-[#047857]/40' 
+            : 'bg-[#991b1b] text-white border-[#7f1d1d]'
+        }`}>
+          <div className="container mx-auto max-w-6xl flex items-center justify-center md:justify-between text-[11px] sm:text-xs font-semibold gap-2">
+            {/* Lado Esquerdo: Modo de Atendimento (Delivery / Retirada), Endereço (desktop) ou Horário (mobile) */}
+            <div className="flex items-center gap-2 sm:gap-2.5 overflow-hidden text-ellipsis whitespace-nowrap min-w-0">
+              <span className="flex items-center gap-1.5 font-bold shrink-0">
+                {settings?.accepts_delivery !== false ? (
+                  <>
+                    <span>Entrega em até {settings?.delivery_time || "40 min"}</span>
+                  </>
+                ) : settings?.accepts_takeaway !== false ? (
+                  <>
+                    <Store className="w-3.5 h-3.5 shrink-0 text-amber-300" />
+                    <span>Trabalhamos com retirada no local</span>
+                  </>
+                ) : (
+                  <>
+                    <Store className="w-3.5 h-3.5 shrink-0 text-stone-200" />
+                    <span>Atendimento no local</span>
+                  </>
+                )}
+              </span>
+
+              {/* Separador Pipe no Mobile */}
+              <span className="md:hidden opacity-40 shrink-0">|</span>
+
+              {/* Horas no Mobile */}
+              <span className="md:hidden flex items-center gap-1.5 font-medium opacity-90 shrink-0">
+                <span className={`w-2 h-2 rounded-full shrink-0 animate-pulse ${storeIsOpen ? 'bg-emerald-400' : 'bg-white'}`} />
+                <span>
+                  {storeIsOpen ? (
+                    settings?.opening_time && settings?.closing_time 
+                      ? `${settings.opening_time} - ${settings.closing_time}` 
+                      : '18:00 - 23:59'
+                  ) : (
+                    settings?.opening_time ? `Abre às ${settings.opening_time}` : 'Fechado'
+                  )}
+                </span>
+              </span>
+
+              {/* Endereço da loja: Visível SOMENTE no Desktop */}
+              {formattedStoreAddress && (
+                <>
+                  <span className="hidden md:inline opacity-40 shrink-0">|</span>
+                  <span className="hidden md:flex items-center gap-1 opacity-90 truncate max-w-[360px] md:max-w-none">
+                    <MapPin className="w-3.5 h-3.5 shrink-0 text-emerald-300" />
+                    <span className="truncate">{formattedStoreAddress}</span>
+                  </span>
+                </>
+              )}
+            </div>
+
+            {/* Lado Direito: Horário e Status (visível SOMENTE no Desktop) */}
+            <div className="hidden md:flex items-center gap-1.5 font-bold shrink-0 whitespace-nowrap text-[11px] sm:text-xs">
+              {storeIsOpen ? (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 animate-pulse" />
+                  <span>Aberto</span>
+                  <span className="opacity-60">•</span>
+                  <span className="font-medium opacity-90">
+                    {settings?.opening_time && settings?.closing_time 
+                      ? `${settings.opening_time} - ${settings.closing_time}` 
+                      : '18:00 - 23:59'}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-white shrink-0 animate-pulse" />
+                  <span className="font-black uppercase tracking-wider text-white">Fechado no momento</span>
+                  <span className="opacity-60">•</span>
+                  <span className="font-medium opacity-90">
+                    {settings?.opening_time ? `Abre às ${settings.opening_time}` : 'Fechado'}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Barra Principal da Loja */}
+        <div className="container mx-auto px-4 sm:px-6 py-2 sm:py-2.5 max-w-6xl">
           <div className="flex items-center justify-between">
             {/* Logo e Nome */}
             <div className="flex items-center gap-3">
@@ -587,27 +787,15 @@ export default function MenuPage() {
                 {settings?.restaurant_logo ? (
                   <img src={settings.restaurant_logo} alt="Logo" className="w-full h-full object-contain" />
                 ) : (
-                  <div className="w-10 h-10 rounded-xl bg-stone-900 border border-stone-800 flex items-center justify-center font-black text-sm text-white">
+                  <div className="w-10 h-10 rounded-xl bg-white border border-[#E5EAE7] flex items-center justify-center font-black text-sm text-[#171717]">
                     {(settings?.restaurant_name || resolvedInitialStoreName).substring(0, 2).toUpperCase()}
                   </div>
                 )}
               </motion.div>
               <div>
-                <h1 className="text-base sm:text-lg font-black leading-tight text-white tracking-tight" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+                <h1 className="text-base sm:text-lg font-black leading-tight text-[#171717] tracking-tight" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
                   {settings?.restaurant_name || resolvedInitialStoreName}
                 </h1>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <div className="flex items-center gap-1.5">
-                    <div className={`w-2 h-2 rounded-full ${storeIsOpen ? 'bg-emerald-400 animate-pulse shadow-sm shadow-emerald-400/50' : 'bg-red-500'}`}></div>
-                    <span className={`text-[11px] font-extrabold tracking-wide ${storeIsOpen ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {storeIsOpen ? 'Aberto agora' : 'Fechado'}
-                    </span>
-                  </div>
-                  <span className="text-stone-600 text-xs">•</span>
-                  <span className="text-stone-400 text-[11px] font-medium">
-                    {settings?.opening_time && settings?.closing_time ? `${settings.opening_time} - ${settings.closing_time}` : '18:00 - 23:59'}
-                  </span>
-                </div>
               </div>
             </div>
 
@@ -620,15 +808,15 @@ export default function MenuPage() {
                     size="icon"
                     onClick={handleCartToggle}
                     title="Carrinho"
-                    className="relative text-stone-300 hover:text-white hover:bg-stone-800/80 rounded-full h-9 w-9 cursor-pointer"
+                    className="relative text-[#171717] hover:text-[#047857] hover:bg-[#D1E9DF]/40 rounded-full h-9 w-9 cursor-pointer"
                   >
-                    <ShoppingBag className="w-4 h-4 text-red-400" />
+                    <ShoppingBag className="w-4 h-4 text-[#171717]" />
                     {cart.reduce((total, item) => total + item.quantity, 0) > 0 && (
                       <motion.span 
                         key={cart.reduce((total, item) => total + item.quantity, 0)}
                         initial={{ scale: 0.5 }}
                         animate={{ scale: 1 }}
-                        className="absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-bold rounded-full w-4 h-4 min-w-4 min-h-4 flex items-center justify-center shadow-sm border border-[#120e0d] leading-none"
+                        className="absolute -top-1 -right-1 bg-[#047857] text-white text-[10px] font-bold rounded-full w-4 h-4 min-w-4 min-h-4 flex items-center justify-center shadow-xs border border-white leading-none"
                       >
                         {cart.reduce((total, item) => total + item.quantity, 0)}
                       </motion.span>
@@ -643,19 +831,18 @@ export default function MenuPage() {
         </div>
       </header>
 
-
       {/* Banner de Mesa Conectada via QR Code */}
       {!isVisualOnly && urlMesa && (
-        <div className="pt-20 container mx-auto px-4 max-w-6xl">
-          <div className="bg-emerald-950/80 border border-emerald-500/40 text-emerald-200 rounded-2xl p-3.5 flex items-center justify-between shadow-lg">
+        <div className="pt-24 container mx-auto px-4 max-w-6xl">
+          <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-2xl p-3.5 flex items-center justify-between shadow-xs">
             <div className="flex items-center gap-2.5">
               <span className="text-xl">🍽️</span>
               <div>
-                <p className="text-[11px] font-black uppercase text-emerald-300">Atendimento no Salão</p>
-                <p className="text-sm font-bold text-white">Você está na Mesa {urlMesa}</p>
+                <p className="text-[11px] font-black uppercase text-emerald-700">Atendimento no Salão</p>
+                <p className="text-sm font-bold text-stone-900">Você está na Mesa {urlMesa}</p>
               </div>
             </div>
-            <span className="text-[11px] bg-emerald-900/80 border border-emerald-400/40 text-emerald-200 px-3 py-1 rounded-xl font-bold">
+            <span className="text-[11px] bg-emerald-100 border border-emerald-200 text-emerald-800 px-3 py-1 rounded-xl font-bold">
               QR Code Ativo
             </span>
           </div>
@@ -664,16 +851,16 @@ export default function MenuPage() {
 
       {/* Banner de Salão quando loja é mesa-only mas cliente abriu sem QR Code da mesa */}
       {!isVisualOnly && isTableOnly && !urlMesa && (
-        <div className="pt-20 container mx-auto px-4 max-w-6xl">
-          <div className="bg-gradient-to-r from-blue-950/80 via-[#10141c] to-blue-950/80 border border-blue-500/40 text-blue-200 rounded-2xl p-3.5 flex items-center justify-between shadow-lg">
+        <div className="pt-24 container mx-auto px-4 max-w-6xl">
+          <div className="bg-stone-100 border border-stone-200 text-stone-900 rounded-2xl p-3.5 flex items-center justify-between shadow-xs">
             <div className="flex items-center gap-2.5">
               <span className="text-xl">🍽️</span>
               <div>
-                <p className="text-[11px] font-black uppercase text-blue-300">Autoatendimento nas Mesas</p>
-                <p className="text-xs sm:text-sm font-semibold text-stone-200">Aponte a câmera para o QR Code da sua mesa para enviar seu pedido direto para a cozinha</p>
+                <p className="text-[11px] font-black uppercase text-stone-600">Autoatendimento nas Mesas</p>
+                <p className="text-xs sm:text-sm font-medium text-stone-700">Aponte a câmera para o QR Code da sua mesa para enviar seu pedido direto para a cozinha</p>
               </div>
             </div>
-            <span className="text-[11px] bg-blue-900/80 border border-blue-400/40 text-blue-200 px-3 py-1 rounded-xl font-bold whitespace-nowrap">
+            <span className="text-[11px] bg-white border border-stone-200 text-stone-800 px-3 py-1 rounded-xl font-bold whitespace-nowrap shadow-xs">
               Salão & Mesas
             </span>
           </div>
@@ -682,20 +869,20 @@ export default function MenuPage() {
 
       {/* Banner de Pedido em Andamento */}
       {!isVisualOnly && activeGuestOrder && (
-        <div className={`${hasTopNotice ? 'pt-3' : 'pt-20'} container mx-auto px-4 max-w-6xl`}>
+        <div className={`${hasTopNotice ? 'pt-3' : 'pt-24'} container mx-auto px-4 max-w-6xl`}>
           <div className="relative">
             <Link to={`${createPageUrl("MyOrders")}?id=${activeGuestOrder.id}`}>
               <motion.div 
                 initial={{ opacity: 0, y: -10 }} 
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-gradient-to-r from-red-700 via-red-600 to-amber-600 text-white rounded-2xl p-3.5 shadow-xl flex items-center justify-between cursor-pointer hover:opacity-95 transition-opacity border border-red-400/30 pr-12"
+                className="bg-stone-900 text-white rounded-2xl p-3.5 shadow-md flex items-center justify-between cursor-pointer hover:bg-stone-850 transition-colors pr-12"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center shadow-inner">
-                    <Bike className="w-5 h-5 animate-pulse text-white" />
+                  <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center">
+                    <Bike className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <p className="text-[11px] font-extrabold uppercase tracking-wider text-red-200">Pedido em Andamento</p>
+                    <p className="text-[11px] font-extrabold uppercase tracking-wider text-stone-400">Pedido em Andamento</p>
                     <p className="text-sm font-bold">
                       #{activeGuestOrder.id.slice(-6).toUpperCase()} • {
                         activeGuestOrder.status === 'preparando' || activeGuestOrder.status === 'confirmado'
@@ -707,7 +894,7 @@ export default function MenuPage() {
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center text-xs font-bold gap-1 bg-black/30 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10">
+                <div className="flex items-center text-xs font-bold gap-1 bg-white/10 px-3 py-1.5 rounded-xl">
                   <span>Rastrear</span>
                   <ChevronRight className="w-4 h-4" />
                 </div>
@@ -723,7 +910,7 @@ export default function MenuPage() {
                 } catch {}
               }}
               title="Dispensar aviso"
-              className="absolute right-3 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/40 hover:bg-black/70 text-white/80 hover:text-white flex items-center justify-center text-xs font-bold transition-all z-10"
+              className="absolute right-3 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center text-xs font-bold transition-all z-10"
             >
               ✕
             </button>
@@ -731,56 +918,56 @@ export default function MenuPage() {
         </div>
       )}
 
-      {!storeIsOpen && (
-        <div className={`${activeGuestOrder || hasTopNotice ? 'pt-3' : 'pt-20'} container mx-auto px-4 max-w-6xl`}>
-          <div className="rounded-2xl border p-4 bg-red-950/40 border-red-500/30 text-red-200 flex items-start gap-3 shadow-lg">
-            <XCircle className="h-5 w-5 mt-0.5 text-red-400 flex-shrink-0" />
-            <div>
-              <p className="font-bold text-sm text-white">Restaurante Fechado no Momento</p>
-              <p className="text-xs mt-0.5 text-stone-300">
-                Horário de funcionamento: {settings?.opening_time || '18:00'} às {settings?.closing_time || '23:59'}. Você pode explorar o cardápio e montar seu pedido à vontade!
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Banners Carrossel */}
       {banners && banners.length > 0 ? (
-        <div className={!activeGuestOrder && !hasTopNotice && storeIsOpen ? "pt-[60px]" : "pt-2"}>
+        <div className={!activeGuestOrder && !hasTopNotice ? "pt-[88px]" : "pt-2"}>
           <BannerCarousel banners={banners} />
         </div>
       ) : (
-        !activeGuestOrder && !hasTopNotice && storeIsOpen && <div className="h-[60px]" />
+        !activeGuestOrder && !hasTopNotice && <div className="h-[88px]" />
       )}
 
-      {/* Barra de Categorias Pills com layoutId Framer Motion */}
-      <div className="sticky top-[58px] z-30 bg-[#0d0a09]/95 backdrop-blur-xl border-b border-stone-800/80 py-3">
+      {/* Barra de Categorias Inspirada no Design de Exemplo com Efeito Pincel */}
+      <div className="sticky top-[86px] sm:top-[90px] z-30 bg-[#F7F9F8]/95 backdrop-blur-md border-b border-[#E5EAE7] py-2 sm:py-2.5 shadow-xs">
         <div className="container mx-auto px-4 sm:px-6 max-w-6xl">
-          <div className="flex gap-2 overflow-x-auto scrollbar-hide py-1">
-            {categories.map(category => {
+          <div className="flex items-center gap-0.5 sm:gap-1 overflow-x-auto scrollbar-hide py-1">
+            {displayCategories.map((category, index) => {
               const isActive = activeCategory === category.id;
+              const isLast = index === displayCategories.length - 1;
+              const nextIsActive = !isLast && activeCategory === displayCategories[index + 1]?.id;
 
               return (
-                <button
-                  key={category.id}
-                  onClick={() => {
-                    setActiveCategory(category.id);
-                    setSearchQuery("");
-                  }}
-                  className={`relative whitespace-nowrap flex-shrink-0 px-4 py-2 rounded-2xl text-xs sm:text-sm font-extrabold transition-colors duration-200 cursor-pointer ${
-                    isActive ? 'text-white' : 'text-stone-400 hover:text-stone-200 bg-stone-900/80 border border-stone-800/80'
-                  }`}
-                >
-                  {isActive && (
-                    <motion.div
-                      layoutId="activeCategoryPill"
-                      className="absolute inset-0 bg-gradient-to-r from-red-600 to-red-700 rounded-2xl shadow-lg shadow-red-950/60 border border-red-500/40"
-                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                    />
+                <React.Fragment key={category.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveCategory(category.id);
+                      setSearchQuery("");
+                    }}
+                    className="flex-shrink-0 flex items-center justify-center transition-all cursor-pointer group focus:outline-none"
+                  >
+                    {isActive ? (
+                      <div className="relative flex items-center justify-center px-4 sm:px-5 py-1.5 sm:py-2 min-w-[76px] select-none">
+                        {/* Efeito Pincel Orgânico (Brush Stroke SVG) */}
+                        <BrushCategoryStroke />
+                        <span className="relative z-10 text-white font-extrabold text-xs sm:text-sm tracking-tight whitespace-nowrap px-1">
+                          {category.name}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center px-3 sm:px-4 py-1.5">
+                        <span className="text-[#171717] group-hover:text-[#047857] font-bold text-xs sm:text-sm transition-colors whitespace-nowrap">
+                          {category.name}
+                        </span>
+                        <span className="w-6 sm:w-7 h-[2px] bg-stone-400/80 rounded-full mt-1.5 group-hover:bg-[#047857] transition-all" />
+                      </div>
+                    )}
+                  </button>
+
+                  {!isLast && !isActive && !nextIsActive && (
+                    <div className="h-4 sm:h-5 w-[1px] bg-stone-300/60 shrink-0 self-center my-auto mx-0.5 sm:mx-1" />
                   )}
-                  <span className="relative z-10">{category.name}</span>
-                </button>
+                </React.Fragment>
               );
             })}
           </div>
@@ -799,7 +986,7 @@ export default function MenuPage() {
           />
         )}
 
-        {/* Carrossel dos Últimos Pedidos (com suporte a múltiplos itens e repetição de pedidos) */}
+        {/* Carrossel dos Últimos Pedidos */}
         {!isVisualOnly && !searchQuery.trim() && recentOrders.length > 0 && (
           <RecentOrdersRow
             orders={recentOrders}
@@ -809,38 +996,33 @@ export default function MenuPage() {
           />
         )}
 
-        {/* Cabeçalho da Categoria com Barra de Busca Global */}
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-3 border-b border-stone-800/80 pt-1">
-          <div>
-            <div className="flex items-center gap-1.5 text-xs font-black tracking-widest text-red-500 uppercase">
-              <span>{isSearching ? "BUSCA NO CARDÁPIO" : "NOSSO CARDÁPIO"}</span>
+        {/* Barra de Busca Global */}
+        <div className="space-y-3 pt-1">
+          {isSearching && (
+            <div>
+              <div className="flex items-center gap-1.5 text-xs font-black tracking-widest text-[#047857] uppercase">
+                <span>BUSCA NO CARDÁPIO</span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-black text-[#171717] mt-0.5 tracking-tight" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+                Resultados para "{searchQuery}"
+              </h2>
             </div>
-            <h2 className="text-2xl sm:text-3xl font-black text-white mt-1 tracking-tight" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-              {isSearching ? `Resultados para "${searchQuery}"` : (activeCategoryObj?.name || "Todos os Produtos")}
-            </h2>
-            <p className="text-xs sm:text-sm text-stone-400 mt-0.5">
-              {isSearching 
-                ? `${filteredProducts.length} ${filteredProducts.length === 1 ? 'produto encontrado' : 'produtos encontrados'}`
-                : (activeCategoryObj?.description || "Feitos artesanalmente com ingredientes nobres e muito sabor.")
-              }
-            </p>
-          </div>
+          )}
 
-          {/* Campo de Busca */}
-          <div className="relative w-full sm:w-80">
-            <Search className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <div className="relative w-full">
+            <Search className="w-4 h-4 text-stone-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Buscar burgers, bebidas, combos..."
-              className="w-full bg-stone-900/90 border border-stone-800 focus:border-red-500/70 focus:bg-stone-900 rounded-2xl pl-10 pr-9 py-2.5 text-xs sm:text-sm text-white placeholder:text-stone-500 outline-none transition-all shadow-inner"
+              placeholder="Buscar no cardápio..."
+              className="w-full bg-white border border-[#E5EAE7] focus:border-[#047857] focus:ring-2 focus:ring-[#D1E9DF] rounded-2xl pl-11 pr-10 py-3 text-xs sm:text-sm text-[#171717] placeholder:text-stone-400 outline-none transition-all shadow-xs"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-white p-1 rounded-full text-xs font-bold cursor-pointer"
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 p-1 rounded-full text-xs font-bold cursor-pointer"
                 aria-label="Limpar busca"
               >
                 ✕
@@ -849,34 +1031,54 @@ export default function MenuPage() {
           </div>
         </div>
 
-        {/* Grid de Produtos */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4">
-          <AnimatePresence>
-            {filteredProducts.map((product, idx) => (
-              <ProductCard
-                key={product.id}
-                product={product}
-                onProductClick={handleProductClick}
-                isStoreOpen={storeIsOpen}
-                isPopular={idx === 0}
-                isVisualOnly={isVisualOnly}
-              />
-            ))}
-          </AnimatePresence>
-        </div>
+        {/* Lista de Produtos Organizada em Componentes Grandes (Inspirado na Foto 1) */}
+        {categorizedSections.map((section) => (
+          <div key={section.id} className="space-y-3">
+            {/* Título da Categoria Estilo Foto 1 */}
+            <div className="flex items-center justify-between px-1">
+              <h3 
+                className="text-sm sm:text-base font-black text-[#171717] uppercase tracking-wider"
+                style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
+              >
+                {section.name}
+              </h3>
+              {section.description && (
+                <p className="text-xs text-stone-400 hidden sm:block">
+                  {section.description}
+                </p>
+              )}
+            </div>
+
+            {/* Componente Grande Card Branco Englobando os Produtos */}
+            <div className="bg-white rounded-2xl sm:rounded-3xl border border-[#E5EAE7] shadow-xs overflow-hidden divide-y divide-[#E5EAE7]">
+              <AnimatePresence>
+                {section.products.map((product, idx) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    onProductClick={handleProductClick}
+                    isStoreOpen={storeIsOpen}
+                    isPopular={idx === 0 && section.id === "all"}
+                    isVisualOnly={isVisualOnly}
+                  />
+                ))}
+              </AnimatePresence>
+            </div>
+          </div>
+        ))}
 
         {filteredProducts.length === 0 && (
-          <div className="text-center py-16 bg-stone-900/40 rounded-3xl border border-stone-800/60 p-8 space-y-3">
+          <div className="text-center py-16 bg-white rounded-3xl border border-[#E5EAE7] p-8 space-y-3 shadow-xs">
             <div className="text-5xl">🍽️</div>
-            <h3 className="text-lg font-bold text-white">Nenhum produto encontrado</h3>
-            <p className="text-xs text-stone-400 max-w-sm mx-auto">
+            <h3 className="text-lg font-bold text-[#171717]">Nenhum produto encontrado</h3>
+            <p className="text-xs text-stone-500 max-w-sm mx-auto">
               {searchQuery ? `Não encontramos itens para "${searchQuery}". Tente outro termo.` : "Não há produtos disponíveis nesta categoria no momento."}
             </p>
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery("")}
-                className="inline-flex items-center gap-1.5 text-xs font-bold text-red-400 hover:text-red-300 bg-red-950/40 border border-red-500/30 px-4 py-2 rounded-full transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1.5 text-xs font-bold text-[#047857] hover:text-[#036348] bg-[#D1E9DF]/40 hover:bg-[#D1E9DF] border border-[#D1E9DF] px-4 py-2 rounded-full transition-colors cursor-pointer"
               >
                 Limpar busca
               </button>
@@ -884,27 +1086,27 @@ export default function MenuPage() {
           </div>
         )}
 
-        {/* Banner Promocional de Combos - Visual Dark Clean */}
+        {/* Banner Promocional de Combos */}
         {comboCategory && (
           <motion.div 
             whileHover={{ y: -2 }}
-            className="rounded-3xl overflow-hidden relative border border-stone-800 bg-[#14100e] p-6 sm:p-8 shadow-xl"
+            className="rounded-3xl overflow-hidden relative border border-[#E5EAE7] bg-white p-6 sm:p-8 shadow-xs"
           >
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
-              <div className="space-y-2.5 text-left flex-1">
-                <div className="inline-flex items-center gap-1.5 text-red-400 text-xs font-black uppercase tracking-widest">
+              <div className="space-y-2 text-left flex-1">
+                <div className="inline-flex items-center gap-1.5 text-[#047857] text-xs font-black uppercase tracking-widest">
                   <span>SELEÇÃO ESPECIAL</span>
                 </div>
                 
                 <h3 
-                  className="text-xl sm:text-2xl font-black text-white leading-tight tracking-tight" 
+                  className="text-xl sm:text-2xl font-black text-[#171717] leading-tight tracking-tight" 
                   style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
                 >
-                  Conheça nossos <span className="text-red-500">{comboCategory.name}</span>
+                  Conheça nossos <span className="text-[#047857]">{comboCategory.name}</span>
                 </h3>
                 
-                <p className="text-xs sm:text-sm text-stone-400 max-w-lg leading-relaxed font-normal">
-                  Burgers artesanais acompanhados de batata crocante e bebida gelada com o melhor custo-benefício.
+                <p className="text-xs sm:text-sm text-stone-500 max-w-lg leading-relaxed font-normal">
+                  Combos especiais e produtos selecionados com o melhor custo-benefício para sua refeição.
                 </p>
               </div>
 
@@ -918,7 +1120,7 @@ export default function MenuPage() {
                     setSearchQuery("");
                     window.scrollTo({ top: 180, behavior: 'smooth' });
                   }}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-red-600 hover:bg-red-500 text-white font-extrabold text-xs sm:text-sm px-6 py-3.5 rounded-2xl shadow-lg transition-all duration-200 cursor-pointer whitespace-nowrap"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-[#047857] hover:bg-[#036348] text-white font-extrabold text-xs sm:text-sm px-6 py-3.5 rounded-2xl shadow-md shadow-[#047857]/20 transition-all duration-200 cursor-pointer whitespace-nowrap"
                 >
                   <span>Explorar Combos</span>
                   <ArrowRight className="w-4 h-4" />
@@ -927,11 +1129,10 @@ export default function MenuPage() {
             </div>
           </motion.div>
         )}
-
       </main>
 
-      {/* Rodapé Institucional Dark */}
-      <footer className="bg-[#090706] border-t border-stone-800/80 py-10 px-4">
+      {/* Rodapé Institucional Clean */}
+      <footer className="bg-white border-t border-[#E5EAE7] py-10 px-4">
         <div className="container mx-auto max-w-6xl grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
           <div className="md:col-span-4 space-y-3">
             <div className="flex items-center gap-3">
@@ -939,29 +1140,29 @@ export default function MenuPage() {
                 {settings?.restaurant_logo ? (
                   <img src={settings.restaurant_logo} alt="Logo" className="w-full h-full object-contain" />
                 ) : (
-                  <div className="w-10 h-10 rounded-xl bg-stone-900 border border-stone-800 flex items-center justify-center font-black text-sm text-white">
+                  <div className="w-10 h-10 rounded-xl bg-stone-100 border border-stone-200 flex items-center justify-center font-black text-sm text-stone-900">
                     {(settings?.restaurant_name || resolvedInitialStoreName).substring(0, 2).toUpperCase()}
                   </div>
                 )}
               </div>
-              <h4 className="font-black text-base text-white tracking-tight" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+              <h4 className="font-black text-base text-stone-900 tracking-tight" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
                 {settings?.restaurant_name || resolvedInitialStoreName}
               </h4>
             </div>
-            <p className="text-xs text-stone-400 leading-relaxed max-w-xs font-normal">
+            <p className="text-xs text-stone-500 leading-relaxed max-w-xs font-normal">
               Os melhores produtos preparados com ingredientes selecionados e entrega rápida para você.
             </p>
           </div>
 
-          <div className="md:col-span-4 space-y-2.5 text-xs text-stone-300">
-            <p className="font-black uppercase tracking-wider text-stone-500 text-[11px]">Localização & Contato</p>
+          <div className="md:col-span-4 space-y-2.5 text-xs text-stone-600">
+            <p className="font-black uppercase tracking-wider text-stone-400 text-[11px]">Localização & Contato</p>
             <div className="flex items-center gap-2">
-              <MapPin className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
+              <MapPin className="w-3.5 h-3.5 text-stone-500 flex-shrink-0" />
               <span>{settings?.address || "Endereço não informado"}</span>
             </div>
             {settings?.phone && (
               <div className="flex items-center gap-2">
-                <Phone className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
+                <Phone className="w-3.5 h-3.5 text-stone-500 flex-shrink-0" />
                 <span>{settings.phone}</span>
               </div>
             )}
@@ -970,9 +1171,9 @@ export default function MenuPage() {
                 href={`https://wa.me/${settings.whatsapp.replace(/\D/g, '')}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 text-stone-300 hover:text-white transition-colors"
+                className="flex items-center gap-2 text-stone-700 hover:text-stone-900 transition-colors"
               >
-                <Phone className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                <Phone className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
                 <span>{settings.whatsapp}</span>
               </a>
             )}
@@ -981,29 +1182,29 @@ export default function MenuPage() {
                 href={`https://instagram.com/${settings.instagram.replace('@', '')}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 text-stone-300 hover:text-white transition-colors"
+                className="flex items-center gap-2 text-stone-700 hover:text-stone-900 transition-colors"
               >
-                <Instagram className="w-3.5 h-3.5 text-pink-500 flex-shrink-0" />
+                <Instagram className="w-3.5 h-3.5 text-stone-600 flex-shrink-0" />
                 <span>{settings.instagram}</span>
               </a>
             )}
           </div>
 
-          <div className="md:col-span-4 space-y-2.5 text-xs text-stone-300">
-            <p className="font-black uppercase tracking-wider text-stone-500 text-[11px]">Horário de Funcionamento</p>
+          <div className="md:col-span-4 space-y-2.5 text-xs text-stone-600">
+            <p className="font-black uppercase tracking-wider text-stone-400 text-[11px]">Horário de Funcionamento</p>
             <div className="flex items-center gap-2">
               <div className={`w-2 h-2 rounded-full ${storeIsOpen ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
-              <span className={storeIsOpen ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold'}>
+              <span className={storeIsOpen ? 'text-emerald-700 font-bold' : 'text-red-600 font-bold'}>
                 {storeIsOpen ? 'Aberto Agora' : 'Fechado'}
               </span>
             </div>
-            <p className="text-stone-400">
+            <p className="text-stone-500">
               {settings?.opening_time && settings?.closing_time ? `${settings.opening_time} às ${settings.closing_time}` : 'Consulte nosso horário'}
             </p>
           </div>
         </div>
 
-        <div className="container mx-auto max-w-6xl pt-8 mt-8 border-t border-stone-800/60 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-stone-400">
+        <div className="container mx-auto max-w-6xl pt-8 mt-8 border-t border-stone-200 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-stone-500">
           <p>© {new Date().getFullYear()} {settings?.restaurant_name || resolvedInitialStoreName}. Todos os direitos reservados.</p>
           <p>
             Desenvolvido por{" "}
@@ -1011,7 +1212,7 @@ export default function MenuPage() {
               href="https://instagram.com/davialeixo_nogueira"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-red-400 hover:text-red-300 font-medium transition-colors"
+              className="text-stone-800 hover:text-stone-950 font-semibold transition-colors"
             >
               Davi Aleixo
             </a>
@@ -1020,7 +1221,7 @@ export default function MenuPage() {
               href="https://wa.me/5531982607426"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-red-400 hover:text-red-300 font-medium transition-colors"
+              className="text-stone-800 hover:text-stone-950 font-semibold transition-colors"
             >
               31982607426
             </a>

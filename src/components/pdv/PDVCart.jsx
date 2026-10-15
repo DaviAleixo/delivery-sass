@@ -86,10 +86,10 @@ export default function PDVCart({
       {/* Header */}
       <div className="bg-gray-900 text-white px-3.5 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
-          <ShoppingCart className="w-5 h-5 text-red-500" />
+          <ShoppingCart className="w-5 h-5 text-[#D1E9DF]" />
           <h2 className="font-bold text-sm sm:text-base">Carrinho</h2>
           {itemCount > 0 && (
-            <span className="bg-red-500 text-white text-xs font-bold rounded-full px-2 py-0.5 min-w-[20px] text-center">
+            <span className="bg-[#047857] text-white text-xs font-bold rounded-full px-2 py-0.5 min-w-[20px] text-center">
               {itemCount}
             </span>
           )}
@@ -134,7 +134,7 @@ export default function PDVCart({
             </Link>
             <Button
               size="sm"
-              className="flex-1 text-xs h-8 bg-green-600 hover:bg-green-700 font-bold"
+              className="flex-1 text-xs h-8 bg-[#047857] hover:bg-[#065f46] text-white font-bold"
               onClick={onDismissSuccess}
             >
               Novo Pedido
@@ -147,7 +147,7 @@ export default function PDVCart({
       <div className="px-3 py-2.5 border-b border-gray-100 bg-stone-50/80 space-y-2 shrink-0">
         <div className="flex items-center justify-between gap-1">
           <div className="flex items-center gap-1.5 text-xs font-bold text-gray-700">
-            <User className="w-3.5 h-3.5 text-red-600" />
+            <User className="w-3.5 h-3.5 text-[#047857]" />
             <span>Identificação do Cliente</span>
           </div>
           <div className="flex items-center gap-1">
@@ -155,7 +155,7 @@ export default function PDVCart({
               <button
                 type="button"
                 onClick={handleClearCustomer}
-                className="text-[11px] text-stone-400 hover:text-red-600 px-1 font-semibold transition-colors cursor-pointer"
+                className="text-[11px] text-stone-400 hover:text-rose-600 px-1 font-semibold transition-colors cursor-pointer"
                 title="Limpar cliente"
               >
                 Limpar
@@ -168,7 +168,7 @@ export default function PDVCart({
               onClick={() => setShowClientModal(true)}
               className="h-6 text-[11px] px-2 rounded-md bg-white border-stone-200 hover:bg-stone-100 text-stone-700 font-bold gap-1 shadow-2xs"
             >
-              <Users className="w-3 h-3 text-red-600" />
+              <Users className="w-3 h-3 text-[#047857]" />
               <span>Salvos</span>
             </Button>
           </div>
@@ -180,11 +180,11 @@ export default function PDVCart({
               placeholder="Telefone: (00) 00000-0000"
               value={customerPhone || ""}
               onChange={handlePhoneChange}
-              className="h-8 text-xs bg-white rounded-lg pr-7"
+              className="h-8 text-xs bg-white rounded-lg pr-7 focus-visible:ring-[#047857]"
             />
             {isSearchingPhone && (
               <div className="absolute right-2 top-1/2 -translate-y-1/2">
-                <div className="w-3.5 h-3.5 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+                <div className="w-3.5 h-3.5 border-2 border-[#047857] border-t-transparent rounded-full animate-spin" />
               </div>
             )}
           </div>
@@ -242,20 +242,20 @@ export default function PDVCart({
                 <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-lg p-0.5">
                   <button
                     onClick={() => onUpdateQty(item.id, -1)}
-                    className="w-6 h-6 rounded-md hover:bg-red-50 hover:text-red-600 flex items-center justify-center transition-colors text-gray-600 cursor-pointer"
+                    className="w-6 h-6 rounded-md hover:bg-stone-100 hover:text-stone-800 flex items-center justify-center transition-colors text-gray-600 cursor-pointer"
                   >
                     <Minus className="w-3 h-3" />
                   </button>
                   <span className="w-6 text-center font-bold text-xs">{item.qty}</span>
                   <button
                     onClick={() => onUpdateQty(item.id, 1)}
-                    className="w-6 h-6 rounded-md hover:bg-green-50 hover:text-green-600 flex items-center justify-center transition-colors text-gray-600 cursor-pointer"
+                    className="w-6 h-6 rounded-md hover:bg-[#D1E9DF]/30 hover:text-[#047857] flex items-center justify-center transition-colors text-gray-600 cursor-pointer"
                   >
                     <Plus className="w-3 h-3" />
                   </button>
                 </div>
                 <div className="text-right">
-                  <p className="font-bold text-red-600 text-xs sm:text-sm">
+                  <p className="font-bold text-[#171717] text-xs sm:text-sm">
                     R$ {(item.price * item.qty).toFixed(2).replace(".", ",")}
                   </p>
                   <p className="text-[10px] text-gray-400">
@@ -285,7 +285,7 @@ export default function PDVCart({
         <Button
           onClick={onFinalize}
           disabled={cart.length === 0}
-          className="w-full h-11 sm:h-12 text-sm sm:text-base font-bold bg-red-600 hover:bg-red-700 text-white disabled:opacity-40 disabled:cursor-not-allowed shadow-md rounded-xl cursor-pointer"
+          className="w-full h-11 sm:h-12 text-sm sm:text-base font-bold bg-[#047857] hover:bg-[#065f46] text-white disabled:opacity-40 disabled:cursor-not-allowed shadow-md rounded-xl cursor-pointer"
         >
           ✓ Finalizar Pedido
         </Button>

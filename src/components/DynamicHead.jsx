@@ -46,7 +46,7 @@ export default function DynamicHead() {
 
     // Caso especial: Login Geral da plataforma (sem loja específica)
     if (!urlSlug && pathname.includes("adminlogin")) {
-      document.title = "Delivery 1.0 — Login Administrativo";
+      document.title = "PedeMuleke — Login Administrativo";
       clearFavicon();
       return;
     }

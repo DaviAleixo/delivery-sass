@@ -212,7 +212,8 @@ export default function OrderModal({
   deliveryRules = {},
   initialTableNumber = "",
   onSubmit,
-  isSubmitting = false
+  isSubmitting = false,
+  isVrumm = false
 }) {
   const storeCity = deliveryRules?.address_city || "";
   const storeState = deliveryRules?.address_state || "MG";
@@ -237,7 +238,23 @@ export default function OrderModal({
   
   const isTableOnlyStore = deliveryRules?.salon_mode === 'table_only';
   const savedMesa = initialTableNumber || (typeof window !== "undefined" ? localStorage.getItem("vrumburguer_table_number") || "" : "");
-  const [orderType, setOrderType] = useState(isTableOnlyStore || savedMesa ? "dine_in" : "delivery");
+  
+  // Regras de canais de atendimento e restrição de mesa via QR Code
+  const acceptsDelivery = deliveryRules?.accepts_delivery !== false && !isTableOnlyStore;
+  const acceptsTakeaway = deliveryRules?.accepts_takeaway !== false;
+  // "Na Mesa" somente deve aparecer se o cliente escaneou o QR Code da mesa (savedMesa) ou em loja exclusiva de mesas
+  const showDineInTab = Boolean(savedMesa || isTableOnlyStore);
+  const showDeliveryTab = Boolean(acceptsDelivery && !isTableOnlyStore);
+  const showTakeawayTab = Boolean(acceptsTakeaway);
+
+  const getInitialOrderType = () => {
+    if (showDineInTab) return "dine_in";
+    if (showDeliveryTab) return "delivery";
+    if (showTakeawayTab) return "takeaway";
+    return "delivery";
+  };
+
+  const [orderType, setOrderType] = useState(getInitialOrderType);
   const [tableNumber, setTableNumber] = useState(savedMesa);
   const [customerData, setCustomerData] = useState({
     customer_name: "",
@@ -256,13 +273,15 @@ export default function OrderModal({
   const [couponError, setCouponError] = useState("");
 
   useEffect(() => {
-    if (savedMesa) {
+    if (savedMesa || isTableOnlyStore) {
       setOrderType("dine_in");
-      setTableNumber(savedMesa);
-    } else if (isTableOnlyStore && orderType === "delivery") {
-      setOrderType("dine_in");
+      if (savedMesa) setTableNumber(savedMesa);
+    } else if (!showDeliveryTab && showTakeawayTab) {
+      setOrderType("takeaway");
+    } else if (showDeliveryTab && !showTakeawayTab) {
+      setOrderType("delivery");
     }
-  }, [savedMesa, isTableOnlyStore]);
+  }, [savedMesa, isTableOnlyStore, showDeliveryTab, showTakeawayTab]);
 
   // Sincroniza cidade base do restaurante quando carregada
   useEffect(() => {
@@ -1015,24 +1034,70 @@ export default function OrderModal({
             </div>
           </div>
 
-          {/* 2º BLOCO: OPÇÕES DE ENTREGA (DELIVERY, RETIRADA, NA MESA) */}
-          <Tabs value={orderType} onValueChange={(val) => {
-            setOrderType(val);
-            if (errors.table_number) setErrors(prev => ({ ...prev, table_number: "" }));
-          }} className="w-full">
-            <TabsList className={`grid w-full ${isTableOnlyStore ? 'grid-cols-2' : 'grid-cols-3'} rounded-2xl p-1 bg-stone-100 h-auto gap-1`}>
-              {!isTableOnlyStore && (
-                <TabsTrigger value="delivery" className="rounded-xl font-bold text-xs sm:text-sm py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-red-600">
-                  <Truck className="w-4 h-4 mr-1.5 shrink-0"/>Delivery
-                </TabsTrigger>
-              )}
-              <TabsTrigger value="dine_in" className="rounded-xl font-bold text-xs sm:text-sm py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-emerald-700">
-                <span className="text-sm mr-1">🍽️</span>Na Mesa
-              </TabsTrigger>
-              <TabsTrigger value="takeaway" className="rounded-xl font-bold text-xs sm:text-sm py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-amber-700">
-                <Store className="w-4 h-4 mr-1.5 shrink-0"/>Retirada
-              </TabsTrigger>
-            </TabsList>
+          {/* 2º BLOCO: OPÇÕES DE ATENDIMENTO (DELIVERY, RETIRADA, NA MESA) */}
+          {(() => {
+            const availableCount = (showDeliveryTab ? 1 : 0) + (showTakeawayTab ? 1 : 0) + (showDineInTab ? 1 : 0);
+            return (
+              <Tabs value={orderType} onValueChange={(val) => {
+                setOrderType(val);
+                if (errors.table_number) setErrors(prev => ({ ...prev, table_number: "" }));
+              }} className="w-full">
+                {/* Se houver apenas 1 canal disponível, não precisa de abas: mostra cabeçalho limpo */}
+                {availableCount <= 1 ? (
+                  <div className="mb-2">
+                    {orderType === 'takeaway' && (
+                      <div className="flex items-center justify-between bg-amber-50/80 border border-amber-200/90 px-4 py-2.5 rounded-2xl text-xs text-amber-950 shadow-xs">
+                        <span className="font-bold flex items-center gap-2 text-xs sm:text-sm text-amber-950">
+                          <Store className="w-4 h-4 text-amber-700 shrink-0" />
+                          Retirada no Balcão
+                        </span>
+                        <span className="bg-amber-100/90 border border-amber-300/80 text-amber-900 font-bold px-2.5 py-0.5 rounded-lg text-[11px]">
+                          Frete Grátis • Buscar na loja
+                        </span>
+                      </div>
+                    )}
+                    {orderType === 'delivery' && (
+                      <div className="flex items-center justify-between bg-emerald-50/80 border border-emerald-200/90 px-4 py-2.5 rounded-2xl text-xs text-emerald-950 shadow-xs">
+                        <span className="font-bold flex items-center gap-2 text-xs sm:text-sm text-emerald-950">
+                          <Truck className="w-4 h-4 text-emerald-700 shrink-0" />
+                          Entrega no seu Endereço (Delivery)
+                        </span>
+                        <span className="bg-white border border-emerald-200 font-bold text-emerald-800 px-2.5 py-0.5 rounded-lg text-[11px] shadow-2xs">
+                          ⏱️ {deliveryTime}
+                        </span>
+                      </div>
+                    )}
+                    {orderType === 'dine_in' && (
+                      <div className="flex items-center justify-between bg-teal-50/80 border border-teal-200/90 px-4 py-2.5 rounded-2xl text-xs text-teal-950 shadow-xs">
+                        <span className="font-bold flex items-center gap-2 text-xs sm:text-sm text-teal-950">
+                          <span className="text-base">🍽️</span>
+                          Consumo no Salão {tableNumber ? `(Mesa ${tableNumber})` : ""}
+                        </span>
+                        <span className="bg-teal-100 text-teal-900 font-bold px-2.5 py-0.5 rounded-lg text-[11px]">
+                          Autoatendimento
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <TabsList className={`grid w-full ${availableCount === 3 ? 'grid-cols-3' : 'grid-cols-2'} rounded-2xl p-1 bg-stone-100 h-auto gap-1 mb-2`}>
+                    {showDeliveryTab && (
+                      <TabsTrigger value="delivery" className="rounded-xl font-bold text-xs sm:text-sm py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-emerald-700">
+                        <Truck className="w-4 h-4 mr-1.5 shrink-0"/>Delivery
+                      </TabsTrigger>
+                    )}
+                    {showDineInTab && (
+                      <TabsTrigger value="dine_in" className="rounded-xl font-bold text-xs sm:text-sm py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-teal-700">
+                        <span className="text-sm mr-1">🍽️</span>Na Mesa
+                      </TabsTrigger>
+                    )}
+                    {showTakeawayTab && (
+                      <TabsTrigger value="takeaway" className="rounded-xl font-bold text-xs sm:text-sm py-2.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-amber-700">
+                        <Store className="w-4 h-4 mr-1.5 shrink-0"/>Retirada
+                      </TabsTrigger>
+                    )}
+                  </TabsList>
+                )}
 
             <TabsContent value="delivery" className="space-y-3 pt-2">
               <div className="flex items-center justify-between bg-amber-50/70 border border-amber-200/80 px-3.5 py-2 rounded-2xl text-xs text-amber-900">
@@ -1398,6 +1463,8 @@ export default function OrderModal({
               </div>
             </TabsContent>
           </Tabs>
+            );
+          })()}
 
           {/* 3º BLOCO: FORMA DE PAGAMENTO E OBSERVAÇÕES */}
           <div className="space-y-3 pt-1">
@@ -1722,7 +1789,11 @@ export default function OrderModal({
             </Button>
             <Button
               type="submit"
-              className="flex-2 h-12 rounded-2xl bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-black text-sm sm:text-base shadow-lg shadow-red-600/30 active:scale-[0.98] transition-all cursor-pointer"
+              className={`flex-2 h-12 rounded-2xl ${
+                isVrumm
+                  ? "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 shadow-red-600/30"
+                  : "bg-[#047857] hover:bg-[#036348] shadow-[#047857]/30"
+              } text-white font-black text-sm sm:text-base shadow-lg active:scale-[0.98] transition-all cursor-pointer`}
               disabled={isSubmitting || finalTotal < minOrderValue || (orderType === 'delivery' && isDeliveryBlocked)}
             >
               {isSubmitting ? "Enviando..." : (orderType === 'delivery' && isDeliveryBlocked ? (isCityBlocked ? "Cidade Não Atendida" : "Bairro Não Atendido") : "Confirmar Pedido ➔")}
@@ -1772,7 +1843,11 @@ export default function OrderModal({
                 <Button
                   type="button"
                   onClick={handleConfirmCustomerModal}
-                  className="flex-1 h-11 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-md"
+                  className={`flex-1 h-11 ${
+                    isVrumm
+                      ? "bg-red-600 hover:bg-red-700 shadow-red-600/30"
+                      : "bg-[#047857] hover:bg-[#036348] shadow-[#047857]/30"
+                  } text-white font-bold rounded-xl text-xs shadow-md`}
                 >
                   Sim, sou eu ✓
                 </Button>

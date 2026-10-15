@@ -40,6 +40,7 @@
  */
 
 import React from "react";
+import VrummMenu from "./vrumm/VrummMenu";
 
 /**
  * Catálogo de templates registrados no sistema.
@@ -48,21 +49,18 @@ import React from "react";
 export const AVAILABLE_TEMPLATES = [
   {
     id: "default",
-    name: "Padrão da Plataforma",
-    description: "Layout oficial de alta conversão com carrossel de banners, categorias sticky e carrinho lateral.",
+    name: "Padrão Clean Retail (SaaS)",
+    description: "Design moderno, clean e de alta conversão para qualquer nicho de restaurante.",
     badge: "Oficial",
     component: null, // null aciona o Menu.jsx genérico nativo
   },
-  /* 
-   * Exemplo de template futuro:
-   * {
-   *   id: "texas-vip",
-   *   name: "Texas Burger VIP",
-   *   description: "Design rústico exclusivo com fontes western e animações especiais",
-   *   badge: "VIP Exclusivo",
-   *   component: React.lazy(() => import("./texas-vip/TexasMenu")),
-   * }
-   */
+  {
+    id: "vrumm",
+    name: "Vrumm Burguer VIP (Dark & Red)",
+    description: "Design exclusivo Dark & Red com carrossel dinâmico e paleta escura (#0d0a09) para hamburguerias e pubs.",
+    badge: "Exclusivo Vrumm",
+    component: VrummMenu,
+  },
 ];
 
 /**

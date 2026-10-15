@@ -93,7 +93,7 @@ export default function CategoriesPage() {
   };
 
   return (
-    <div className="p-8 bg-gray-50 min-h-screen">
+    <div className="p-8 bg-[#F7F9F8] min-h-screen">
       <div className="max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-8">
           <div>
@@ -102,7 +102,7 @@ export default function CategoriesPage() {
           </div>
           <Button 
             onClick={() => { setShowModal(true); resetForm(); }}
-            className="bg-red-600 hover:bg-red-700 text-white"
+            className="bg-[#047857] hover:bg-[#065f46] text-white font-bold shadow-sm cursor-pointer"
           >
             <Plus className="w-4 h-4 mr-2" />
             Nova Categoria
@@ -119,12 +119,12 @@ export default function CategoriesPage() {
                 exit={{ opacity: 0, scale: 0.9 }}
                 transition={{ duration: 0.2 }}
               >
-                <Card className={`overflow-hidden hover:shadow-lg transition-shadow border-2 ${category.is_combo ? 'border-red-500 bg-red-50/20' : 'hover:border-red-200'}`}>
+                <Card className={`overflow-hidden hover:shadow-lg transition-shadow border-2 ${category.is_combo ? 'border-[#047857] bg-[#D1E9DF]/10' : 'hover:border-stone-300'}`}>
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between gap-2">
                       <CardTitle className="text-lg text-gray-900">{category.name}</CardTitle>
                       {category.is_combo && (
-                        <span className="inline-flex items-center gap-1 bg-red-600 text-white text-xs font-bold px-2 py-0.5 rounded-full shadow-xs">
+                        <span className="inline-flex items-center gap-1 bg-[#047857] text-white text-xs font-bold px-2 py-0.5 rounded-full shadow-xs">
                           <Sparkles className="w-3 h-3" />
                           Combos
                         </span>
@@ -135,7 +135,7 @@ export default function CategoriesPage() {
                     <div className="flex items-center justify-between mb-4 text-sm text-gray-500">
                       <span>Ordem: <span className="font-medium text-gray-700">{category.order_index}</span></span>
                       {category.is_combo ? (
-                        <span className="text-xs font-bold text-red-600">Banner Promocional Ativo</span>
+                        <span className="text-xs font-bold text-[#047857]">Banner Promocional Ativo</span>
                       ) : (
                         <span>Padrão</span>
                       )}
@@ -146,7 +146,7 @@ export default function CategoriesPage() {
                         variant="outline"
                         size="sm"
                         onClick={() => openEditModal(category)}
-                        className="flex-1 border-red-200 text-red-600 hover:bg-red-50"
+                        className="flex-1 border-stone-200 text-[#047857] hover:bg-[#D1E9DF]/30 cursor-pointer"
                       >
                         <Edit className="w-4 h-4 mr-1" />
                         Editar
@@ -155,7 +155,7 @@ export default function CategoriesPage() {
                         variant="outline"
                         size="sm"
                         onClick={() => handleDelete(category.id)}
-                        className="flex-1 text-red-600 hover:text-red-700 border-red-200 hover:bg-red-50"
+                        className="flex-1 text-rose-600 hover:text-rose-700 border-rose-200 hover:bg-rose-50 cursor-pointer"
                       >
                         <Trash2 className="w-4 h-4 mr-1" />
                         Excluir
@@ -183,7 +183,7 @@ export default function CategoriesPage() {
         <Dialog open={showModal} onOpenChange={setShowModal}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle className="text-red-800">
+              <DialogTitle className="text-stone-900 font-extrabold text-lg">
                 {editingCategory ? "Editar Categoria" : "Nova Categoria"}
               </DialogTitle>
             </DialogHeader>
@@ -198,7 +198,7 @@ export default function CategoriesPage() {
                     onChange={(e) => setCategoryForm({...categoryForm, name: e.target.value})}
                     required
                     placeholder="Ex: Combos Especiais"
-                    className="border-red-200 focus:border-red-600 mt-1"
+                    className="border-stone-200 focus:border-[#047857] mt-1"
                   />
                 </div>
                 
@@ -209,12 +209,12 @@ export default function CategoriesPage() {
                     type="number"
                     value={categoryForm.order_index}
                     onChange={(e) => setCategoryForm({...categoryForm, order_index: parseInt(e.target.value) || 0})}
-                    className="border-red-200 focus:border-red-600 mt-1"
+                    className="border-stone-200 focus:border-[#047857] mt-1"
                   />
                 </div>
 
                 {/* Flag de Categoria de Combos */}
-                <div className="flex items-center justify-between p-3 bg-red-50/50 rounded-xl border border-red-100">
+                <div className="flex items-center justify-between p-3 bg-[#D1E9DF]/20 rounded-xl border border-[#D1E9DF]/60">
                   <div className="space-y-0.5">
                     <Label htmlFor="is_combo" className="text-sm font-bold text-gray-900 cursor-pointer">
                       Categoria de Combos (Banner Promocional)
@@ -227,6 +227,7 @@ export default function CategoriesPage() {
                     id="is_combo"
                     checked={categoryForm.is_combo}
                     onCheckedChange={(checked) => setCategoryForm({ ...categoryForm, is_combo: checked })}
+                    className="data-[state=checked]:bg-[#047857]"
                   />
                 </div>
               </div>
@@ -236,14 +237,14 @@ export default function CategoriesPage() {
                   type="button"
                   variant="outline"
                   onClick={() => {setShowModal(false); resetForm();}}
-                  className="flex-1 border-red-200 text-red-600 hover:bg-red-50"
+                  className="flex-1 border-stone-200 text-stone-700 hover:bg-stone-50 cursor-pointer"
                 >
                   Cancelar
                 </Button>
                 <Button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex-1 bg-red-600 hover:bg-red-700"
+                  className="flex-1 bg-[#047857] hover:bg-[#065f46] text-white font-bold cursor-pointer"
                 >
                   {isSubmitting ? "Salvando..." : "Salvar"}
                 </Button>

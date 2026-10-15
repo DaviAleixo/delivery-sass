@@ -562,14 +562,14 @@ export default function Layout({ children, currentPageName }) {
   if (currentPageName !== "Menu" && currentPageName !== "MyOrders" && currentPageName !== "PrintOrder" && currentPageName !== "PrintShiftClosing") {
     return (
       <SidebarProvider>
-        <div className="min-h-screen flex w-full bg-gray-50">
+        <div className="min-h-screen flex w-full bg-[#F7F9F8]">
           <Sidebar className="border-r border-stone-200 bg-white text-stone-900">
             {user?.role === "super_admin" && (
               <div className="p-2 bg-slate-900 border-b border-slate-800 flex items-center justify-between text-xs text-slate-200">
-                <span className="font-semibold text-rose-400">👑 Modo Super Admin</span>
+                <span className="font-semibold text-emerald-400">👑 Modo Super Admin</span>
                 <Link
                   to={createPageUrl("SuperAdmin")}
-                  className="bg-rose-600 hover:bg-rose-700 text-white px-2 py-0.5 rounded text-[11px] font-bold"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-0.5 rounded text-[11px] font-bold"
                 >
                   Painel Master
                 </Link>
@@ -592,7 +592,7 @@ export default function Layout({ children, currentPageName }) {
                   <h2 className="font-extrabold text-base text-stone-950 leading-tight" style={{ letterSpacing: '-0.02em' }}>
                     {settings?.restaurant_name || currentStoreName}
                   </h2>
-                  <p className="text-xs font-bold text-red-600 mt-0.5">Painel Administrativo</p>
+                  <p className="text-xs font-bold text-[#047857] mt-0.5">Painel Administrativo</p>
                 </div>
               </div>
             </SidebarHeader>
@@ -615,8 +615,8 @@ export default function Layout({ children, currentPageName }) {
                             asChild 
                             className={`h-10 transition-all duration-150 rounded-xl px-3.5 font-semibold text-sm ${
                               isActive 
-                                ? 'bg-red-600 text-white font-bold shadow-md shadow-red-200 hover:bg-red-700 hover:text-white' 
-                                : 'text-stone-700 hover:bg-stone-100 hover:text-stone-950'
+                                ? 'bg-[#047857] text-white font-bold shadow-sm hover:bg-[#065f46] hover:text-white' 
+                                : 'text-stone-700 hover:bg-[#D1E9DF]/30 hover:text-[#047857]'
                             }`}
                           >
                             <Link to={item.url} className="flex items-center justify-between w-full">
@@ -625,7 +625,7 @@ export default function Layout({ children, currentPageName }) {
                                 <span className="truncate">{item.title}</span>
                               </div>
                               {showBadge && (
-                                <span className="ml-auto bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm animate-pulse flex items-center justify-center min-w-[20px] h-5">
+                                <span className="ml-auto bg-[#047857] text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm animate-pulse flex items-center justify-center min-w-[20px] h-5">
                                   {pendingOrdersCount}
                                 </span>
                               )}
@@ -642,9 +642,9 @@ export default function Layout({ children, currentPageName }) {
                 <SidebarGroupContent>
                   <SidebarMenu>
                     <SidebarMenuItem>
-                      <SidebarMenuButton asChild className="rounded-xl border border-stone-200 text-stone-800 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all font-bold text-sm">
+                      <SidebarMenuButton asChild className="rounded-xl border border-[#D1E9DF] text-stone-800 hover:bg-[#D1E9DF]/30 hover:text-[#047857] hover:border-[#047857]/40 transition-all font-bold text-sm">
                         <Link to={`/${activeSlug}/menu`} target="_blank" className="flex items-center gap-3 px-3 py-2.5">
-                          <ShoppingBag className="w-4 h-4 text-red-600 flex-shrink-0" />
+                          <ShoppingBag className="w-4 h-4 text-[#047857] flex-shrink-0" />
                           <span>Ver Cardápio Online</span>
                         </Link>
                       </SidebarMenuButton>
@@ -658,7 +658,7 @@ export default function Layout({ children, currentPageName }) {
 
               <div className="flex items-center justify-between pt-1">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center flex-shrink-0 text-white font-black text-xs shadow-sm uppercase">
+                  <div className="w-8 h-8 bg-[#047857] rounded-full flex items-center justify-center flex-shrink-0 text-white font-black text-xs shadow-sm uppercase">
                     {(user?.username || 'a').charAt(0)}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -669,7 +669,7 @@ export default function Layout({ children, currentPageName }) {
                 </div>
                 <button 
                   onClick={handleLogout}
-                  className="p-1.5 text-stone-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors ml-1 cursor-pointer"
+                  className="p-1.5 text-stone-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors ml-1 cursor-pointer"
                   title="Sair do painel"
                 >
                   <LogOut className="w-4 h-4" />

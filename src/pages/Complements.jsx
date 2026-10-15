@@ -307,7 +307,7 @@ export default function ComplementsPage() {
             Crie grupos reutilizáveis (Ponto da Carne, Turbine seu Burger, Molhos) e vincule a múltiplos produtos com 1 clique.
           </p>
         </div>
-        <Button onClick={handleOpenCreateGroup} className="bg-red-600 hover:bg-red-700 text-white shadow-sm">
+        <Button onClick={handleOpenCreateGroup} className="bg-[#047857] hover:bg-[#065f46] text-white shadow-sm cursor-pointer">
           <Plus className="w-4 h-4 mr-2" /> Novo Grupo
         </Button>
       </div>
@@ -326,7 +326,7 @@ export default function ComplementsPage() {
           <p className="text-sm text-gray-500 max-w-md mx-auto mt-1 mb-4">
             Crie seu primeiro grupo de complementos para organizar adicionais e opções obrigatórias ou opcionais.
           </p>
-          <Button onClick={handleOpenCreateGroup} className="bg-red-600 hover:bg-red-700">
+          <Button onClick={handleOpenCreateGroup} className="bg-[#047857] hover:bg-[#065f46] text-white cursor-pointer">
             <Plus className="w-4 h-4 mr-2" /> Criar Grupo Agora
           </Button>
         </Card>
@@ -386,7 +386,7 @@ export default function ComplementsPage() {
                           <span>Opções ({grpItems.length})</span>
                           <button 
                             onClick={() => handleOpenItemsModal(group)}
-                            className="text-red-600 hover:underline flex items-center gap-1 font-bold cursor-pointer"
+                            className="text-[#047857] hover:underline flex items-center gap-1 font-bold cursor-pointer"
                           >
                             <ListPlus className="w-3.5 h-3.5" /> Gerenciar Opções
                           </button>
@@ -398,7 +398,7 @@ export default function ComplementsPage() {
                             <p className="text-xs text-amber-800 font-medium">Nenhuma opção cadastrada</p>
                             <button
                               onClick={() => handleOpenItemsModal(group)}
-                              className="text-[11px] text-red-600 font-bold hover:underline mt-1"
+                              className="text-[11px] text-[#047857] font-bold hover:underline mt-1 cursor-pointer"
                             >
                               + Adicionar opções
                             </button>
@@ -554,7 +554,7 @@ export default function ComplementsPage() {
               <Button type="button" variant="outline" onClick={() => setShowGroupModal(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={isSaving} className="bg-red-600 hover:bg-red-700 text-white font-semibold">
+              <Button type="submit" disabled={isSaving} className="bg-[#047857] hover:bg-[#065f46] text-white font-semibold cursor-pointer">
                 {isSaving ? "Salvando..." : (editingGroup ? "Salvar Alterações" : "Criar Grupo")}
               </Button>
             </div>
@@ -567,8 +567,8 @@ export default function ComplementsPage() {
         <DialogContent className="sm:max-w-xl max-h-[88vh] overflow-y-auto rounded-2xl">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
-              <Layers className="w-5 h-5 text-red-600" />
-              Opções do Grupo: <span className="text-red-600">{activeGroupForItems?.name}</span>
+              <Layers className="w-5 h-5 text-[#047857]" />
+              Opções do Grupo: <span className="text-[#047857]">{activeGroupForItems?.name}</span>
             </DialogTitle>
           </DialogHeader>
 
@@ -577,7 +577,7 @@ export default function ComplementsPage() {
               {/* Formulário de adicionar opção */}
               <form onSubmit={handleAddItem} className="bg-stone-50 p-4 rounded-2xl border border-stone-200 space-y-3">
                 <h4 className="font-bold text-sm text-gray-800 flex items-center gap-1.5">
-                  <Plus className="w-4 h-4 text-red-600" /> Adicionar Nova Opção
+                  <Plus className="w-4 h-4 text-[#047857]" /> Adicionar Nova Opção
                 </h4>
                 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -589,7 +589,7 @@ export default function ComplementsPage() {
                       value={itemForm.name}
                       onChange={e => setItemForm({ ...itemForm, name: e.target.value })}
                       required
-                      className="mt-1 bg-white"
+                      className="mt-1 bg-white focus:border-[#047857]"
                     />
                   </div>
                   <div>
@@ -599,7 +599,7 @@ export default function ComplementsPage() {
                       placeholder="R$ 0,00"
                       value={itemForm.price}
                       onChange={e => setItemForm({ ...itemForm, price: e.target.value })}
-                      className="mt-1 bg-white"
+                      className="mt-1 bg-white focus:border-[#047857]"
                     />
                   </div>
                 </div>
@@ -612,10 +612,10 @@ export default function ComplementsPage() {
                       placeholder="Ex: 4 fatias crocantes"
                       value={itemForm.description}
                       onChange={e => setItemForm({ ...itemForm, description: e.target.value })}
-                      className="mt-1 bg-white"
+                      className="mt-1 bg-white focus:border-[#047857]"
                     />
                   </div>
-                  <Button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white font-semibold">
+                  <Button type="submit" className="w-full bg-[#047857] hover:bg-[#065f46] text-white font-semibold cursor-pointer">
                     <Plus className="w-4 h-4 mr-1" /> Adicionar
                   </Button>
                 </div>
@@ -678,8 +678,8 @@ export default function ComplementsPage() {
         <DialogContent className="sm:max-w-2xl max-h-[88vh] overflow-y-auto rounded-2xl">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold flex items-center gap-2">
-              <Link2 className="w-5 h-5 text-indigo-600" />
-              Vincular Grupo aos Produtos: <span className="text-red-600">{activeGroupForLink?.name}</span>
+              <Link2 className="w-5 h-5 text-[#047857]" />
+              Vincular Grupo aos Produtos: <span className="text-[#047857]">{activeGroupForLink?.name}</span>
             </DialogTitle>
           </DialogHeader>
 
@@ -695,7 +695,7 @@ export default function ComplementsPage() {
                   variant={filterCategory === "all" ? "default" : "outline"}
                   size="sm"
                   onClick={() => setFilterCategory("all")}
-                  className={filterCategory === "all" ? "bg-red-600 text-white rounded-full text-xs" : "rounded-full text-xs"}
+                  className={filterCategory === "all" ? "bg-[#047857] hover:bg-[#065f46] text-white rounded-full text-xs font-bold" : "rounded-full text-xs hover:border-[#047857] hover:text-[#047857]"}
                 >
                   Todas ({products.length})
                 </Button>
@@ -707,7 +707,7 @@ export default function ComplementsPage() {
                       variant={filterCategory === cat.id ? "default" : "outline"}
                       size="sm"
                       onClick={() => setFilterCategory(cat.id)}
-                      className={filterCategory === cat.id ? "bg-red-600 text-white rounded-full text-xs" : "rounded-full text-xs"}
+                      className={filterCategory === cat.id ? "bg-[#047857] hover:bg-[#065f46] text-white rounded-full text-xs font-bold" : "rounded-full text-xs hover:border-[#047857] hover:text-[#047857]"}
                     >
                       {cat.name} ({catProds.length})
                     </Button>
@@ -725,7 +725,7 @@ export default function ComplementsPage() {
                   variant="ghost" 
                   size="sm" 
                   onClick={() => handleSelectAllCategory(filterCategory)}
-                  className="text-xs font-semibold text-red-600 hover:bg-red-50"
+                  className="text-xs font-semibold text-[#047857] hover:bg-[#D1E9DF]/30 cursor-pointer"
                 >
                   Marcar / Desmarcar Todos Desta Categoria
                 </Button>
@@ -740,12 +740,12 @@ export default function ComplementsPage() {
                     return (
                       <label
                         key={product.id}
-                        className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${isSelected ? 'bg-red-50/60 border-red-400 shadow-sm' : 'bg-white hover:border-gray-300'}`}
+                        className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${isSelected ? 'bg-[#D1E9DF]/20 border-[#047857] shadow-xs' : 'bg-white hover:border-gray-300'}`}
                       >
                         <Checkbox
                           checked={isSelected}
                           onCheckedChange={() => handleToggleProductSelection(product.id)}
-                          className="data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"
+                          className="data-[state=checked]:bg-[#047857] data-[state=checked]:border-[#047857]"
                         />
                         <div className="min-w-0 flex-1">
                           <p className="font-semibold text-sm text-gray-900 truncate">{product.name}</p>
@@ -765,7 +765,7 @@ export default function ComplementsPage() {
                   type="button" 
                   onClick={handleSaveLinks} 
                   disabled={isSaving}
-                  className="bg-red-600 hover:bg-red-700 text-white font-semibold"
+                  className="bg-[#047857] hover:bg-[#065f46] text-white font-semibold cursor-pointer"
                 >
                   {isSaving ? "Salvando..." : "Salvar Vínculos"}
                 </Button>

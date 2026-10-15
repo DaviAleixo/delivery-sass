@@ -146,7 +146,7 @@ export default function CouponsPage() {
 
 
   return (
-    <div className="p-8 bg-gray-50 min-h-screen">
+    <div className="p-8 bg-[#F7F9F8] min-h-screen">
       <div className="max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-8">
           <div>
@@ -158,7 +158,7 @@ export default function CouponsPage() {
               resetForm(); // Reset form when opening for new coupon
               setShowModal(true);
             }}
-            className="bg-red-500 hover:bg-red-600 text-white"
+            className="bg-[#047857] hover:bg-[#065f46] text-white font-bold shadow-sm cursor-pointer"
           >
             <Plus className="w-4 h-4 mr-2" />
             Novo Cupom
@@ -205,8 +205,8 @@ export default function CouponsPage() {
                         </div>
                       </div>
                       
-                      <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
-                        <Tag className="w-6 h-6 text-red-500" />
+                      <div className="w-12 h-12 bg-[#D1E9DF]/50 rounded-full flex items-center justify-center">
+                        <Tag className="w-6 h-6 text-[#047857]" />
                       </div>
                     </div>
                   </CardHeader>
@@ -263,7 +263,7 @@ export default function CouponsPage() {
                           variant="outline"
                           size="sm"
                           onClick={() => openEditModal(coupon)}
-                          className="flex-1"
+                          className="flex-1 border-stone-200 text-[#047857] hover:bg-[#D1E9DF]/30 cursor-pointer"
                         >
                           <Edit className="w-4 h-4 mr-1" />
                           Editar
@@ -272,7 +272,7 @@ export default function CouponsPage() {
                           variant="outline"
                           size="sm"
                           onClick={() => handleDelete(coupon.id)}
-                          className="flex-1 text-red-600 hover:text-red-700"
+                          className="flex-1 text-rose-600 hover:text-rose-700 border-rose-200 hover:bg-rose-50 cursor-pointer"
                         >
                           <Trash2 className="w-4 h-4 mr-1" />
                           Excluir
@@ -486,7 +486,7 @@ export default function CouponsPage() {
                   id="active"
                   checked={couponForm.active}
                   onCheckedChange={(checked) => setCouponForm({...couponForm, active: checked})}
-                  className="data-[state=checked]:bg-red-500"
+                  className="data-[state=checked]:bg-[#047857]"
                 />
                 <Label htmlFor="active">Cupom ativo</Label>
               </div>
@@ -503,7 +503,7 @@ export default function CouponsPage() {
                 <Button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex-1 bg-red-500 hover:bg-red-600"
+                  className="flex-1 bg-[#047857] hover:bg-[#065f46] text-white font-bold cursor-pointer"
                 >
                   {isSubmitting ? "Salvando..." : "Salvar Cupom"}
                 </Button>

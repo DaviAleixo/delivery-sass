@@ -613,7 +613,7 @@ export default function ShiftClosingModal({
             <Button
               type="button"
               onClick={handlePrint}
-              className="flex-1 sm:flex-none bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black gap-1.5 cursor-pointer shadow-md"
+              className="flex-1 sm:flex-none bg-[#047857] hover:bg-[#065f46] text-white rounded-xl text-xs font-black gap-1.5 cursor-pointer shadow-md"
             >
               <Printer className="w-3.5 h-3.5" />
               <span>Imprimir Cupom Térmico</span>

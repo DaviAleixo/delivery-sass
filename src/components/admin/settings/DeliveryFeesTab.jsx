@@ -85,6 +85,20 @@ export default function DeliveryFeesTab({
           </p>
         </CardHeader>
         <CardContent className="space-y-6">
+          {settings.accepts_delivery === false && (
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3">
+              <span className="text-xl">⚠️</span>
+              <div>
+                <h4 className="text-xs sm:text-sm font-bold text-amber-900">
+                  O serviço de Delivery está desativado nas Configurações Gerais
+                </h4>
+                <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
+                  Seus clientes atualmente só conseguem pedir para <strong>Retirada no Balcão</strong>. As taxas e bairros configurados abaixo só serão cobrados se você reativar o Delivery na aba <strong>Geral & Loja</strong>.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Seletor de Tipo de Taxa */}
           <div>
             <Label className="text-sm font-bold text-stone-800 block mb-2">
