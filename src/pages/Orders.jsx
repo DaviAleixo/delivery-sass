@@ -3,8 +3,9 @@ import { Order } from "@/entities/Order";
 import { Settings } from "@/entities/Settings";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MapPin, Clock, CheckCircle, X, Bell, BellOff, Volume2, Timer, Check,
-  Calendar, Search
+import { 
+  MapPin, Clock, CheckCircle, X, Bell, BellOff, Volume2, Timer, Check,
+  Calendar, Search, ChefHat, Bike, ShoppingBag, SlidersHorizontal, ChevronRight, ChevronDown, Pencil, QrCode, RefreshCw
 } from "lucide-react";
 import { AnimatePresence } from "framer-motion";
 import { soundAlert } from "@/utils/soundAlert";
@@ -83,7 +84,7 @@ function isDateWithinDays(dateStr, days = 7) {
 export default function OrdersPage() {
   const [orders, setOrders] = useState([]);
   const [settings, setSettings] = useState(null);
-  const [deliveryTime, setDeliveryTime] = useState("40-50 min");
+  const [deliveryTime, setDeliveryTime] = useState("60–80 min");
   const [isEditingTime, setIsEditingTime] = useState(false);
   const [customTimeInput, setCustomTimeInput] = useState("");
   const [soundEnabled, setSoundEnabled] = useState(() => {
@@ -95,6 +96,7 @@ export default function OrdersPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("pendente");
   const [timeFilter, setTimeFilter] = useState("shift"); // "shift" | "today" | "yesterday" | "week" | "all"
+  const [channelFilter, setChannelFilter] = useState("all"); // "all" | "delivery" | "pickup" | "dine_in"
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedOrders, setExpandedOrders] = useState(new Set());
   
@@ -539,6 +541,16 @@ export default function OrdersPage() {
       list = list.filter(o => isDateWithinDays(o.created_date, 7));
     }
 
+    // Filtro por canal de atendimento
+    if (channelFilter !== "all") {
+      list = list.filter(o => {
+        if (channelFilter === "delivery") return o.order_type === "delivery";
+        if (channelFilter === "pickup") return o.order_type === "pickup" || o.order_type === "balcao";
+        if (channelFilter === "dine_in") return o.order_type === "dine_in" || o.order_type === "mesa";
+        return true;
+      });
+    }
+
     // Busca rápida por texto (Número do pedido, Nome, Mesa ou Telefone)
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
@@ -551,7 +563,7 @@ export default function OrdersPage() {
     }
 
     return list;
-  }, [orders, timeFilter, settings, searchQuery]);
+  }, [orders, timeFilter, channelFilter, settings, searchQuery]);
 
   const filteredOrders = React.useMemo(() => {
     if (activeTab === "all") return timeFilteredOrders;
@@ -593,319 +605,303 @@ export default function OrdersPage() {
   return (
     <div className="p-4 md:p-8 bg-[#F7F9F8] min-h-screen">
       <div className="max-w-7xl mx-auto space-y-6">
+        {/* Cabeçalho da Página com Título e Cards de Ações Rápidas */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Pedidos</h1>
-            <p className="text-sm md:text-base text-gray-600 mt-0.5">Gerencie e acompanhe todos os pedidos do seu restaurante</p>
+            <h1 className="text-3xl font-black text-gray-950 tracking-tight">Pedidos</h1>
+            <p className="text-sm text-gray-500 mt-1">Gerencie e acompanhe todos os pedidos do seu restaurante.</p>
           </div>
 
-          {/* Barra de Ações Rápidas: Status da Loja, Tempo de Entrega, Som e QR Code */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            {/* Controle de Abrir / Fechar Restaurante (Manual / Automático) */}
-            <div className="bg-white border border-stone-200 shadow-sm rounded-2xl p-1.5 flex items-center gap-2">
-              <button
-                type="button"
-                disabled={isTogglingStore}
-                onClick={handleToggleStoreStatus}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer select-none active:scale-95 ${
-                  storeStatus.isOpen
-                    ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-300"
-                    : "bg-red-50 text-red-700 hover:bg-red-100 border border-red-300"
-                }`}
-                title={storeStatus.isOpen ? "Clique para Fechar a loja agora (Override manual hoje)" : "Clique para Abrir a loja agora (Override manual hoje)"}
-              >
-                <div className={`w-2.5 h-2.5 rounded-full ${storeStatus.isOpen ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
-                <span className="font-extrabold">
-                  {storeStatus.isOpen ? "Loja Aberta" : "Loja Fechada"}
-                </span>
-                {storeStatus.isManual ? (
-                  <span className="text-[10px] bg-white/90 px-1.5 py-0.5 rounded text-stone-600 font-semibold border border-stone-200">
-                    Manual (Hoje)
-                  </span>
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Card 1: Entrega média */}
+            <div className="bg-white border border-gray-200/90 rounded-2xl px-4 py-2 flex items-center gap-3 shadow-2xs">
+              <Clock className="w-4 h-4 text-gray-500 shrink-0" />
+              <div>
+                <p className="text-[10px] text-gray-400 font-medium leading-none">Entrega média</p>
+                {!isEditingTime ? (
+                  <p className="text-sm font-black text-gray-950 leading-tight mt-0.5">{deliveryTime}</p>
                 ) : (
-                  <span className="text-[10px] bg-stone-100 px-1.5 py-0.5 rounded text-stone-500 font-medium">
-                    Horário Auto
-                  </span>
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <input
+                      type="text"
+                      value={customTimeInput}
+                      onChange={(e) => setCustomTimeInput(e.target.value)}
+                      placeholder="60–80 min"
+                      className="bg-gray-100 text-xs px-2 py-0.5 rounded-md w-20 border border-gray-300 outline-none font-bold"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (customTimeInput.trim()) handleSetDeliveryTime(customTimeInput.trim());
+                        else setIsEditingTime(false);
+                      }}
+                      className="bg-[#047857] text-white p-0.5 rounded text-xs cursor-pointer"
+                    >
+                      <Check className="w-3 h-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingTime(false)}
+                      className="bg-gray-200 text-gray-600 p-0.5 rounded text-xs cursor-pointer"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
                 )}
-              </button>
-
-              {storeStatus.isManual && (
+              </div>
+              {!isEditingTime && (
                 <button
                   type="button"
-                  disabled={isTogglingStore}
-                  onClick={handleResetToAuto}
-                  title="Restaurar para seguir o horário automático configurado"
-                  className="text-[11px] text-amber-700 hover:text-amber-900 underline px-1 font-semibold transition-colors cursor-pointer"
+                  onClick={() => {
+                    setCustomTimeInput(deliveryTime);
+                    setIsEditingTime(true);
+                  }}
+                  className="p-1 text-gray-400 hover:text-gray-700 transition-colors cursor-pointer"
+                  title="Alterar tempo médio"
                 >
-                  Voltar p/ Auto
+                  <Pencil className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
 
-            {/* Controle de Tempo de Entrega Rápido */}
-            <div className="bg-white border border-stone-200 shadow-sm rounded-2xl p-1.5 flex items-center gap-1.5">
-              <div className="flex items-center gap-1 text-xs font-bold text-stone-700 px-2">
-                <Timer className="w-3.5 h-3.5 text-amber-600" />
-                <span>Entrega:</span>
-              </div>
-
-              {!isEditingTime ? (
-                <div className="flex items-center gap-1">
-                  {["30-40 min", "40-50 min", "50-60 min", "60-80 min"].map((timeOption) => {
-                    const isSelected = deliveryTime === timeOption;
-                    return (
-                      <button
-                        key={timeOption}
-                        type="button"
-                        onClick={() => handleSetDeliveryTime(timeOption)}
-                        className={`px-2.5 py-1 rounded-xl text-xs font-bold cursor-pointer transition-all ${
-                          isSelected
-                            ? "bg-amber-500 text-white shadow-sm scale-105"
-                            : "bg-stone-100 text-stone-700 hover:bg-stone-200"
-                        }`}
-                      >
-                        {timeOption}
-                      </button>
-                    );
-                  })}
-                  
-                  {/* Botão para digitar outro tempo se não for nenhum dos 4 */}
-                  {!["30-40 min", "40-50 min", "50-60 min", "60-80 min"].includes(deliveryTime) && (
-                    <span className="bg-amber-500 text-white font-bold text-xs px-2.5 py-1 rounded-xl shadow-sm">
-                      {deliveryTime}
-                    </span>
-                  )}
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCustomTimeInput(deliveryTime);
-                      setIsEditingTime(true);
-                    }}
-                    title="Definir tempo personalizado"
-                    className="p-1 text-stone-400 hover:text-stone-700 text-xs font-bold rounded-lg hover:bg-stone-100"
-                  >
-                    ✏️
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1">
-                  <input
-                    type="text"
-                    value={customTimeInput}
-                    onChange={(e) => setCustomTimeInput(e.target.value)}
-                    placeholder="Ex: 45-60 min"
-                    className="bg-stone-100 text-xs px-2 py-1 rounded-lg w-24 border border-stone-300 outline-none"
-                    autoFocus
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (customTimeInput.trim()) handleSetDeliveryTime(customTimeInput.trim());
-                      else setIsEditingTime(false);
-                    }}
-                    className="bg-emerald-600 text-white p-1 rounded-lg text-xs"
-                    title="Salvar"
-                  >
-                    <Check className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsEditingTime(false)}
-                    className="bg-stone-200 text-stone-600 p-1 rounded-lg text-xs"
-                    title="Cancelar"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Controle da Campainha de Pedidos */}
-            <div className="flex items-center gap-1 bg-white border border-stone-200 shadow-sm rounded-2xl p-1.5">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={toggleSoundAlert}
-                className={`h-7 px-2.5 rounded-xl text-xs font-bold gap-1.5 cursor-pointer ${
-                  soundEnabled 
-                    ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200" 
-                    : "bg-red-50 text-red-700 hover:bg-red-100 border border-red-200"
-                }`}
-              >
-                {soundEnabled ? (
-                  <>
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <Bell className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Som Ativado</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="w-2 h-2 rounded-full bg-red-400" />
-                    <BellOff className="w-3.5 h-3.5 text-red-600" />
-                    <span>Som Mudo</span>
-                  </>
-                )}
-              </Button>
-
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={testSound}
-                title="Testar Campainha"
-                className="h-7 px-2 text-stone-600 hover:text-stone-900 rounded-xl text-xs"
-              >
-                <Volume2 className="w-3.5 h-3.5" />
-              </Button>
-            </div>
-
-            {/* Plaquinhas QR Code das Mesas */}
-            <TableQRCodeModal settings={settings} />
-
-            {/* Botão de Fechamento de Caixa do Turno */}
-            <Button
+            {/* Card 2: Fechamento de Caixa */}
+            <button
               type="button"
               onClick={() => setShiftClosingOpen(true)}
-              className="h-9 px-3.5 bg-gradient-to-r from-stone-900 to-stone-800 hover:from-black hover:to-stone-900 text-white rounded-2xl text-xs font-black shadow-sm flex items-center gap-2 cursor-pointer border border-stone-700 transition-all active:scale-95"
-              title="Abrir Fechamento de Caixa do Turno"
+              className="bg-white border border-gray-200/90 hover:border-gray-300 rounded-2xl px-4 py-3 flex items-center gap-3 shadow-2xs hover:bg-gray-50/70 transition-all cursor-pointer"
             >
-              <Receipt className="w-4 h-4 text-amber-400" />
-              <span>Fechamento de Caixa</span>
-            </Button>
+              <Receipt className="w-4 h-4 text-gray-700 shrink-0" />
+              <span className="text-xs font-bold text-gray-900">Fechamento de Caixa</span>
+              <ChevronRight className="w-4 h-4 text-gray-400 shrink-0 ml-0.5" />
+            </button>
+
+            {/* Card 3: QR Code das Mesas */}
+            <TableQRCodeModal
+              settings={settings}
+              trigger={
+                <button
+                  type="button"
+                  className="bg-white border border-gray-200/90 hover:border-gray-300 rounded-2xl px-4 py-3 flex items-center gap-3 shadow-2xs hover:bg-gray-50/70 transition-all cursor-pointer"
+                >
+                  <QrCode className="w-4 h-4 text-gray-700 shrink-0" />
+                  <span className="text-xs font-bold text-gray-900">QR Code das Mesas</span>
+                </button>
+              }
+            />
           </div>
         </div>
 
-        {/* Barra de Filtro de Período e Busca de Pedidos */}
-        <div className="bg-white border border-stone-200 rounded-2xl p-3 shadow-xs flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide py-0.5">
-            <span className="text-xs font-bold text-stone-500 mr-1 flex items-center gap-1 shrink-0">
-              <Calendar className="w-3.5 h-3.5 text-stone-400" />
-              <span>Período:</span>
-            </span>
+        {/* Abas de Status dos Pedidos (Pílulas Horizontais) */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide pt-1">
+          {[
+            { id: "pendente", label: "Pendentes", icon: Clock, count: statusCounts.pendente },
+            { id: "confirmado", label: "Confirmados", icon: Check, count: statusCounts.confirmado },
+            { id: "preparando", label: "Preparando", icon: ChefHat, count: statusCounts.preparando },
+            { id: "enviado", label: "Enviados", icon: Bike, count: statusCounts.enviado },
+            { id: "entregue", label: "Entregues", icon: ShoppingBag, count: statusCounts.entregue },
+            { id: "cancelado", label: "Cancelados", icon: X, count: statusCounts.cancelado },
+          ].map((tab) => {
+            const isActive = activeTab === tab.id;
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
+                  isActive
+                    ? "bg-[#E6F4EA] border border-emerald-200/90 text-[#047857] shadow-2xs"
+                    : "bg-white/70 border border-transparent hover:border-gray-200 hover:bg-white text-gray-600"
+                }`}
+              >
+                <Icon className={`w-3.5 h-3.5 ${isActive ? "text-[#047857]" : "text-gray-500"}`} />
+                <span>{tab.label}</span>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-bold min-w-[20px] text-center ${
+                  isActive
+                    ? "bg-[#D1E9DF] text-[#047857]"
+                    : "text-gray-400 font-semibold"
+                }`}>
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
 
-            {[
-              { id: "shift", label: "Turno Aberto (Ao Vivo)", isLive: true },
-              { id: "today", label: "Hoje" },
-              { id: "yesterday", label: "Ontem" },
-              { id: "week", label: "Últimos 7 dias" },
-              { id: "all", label: "Histórico Completo" },
-            ].map((p) => {
-              const isSelected = timeFilter === p.id;
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => setTimeFilter(p.id)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
-                    isSelected
-                      ? "bg-[#047857] text-white shadow-sm scale-102"
-                      : "bg-stone-100 text-stone-700 hover:bg-stone-200"
-                  }`}
-                >
-                  {p.isLive && (
-                    <span className={`w-2 h-2 rounded-full ${isSelected ? "bg-emerald-300 animate-pulse" : "bg-emerald-500"}`} />
-                  )}
-                  <span>{p.label}</span>
-                </button>
-              );
-            })}
+        {/* Barra de Filtros e Busca */}
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 pt-0.5">
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Dropdown de Data */}
+            <div className="relative">
+              <select
+                value={timeFilter === "shift" ? "shift" : timeFilter}
+                onChange={(e) => setTimeFilter(e.target.value)}
+                className="appearance-none bg-white border border-gray-200/90 rounded-2xl pl-8 pr-8 py-2 text-xs font-bold text-gray-800 shadow-2xs hover:bg-gray-50 focus:border-[#047857] outline-none cursor-pointer"
+              >
+                <option value="today">Hoje</option>
+                <option value="yesterday">Ontem</option>
+                <option value="week">Últimos 7 dias</option>
+                <option value="all">Histórico Completo</option>
+                <option value="shift">Turno Aberto (Ao Vivo)</option>
+              </select>
+              <Calendar className="w-3.5 h-3.5 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
+
+            {/* Botão de Turno Ao Vivo */}
+            <button
+              type="button"
+              onClick={() => setTimeFilter(timeFilter === "shift" ? "today" : "shift")}
+              className={`bg-white border rounded-2xl pl-3 pr-4 py-2 text-xs font-bold shadow-2xs hover:bg-gray-50 transition-all flex items-center gap-2 cursor-pointer ${
+                timeFilter === "shift" ? "border-emerald-300 text-emerald-800 bg-emerald-50/50" : "border-gray-200/90 text-gray-800"
+              }`}
+              title="Alternar filtro de Turno Aberto"
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Turno Aberto (Ao Vivo)</span>
+              <ChevronDown className="w-3.5 h-3.5 text-gray-400 ml-1" />
+            </button>
+
+            {/* Dropdown de Canais */}
+            <div className="relative">
+              <select
+                value={channelFilter}
+                onChange={(e) => setChannelFilter(e.target.value)}
+                className="appearance-none bg-white border border-gray-200/90 rounded-2xl pl-4 pr-8 py-2 text-xs font-bold text-gray-800 shadow-2xs hover:bg-gray-50 focus:border-[#047857] outline-none cursor-pointer"
+              >
+                <option value="all">Todos os canais</option>
+                <option value="delivery">🛵 Delivery</option>
+                <option value="pickup">🥡 Retirada</option>
+                <option value="dine_in">🍽️ Salão (Mesa)</option>
+              </select>
+              <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
           </div>
 
-          {/* Campo de Busca Rápida de Pedidos */}
-          <div className="relative w-full md:w-64">
-            <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Buscar #pedido, cliente, mesa..."
-              className="w-full bg-stone-50 border border-stone-200 rounded-xl pl-8 pr-7 py-1.5 text-xs text-stone-900 placeholder:text-stone-400 outline-none focus:bg-white focus:border-red-500 transition-all"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery("")}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 text-xs font-bold"
-              >
-                ✕
-              </button>
+          {/* Busca e Botão Filtros */}
+          <div className="flex items-center gap-2.5">
+            <div className="relative flex-1 md:w-80">
+              <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Buscar pedido, cliente, mesa..."
+                className="w-full bg-white border border-gray-200/90 rounded-2xl pl-9 pr-8 py-2 text-xs text-gray-900 placeholder:text-gray-400 shadow-2xs outline-none focus:border-[#047857] focus:ring-1 focus:ring-[#047857] transition-all"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 text-xs font-bold"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setTimeFilter("shift");
+                setChannelFilter("all");
+                setSearchQuery("");
+              }}
+              className="bg-white border border-gray-200/90 rounded-2xl px-3.5 py-2 text-xs font-bold text-gray-700 shadow-2xs hover:bg-gray-50 flex items-center gap-1.5 cursor-pointer transition-colors shrink-0"
+              title="Limpar filtros"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5 text-gray-500" />
+              <span>Filtros</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Listagem de Pedidos ou Estado Vazio */}
+        <div className="space-y-4 pt-2">
+          <div className="grid gap-4">
+            <AnimatePresence>
+              {filteredOrders.map((order) => (
+                <OrderCard
+                  key={order.id}
+                  order={order}
+                  isExpanded={expandedOrders.has(order.id)}
+                  onToggleExpansion={() => toggleOrderExpansion(order.id)}
+                  onUpdateStatus={handleOrderStatusClick}
+                  deliveryTime={deliveryTime}
+                  safeDate={safeDate}
+                  safeMoney={safeMoney}
+                  getStatusColor={getStatusColor}
+                  getStatusIcon={getStatusIcon}
+                  getStatusText={getStatusText}
+                  getPaymentMethodText={getPaymentMethodText}
+                />
+              ))}
+            </AnimatePresence>
+
+            {orders.length >= orderLimit && (
+              <div className="flex justify-center pt-4 pb-2">
+                <Button
+                  onClick={handleLoadMore}
+                  variant="outline"
+                  disabled={isLoadingMore}
+                  className="border-gray-200 bg-white text-gray-700 hover:bg-gray-50 rounded-2xl text-xs font-bold"
+                >
+                  {isLoadingMore ? "Carregando..." : `Carregar Mais Pedidos (+25)`}
+                </Button>
+              </div>
+            )}
+
+            {filteredOrders.length === 0 && !isLoading && (
+              <div className="text-center py-20 px-4">
+                {/* Ilustração da Caixa de Papelão Aberta Isométrica Idêntica à Foto */}
+                <div className="w-32 h-32 mx-auto flex items-center justify-center">
+                  <svg viewBox="0 0 160 140" fill="none" className="w-32 h-32 drop-shadow-sm">
+                    <ellipse cx="80" cy="120" rx="46" ry="10" fill="#E2E8F0" />
+                    {/* Caixa lateral esquerda */}
+                    <path d="M42 68 L80 88 L80 120 L42 100 Z" fill="#D39763" />
+                    {/* Caixa lateral direita */}
+                    <path d="M80 88 L118 68 L118 100 L80 120 Z" fill="#B87B48" />
+                    {/* Fundo interno esquerdo */}
+                    <path d="M42 68 L80 48 L80 88 L42 68 Z" fill="#995E32" />
+                    {/* Fundo interno direito */}
+                    <path d="M80 48 L118 68 L80 88 Z" fill="#7D4922" />
+                    {/* Aba superior esquerda (aberta p/ fora) */}
+                    <path d="M42 68 L80 48 L65 32 L26 52 Z" fill="#E8B07D" />
+                    {/* Aba superior direita (aberta p/ fora) */}
+                    <path d="M80 48 L118 68 L134 52 L95 32 Z" fill="#DC9F6A" />
+                    {/* Aba frontal esquerda (caída p/ baixo) */}
+                    <path d="M42 68 L80 88 L74 104 L36 84 Z" fill="#E8B07D" />
+                    {/* Aba frontal direita (caída p/ baixo) */}
+                    <path d="M80 88 L118 68 L124 84 L86 104 Z" fill="#DC9F6A" />
+                    {/* Faíscas verdes alegres */}
+                    <path d="M72 26 L76 18 L80 26" stroke="#10B981" strokeWidth="2.5" strokeLinecap="round" />
+                    <path d="M88 28 L94 22" stroke="#10B981" strokeWidth="2.5" strokeLinecap="round" />
+                    <path d="M64 30 L58 24" stroke="#10B981" strokeWidth="2.5" strokeLinecap="round" />
+                  </svg>
+                </div>
+
+                <h3 className="text-xl font-bold text-gray-950 mt-5">
+                  Nenhum pedido encontrado
+                </h3>
+                <p className="text-xs sm:text-sm text-gray-500 mt-1.5 max-w-sm mx-auto">
+                  {activeTab === "all"
+                    ? "Não há pedidos no período selecionado."
+                    : `Não há pedidos com o status "${getStatusText(activeTab)}" no período selecionado.`}
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => loadOrdersOnly()}
+                  className="bg-[#047857] hover:bg-[#065f46] text-white font-bold rounded-xl px-6 py-2.5 text-xs shadow-sm flex items-center gap-2 mx-auto mt-5 transition-all active:scale-95 cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Atualizar pedidos</span>
+                </button>
+              </div>
             )}
           </div>
         </div>
-
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 md:space-y-6">
-          <div className="overflow-x-auto pb-2 -mx-4 px-4 md:mx-0 md:px-0">
-            <TabsList className="bg-white border p-1 inline-flex w-max md:w-auto min-w-full md:min-w-0">
-              <TabsTrigger value="pendente" className="text-xs md:text-sm whitespace-nowrap">
-                Pendentes ({statusCounts.pendente})
-              </TabsTrigger>
-              <TabsTrigger value="confirmado" className="text-xs md:text-sm whitespace-nowrap">
-                Confirmados ({statusCounts.confirmado})
-              </TabsTrigger>
-              <TabsTrigger value="preparando" className="text-xs md:text-sm whitespace-nowrap">
-                Preparando ({statusCounts.preparando})
-              </TabsTrigger>
-              <TabsTrigger value="enviado" className="text-xs md:text-sm whitespace-nowrap">
-                Enviados ({statusCounts.enviado})
-              </TabsTrigger>
-              <TabsTrigger value="entregue" className="text-xs md:text-sm whitespace-nowrap">
-                Entregues ({statusCounts.entregue})
-              </TabsTrigger>
-            </TabsList>
-          </div>
-
-          <TabsContent value={activeTab} className="space-y-4">
-            <div className="grid gap-4">
-              <AnimatePresence>
-                {filteredOrders.map((order) => (
-                  <OrderCard
-                    key={order.id}
-                    order={order}
-                    isExpanded={expandedOrders.has(order.id)}
-                    onToggleExpansion={() => toggleOrderExpansion(order.id)}
-                    onUpdateStatus={handleOrderStatusClick}
-                    deliveryTime={deliveryTime}
-                    safeDate={safeDate}
-                    safeMoney={safeMoney}
-                    getStatusColor={getStatusColor}
-                    getStatusIcon={getStatusIcon}
-                    getStatusText={getStatusText}
-                    getPaymentMethodText={getPaymentMethodText}
-                  />
-                ))}
-              </AnimatePresence>
-
-              {orders.length >= orderLimit && (
-                <div className="flex justify-center pt-4 pb-2">
-                  <Button
-                    onClick={handleLoadMore}
-                    variant="outline"
-                    disabled={isLoadingMore}
-                    className="border-stone-700 bg-stone-900 text-stone-200 hover:bg-stone-800 hover:text-white"
-                  >
-                    {isLoadingMore ? "Carregando..." : `Carregar Mais Pedidos (+25)`}
-                  </Button>
-                </div>
-              )}
-
-              {filteredOrders.length === 0 && !isLoading && (
-                <div className="text-center py-12">
-                  <div className="text-4xl mb-4">📦</div>
-                  <h3 className="text-xl font-medium text-gray-900 mb-2">
-                    Nenhum pedido encontrado
-                  </h3>
-                  <p className="text-gray-600">
-                    {activeTab === "all" 
-                      ? "Você ainda não recebeu nenhum pedido."
-                      : `Nenhum pedido com status "${getStatusText(activeTab)}" encontrado.`}
-                  </p>
-                </div>
-              )}
-            </div>
-          </TabsContent>
-        </Tabs>
 
         {/* Modal Inteligente de Despacho com Entregador */}
         <DispatchOrderModal

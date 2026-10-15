@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { QrCode, Printer } from "lucide-react";
 
-export default function TableQRCodeModal({ settings }) {
+export default function TableQRCodeModal({ settings, trigger }) {
   const [isOpen, setIsOpen] = useState(false);
   const [tableCount, setTableCount] = useState(10);
   const [customTables, setCustomTables] = useState("");
@@ -133,10 +133,14 @@ export default function TableQRCodeModal({ settings }) {
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="gap-2 rounded-xl text-xs font-bold border-stone-300 hover:bg-stone-100 shadow-sm">
-          <QrCode className="w-4 h-4 text-[#047857]" />
-          <span>QR Code das Mesas</span>
-        </Button>
+        {trigger ? (
+          trigger
+        ) : (
+          <Button variant="outline" className="gap-2 rounded-xl text-xs font-bold border-stone-300 hover:bg-stone-100 shadow-sm">
+            <QrCode className="w-4 h-4 text-[#047857]" />
+            <span>QR Code das Mesas</span>
+          </Button>
+        )}
       </DialogTrigger>
 
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl p-6">

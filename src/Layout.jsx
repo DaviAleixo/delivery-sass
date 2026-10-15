@@ -1,10 +1,11 @@
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { LayoutDashboard, Package, ShoppingBag, Settings, LogOut, Image as ImageIcon, Tag, BarChart, Folder, Users, Monitor, Layers, Flame, Lock, CreditCard, ExternalLink, RefreshCw, Bike } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingBag, Settings, LogOut, Image as ImageIcon, Tag, BarChart, Folder, Users, Monitor, Layers, Flame, Lock, CreditCard, ExternalLink, RefreshCw, Bike, ChevronRight, ChevronDown } from "lucide-react";
 import { Settings as SettingsEntity } from "@/entities/Settings";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useAuth } from "@/lib/AuthContext";
+import { getStoreStatusInfo } from "@/utils/storeStatus";
 import {
   Sidebar,
   SidebarContent,
@@ -560,10 +561,28 @@ export default function Layout({ children, currentPageName }) {
 
   // Se não for a página do Menu, mostrar layout admin
   if (currentPageName !== "Menu" && currentPageName !== "MyOrders" && currentPageName !== "PrintOrder" && currentPageName !== "PrintShiftClosing") {
+    const pageTitles = {
+      Dashboard: "Dashboard",
+      Orders: "Pedidos",
+      KDS: "KDS (Cozinha)",
+      PDV: "PDV (Balcão)",
+      DeliveryDrivers: "Entregadores",
+      Clients: "Clientes",
+      Products: "Produtos",
+      Categories: "Categorias",
+      Complements: "Complementos",
+      Coupons: "Cupons e Fidelidade",
+      Banners: "Banners",
+      Reports: "Relatórios",
+      Settings: "Configurações",
+    };
+    const currentPageTitle = pageTitles[currentPageName] || currentPageName;
+    const storeStatus = getStoreStatusInfo(settings);
+
     return (
       <SidebarProvider>
         <div className="min-h-screen flex w-full bg-[#F7F9F8]">
-          <Sidebar className="border-r border-stone-200 bg-white text-stone-900">
+          <Sidebar className="border-r border-gray-200/80 bg-white text-stone-900">
             {user?.role === "super_admin" && (
               <div className="p-2 bg-slate-900 border-b border-slate-800 flex items-center justify-between text-xs text-slate-200">
                 <span className="font-semibold text-emerald-400">👑 Modo Super Admin</span>
@@ -575,59 +594,62 @@ export default function Layout({ children, currentPageName }) {
                 </Link>
               </div>
             )}
-            <SidebarHeader className="border-b border-stone-200 p-4 bg-stone-50/50">
-              <div className="flex items-center gap-3">
-                {settings?.restaurant_logo ? (
-                  <img 
-                    src={settings.restaurant_logo} 
-                    alt="Logo" 
-                    className="w-10 h-10 rounded-xl object-cover shadow-sm border border-stone-200"
-                  />
-                ) : (
-                  <div className="w-10 h-10 bg-slate-900 text-white rounded-xl flex items-center justify-center font-black text-sm shadow-sm border border-slate-800">
-                    {(settings?.restaurant_name || currentStoreName).substring(0, 2).toUpperCase()}
-                  </div>
-                )}
-                <div>
-                  <h2 className="font-extrabold text-base text-stone-950 leading-tight" style={{ letterSpacing: '-0.02em' }}>
-                    {settings?.restaurant_name || currentStoreName}
-                  </h2>
-                  <p className="text-xs font-bold text-[#047857] mt-0.5">Painel Administrativo</p>
+            
+            {/* Header da Sidebar com a Logo PedeMuleke Oficial */}
+            <SidebarHeader className="border-b border-gray-100 p-5 bg-white">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-200/80 flex items-center justify-center text-[#047857] shadow-2xs">
+                  <svg className="w-5 h-5 text-[#047857]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
+                    <path d="M3 6h18" />
+                    <path d="M16 10a4 4 0 0 1-8 0" />
+                  </svg>
+                </div>
+                <div className="flex items-baseline tracking-tight">
+                  <span className="text-xl font-black text-gray-950">Pede</span>
+                  <span className="text-xl font-black text-[#047857]">Muleke</span>
                 </div>
               </div>
             </SidebarHeader>
             
             <SidebarContent className="p-3 bg-white">
               <SidebarGroup>
-                <SidebarGroupLabel className="text-[11px] font-extrabold text-stone-400 uppercase tracking-widest px-3 py-2">
-                  Menu Principal
-                </SidebarGroupLabel>
                 <SidebarGroupContent>
                   <SidebarMenu className="space-y-1">
                     {allowedNavigationItems.map((item) => {
                       const isActive = location.pathname === item.url;
                       const isOrdersItem = item.title === "Pedidos";
-                      const showBadge = isOrdersItem && pendingOrdersCount > 0 && !isActive;
+                      const isSettingsItem = item.title === "Configurações";
+                      const showCount = isOrdersItem;
 
                       return (
                         <SidebarMenuItem key={item.title}>
                           <SidebarMenuButton 
                             asChild 
-                            className={`h-10 transition-all duration-150 rounded-xl px-3.5 font-semibold text-sm ${
+                            className={`h-10.5 transition-all duration-150 rounded-2xl px-3.5 text-[13.5px] ${
                               isActive 
-                                ? 'bg-[#047857] text-white font-bold shadow-sm hover:bg-[#065f46] hover:text-white' 
-                                : 'text-stone-700 hover:bg-[#D1E9DF]/30 hover:text-[#047857]'
+                                ? 'bg-[#E6F4EA] text-[#047857] font-bold shadow-none hover:bg-[#E6F4EA] hover:text-[#047857]' 
+                                : 'text-gray-600 hover:bg-gray-50/80 hover:text-gray-950 font-medium'
                             }`}
                           >
                             <Link to={item.url} className="flex items-center justify-between w-full">
                               <div className="flex items-center gap-3 truncate">
-                                <item.icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-white' : 'text-stone-500'}`} />
+                                <item.icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-[#047857]' : 'text-gray-500'}`} />
                                 <span className="truncate">{item.title}</span>
                               </div>
-                              {showBadge && (
-                                <span className="ml-auto bg-[#047857] text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm animate-pulse flex items-center justify-center min-w-[20px] h-5">
+                              {showCount && (
+                                <span className={`ml-auto text-xs font-bold px-2 py-0.5 rounded-full flex items-center justify-center min-w-[20px] ${
+                                  isActive
+                                    ? 'bg-[#D1E9DF] text-[#047857]'
+                                    : pendingOrdersCount > 0
+                                    ? 'bg-[#047857] text-white animate-pulse'
+                                    : 'text-gray-400 bg-gray-100'
+                                }`}>
                                   {pendingOrdersCount}
                                 </span>
+                              )}
+                              {isSettingsItem && (
+                                <ChevronRight className="w-4 h-4 text-gray-400 ml-auto shrink-0" />
                               )}
                             </Link>
                           </SidebarMenuButton>
@@ -638,12 +660,12 @@ export default function Layout({ children, currentPageName }) {
                 </SidebarGroupContent>
               </SidebarGroup>
 
-              <SidebarGroup className="mt-auto pt-4 border-t border-stone-100">
+              <SidebarGroup className="mt-auto pt-3 border-t border-gray-150">
                 <SidebarGroupContent>
                   <SidebarMenu>
                     <SidebarMenuItem>
-                      <SidebarMenuButton asChild className="rounded-xl border border-[#D1E9DF] text-stone-800 hover:bg-[#D1E9DF]/30 hover:text-[#047857] hover:border-[#047857]/40 transition-all font-bold text-sm">
-                        <Link to={`/${activeSlug}/menu`} target="_blank" className="flex items-center gap-3 px-3 py-2.5">
+                      <SidebarMenuButton asChild className="rounded-2xl border border-[#D1E9DF] text-gray-800 hover:bg-[#D1E9DF]/30 hover:text-[#047857] hover:border-[#047857]/40 transition-all font-bold text-sm">
+                        <Link to={`/${activeSlug}/menu`} target="_blank" className="flex items-center gap-3 px-3.5 py-2.5">
                           <ShoppingBag className="w-4 h-4 text-[#047857] flex-shrink-0" />
                           <span>Ver Cardápio Online</span>
                         </Link>
@@ -654,35 +676,83 @@ export default function Layout({ children, currentPageName }) {
               </SidebarGroup>
             </SidebarContent>
 
-            <SidebarFooter className="border-t border-stone-200 p-3 bg-stone-50/70">
-
-              <div className="flex items-center justify-between pt-1">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-8 h-8 bg-[#047857] rounded-full flex items-center justify-center flex-shrink-0 text-white font-black text-xs shadow-sm uppercase">
-                    {(user?.username || 'a').charAt(0)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-stone-900 text-xs truncate">
-                      {user?.username || "admin"}
-                    </p>
-                  </div>
-                </div>
-                <button 
-                  onClick={handleLogout}
-                  className="p-1.5 text-stone-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors ml-1 cursor-pointer"
-                  title="Sair do painel"
+            {/* Card da Loja no Rodapé da Sidebar */}
+            <SidebarFooter className="border-t border-gray-100 p-3 bg-white">
+              <div className="space-y-2">
+                <div 
+                  onClick={() => navigate(`/${activeSlug}/Settings`)}
+                  className="border border-gray-200/90 bg-white rounded-2xl p-2.5 flex items-center justify-between shadow-2xs hover:bg-gray-50/70 transition-all cursor-pointer group"
                 >
-                  <LogOut className="w-4 h-4" />
-                </button>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {settings?.restaurant_logo ? (
+                      <img 
+                        src={settings.restaurant_logo} 
+                        alt="Logo" 
+                        className="w-8 h-8 rounded-full object-cover border border-gray-100 shrink-0"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-stone-900 text-white flex items-center justify-center font-black text-xs shrink-0 shadow-2xs uppercase">
+                        {(settings?.restaurant_name || currentStoreName || "SR").substring(0, 2)}
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-gray-900 text-xs truncate leading-tight group-hover:text-[#047857] transition-colors">
+                        {settings?.restaurant_name || currentStoreName || "Seu Restaurante"}
+                      </p>
+                      <p className="text-[11px] text-emerald-600 font-medium flex items-center gap-1 mt-0.5">
+                        <span className={`w-1.5 h-1.5 rounded-full ${storeStatus.isOpen ? "bg-emerald-500" : "bg-rose-500"} shrink-0`} />
+                        <span>{storeStatus.isOpen ? "Loja aberta" : "Loja fechada"}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-gray-700 shrink-0 transition-colors" />
+                </div>
+
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-[11px] text-gray-400 font-medium truncate max-w-[150px]">
+                    {user?.username || "admin"}
+                  </span>
+                  <button 
+                    onClick={handleLogout}
+                    className="text-[11px] text-gray-400 hover:text-rose-600 font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                    title="Sair do painel"
+                  >
+                    <LogOut className="w-3 h-3" />
+                    <span>Sair</span>
+                  </button>
+                </div>
               </div>
             </SidebarFooter>
           </Sidebar>
 
           <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-            <header className="bg-white border-b border-gray-200 px-6 py-4 md:hidden shrink-0">
-              <div className="flex items-center gap-4">
-                <SidebarTrigger className="hover:bg-gray-100 p-2 rounded-lg transition-colors duration-200" />
-                <h1 className="text-xl font-semibold text-gray-900">{settings?.restaurant_name || 'Admin Panel'}</h1>
+            {/* Top Navbar Moderna Idêntica à Foto (sem notificação) */}
+            <header className="bg-white border-b border-gray-150 px-4 md:px-6 py-2.5 shrink-0 flex items-center justify-between z-10">
+              <div className="flex items-center gap-3">
+                <SidebarTrigger className="text-gray-600 hover:text-gray-900 hover:bg-gray-100 p-2 rounded-xl transition-colors cursor-pointer" />
+                <h1 className="text-sm md:text-base font-bold text-gray-900">{currentPageTitle}</h1>
+              </div>
+
+              <div className="flex items-center gap-3">
+                {/* Status da Loja */}
+                <div 
+                  onClick={() => navigate(`/${activeSlug}/Settings`)}
+                  title="Clique para gerenciar o horário e status da loja"
+                  className="bg-white border border-gray-200 text-gray-800 rounded-full px-3.5 py-1.5 text-xs font-semibold flex items-center gap-2 shadow-2xs hover:bg-gray-50 transition-colors cursor-pointer select-none"
+                >
+                  <span className={`w-2 h-2 rounded-full ${storeStatus.isOpen ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`} />
+                  <span className="text-gray-800 font-bold">{storeStatus.isOpen ? "Loja Aberta" : "Loja Fechada"}</span>
+                  <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                </div>
+
+                {/* Avatar da Loja / Usuário */}
+                <div 
+                  onClick={() => navigate(`/${activeSlug}/Settings`)}
+                  className="w-8 h-8 rounded-full bg-stone-900 text-white font-bold text-xs flex items-center justify-center shadow-2xs uppercase cursor-pointer hover:ring-2 hover:ring-emerald-500 transition-all"
+                  title="Perfil do Restaurante"
+                >
+                  {(settings?.restaurant_name || currentStoreName || "SR").substring(0, 2)}
+                </div>
               </div>
             </header>
 
