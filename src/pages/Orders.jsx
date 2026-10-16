@@ -528,7 +528,9 @@ export default function OrdersPage() {
       cartao: "Cartão",
       cartao_credito: "Cartão de Crédito",
       cartao_debito: "Cartão de Débito",
-      alimentacao: "Vale Alimentação / Refeição"
+      alimentacao: "Vale Alimentação / Refeição",
+      caixa: "Pagar no Caixa (Mesa)",
+      pagar_no_caixa: "Pagar no Caixa (Mesa)"
     };
     return methods[method] || method || "-";
   };

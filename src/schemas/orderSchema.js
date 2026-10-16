@@ -14,8 +14,8 @@ export const orderItemSchema = z.object({
 });
 
 export const orderSchema = z.object({
-  customer_name: z.string().min(2, "Nome do cliente deve ter ao menos 2 caracteres"),
-  customer_phone: z.string().min(8, "Telefone do cliente é obrigatório"),
+  customer_name: z.string().optional().default("Cliente"),
+  customer_phone: z.string().optional().nullable(),
   customer_email: z.string().email("E-mail inválido").optional().or(z.literal("")),
   order_type: z.enum(["delivery", "balcao", "mesa"], {
     errorMap: () => ({ message: "Tipo de pedido inválido" })
@@ -23,7 +23,7 @@ export const orderSchema = z.object({
   table_number: z.string().optional().nullable(),
   customer_address: z.string().optional().nullable(),
   delivery_address: z.string().optional().nullable(),
-  payment_method: z.string().min(1, "Forma de pagamento é obrigatória"),
+  payment_method: z.string().optional().nullable().default("caixa"),
   change_for: z.coerce.number().optional().nullable(),
   notes: z.string().optional().nullable().default(""),
   coupon_code: z.string().optional().nullable(),
@@ -40,6 +40,23 @@ export const orderSchema = z.object({
 }, {
   message: "Endereço de entrega é obrigatório para pedidos de Delivery",
   path: ["delivery_address"]
+}).refine((data) => {
+  if (data.order_type === "delivery" || data.order_type === "balcao") {
+    const cleanDigits = (data.customer_phone || "").replace(/\D/g, "");
+    return cleanDigits.length >= 8;
+  }
+  return true;
+}, {
+  message: "Telefone do cliente é obrigatório para entregas e retiradas",
+  path: ["customer_phone"]
+}).refine((data) => {
+  if (data.order_type === "delivery" || data.order_type === "balcao") {
+    return Boolean(data.payment_method && data.payment_method.trim().length > 0);
+  }
+  return true;
+}, {
+  message: "Forma de pagamento é obrigatória para entregas e retiradas",
+  path: ["payment_method"]
 }).refine((data) => {
   if (data.order_type === "mesa") {
     return Boolean(data.table_number && String(data.table_number).trim().length > 0);

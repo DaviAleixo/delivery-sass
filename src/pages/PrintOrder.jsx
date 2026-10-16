@@ -77,6 +77,7 @@ export default function PrintOrderPage() {
     if (m.includes("debito") || m.includes("débito")) return "Cartão de Débito";
     if (m.includes("cartao") || m.includes("cartão")) return "Cartão";
     if (m.includes("ticket") || m.includes("vale")) return "Vale / Ticket Refeição";
+    if (m.includes("caixa")) return "Pagar no Caixa (Mesa)";
     return method;
   };
 
@@ -203,7 +204,13 @@ export default function PrintOrderPage() {
 
       {/* Seção Cliente */}
       <div className="border-t-2 border-dashed border-black pt-2 my-2 space-y-1 text-black text-[13px]">
-        <p className="font-black text-[14px] uppercase border-b border-black pb-0.5 mb-1">DADOS DE ENTREGA</p>
+        <p className="font-black text-[14px] uppercase border-b border-black pb-0.5 mb-1">
+          {order.order_type === 'dine_in' || (order.table_number && String(order.table_number).toLowerCase().includes('mesa'))
+            ? `DADOS DA MESA (${order.table_number || 'Salão'})`
+            : (order.order_type === 'pickup' || order.order_type === 'takeaway' || order.order_type === 'balcao'
+                ? 'DADOS DO BALCÃO'
+                : 'DADOS DE ENTREGA')}
+        </p>
         <p className="leading-snug"><b>CLIENTE:</b> <span className="font-black">{customerName}</span></p>
         {order.cpf && <p><b>CPF/CNPJ:</b> {order.cpf}</p>}
         {customerPhone && customerPhone !== "-" && (
