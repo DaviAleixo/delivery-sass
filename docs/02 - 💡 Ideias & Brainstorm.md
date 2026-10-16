@@ -679,6 +679,19 @@
   - Substitui o antigo codinome técnico `Delivery 1.0` por uma marca comercial autêntica, descontraída e pronta para tração, marketing e vendas.
   - Slogan / Tagline sugerida: *"Bateu a fome? PedeMuleke!"* ou *"O delivery sem taxa abusiva que seu restaurante merece."*
 
+### 📲 48. Autenticação Oficial por WhatsApp (OTP) & Separação Rígida de Guest vs Cliente Cadastrado
+* **O Problema Atual**: 
+  - Ao comprar sem login, o sistema executa um "auto-cadastro" invisível (`customers` e `user_addresses`), fazendo auto-login na sessão e buscando dados em pedidos anteriores apenas digitando o número de telefone no checkout.
+  - Além disso, qualquer pessoa (mesmo visitante não identificado) consegue aplicar cupons de desconto e puxar endereços antigos.
+* **A Nova Diretriz de Negócio**:
+  1. **Compra como Visitante (Guest Checkout)**: Permitida para não perder conversão rápida, mas é estritamente avulsa. Não cria conta de cliente, não salva endereço para preenchimento futuro e não faz login na sessão.
+  2. **Benefícios Exclusivos de Quem se Cadastrar**: 
+     - **Endereços Salvos**: Salvar e reutilizar endereços em 1 clique é exclusivo para quem tem cadastro ativo.
+     - **Cupons de Desconto**: Exclusivo para clientes que criaram conta formal e estão logados (mesmo que o cliente já tenha pedido antes como visitante).
+  3. **Cadastro e Login via WhatsApp Oficial (Meta Cloud API)**:
+     - Disparo de código de 6 dígitos (OTP) via WhatsApp Oficial para verificação real do número.
+     - Sem senhas difíceis de lembrar: autenticação rápida e segura por WhatsApp.
+
 ---
 
 ## 🔗 Links Relacionados

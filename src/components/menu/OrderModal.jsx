@@ -21,6 +21,7 @@ import { base44 } from "@/api/base44Client";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { validateSchema, orderSchema } from "@/schemas";
 import { getActiveTenantId } from "@/entities/storage";
+import WhatsAppAuthModal from "./WhatsAppAuthModal";
 
 export const parseAddressString = (addrStr) => {
   if (!addrStr || typeof addrStr !== 'string') return null;
@@ -143,59 +144,6 @@ export const fetchCustomerAddresses = async (phone, email) => {
         }
       } catch {}
     }
-
-    // 3. Se ainda não achou, buscar em pedidos anteriores no Supabase
-    if (addressList.length === 0 && cleanPhone) {
-      try {
-        const { data: orderData } = await supabase
-          .from("orders")
-          .select("delivery_address,customer_address,created_date")
-          .ilike("customer_phone", `%${cleanPhone.slice(-8)}%`)
-          .order("created_date", { ascending: false })
-          .limit(5);
-
-        if (orderData && orderData.length > 0) {
-          for (const ord of orderData) {
-            const rawAddr = ord.delivery_address || ord.customer_address;
-            if (rawAddr) {
-              const parsed = parseAddressString(rawAddr);
-              if (parsed && parsed.street) {
-                addUnique({ ...parsed, name: "Casa" });
-              }
-            }
-          }
-        }
-      } catch {}
-    }
-  }
-
-  // 4. Fallback em memória (Order.list)
-  if (addressList.length === 0 && cleanPhone) {
-    try {
-      const allOrders = await Order.list("-created_date");
-      const matchedOrders = (allOrders || []).filter(o =>
-        o.customer_phone && o.customer_phone.replace(/\D/g, "").slice(-8) === cleanPhone.slice(-8)
-      );
-      matchedOrders.forEach(ord => {
-        const rawAddr = ord.delivery_address || ord.customer_address;
-        if (rawAddr) {
-          const parsed = parseAddressString(rawAddr);
-          if (parsed && parsed.street) {
-            addUnique({ ...parsed, name: "Casa" });
-          }
-        }
-      });
-    } catch {}
-  }
-
-  // 5. Fallback localStorage guest info
-  if (addressList.length === 0) {
-    try {
-      const guestInfo = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("vrumburguer_guest_info") || "null") : null;
-      if (guestInfo?.addressForm?.street) {
-        addUnique({ ...guestInfo.addressForm, name: guestInfo.addressForm.name || "Casa" });
-      }
-    } catch {}
   }
 
   return addressList;
@@ -268,6 +216,9 @@ export default function OrderModal({
   const [phoneLookupFeedback, setPhoneLookupFeedback] = useState("");
   const [errors, setErrors] = useState({});
   const [user, setUser] = useState(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authModalTitle, setAuthModalTitle] = useState("Acessar Conta com WhatsApp");
+  const [pendingCoupon, setPendingCoupon] = useState("");
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState(null);
   const [couponError, setCouponError] = useState("");
@@ -427,26 +378,16 @@ export default function OrderModal({
         userData = null;
       }
 
-      const savedGuestInfo = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("vrumburguer_guest_info") || "null") : null;
-      const savedPhone = typeof window !== "undefined" ? localStorage.getItem("vrumburguer_customer_phone") : null;
-
-      const effectivePhone = userData?.phone || savedGuestInfo?.customer_phone || savedPhone || "";
-      const effectiveName = userData?.full_name || savedGuestInfo?.customer_name || "";
-      const effectiveEmail = userData?.email || savedGuestInfo?.customer_email || "";
-
-      if (userData) {
+      if (userData && userData.id) {
         setUser(userData);
-      }
-
-      if (effectiveName || effectivePhone || effectiveEmail) {
         setCustomerData(prev => ({
           ...prev,
-          customer_name: effectiveName && effectiveName !== "Cliente" ? effectiveName : prev.customer_name || "",
-          customer_phone: effectivePhone ? formatPhone(effectivePhone) : prev.customer_phone || "",
-          customer_email: effectiveEmail || prev.customer_email || ""
+          customer_name: (userData.full_name && userData.full_name !== "Cliente") ? userData.full_name : prev.customer_name || "",
+          customer_phone: userData.phone ? formatPhone(userData.phone) : prev.customer_phone || "",
+          customer_email: userData.email || prev.customer_email || ""
         }));
 
-        const userAddrs = await fetchCustomerAddresses(effectivePhone, effectiveEmail);
+        const userAddrs = await fetchCustomerAddresses(userData.phone, userData.email);
         if (userAddrs && userAddrs.length > 0) {
           setAddresses(userAddrs);
           const defaultAddress = userAddrs.find(addr => addr.is_default) || userAddrs[0];
@@ -461,12 +402,12 @@ export default function OrderModal({
         } else {
           setAddresses([]);
           setIsCreatingNewAddress(true);
-          if (savedGuestInfo?.addressForm) {
-            setNewAddressForm(prev => ({ ...prev, ...savedGuestInfo.addressForm }));
-          }
         }
-
-        setShowCustomerConfirm(false);
+      } else {
+        // Visitante (Guest Checkout): sem cadastro prévio, sem login e sem endereços salvos
+        setUser(null);
+        setAddresses([]);
+        setIsCreatingNewAddress(true);
       }
     };
 
@@ -527,18 +468,25 @@ export default function OrderModal({
     }
   }
 
-  const handleApplyCoupon = async () => {
-    if (!couponCode) return;
+  const handleApplyCoupon = async (codeOverride = null, userOverride = null) => {
+    const codeToUse = typeof codeOverride === 'string' ? codeOverride : couponCode;
+    if (!codeToUse) return;
     setCouponError("");
     setAppliedCoupon(null);
 
-    const coupons = await Coupon.filter({ code: couponCode.toUpperCase(), active: true });
+    const activeUser = userOverride || user;
+    if (!activeUser || !activeUser.id) {
+      setCouponError("Cupons de desconto são exclusivos para clientes cadastrados.");
+      return;
+    }
+
+    const coupons = await Coupon.filter({ code: codeToUse.toUpperCase(), active: true });
     const coupon = coupons[0];
 
     if (!coupon) { setCouponError("Cupom inválido ou inativo."); return; }
     if (coupon.end_date && new Date(coupon.end_date) < new Date()) { setCouponError("Este cupom expirou."); return; }
 
-    const cleanPhone = (customerData.customer_phone || user?.phone || "").replace(/\D/g, "");
+    const cleanPhone = (activeUser.phone || customerData.customer_phone || "").replace(/\D/g, "");
     if (coupon.usage_limit && (cleanPhone || user?.email)) {
       const allUsages = await CouponUsage.list();
       const userUsages = (allUsages || []).filter(u => {
@@ -710,25 +658,8 @@ export default function OrderModal({
     await onSubmit(orderData);
 
     try {
-      if (customerData.customer_phone) {
-        localStorage.setItem("vrumburguer_customer_phone", customerData.customer_phone);
-        const finalName = customerData.customer_name?.trim() || "";
-        if (finalName && finalName !== "Cliente") {
-          try {
-            const logged = await User.loginWithPhone(customerData.customer_phone, finalName);
-            if (logged) setUser(logged);
-          } catch {}
-        }
-      }
-      localStorage.setItem("vrumburguer_guest_info", JSON.stringify({
-        customer_name: customerData.customer_name,
-        customer_phone: customerData.customer_phone,
-        customer_email: customerData.customer_email,
-        addressForm: newAddressForm
-      }));
-
-      // Salva o endereço vinculado ao telefone no banco de dados para futuras compras
-      if (orderType === 'delivery' && newAddressForm.street && customerData.customer_phone) {
+      // Salva endereço para futuras compras EXCLUSIVAMENTE se for um cliente com conta logada
+      if (user && user.id && orderType === 'delivery' && newAddressForm.street && customerData.customer_phone) {
         const cleanPhone = customerData.customer_phone.replace(/\D/g, "");
         const allAddrs = await UserAddress.list();
         const existing = (allAddrs || []).find(a => 
@@ -739,7 +670,7 @@ export default function OrderModal({
         if (!existing) {
           await UserAddress.create({
             user_phone: customerData.customer_phone,
-            user_email: customerData.customer_email || "",
+            user_email: customerData.customer_email || user.email || "",
             name: newAddressForm.name || "Endereço de Entrega",
             street: newAddressForm.street,
             number: newAddressForm.number,
@@ -749,21 +680,18 @@ export default function OrderModal({
             complement: newAddressForm.complement || "",
             reference: newAddressForm.reference || "",
             cep: newAddressForm.cep || "",
-            is_default: true,
+            is_default: addresses.length === 0,
           });
         }
       }
     } catch (saveErr) {
-      console.warn("Erro ao salvar dados locais/banco do cliente:", saveErr);
+      console.warn("Erro ao salvar endereço do cliente autenticado:", saveErr);
     }
 
     if (user && !user.phone && customerData.customer_phone) {
       try { await base44.auth.updateMe({ phone: customerData.customer_phone }); } catch {}
     }
   };
-
-  const [showCustomerConfirm, setShowCustomerConfirm] = useState(false);
-  const [lastSearchedPhone, setLastSearchedPhone] = useState("");
 
   const formatPhone = (value) => {
     if (!value) return "";
@@ -773,183 +701,10 @@ export default function OrderModal({
     return `(${raw.slice(0, 2)}) ${raw.slice(2, 7)}-${raw.slice(7)}`;
   };
 
-  const lookupCustomerByPhone = async (phoneStr) => {
-    if (!phoneStr) return;
-    const cleanDigits = phoneStr.replace(/\D/g, "");
-    if (cleanDigits.length < 10) {
-      setPhoneLookupFeedback("");
-      return;
-    }
-
-    if (cleanDigits === lastSearchedPhone) return;
-    setLastSearchedPhone(cleanDigits);
-
-    setIsSearchingPhone(true);
-    try {
-      let foundName = "";
-      let foundEmail = "";
-
-      // 1. Tentar obter nome do cliente no Supabase (RPC ou users ou orders)
-      if (isSupabaseConfigured() && supabase) {
-        try {
-          const activeTenantId = getActiveTenantId();
-          const { data, error } = await supabase.rpc("lookup_customer_by_phone", {
-            p_phone: phoneStr,
-            p_tenant_id: activeTenantId || undefined
-          });
-          if (!error && data && data.length > 0) {
-            const client = data[0];
-            if (client.customer_name && client.customer_name !== "Cliente") foundName = client.customer_name;
-            if (client.customer_email) foundEmail = client.customer_email;
-          }
-        } catch {}
-
-
-        if (!foundName) {
-          try {
-            const { data: userData } = await supabase
-              .from("users")
-              .select("full_name,email")
-              .ilike("phone", `%${cleanDigits.slice(-8)}%`)
-              .limit(1);
-            if (userData && userData[0]?.full_name && userData[0].full_name !== "Cliente") {
-              foundName = userData[0].full_name;
-              if (userData[0].email) foundEmail = userData[0].email;
-            }
-          } catch {}
-        }
-
-        if (!foundName) {
-          try {
-            const { data: orderData } = await supabase
-              .from("orders")
-              .select("customer_name,customer_email")
-              .ilike("customer_phone", `%${cleanDigits.slice(-8)}%`)
-              .order("created_date", { ascending: false })
-              .limit(3);
-            if (orderData && orderData.length > 0) {
-              const bestOrder = orderData.find(o => o.customer_name && o.customer_name !== "Cliente") || orderData[0];
-              if (bestOrder.customer_name && bestOrder.customer_name !== "Cliente") {
-                foundName = bestOrder.customer_name;
-              }
-              if (!foundEmail && bestOrder.customer_email) {
-                foundEmail = bestOrder.customer_email;
-              }
-            }
-          } catch {}
-        }
-      }
-
-      // 2. Fallbacks de nome em memória / local storage
-      if (!foundName) {
-        try {
-          const allOrders = await Order.list("-created_date");
-          const matchOrder = (allOrders || []).find(o => 
-            o.customer_phone && o.customer_phone.replace(/\D/g, "").slice(-8) === cleanDigits.slice(-8)
-          );
-          if (matchOrder && matchOrder.customer_name && matchOrder.customer_name !== "Cliente") {
-            foundName = matchOrder.customer_name;
-          }
-        } catch {}
-      }
-
-      try {
-        const guestInfo = JSON.parse(localStorage.getItem("vrumburguer_guest_info") || "null");
-        if (guestInfo) {
-          const gPhoneClean = (guestInfo.customer_phone || "").replace(/\D/g, "");
-          if (gPhoneClean && gPhoneClean.slice(-8) === cleanDigits.slice(-8)) {
-            if (!foundName && guestInfo.customer_name && guestInfo.customer_name !== "Cliente") {
-              foundName = guestInfo.customer_name;
-            }
-            if (!foundEmail && guestInfo.customer_email) {
-              foundEmail = guestInfo.customer_email;
-            }
-          }
-        }
-      } catch {}
-
-      if (foundName) {
-        setCustomerData(prev => ({
-          ...prev,
-          customer_name: foundName,
-          customer_email: foundEmail || prev.customer_email
-        }));
-      }
-
-      // 3. Buscar endereços cadastrados desse telefone/email
-      const resolvedAddrs = await fetchCustomerAddresses(phoneStr, foundEmail);
-      let resolvedAddressString = "";
-
-      if (resolvedAddrs && resolvedAddrs.length > 0) {
-        setAddresses(resolvedAddrs);
-        const defaultAddr = resolvedAddrs.find(a => a.is_default) || resolvedAddrs[0];
-        if (defaultAddr) {
-          setSelectedAddress(defaultAddr.id);
-          setIsCreatingNewAddress(false);
-          setNewAddressForm(prev => ({
-            ...prev,
-            name: "",
-            city: defaultAddr.city || prev.city || deliveryRules?.address_city || "",
-            state: defaultAddr.state || prev.state || deliveryRules?.address_state || "MG"
-          }));
-          resolvedAddressString = `${defaultAddr.street}, ${defaultAddr.number}${defaultAddr.complement ? ` (${defaultAddr.complement})` : ''} - ${defaultAddr.neighborhood}, ${defaultAddr.city}/${defaultAddr.state || 'MG'}`;
-          setManualAddress(resolvedAddressString);
-        }
-      }
-
-      // 4. Login Automático com o Telefone
-      try {
-        const nameToUse = foundName || (customerData.customer_name && customerData.customer_name !== "Cliente" ? customerData.customer_name : "");
-        const logged = await User.loginWithPhone(phoneStr, nameToUse);
-        if (logged) setUser(logged);
-      } catch {}
-
-      // 5. Feedback visual de cadastro encontrado
-      if (resolvedAddrs.length > 0) {
-        const defaultAddr = resolvedAddrs.find(a => a.is_default) || resolvedAddrs[0];
-        setPhoneLookupFeedback(`✓ Endereço "${defaultAddr.name || 'Casa'}" carregado!`);
-      } else if (foundName) {
-        setPhoneLookupFeedback(`✓ Conectado como ${foundName}!`);
-      } else {
-        setPhoneLookupFeedback("✓ Número verificado!");
-      }
-      setShowCustomerConfirm(false);
-    } catch (_err) {
-      console.warn("Erro ao buscar dados do cliente por telefone:", _err);
-    } finally {
-      setIsSearchingPhone(false);
-    }
-  };
-
   const handleInputChange = (field, value) => {
     const finalValue = field === 'customer_phone' ? formatPhone(value) : value;
     setCustomerData(prev => ({ ...prev, [field]: finalValue }));
     if (errors[field]) setErrors(prev => ({ ...prev, [field]: "" }));
-
-    if (field === 'customer_name') {
-      const cleanName = typeof value === "string" ? value.trim() : "";
-      if (cleanName && cleanName !== "Cliente") {
-        const phone = customerData.customer_phone;
-        if (phone && phone.replace(/\D/g, "").length >= 10) {
-          User.loginWithPhone(phone, cleanName).then(logged => {
-            if (logged) setUser(logged);
-          }).catch(() => {});
-        }
-      }
-    }
-
-    if (field === 'customer_phone') {
-      const digits = finalValue.replace(/\D/g, "");
-      if (digits.length >= 10) {
-        lookupCustomerByPhone(finalValue);
-      } else {
-        setPhoneLookupFeedback("");
-      }
-    }
-  };
-
-  const handleConfirmCustomerModal = () => {
-    setShowCustomerConfirm(false);
   };
 
   return (
@@ -970,6 +725,34 @@ export default function OrderModal({
         <form onSubmit={handleSubmit} className="space-y-4 pt-1">
           {/* 1º BLOCO: IDENTIFICAÇÃO DO CLIENTE (WHATSAPP & NOME EM PRIMEIRO LUGAR) */}
           <div className="bg-stone-50/90 p-4 rounded-2xl border border-stone-200/90 space-y-3 shadow-xs">
+            {/* Barra de Status da Conta (Visitante vs Conectado) */}
+            <div className="flex items-center justify-between pb-2 border-b border-stone-200/80">
+              {user ? (
+                <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span className="truncate">Conta conectada: <strong>{user.full_name || "Cliente"}</strong></span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 text-xs font-medium text-stone-600">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0"></span>
+                  <span>Comprando como visitante</span>
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthModalTitle(user ? "Trocar de Conta WhatsApp" : "Acessar Conta com WhatsApp");
+                  setShowAuthModal(true);
+                }}
+                className={`text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors ${
+                  user ? "text-stone-500 hover:text-emerald-700 underline" : "text-[#047857] hover:text-[#065f46]"
+                }`}
+              >
+                <PhoneCall className="w-3.5 h-3.5" />
+                <span>{user ? "Trocar conta" : "Entrar com WhatsApp"}</span>
+              </button>
+            </div>
+
             {/* WhatsApp / Celular */}
             <div>
               <div className="flex items-center justify-between mb-1">
@@ -1238,6 +1021,28 @@ export default function OrderModal({
               ) : (
                 // Formulário estruturado com CEP (padrão para todos os clientes sem login ou com novo endereço)
                 <div className="bg-stone-50 p-4 rounded-2xl border border-stone-200 space-y-3 shadow-xs">
+                  {/* Banner de convite para salvar endereços para visitantes */}
+                  {!user && (
+                    <div className="p-3 bg-emerald-50/70 border border-emerald-200/80 rounded-xl flex items-center justify-between gap-2.5 text-xs">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-emerald-700 shrink-0" />
+                        <span className="text-emerald-950 text-[11px] font-medium leading-tight">
+                          Deseja salvar seus endereços e agilizar seus próximos pedidos?
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAuthModalTitle("Salvar Endereços no WhatsApp");
+                          setShowAuthModal(true);
+                        }}
+                        className="text-[11px] font-bold text-white bg-[#047857] hover:bg-[#065f46] px-2.5 py-1 rounded-lg shrink-0 cursor-pointer transition-colors shadow-2xs"
+                      >
+                        Entrar com WhatsApp
+                      </button>
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between pb-1 border-b border-stone-200">
                     <div className="flex items-center gap-2">
                       <MapPin className="w-4 h-4 text-red-600" />
@@ -1707,7 +1512,14 @@ export default function OrderModal({
 
           {/* Cupom de Desconto */}
           <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200">
-            <Label className="text-xs font-bold text-gray-700">Cupom de Desconto</Label>
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-bold text-gray-700">Cupom de Desconto</Label>
+              {!user && (
+                <span className="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md">
+                  Exclusivo p/ Clientes Cadastrados
+                </span>
+              )}
+            </div>
             <div className="flex gap-2 mt-1.5">
               <Input
                 placeholder="INSIRA SEU CUPOM"
@@ -1716,11 +1528,29 @@ export default function OrderModal({
                 disabled={!!appliedCoupon}
                 className="bg-white uppercase font-bold text-xs h-10 rounded-xl"
               />
-              <Button type="button" onClick={handleApplyCoupon} disabled={!!appliedCoupon} className="h-10 px-4 text-xs font-bold bg-stone-900 hover:bg-black text-white rounded-xl">
+              <Button type="button" onClick={() => handleApplyCoupon()} disabled={!!appliedCoupon} className="h-10 px-4 text-xs font-bold bg-stone-900 hover:bg-black text-white rounded-xl cursor-pointer">
                 {appliedCoupon ? "Aplicado!" : "Aplicar"}
               </Button>
             </div>
-            {couponError && <p className="text-red-500 text-xs mt-1 font-medium">{couponError}</p>}
+            {couponError && (
+              <div className="mt-2 space-y-1">
+                <p className="text-rose-600 text-xs font-semibold">{couponError}</p>
+                {!user && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPendingCoupon(couponCode);
+                      setAuthModalTitle("Liberar Cupom de Desconto");
+                      setShowAuthModal(true);
+                    }}
+                    className="text-xs font-bold text-[#047857] hover:text-[#065f46] underline flex items-center gap-1.5 cursor-pointer pt-0.5"
+                  >
+                    <PhoneCall className="w-3.5 h-3.5" />
+                    <span>Entrar com WhatsApp para liberar este cupom</span>
+                  </button>
+                )}
+              </div>
+            )}
             {appliedCoupon && <p className="text-emerald-600 text-xs mt-1 font-bold">✓ Cupom "{appliedCoupon.name}" aplicado!</p>}
           </div>
 
@@ -1803,59 +1633,49 @@ export default function OrderModal({
         </DialogContent>
       </Dialog>
 
-      {/* Modal de Confirmação de Reconhecimento do Cliente */}
-      {showCustomerConfirm && customerModalData && (
-        <Dialog open={showCustomerConfirm} onOpenChange={setShowCustomerConfirm}>
-          <DialogContent className="w-[calc(100vw-2rem)] sm:w-full max-w-sm p-5 rounded-3xl bg-white text-stone-900 shadow-2xl border border-stone-200 z-[60]">
-            <div className="text-center space-y-3 pt-1">
-              <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto text-2xl shadow-inner">
-                👋
-              </div>
-              <DialogTitle className="text-lg sm:text-xl font-black text-gray-900 tracking-tight">
-                Cadastro Encontrado!
-              </DialogTitle>
-              <p className="text-xs text-stone-500 leading-relaxed">
-                Localizamos sua conta com o WhatsApp <strong className="text-stone-800">{customerModalData.phone}</strong>.
-              </p>
+      {/* Modal de Autenticação via WhatsApp OTP */}
+      <WhatsAppAuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        title={authModalTitle}
+        initialPhone={customerData.customer_phone}
+        initialName={customerData.customer_name}
+        dark={isVrumm}
+        onSuccess={(loggedUser) => {
+          setUser(loggedUser);
+          setCustomerData(prev => ({
+            ...prev,
+            customer_phone: loggedUser.phone ? formatPhone(loggedUser.phone) : prev.customer_phone,
+            customer_name: (loggedUser.full_name && loggedUser.full_name !== "Cliente") ? loggedUser.full_name : prev.customer_name,
+            customer_email: loggedUser.email || prev.customer_email || ""
+          }));
 
-              <div className="bg-stone-50 border border-stone-200 rounded-2xl p-3.5 text-left text-xs space-y-2 shadow-xs">
-                <div>
-                  <span className="text-[10px] font-bold text-stone-400 uppercase">Nome</span>
-                  <p className="font-bold text-sm text-stone-900">{customerModalData.name || 'Cliente'}</p>
-                </div>
-                {customerModalData.addressString && (
-                  <div className="border-t border-stone-200/80 pt-1.5">
-                    <span className="text-[10px] font-bold text-stone-400 uppercase">Endereço Salvo</span>
-                    <p className="font-medium text-xs text-stone-700 leading-relaxed mt-0.5">{customerModalData.addressString}</p>
-                  </div>
-                )}
-              </div>
+          // Carrega os endereços salvos da conta verificada
+          fetchCustomerAddresses(loggedUser.phone, loggedUser.email).then(addrs => {
+            if (addrs && addrs.length > 0) {
+              setAddresses(addrs);
+              const defaultAddr = addrs.find(a => a.is_default) || addrs[0];
+              setSelectedAddress(defaultAddr.id);
+              setIsCreatingNewAddress(false);
+              setNewAddressForm(prev => ({
+                ...prev,
+                name: "",
+                city: defaultAddr.city || prev.city || deliveryRules?.address_city || "",
+                state: defaultAddr.state || prev.state || deliveryRules?.address_state || "MG"
+              }));
+            }
+          });
 
-              <div className="flex gap-2 pt-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowCustomerConfirm(false)}
-                  className="flex-1 h-11 rounded-xl text-xs font-semibold"
-                >
-                  Alterar Dados
-                </Button>
-                <Button
-                  type="button"
-                  onClick={handleConfirmCustomerModal}
-                  className={`flex-1 h-11 ${
-                    isVrumm
-                      ? "bg-red-600 hover:bg-red-700 shadow-red-600/30"
-                      : "bg-[#047857] hover:bg-[#036348] shadow-[#047857]/30"
-                  } text-white font-bold rounded-xl text-xs shadow-md`}
-                >
-                  Sim, sou eu ✓
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
+          // Se havia tentativa de cupom pendente, aplica automaticamente!
+          if (pendingCoupon) {
+            setCouponCode(pendingCoupon);
+            setTimeout(() => {
+              handleApplyCoupon(pendingCoupon, loggedUser);
+            }, 100);
+            setPendingCoupon("");
+          }
+        }}
+      />
     </>
   );
 }

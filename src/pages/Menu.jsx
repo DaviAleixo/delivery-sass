@@ -523,12 +523,6 @@ export default function MenuPage() {
           recentOrders.unshift(createdOrder.id);
           localStorage.setItem("vrumburguer_recent_orders", JSON.stringify(recentOrders.slice(0, 10)));
         }
-        if (orderData.customer_phone) {
-          localStorage.setItem("vrumburguer_customer_phone", orderData.customer_phone);
-          if (orderData.customer_name && orderData.customer_name.trim() !== "Cliente") {
-            await User.loginWithPhone(orderData.customer_phone, orderData.customer_name.trim());
-          }
-        }
       } catch {}
 
       if (orderData.coupon_code) {

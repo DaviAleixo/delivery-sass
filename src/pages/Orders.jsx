@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   MapPin, Clock, CheckCircle, X, Bell, BellOff, Volume2, Timer, Check,
-  Calendar, Search, ChefHat, Bike, ShoppingBag, SlidersHorizontal, ChevronRight, ChevronDown, Pencil, QrCode, RefreshCw
+  Calendar, Search, ChefHat, Bike, ShoppingBag, SlidersHorizontal, ChevronRight, ChevronDown, ChevronUp, Pencil, QrCode, RefreshCw, Banknote, Layers
 } from "lucide-react";
 import { AnimatePresence } from "framer-motion";
 import { soundAlert } from "@/utils/soundAlert";
@@ -13,8 +13,14 @@ import TableQRCodeModal from "@/components/admin/TableQRCodeModal";
 import OrderCard from "@/components/admin/orders/OrderCard";
 import DispatchOrderModal from "@/components/admin/orders/DispatchOrderModal";
 import ShiftClosingModal from "@/components/admin/orders/ShiftClosingModal";
+import EmptyOrdersIllustration from "@/components/admin/orders/EmptyOrdersIllustration";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { calculateShiftClosing } from "@/utils/shiftClosingCalculator";
-import { Receipt } from "lucide-react";
 import { getStoreStatusInfo, getTodayDateKey } from "@/utils/storeStatus";
 import { getBrasiliaParts } from "@/utils/dateTime";
 import { useOrdersRealtime } from "@/hooks/useOrdersRealtime";
@@ -614,8 +620,8 @@ export default function OrdersPage() {
 
           <div className="flex flex-wrap items-center gap-3">
             {/* Card 1: Entrega média */}
-            <div className="bg-white border border-gray-200/90 rounded-2xl px-4 py-2 flex items-center gap-3 shadow-2xs">
-              <Clock className="w-4 h-4 text-gray-500 shrink-0" />
+            <div className="bg-white border border-gray-200/90 rounded-xl px-4 py-2.5 flex items-center gap-3 shadow-2xs">
+              <Clock className="w-4 h-4 text-gray-600 shrink-0" />
               <div>
                 <p className="text-[10px] text-gray-400 font-medium leading-none">Entrega média</p>
                 {!isEditingTime ? (
@@ -669,9 +675,9 @@ export default function OrdersPage() {
             <button
               type="button"
               onClick={() => setShiftClosingOpen(true)}
-              className="bg-white border border-gray-200/90 hover:border-gray-300 rounded-2xl px-4 py-3 flex items-center gap-3 shadow-2xs hover:bg-gray-50/70 transition-all cursor-pointer"
+              className="bg-white border border-gray-200/90 hover:border-gray-300 rounded-xl px-4 py-2.5 flex items-center gap-3 shadow-2xs hover:bg-gray-50/70 transition-all cursor-pointer"
             >
-              <Receipt className="w-4 h-4 text-gray-700 shrink-0" />
+              <Banknote className="w-4 h-4 text-gray-700 shrink-0" />
               <span className="text-xs font-bold text-gray-900">Fechamento de Caixa</span>
               <ChevronRight className="w-4 h-4 text-gray-400 shrink-0 ml-0.5" />
             </button>
@@ -682,113 +688,156 @@ export default function OrdersPage() {
               trigger={
                 <button
                   type="button"
-                  className="bg-white border border-gray-200/90 hover:border-gray-300 rounded-2xl px-4 py-3 flex items-center gap-3 shadow-2xs hover:bg-gray-50/70 transition-all cursor-pointer"
+                  className="bg-white border border-gray-200/90 hover:border-gray-300 rounded-xl px-4 py-2.5 flex items-center gap-3 shadow-2xs hover:bg-gray-50/70 transition-all cursor-pointer"
                 >
                   <QrCode className="w-4 h-4 text-gray-700 shrink-0" />
                   <span className="text-xs font-bold text-gray-900">QR Code das Mesas</span>
+                  <ChevronRight className="w-4 h-4 text-gray-400 shrink-0 ml-0.5" />
                 </button>
               }
             />
           </div>
         </div>
 
-        {/* Abas de Status dos Pedidos (Pílulas Horizontais) */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide pt-1">
-          {[
-            { id: "pendente", label: "Pendentes", icon: Clock, count: statusCounts.pendente },
-            { id: "confirmado", label: "Confirmados", icon: Check, count: statusCounts.confirmado },
-            { id: "preparando", label: "Preparando", icon: ChefHat, count: statusCounts.preparando },
-            { id: "enviado", label: "Enviados", icon: Bike, count: statusCounts.enviado },
-            { id: "entregue", label: "Entregues", icon: ShoppingBag, count: statusCounts.entregue },
-            { id: "cancelado", label: "Cancelados", icon: X, count: statusCounts.cancelado },
-          ].map((tab) => {
-            const isActive = activeTab === tab.id;
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
-                  isActive
-                    ? "bg-[#E6F4EA] border border-emerald-200/90 text-[#047857] shadow-2xs"
-                    : "bg-white/70 border border-transparent hover:border-gray-200 hover:bg-white text-gray-600"
-                }`}
-              >
-                <Icon className={`w-3.5 h-3.5 ${isActive ? "text-[#047857]" : "text-gray-500"}`} />
-                <span>{tab.label}</span>
-                <span className={`text-xs px-2 py-0.5 rounded-full font-bold min-w-[20px] text-center ${
-                  isActive
-                    ? "bg-[#D1E9DF] text-[#047857]"
-                    : "text-gray-400 font-semibold"
-                }`}>
-                  {tab.count}
-                </span>
-              </button>
-            );
-          })}
+        {/* Abas de Status dos Pedidos (Barra Segmentada Idêntica à Referência) */}
+        <div className="w-full bg-white border-y border-gray-200">
+          <div className="flex items-stretch overflow-x-auto scrollbar-hide">
+            {[
+              { id: "pendente", label: "Pendentes", icon: Clock, count: statusCounts.pendente },
+              { id: "confirmado", label: "Confirmados", icon: Check, count: statusCounts.confirmado },
+              { id: "preparando", label: "Preparando", icon: ChefHat, count: statusCounts.preparando },
+              { id: "enviado", label: "Enviados", icon: Bike, count: statusCounts.enviado },
+              { id: "entregue", label: "Entregues", icon: ShoppingBag, count: statusCounts.entregue },
+              { id: "cancelado", label: "Cancelados", icon: X, count: statusCounts.cancelado },
+            ].map((tab) => {
+              const isActive = activeTab === tab.id;
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`px-5 py-3.5 flex items-center justify-center gap-2.5 text-xs transition-colors shrink-0 border-r border-gray-200 cursor-pointer select-none relative ${
+                    isActive
+                      ? "bg-white font-bold text-gray-950 border-b-2 border-b-[#047857] -mb-[1px] border-l-2 border-l-[#047857]"
+                      : "bg-white font-medium text-gray-600 hover:text-gray-950 hover:bg-gray-50/70 border-b border-b-transparent"
+                  }`}
+                >
+                  <Icon className={`w-4 h-4 ${isActive ? "text-[#047857]" : "text-gray-500"}`} />
+                  <span>{tab.label}</span>
+                  {tab.id !== "cancelado" && (
+                    <span
+                      className={`text-xs px-1.5 py-0.5 rounded-md min-w-[20px] text-center font-bold ${
+                        isActive
+                          ? "bg-[#E6F4EA] text-[#047857] border border-[#A7F3D0]"
+                          : "bg-gray-100 text-gray-600 font-semibold"
+                      }`}
+                    >
+                      {tab.count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Barra de Filtros e Busca */}
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 pt-0.5">
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 pt-1">
           <div className="flex flex-wrap items-center gap-2.5">
-            {/* Dropdown de Data */}
-            <div className="relative">
-              <select
-                value={timeFilter === "shift" ? "shift" : timeFilter}
-                onChange={(e) => setTimeFilter(e.target.value)}
-                className="appearance-none bg-white border border-gray-200/90 rounded-2xl pl-8 pr-8 py-2 text-xs font-bold text-gray-800 shadow-2xs hover:bg-gray-50 focus:border-[#047857] outline-none cursor-pointer"
-              >
-                <option value="today">Hoje</option>
-                <option value="yesterday">Ontem</option>
-                <option value="week">Últimos 7 dias</option>
-                <option value="all">Histórico Completo</option>
-                <option value="shift">Turno Aberto (Ao Vivo)</option>
-              </select>
-              <Calendar className="w-3.5 h-3.5 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            </div>
+            {/* Dropdown de Data / Período */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="bg-white border border-gray-200/90 rounded-xl px-3.5 py-2.5 text-xs font-bold text-gray-800 shadow-2xs hover:bg-gray-50 flex items-center gap-2 cursor-pointer transition-colors"
+                >
+                  <Calendar className="w-4 h-4 text-gray-600" />
+                  <span>
+                    {timeFilter === "shift" && "Turno Aberto (Ao Vivo)"}
+                    {timeFilter === "today" && "Hoje"}
+                    {timeFilter === "yesterday" && "Ontem"}
+                    {timeFilter === "week" && "Últimos 7 dias"}
+                    {timeFilter === "all" && "Histórico Completo"}
+                  </span>
+                  <ChevronDown className="w-3.5 h-3.5 text-gray-400 ml-1" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-52 bg-white rounded-xl shadow-lg border border-gray-200 p-1">
+                <DropdownMenuItem onClick={() => setTimeFilter("shift")} className="cursor-pointer text-xs font-medium py-2 rounded-lg">
+                  🟢 Turno Aberto (Ao Vivo)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTimeFilter("today")} className="cursor-pointer text-xs font-medium py-2 rounded-lg">
+                  📅 Hoje
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTimeFilter("yesterday")} className="cursor-pointer text-xs font-medium py-2 rounded-lg">
+                  ⏮️ Ontem
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTimeFilter("week")} className="cursor-pointer text-xs font-medium py-2 rounded-lg">
+                  🗓️ Últimos 7 dias
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setTimeFilter("all")} className="cursor-pointer text-xs font-medium py-2 rounded-lg">
+                  📜 Histórico Completo
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-            {/* Botão de Turno Ao Vivo */}
+            {/* Botão de Status do Turno Aberto (Ao Vivo) */}
             <button
               type="button"
               onClick={() => setTimeFilter(timeFilter === "shift" ? "today" : "shift")}
-              className={`bg-white border rounded-2xl pl-3 pr-4 py-2 text-xs font-bold shadow-2xs hover:bg-gray-50 transition-all flex items-center gap-2 cursor-pointer ${
-                timeFilter === "shift" ? "border-emerald-300 text-emerald-800 bg-emerald-50/50" : "border-gray-200/90 text-gray-800"
-              }`}
+              className="bg-white border border-emerald-300/80 rounded-xl px-3.5 py-2.5 text-xs font-bold text-emerald-900 shadow-2xs hover:bg-emerald-50/50 flex items-center gap-2 cursor-pointer transition-all"
               title="Alternar filtro de Turno Aberto"
             >
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-200 animate-pulse" />
               <span>Turno Aberto (Ao Vivo)</span>
-              <ChevronDown className="w-3.5 h-3.5 text-gray-400 ml-1" />
+              <ChevronUp className="w-3.5 h-3.5 text-emerald-700 ml-0.5" />
             </button>
 
             {/* Dropdown de Canais */}
-            <div className="relative">
-              <select
-                value={channelFilter}
-                onChange={(e) => setChannelFilter(e.target.value)}
-                className="appearance-none bg-white border border-gray-200/90 rounded-2xl pl-4 pr-8 py-2 text-xs font-bold text-gray-800 shadow-2xs hover:bg-gray-50 focus:border-[#047857] outline-none cursor-pointer"
-              >
-                <option value="all">Todos os canais</option>
-                <option value="delivery">🛵 Delivery</option>
-                <option value="pickup">🥡 Retirada</option>
-                <option value="dine_in">🍽️ Salão (Mesa)</option>
-              </select>
-              <ChevronDown className="w-3.5 h-3.5 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="bg-white border border-gray-200/90 rounded-xl px-3.5 py-2.5 text-xs font-bold text-gray-800 shadow-2xs hover:bg-gray-50 flex items-center gap-2 cursor-pointer transition-colors"
+                >
+                  <Layers className="w-4 h-4 text-gray-600" />
+                  <span>
+                    {channelFilter === "all" && "Todos os canais"}
+                    {channelFilter === "delivery" && "🛵 Delivery"}
+                    {channelFilter === "pickup" && "🥡 Retirada"}
+                    {channelFilter === "dine_in" && "🍽️ Salão (Mesa)"}
+                  </span>
+                  <ChevronDown className="w-3.5 h-3.5 text-gray-400 ml-1" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-48 bg-white rounded-xl shadow-lg border border-gray-200 p-1">
+                <DropdownMenuItem onClick={() => setChannelFilter("all")} className="cursor-pointer text-xs font-medium py-2 rounded-lg">
+                  Todos os canais
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setChannelFilter("delivery")} className="cursor-pointer text-xs font-medium py-2 rounded-lg">
+                  🛵 Delivery
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setChannelFilter("pickup")} className="cursor-pointer text-xs font-medium py-2 rounded-lg">
+                  🥡 Retirada (Balcão)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setChannelFilter("dine_in")} className="cursor-pointer text-xs font-medium py-2 rounded-lg">
+                  🍽️ Salão (Mesa)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
           {/* Busca e Botão Filtros */}
           <div className="flex items-center gap-2.5">
             <div className="relative flex-1 md:w-80">
-              <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Buscar pedido, cliente, mesa..."
-                className="w-full bg-white border border-gray-200/90 rounded-2xl pl-9 pr-8 py-2 text-xs text-gray-900 placeholder:text-gray-400 shadow-2xs outline-none focus:border-[#047857] focus:ring-1 focus:ring-[#047857] transition-all"
+                className="w-full bg-white border border-gray-200/90 rounded-xl pl-9 pr-8 py-2.5 text-xs text-gray-900 placeholder:text-gray-400 shadow-2xs outline-none focus:border-[#047857] focus:ring-1 focus:ring-[#047857] transition-all"
               />
               {searchQuery && (
                 <button
@@ -807,11 +856,12 @@ export default function OrdersPage() {
                 setTimeFilter("shift");
                 setChannelFilter("all");
                 setSearchQuery("");
+                toast.info("Filtros redefinidos!");
               }}
-              className="bg-white border border-gray-200/90 rounded-2xl px-3.5 py-2 text-xs font-bold text-gray-700 shadow-2xs hover:bg-gray-50 flex items-center gap-1.5 cursor-pointer transition-colors shrink-0"
-              title="Limpar filtros"
+              className="bg-white border border-gray-200/90 rounded-xl px-4 py-2.5 text-xs font-bold text-gray-800 shadow-2xs hover:bg-gray-50 flex items-center gap-2 cursor-pointer transition-colors shrink-0"
+              title="Redefinir filtros"
             >
-              <SlidersHorizontal className="w-3.5 h-3.5 text-gray-500" />
+              <SlidersHorizontal className="w-4 h-4 text-gray-600" />
               <span>Filtros</span>
             </button>
           </div>
@@ -853,38 +903,13 @@ export default function OrdersPage() {
             )}
 
             {filteredOrders.length === 0 && !isLoading && (
-              <div className="text-center py-20 px-4">
-                {/* Ilustração da Caixa de Papelão Aberta Isométrica Idêntica à Foto */}
-                <div className="w-32 h-32 mx-auto flex items-center justify-center">
-                  <svg viewBox="0 0 160 140" fill="none" className="w-32 h-32 drop-shadow-sm">
-                    <ellipse cx="80" cy="120" rx="46" ry="10" fill="#E2E8F0" />
-                    {/* Caixa lateral esquerda */}
-                    <path d="M42 68 L80 88 L80 120 L42 100 Z" fill="#D39763" />
-                    {/* Caixa lateral direita */}
-                    <path d="M80 88 L118 68 L118 100 L80 120 Z" fill="#B87B48" />
-                    {/* Fundo interno esquerdo */}
-                    <path d="M42 68 L80 48 L80 88 L42 68 Z" fill="#995E32" />
-                    {/* Fundo interno direito */}
-                    <path d="M80 48 L118 68 L80 88 Z" fill="#7D4922" />
-                    {/* Aba superior esquerda (aberta p/ fora) */}
-                    <path d="M42 68 L80 48 L65 32 L26 52 Z" fill="#E8B07D" />
-                    {/* Aba superior direita (aberta p/ fora) */}
-                    <path d="M80 48 L118 68 L134 52 L95 32 Z" fill="#DC9F6A" />
-                    {/* Aba frontal esquerda (caída p/ baixo) */}
-                    <path d="M42 68 L80 88 L74 104 L36 84 Z" fill="#E8B07D" />
-                    {/* Aba frontal direita (caída p/ baixo) */}
-                    <path d="M80 88 L118 68 L124 84 L86 104 Z" fill="#DC9F6A" />
-                    {/* Faíscas verdes alegres */}
-                    <path d="M72 26 L76 18 L80 26" stroke="#10B981" strokeWidth="2.5" strokeLinecap="round" />
-                    <path d="M88 28 L94 22" stroke="#10B981" strokeWidth="2.5" strokeLinecap="round" />
-                    <path d="M64 30 L58 24" stroke="#10B981" strokeWidth="2.5" strokeLinecap="round" />
-                  </svg>
-                </div>
+              <div className="text-center py-16 md:py-24 px-4">
+                <EmptyOrdersIllustration className="w-72 sm:w-80 h-44 sm:h-48 mx-auto" />
 
-                <h3 className="text-xl font-bold text-gray-950 mt-5">
+                <h3 className="text-2xl font-black text-gray-950 mt-6 tracking-tight">
                   Nenhum pedido encontrado
                 </h3>
-                <p className="text-xs sm:text-sm text-gray-500 mt-1.5 max-w-sm mx-auto">
+                <p className="text-sm text-gray-500 mt-2 max-w-sm mx-auto font-normal">
                   {activeTab === "all"
                     ? "Não há pedidos no período selecionado."
                     : `Não há pedidos com o status "${getStatusText(activeTab)}" no período selecionado.`}
@@ -892,10 +917,13 @@ export default function OrdersPage() {
 
                 <button
                   type="button"
-                  onClick={() => loadOrdersOnly()}
-                  className="bg-[#047857] hover:bg-[#065f46] text-white font-bold rounded-xl px-6 py-2.5 text-xs shadow-sm flex items-center gap-2 mx-auto mt-5 transition-all active:scale-95 cursor-pointer"
+                  onClick={() => {
+                    loadOrdersOnly();
+                    toast.info("Atualizando pedidos...");
+                  }}
+                  className="bg-[#047857] hover:bg-[#065f46] text-white font-bold rounded-xl px-7 py-3 text-sm shadow-sm flex items-center gap-2 mx-auto mt-6 transition-all active:scale-95 cursor-pointer"
                 >
-                  <RefreshCw className="w-3.5 h-3.5" />
+                  <RefreshCw className="w-4 h-4" />
                   <span>Atualizar pedidos</span>
                 </button>
               </div>

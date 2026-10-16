@@ -17,7 +17,10 @@ import {
   X, 
   Loader2, 
   Copy,
-  Plus
+  Plus,
+  ShieldCheck,
+  ArrowLeft,
+  RefreshCw
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -28,6 +31,7 @@ import { CouponUsage } from "@/entities/CouponUsage";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { sendWhatsAppOtp, verifyWhatsAppOtp } from "@/services/whatsappOtpService";
 
 function AddressForm({ address, onSave, onCancel, dark = false }) {
   const [formData, setFormData] = useState(
@@ -268,6 +272,9 @@ export default function UserProfileSheet({ dark = false }) {
   
   const [phoneInput, setPhoneInput] = useState("");
   const [nameInput, setNameInput] = useState("");
+  const [authStep, setAuthStep] = useState("phone"); // 'phone' | 'code'
+  const [otpCode, setOtpCode] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [isSubmittingPhone, setIsSubmittingPhone] = useState(false);
   const [phoneError, setPhoneError] = useState("");
   const [isLookingUpPhone, setIsLookingUpPhone] = useState(false);
@@ -280,6 +287,14 @@ export default function UserProfileSheet({ dark = false }) {
   useEffect(() => {
     loadUserData();
   }, []);
+
+  useEffect(() => {
+    let timer;
+    if (resendCooldown > 0) {
+      timer = setInterval(() => setResendCooldown(prev => prev - 1), 1000);
+    }
+    return () => clearInterval(timer);
+  }, [resendCooldown]);
 
   const formatPhone = (value) => {
     const raw = value.replace(/\D/g, "").slice(0, 11);
@@ -423,22 +438,62 @@ export default function UserProfileSheet({ dark = false }) {
     }
   };
 
-  const handlePhoneLogin = async (e) => {
-    e.preventDefault();
+  const handleSendOtp = async (e) => {
+    e?.preventDefault();
     const clean = phoneInput.replace(/\D/g, "");
     if (clean.length < 10) {
       setPhoneError("Digite um número de WhatsApp válido com DDD.");
       return;
     }
+    if (!nameInput.trim()) {
+      setPhoneError("Informe seu nome completo para o cadastro.");
+      return;
+    }
     setPhoneError("");
     setIsSubmittingPhone(true);
     try {
-      const logged = await User.loginWithPhone(phoneInput, nameInput.trim());
-      setUser(logged);
-      toast.success(`Bem-vindo, ${logged.full_name || 'Cliente'}!`);
-      loadUserData();
+      const res = await sendWhatsAppOtp({ phone: clean, fullName: nameInput.trim() });
+      if (res.success) {
+        setAuthStep("code");
+        setResendCooldown(60);
+        toast.success("Código enviado com sucesso pelo WhatsApp!");
+      } else {
+        setPhoneError(res.error || "Erro ao enviar código.");
+      }
     } catch (_err) {
-      toast.error("Erro ao identificar. Tente novamente.");
+      setPhoneError("Erro ao se conectar ao serviço de envio.");
+    } finally {
+      setIsSubmittingPhone(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e) => {
+    e?.preventDefault();
+    const cleanCode = otpCode.replace(/\D/g, "").slice(0, 6);
+    if (cleanCode.length < 4) {
+      setPhoneError("Digite o código de 6 dígitos recebido.");
+      return;
+    }
+    setPhoneError("");
+    setIsSubmittingPhone(true);
+    try {
+      const clean = phoneInput.replace(/\D/g, "");
+      const res = await verifyWhatsAppOtp({
+        phone: clean,
+        code: cleanCode,
+        fullName: nameInput.trim()
+      });
+      if (res.success && res.user) {
+        setUser(res.user);
+        toast.success(`Bem-vindo, ${res.user.full_name || 'Cliente'}!`);
+        setAuthStep("phone");
+        setOtpCode("");
+        loadUserData();
+      } else {
+        setPhoneError(res.error || "Código incorreto ou expirado.");
+      }
+    } catch (_err) {
+      setPhoneError("Erro ao validar código.");
     } finally {
       setIsSubmittingPhone(false);
     }
@@ -905,106 +960,192 @@ export default function UserProfileSheet({ dark = false }) {
               </Button>
             </div>
           ) : (
-            /* Formulário de Identificação Rápida / Acessar Conta */
+            /* Formulário de Identificação Oficial via WhatsApp OTP */
             <div className="space-y-4">
               <div className="text-center pb-2">
                 <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-sm ${
                   dark 
-                    ? "bg-red-950/80 border border-red-500/40 text-red-400" 
-                    : "bg-[#D1E9DF]/60 border border-[#D1E9DF] text-[#047857]"
+                    ? "bg-emerald-950/80 border border-emerald-500/40 text-emerald-400" 
+                    : "bg-[#D1E9DF]/70 border border-[#D1E9DF] text-[#047857]"
                 }`}>
-                  <PhoneCall className="w-7 h-7" />
+                  {authStep === "phone" ? (
+                    <PhoneCall className="w-7 h-7" />
+                  ) : (
+                    <ShieldCheck className="w-7 h-7" />
+                  )}
                 </div>
                 <h3 
                   className={`font-black text-xl tracking-tight ${dark ? "text-white" : "text-[#171717]"}`}
                   style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
                 >
-                  Identificação Rápida
+                  {authStep === "phone" ? "Entrar com WhatsApp" : "Confirmar Código"}
                 </h3>
                 <p className={`text-xs mt-1 max-w-[280px] mx-auto leading-relaxed ${dark ? "text-stone-400" : "text-stone-500"}`}>
-                  Digite seu WhatsApp para carregar seus endereços e agilizar seus pedidos.
+                  {authStep === "phone" 
+                    ? "Cadastre-se ou acesse sua conta para salvar endereços e liberar cupons exclusivos." 
+                    : `Digite o código de 6 dígitos que enviamos para ${phoneInput}.`}
                 </p>
               </div>
 
-              <form onSubmit={handlePhoneLogin} className={`space-y-3.5 p-4.5 rounded-2xl border ${
-                dark 
-                  ? "bg-stone-900/90 border-stone-800" 
-                  : "bg-[#F7F9F8] border-[#E5EAE7] shadow-2xs"
-              }`}>
-                <div>
-                  <div className="flex items-center justify-between mb-1">
+              {authStep === "phone" ? (
+                <form onSubmit={handleSendOtp} className={`space-y-3.5 p-4.5 rounded-2xl border ${
+                  dark 
+                    ? "bg-stone-900/90 border-stone-800" 
+                    : "bg-[#F7F9F8] border-[#E5EAE7] shadow-2xs"
+                }`}>
+                  <div>
                     <Label htmlFor="phone" className={`text-xs font-bold uppercase tracking-wider ${dark ? "text-stone-300" : "text-stone-700"}`}>
-                      Seu WhatsApp / Celular *
+                      Seu WhatsApp com DDD *
                     </Label>
-                    {isLookingUpPhone && (
-                      <span className="text-[10px] text-amber-600 font-semibold flex items-center gap-1 animate-pulse">
-                        <Loader2 className="w-2.5 h-2.5 animate-spin" /> Buscando cadastro...
-                      </span>
-                    )}
+                    <Input
+                      id="phone"
+                      type="tel"
+                      placeholder="(11) 99999-9999"
+                      value={phoneInput}
+                      onChange={(e) => {
+                        handlePhoneInputChange(e.target.value);
+                        if (phoneError) setPhoneError("");
+                      }}
+                      className={`mt-1 rounded-xl h-11 text-base sm:text-sm font-medium ${
+                        dark 
+                          ? "bg-stone-950 border-stone-800 text-white placeholder:text-stone-600 focus-visible:ring-emerald-500" 
+                          : "bg-white border-stone-200 text-[#171717] placeholder:text-stone-400 focus-visible:ring-[#047857]"
+                      } ${phoneError ? 'border-red-500' : ''}`}
+                      required
+                    />
                   </div>
-                  <Input
-                    id="phone"
-                    type="tel"
-                    placeholder="(11) 99999-9999"
-                    value={phoneInput}
-                    onChange={(e) => handlePhoneInputChange(e.target.value)}
-                    className={`rounded-xl h-11 text-base sm:text-sm font-medium ${
-                      dark 
-                        ? "bg-stone-950 border-stone-800 text-white placeholder:text-stone-600" 
-                        : "bg-white border-stone-200 text-[#171717] placeholder:text-stone-400 focus-visible:ring-[#047857]"
-                    } ${phoneError ? 'border-red-500' : ''}`}
-                    required
-                  />
-                  {phoneError && <p className="text-xs text-red-500 mt-1 font-semibold">{phoneError}</p>}
-                </div>
 
-                <div>
-                  <div className="flex items-center justify-between mb-1">
+                  <div>
                     <Label htmlFor="name" className={`text-xs font-bold uppercase tracking-wider ${dark ? "text-stone-300" : "text-stone-700"}`}>
-                      Seu Nome Completo
+                      Seu Nome Completo *
                     </Label>
-                    {foundNameMessage && (
-                      <span className="text-[10px] text-[#047857] font-bold">
-                        {foundNameMessage}
-                      </span>
-                    )}
+                    <Input
+                      id="name"
+                      type="text"
+                      placeholder="Ex: Carlos Silva"
+                      value={nameInput}
+                      onChange={(e) => {
+                        setNameInput(e.target.value);
+                        if (phoneError) setPhoneError("");
+                      }}
+                      required
+                      className={`mt-1 rounded-xl h-11 text-base sm:text-sm ${
+                        dark 
+                          ? "bg-stone-950 border-stone-800 text-white placeholder:text-stone-600 focus-visible:ring-emerald-500" 
+                          : "bg-white border-stone-200 text-[#171717] placeholder:text-stone-400 focus-visible:ring-[#047857]"
+                      }`}
+                    />
                   </div>
-                  <Input
-                    id="name"
-                    type="text"
-                    placeholder="Ex: Carlos Silva"
-                    value={nameInput}
-                    onChange={(e) => {
-                      setNameInput(e.target.value);
-                      if (foundNameMessage) setFoundNameMessage("");
-                    }}
-                    className={`rounded-xl h-11 text-base sm:text-sm ${
-                      dark 
-                        ? "bg-stone-950 border-stone-800 text-white placeholder:text-stone-600" 
-                        : "bg-white border-stone-200 text-[#171717] placeholder:text-stone-400 focus-visible:ring-[#047857]"
-                    } ${foundNameMessage ? 'border-[#047857]' : ''}`}
-                  />
-                  <p className={`text-[11px] mt-1 ${dark ? "text-stone-500" : "text-stone-400"}`}>
-                    {foundNameMessage ? "Preenchido automaticamente a partir do seu histórico." : "Se já pediu antes, seu nome é recuperado automaticamente."}
-                  </p>
-                </div>
 
-                <Button
-                  type="submit"
-                  disabled={isSubmittingPhone || isLookingUpPhone}
-                  className={`w-full font-extrabold h-11 rounded-xl shadow-md flex items-center justify-center gap-2 mt-2 cursor-pointer transition-all ${
-                    dark 
-                      ? "bg-red-600 hover:bg-red-500 text-white" 
-                      : "bg-[#047857] hover:bg-[#065f46] text-white"
-                  }`}
-                >
-                  <PhoneCall className="w-4 h-4" />
-                  <span>{isSubmittingPhone ? "Identificando..." : "Entrar com WhatsApp"}</span>
-                </Button>
-              </form>
+                  {phoneError && <p className="text-xs text-rose-500 mt-1 font-semibold">{phoneError}</p>}
+
+                  <Button
+                    type="submit"
+                    disabled={isSubmittingPhone}
+                    className={`w-full font-extrabold h-11 rounded-xl shadow-md flex items-center justify-center gap-2 mt-2 cursor-pointer transition-all ${
+                      dark 
+                        ? "bg-emerald-600 hover:bg-emerald-500 text-white" 
+                        : "bg-[#047857] hover:bg-[#065f46] text-white"
+                    }`}
+                  >
+                    {isSubmittingPhone ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Enviando código...</span>
+                      </>
+                    ) : (
+                      <>
+                        <PhoneCall className="w-4 h-4" />
+                        <span>Enviar Código no WhatsApp</span>
+                      </>
+                    )}
+                  </Button>
+                </form>
+              ) : (
+                <form onSubmit={handleVerifyOtp} className={`space-y-3.5 p-4.5 rounded-2xl border ${
+                  dark 
+                    ? "bg-stone-900/90 border-stone-800" 
+                    : "bg-[#F7F9F8] border-[#E5EAE7] shadow-2xs"
+                }`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <Label htmlFor="otp" className={`text-xs font-bold uppercase tracking-wider ${dark ? "text-stone-300" : "text-stone-700"}`}>
+                      Código de 6 dígitos
+                    </Label>
+                    <button
+                      type="button"
+                      onClick={() => { setAuthStep("phone"); setPhoneError(""); }}
+                      className={`text-xs font-bold inline-flex items-center gap-1 cursor-pointer transition-colors ${
+                        dark ? "text-emerald-400 hover:text-emerald-300" : "text-[#047857] hover:text-[#065f46]"
+                      }`}
+                    >
+                      <ArrowLeft className="w-3 h-3" />
+                      Alterar número
+                    </button>
+                  </div>
+
+                  <Input
+                    id="otp"
+                    type="text"
+                    maxLength={6}
+                    placeholder="••••••"
+                    value={otpCode}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, "").slice(0, 6);
+                      setOtpCode(val);
+                      if (phoneError) setPhoneError("");
+                    }}
+                    required
+                    className={`rounded-xl h-12 text-center text-xl font-black tracking-[0.4em] font-mono ${
+                      dark 
+                        ? "bg-stone-950 border-stone-800 text-white placeholder:text-stone-700 focus-visible:ring-emerald-500" 
+                        : "bg-white border-stone-300 text-[#171717] placeholder:text-stone-300 focus-visible:ring-[#047857]"
+                    }`}
+                  />
+
+                  {phoneError && <p className="text-xs text-rose-500 mt-1 font-semibold">{phoneError}</p>}
+
+                  <Button
+                    type="submit"
+                    disabled={isSubmittingPhone || otpCode.length < 4}
+                    className={`w-full font-extrabold h-11 rounded-xl shadow-md flex items-center justify-center gap-2 mt-2 cursor-pointer transition-all ${
+                      dark 
+                        ? "bg-emerald-600 hover:bg-emerald-500 text-white" 
+                        : "bg-[#047857] hover:bg-[#065f46] text-white"
+                    }`}
+                  >
+                    {isSubmittingPhone ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Validando código...</span>
+                      </>
+                    ) : (
+                      <>
+                        <ShieldCheck className="w-4 h-4" />
+                        <span>Confirmar e Entrar</span>
+                      </>
+                    )}
+                  </Button>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <button
+                      type="button"
+                      disabled={resendCooldown > 0 || isSubmittingPhone}
+                      onClick={handleSendOtp}
+                      className={`text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${
+                        dark ? "text-stone-400 hover:text-stone-200" : "text-stone-600 hover:text-[#047857]"
+                      }`}
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isSubmittingPhone ? "animate-spin" : ""}`} />
+                      {resendCooldown > 0
+                        ? `Reenviar código em ${resendCooldown}s`
+                        : "Reenviar código no WhatsApp"}
+                    </button>
+                  </div>
+                </form>
+              )}
 
               <p className={`text-[11px] text-center ${dark ? "text-stone-500" : "text-stone-400"}`}>
-                🔒 Sem senhas chatas. Seus endereços ficam salvos com segurança.
+                🔒 Verificação oficial por WhatsApp. Seus dados e endereços protegidos.
               </p>
             </div>
           )}
