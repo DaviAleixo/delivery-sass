@@ -4,8 +4,6 @@ import { Plus } from "lucide-react";
 
 function PopularProductCard({ product, index, hasMoved, onProductClick, isVisualOnly = false }) {
   const [imageError, setImageError] = useState(false);
-  const isTop1 = index === 0;
-  const isTop3 = index < 3;
   const hasValidImage = Boolean(product.image_url && !imageError);
 
   return (
@@ -15,73 +13,54 @@ function PopularProductCard({ product, index, hasMoved, onProductClick, isVisual
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, delay: index * 0.03, ease: [0.25, 1, 0.5, 1] }}
       whileHover={{ y: -3 }}
-      whileTap={{ scale: 0.97 }}
-      className="flex-shrink-0 w-32 sm:w-36 group cursor-pointer"
+      whileTap={{ scale: 0.98 }}
+      className="flex-shrink-0 w-36 sm:w-40 bg-white rounded-2xl p-2.5 border border-gray-100 shadow-sm hover:shadow-md transition-all flex flex-col justify-between cursor-pointer group select-none"
       onClick={() => {
         if (!hasMoved) {
           onProductClick(product);
         }
       }}
     >
-      <div className="relative flex flex-col h-full">
-        {/* Imagem Quadrada com cantos arredondados */}
-        <div className="relative w-full aspect-square rounded-2xl overflow-hidden bg-[#F7F9F8] border border-[#E5EAE7]">
-          {hasValidImage ? (
-            <img
-              src={product.image_url}
-              alt={product.name}
-              onError={() => setImageError(true)}
-              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-              loading="lazy"
-              draggable={false}
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-3xl bg-[#F7F9F8]">
-              🍽️
-            </div>
-          )}
-
-          {/* Badge de Ranking minimalista */}
-          <div className={`absolute top-2 left-2 text-[10px] sm:text-[11px] font-black px-2 py-0.5 rounded-md shadow-xs flex items-center gap-1 ${
-            isTop1 
-              ? 'bg-amber-500 text-white' 
-              : (isTop3 
-                  ? 'bg-[#047857] text-white' 
-                  : 'bg-[#D1E9DF] text-[#047857] border border-[#047857]/20')
-          }`}>
-            <span>#{index + 1}</span>
+      {/* Imagem Proporção 4:3 com cantos arredondados */}
+      <div className="relative w-full aspect-[4/3] rounded-xl overflow-hidden bg-gray-50 border border-gray-100">
+        {hasValidImage ? (
+          <img
+            src={product.image_url}
+            alt={product.name}
+            onError={() => setImageError(true)}
+            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+            loading="lazy"
+            draggable={false}
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-3xl bg-gray-50">
+            🍽️
           </div>
+        )}
+      </div>
 
-          {/* Botão flutuante rápido sobre a imagem */}
-          {!isVisualOnly && (
-            <div className="absolute bottom-2 right-2 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#047857] hover:bg-[#036348] text-white flex items-center justify-center shadow-md transition-transform active:scale-90">
-              <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5]" />
-            </div>
-          )}
-        </div>
-
-        {/* Informações */}
-        <div className="pt-2 px-0.5 flex flex-col flex-1 justify-between">
-          <h3
-            className="font-bold text-xs sm:text-sm text-[#171717] group-hover:text-[#047857] transition-colors line-clamp-1 leading-snug tracking-tight"
-            style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}
-          >
-            {product.name}
-          </h3>
-          
-          <div className="mt-1 flex items-baseline justify-between gap-1">
-            <span
-              className="font-black text-xs sm:text-sm text-[#171717] tracking-tight"
-              style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}
-            >
-              R$ {Number(product.price || 0).toFixed(2).replace(".", ",")}
-            </span>
-            {product.totalSold > 0 && (
-              <span className="text-[10px] text-stone-400 font-medium">
-                {product.totalSold} {product.totalSold === 1 ? 'pedido' : 'pedidos'}
+      {/* Informações: Título, Preço e Botão + verde circular */}
+      <div className="pt-2 flex flex-col flex-1 justify-between">
+        <h3 className="font-bold text-xs sm:text-sm text-gray-900 group-hover:text-[#046c4e] transition-colors line-clamp-1 leading-snug tracking-tight">
+          {product.name}
+        </h3>
+        
+        <div className="mt-2 flex items-center justify-between">
+          <span className="font-black text-xs sm:text-sm text-gray-950">
+            {product.pizza_prices && Object.keys(product.pizza_prices).length > 0 ? (
+              <span className="text-[10px] sm:text-xs">
+                A partir de R$ {Number(product.price || 0).toFixed(2).replace(".", ",")}
               </span>
+            ) : (
+              `R$ ${Number(product.price || 0).toFixed(2).replace(".", ",")}`
             )}
-          </div>
+          </span>
+
+          {!isVisualOnly && (
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#046c4e] hover:bg-[#03543d] text-white flex items-center justify-center shadow-xs transition-transform active:scale-90">
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+            </div>
+          )}
         </div>
       </div>
     </motion.div>
@@ -129,23 +108,18 @@ export default function PopularProductsRow({ products = [], onProductClick, _isS
   };
 
   return (
-    <section className="bg-white rounded-2xl sm:rounded-3xl border border-[#E5EAE7] shadow-xs p-3.5 sm:p-5 space-y-3">
-      {/* Cabeçalho dentro do card grande */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <h2
-            className="text-base sm:text-lg font-black text-[#171717] tracking-tight flex items-center gap-2"
-            style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}
-          >
-            <span>Mais Pedidos</span>
-            <span className="text-[#047857] text-[11px] font-bold bg-[#D1E9DF]/60 border border-[#D1E9DF] px-2 py-0.5 rounded-full">
-              Top {popularProducts.length}
-            </span>
-          </h2>
-        </div>
+    <section className="space-y-3">
+      {/* Cabeçalho limpo fora de container, idêntico à Foto 1 */}
+      <div className="flex items-center gap-2 px-1">
+        <h2 className="text-lg sm:text-xl font-black text-gray-950 tracking-tight">
+          Mais pedidos
+        </h2>
+        <span className="text-[#046c4e] text-xs font-bold bg-emerald-50 border border-emerald-200/60 px-2.5 py-0.5 rounded-full">
+          Top {popularProducts.length}
+        </span>
       </div>
 
-      {/* Fileira com arrastar fluido */}
+      {/* Fileira de cards com arrastar fluido */}
       <div
         ref={scrollRef}
         onMouseDown={handleMouseDown}

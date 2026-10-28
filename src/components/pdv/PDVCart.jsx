@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { Trash2, Plus, Minus, ShoppingCart, CheckCircle, Printer, X, Users, User, Sparkles, AlertCircle } from "lucide-react";
+import { Trash2, Plus, Minus, ShoppingCart, CheckCircle, Printer, X, Users, User, Sparkles, AlertCircle, UtensilsCrossed, Monitor, Flame } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import PDVClientSelectModal from "./PDVClientSelectModal";
@@ -26,6 +26,13 @@ export default function PDVCart({
   lastOrder,
   onDismissSuccess,
   onCloseMobile,
+  orderType = "pickup",
+  onOrderTypeChange,
+  tables = [],
+  selectedTableNumber = "",
+  onSelectTableNumber,
+  onLaunchToTable,
+  isSubmittingTableOrder = false,
 }) {
   const [showClientModal, setShowClientModal] = useState(false);
   const [isSearchingPhone, setIsSearchingPhone] = useState(false);
@@ -34,11 +41,17 @@ export default function PDVCart({
 
   const cleanPhone = (customerPhone || "").replace(/\D/g, "");
   const trimmedName = (customerName || "").trim();
-  const isCustomerValid = trimmedName.length >= 2 && cleanPhone.length >= 10;
+  const isDineIn = orderType === "dine_in";
+  const isCustomerValid = isDineIn || (trimmedName.length >= 2 && cleanPhone.length >= 10);
 
   const handleFinalizeClick = () => {
     if (cart.length === 0) {
       toast.error("O carrinho está vazio.");
+      return;
+    }
+
+    if (isDineIn && !selectedTableNumber) {
+      toast.error("Selecione a mesa do salão para continuar.");
       return;
     }
 
@@ -56,6 +69,20 @@ export default function PDVCart({
 
     setHasAttemptedFinalize(false);
     onFinalize();
+  };
+
+  const handleLaunchTableClick = () => {
+    if (cart.length === 0) {
+      toast.error("O carrinho está vazio.");
+      return;
+    }
+    if (!selectedTableNumber) {
+      toast.error("Selecione a mesa do salão para lançar os itens.");
+      return;
+    }
+    if (onLaunchToTable) {
+      onLaunchToTable();
+    }
   };
 
   const formatPhone = (val) => {
@@ -172,12 +199,74 @@ export default function PDVCart({
         </div>
       )}
 
+      {/* Tipo de Atendimento: Balcão vs Mesa */}
+      <div className="px-3 pt-2.5 pb-2 bg-stone-100/70 border-b border-gray-200/80 shrink-0 space-y-1.5">
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => onOrderTypeChange && onOrderTypeChange("pickup")}
+            className={cn(
+              "flex-1 h-8 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 border cursor-pointer",
+              orderType === "pickup"
+                ? "bg-[#047857] text-white border-[#047857] shadow-2xs"
+                : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+            )}
+          >
+            <Monitor className="w-3.5 h-3.5" />
+            <span>Balcão</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onOrderTypeChange && onOrderTypeChange("dine_in")}
+            className={cn(
+              "flex-1 h-8 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 border cursor-pointer",
+              orderType === "dine_in"
+                ? "bg-[#047857] text-white border-[#047857] shadow-2xs"
+                : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+            )}
+          >
+            <UtensilsCrossed className="w-3.5 h-3.5" />
+            <span>Mesa / Salão</span>
+          </button>
+        </div>
+
+        {/* Seletor de Mesa */}
+        {orderType === "dine_in" && (
+          <div className="pt-1 space-y-1">
+            <select
+              value={selectedTableNumber || ""}
+              onChange={(e) => onSelectTableNumber && onSelectTableNumber(e.target.value)}
+              className="w-full h-9 text-xs bg-white rounded-xl border-2 border-emerald-400 px-2.5 font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-2xs"
+            >
+              <option value="">Selecione uma mesa...</option>
+              {(tables.length > 0 ? tables : Array.from({ length: 10 }, (_, i) => ({ id: `fallback_${i+1}`, table_number: String(i+1), status: 'available' }))).map(t => (
+                <option key={t.id || t.table_number} value={t.table_number}>
+                  Mesa {t.table_number} {t.status === 'occupied' ? '🔴 (Ocupada)' : t.status === 'bill_requested' ? '🔵 (Pré-Conta)' : '🟢 (Livre)'}
+                </option>
+              ))}
+            </select>
+
+            {selectedTableNumber && (
+              <div className="flex items-center justify-between text-[11px] px-1 text-emerald-800 font-bold">
+                <span>Mesa {selectedTableNumber} Selecionada</span>
+                <span className="text-[10px] text-gray-500 font-normal">
+                  {tables.find(t => String(t.table_number) === String(selectedTableNumber))?.status === 'occupied' 
+                    ? "Acrescentando à comanda aberta" 
+                    : "Abrirá comanda no salão"}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Identificação do Cliente */}
       <div className="px-3 py-2.5 border-b border-gray-100 bg-stone-50/80 space-y-2 shrink-0">
         <div className="flex items-center justify-between gap-1">
           <div className="flex items-center gap-1.5 text-xs font-bold text-gray-700">
             <User className="w-3.5 h-3.5 text-[#047857]" />
-            <span>Identificação do Cliente</span>
+            <span>{isDineIn ? "Identificação (Opcional p/ Mesa)" : "Identificação do Cliente"}</span>
           </div>
           <div className="flex items-center gap-1">
             {(customerName || customerPhone) && (
@@ -337,18 +426,57 @@ export default function PDVCart({
             R$ {total.toFixed(2).replace(".", ",")}
           </span>
         </div>
-        <Button
-          onClick={handleFinalizeClick}
-          disabled={cart.length === 0}
-          className={cn(
-            "w-full h-11 sm:h-12 text-sm sm:text-base font-bold text-white shadow-md rounded-xl cursor-pointer transition-all active:scale-[0.99]",
-            !isCustomerValid && cart.length > 0
-              ? "bg-[#047857]/90 hover:bg-[#047857]"
-              : "bg-[#047857] hover:bg-[#065f46]"
-          )}
-        >
-          ✓ Finalizar Pedido
-        </Button>
+        {isDineIn ? (
+          selectedTableNumber ? (
+            <div className="space-y-2">
+              <Button
+                onClick={handleLaunchTableClick}
+                disabled={cart.length === 0 || isSubmittingTableOrder}
+                className="w-full h-11 text-xs sm:text-sm font-black bg-emerald-700 hover:bg-emerald-800 text-white shadow-md rounded-xl cursor-pointer transition-all active:scale-[0.99] gap-1.5"
+              >
+                <Flame className="w-4 h-4 text-emerald-200" />
+                <span>{isSubmittingTableOrder ? "Lançando..." : `✓ Lançar na Mesa ${selectedTableNumber}`}</span>
+              </Button>
+
+              <Button
+                onClick={handleFinalizeClick}
+                disabled={cart.length === 0}
+                variant="outline"
+                className="w-full h-9 text-xs font-bold text-gray-700 border-gray-300 hover:bg-gray-50 rounded-xl cursor-pointer"
+              >
+                Pagar Agora no Balcão
+              </Button>
+            </div>
+          ) : (
+            <Button
+              onClick={() => {
+                if (cart.length === 0) {
+                  toast.error("O carrinho está vazio.");
+                  return;
+                }
+                toast.info("Selecione uma mesa no topo do carrinho para continuar.");
+              }}
+              disabled={cart.length === 0}
+              className="w-full h-11 sm:h-12 text-sm sm:text-base font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-md rounded-xl cursor-pointer transition-all active:scale-[0.99] gap-1.5"
+            >
+              <UtensilsCrossed className="w-4 h-4" />
+              <span>Selecione a Mesa para Lançar</span>
+            </Button>
+          )
+        ) : (
+          <Button
+            onClick={handleFinalizeClick}
+            disabled={cart.length === 0}
+            className={cn(
+              "w-full h-11 sm:h-12 text-sm sm:text-base font-bold text-white shadow-md rounded-xl cursor-pointer transition-all active:scale-[0.99]",
+              !isCustomerValid && cart.length > 0
+                ? "bg-[#047857]/90 hover:bg-[#047857]"
+                : "bg-[#047857] hover:bg-[#065f46]"
+            )}
+          >
+            ✓ Finalizar Pedido
+          </Button>
+        )}
       </div>
     </div>
   );

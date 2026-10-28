@@ -8,5 +8,6 @@ export const productSchema = z.object({
   category_id: z.string().optional().nullable(),
   image_url: z.string().optional().nullable().default(""),
   available: z.boolean().default(true),
-  popular: z.boolean().default(false)
-});
+  popular: z.boolean().default(false),
+  pizza_prices: z.record(z.any()).optional().default({})
+}).passthrough();

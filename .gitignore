@@ -34,3 +34,7 @@ base44/.app.jsonc
 .agents
 .specs
 supabase/.temp
+
+# Backups
+backups/
+*.sql.gz

@@ -16,22 +16,24 @@ const STORAGE_PREFIX = "vrumburguer_db_";
 // Mapeamento de projeção de colunas estritas (PROIBIDO SELECT *)
 // Retorna apenas as colunas indispensáveis para economizar banda/egress do Supabase
 const TABLE_COLUMNS = {
-  settings: "id,restaurant_name,restaurant_logo,opening_time,closing_time,open_days,phone,address,instagram,whatsapp,delivery_fee,min_order_value,delivery_time,manual_store_open,manual_override_date",
-  categories: "id,tenant_id,name,order_index,is_combo,created_date",
-  products: "id,tenant_id,name,description,price,category,category_id,image_url,available,popular,created_date",
+  settings: "id,restaurant_name,restaurant_logo,opening_time,closing_time,open_days,phone,address,instagram,whatsapp,delivery_fee,min_order_value,delivery_time,manual_store_open,manual_override_date,pizza_pricing_rule",
+  categories: "id,tenant_id,name,order_index,is_combo,created_date,type,pizza_sizes",
+  products: "id,tenant_id,name,description,price,category,category_id,image_url,available,popular,created_date,pizza_prices",
   product_additionals: "id,tenant_id,product_id,name,price,required,max_quantity,active",
-  complement_groups: "id,tenant_id,name,description,min_quantity,max_quantity,required,active,order_index",
+  complement_groups: "id,tenant_id,name,description,min_quantity,max_quantity,required,active,order_index,is_pizza_crust",
   complement_items: "id,tenant_id,group_id,name,description,price,max_quantity,image_url,active,order_index",
   product_complement_groups: "id,tenant_id,product_id,group_id,order_index",
   banner_images: "id,tenant_id,title,image_url,order_index,active",
   banners: "id,tenant_id,title,image_url,order_index,active",
   coupons: "id,tenant_id,code,name,description,discount_type,discount_value,apply_to,applicable_products,min_order_value,usage_limit,start_date,end_date,active",
   coupon_usages: "id,tenant_id,coupon_id,user_email,order_id,created_date",
-  orders: "id,tenant_id,order_number,customer_name,customer_phone,customer_email,customer_address,delivery_address,total_amount,total,subtotal,delivery_fee,status,payment_method,order_type,table_number,notes,coupon_code,discount_amount,discount,user_email,items,sent_at,created_date,print_status,printed_at,print_count",
+  orders: "id,tenant_id,order_number,customer_name,customer_phone,customer_email,customer_address,delivery_address,total_amount,total,subtotal,delivery_fee,status,payment_method,order_type,table_number,table_session_id,notes,coupon_code,discount_amount,discount,user_email,items,sent_at,created_date,print_status,printed_at,print_count",
   users: "id,full_name,email,phone,role,created_date",
   user_addresses: "id,tenant_id,user_email,user_phone,name,cep,zip_code,street,number,complement,neighborhood,city,state,reference,is_default",
   admin_users: "id,tenant_id,username,role,active,permissions,created_date,updated_date",
   shift_closings: "id,tenant_id,shift_date,period_mode,period_label,opened_at,closed_at,cashier_name,gross_revenue,net_revenue,total_orders,delivery_orders,counter_orders,dine_in_orders,average_ticket,payment_breakdown,cash_drawer,driver_settlements,raw_closing_data,created_at",
+  restaurant_tables: "id,tenant_id,table_number,label,capacity,status,created_at,updated_at",
+  table_sessions: "id,tenant_id,table_id,table_number,customer_name,customer_phone,people_count,opened_at,closed_at,subtotal,service_fee,discount,total_amount,status,payment_method,payment_details,notes,created_at,updated_at",
 };
 
 // Tabelas estáticas elegíveis para cache persistido em LocalStorage
@@ -68,6 +70,8 @@ const CACHE_TTL_MAP = {
   users: 30 * 1000,                      // 30 segundos
   user_addresses: 30 * 1000,             // 30 segundos
   admin_users: 5 * 1000,                 // 5 segundos
+  restaurant_tables: 2 * 1000,           // 2 segundos (sincronização ágil de salão)
+  table_sessions: 2 * 1000,              // 2 segundos
 };
 
 // Coleções com dados isolados por restaurante (tenant_id)
@@ -87,13 +91,16 @@ const MULTI_TENANT_COLLECTIONS = new Set([
   "user_addresses",
   "users",
   "customers",
+  "restaurant_tables",
+  "table_sessions",
 ]);
 
 const RESERVED_ROUTE_SLUGS = new Set([
   "menu", "dashboard", "orders", "pedidos", "pdv", "pdvorders",
   "clients", "products", "categories", "banners", "coupons",
   "complements", "reports", "settings", "superadmin", "adminlogin",
-  "myorders", "printorder", "printshiftclosing", "home", "api"
+  "myorders", "meus-pedidos", "printorder", "printshiftclosing", "home", "api",
+  "tables", "kds", "deliverydrivers"
 ]);
 
 export function getRouteTenantSlug() {
@@ -228,21 +235,20 @@ if (typeof window !== "undefined") {
 }
 
 // Garantir que a versão oficial do cardápio seja carregada
-const MENU_DATA_VERSION = "delivery_menu_v1_0";
+const MENU_DATA_VERSION = "delivery_menu_v1_2";
 if (typeof window !== "undefined") {
   try {
     const currentVer = localStorage.getItem(`${STORAGE_PREFIX}menu_data_version`);
     if (currentVer !== MENU_DATA_VERSION) {
-      localStorage.setItem(`${STORAGE_PREFIX}menu_data_version`, MENU_DATA_VERSION);
-      localStorage.removeItem(`${STORAGE_PREFIX}products`);
-      localStorage.removeItem(`${STORAGE_PREFIX}categories`);
-      localStorage.removeItem(`${STORAGE_PREFIX}complement_groups`);
-      localStorage.removeItem(`${STORAGE_PREFIX}complement_items`);
-      localStorage.removeItem(`${STORAGE_PREFIX}product_complement_groups`);
-      localStorage.removeItem(`${STORAGE_PREFIX}product_additionals`);
-      for (const key of ["products", "categories", "complement_groups", "complement_items", "product_complement_groups"]) {
-        localStorage.removeItem(`${STORAGE_PREFIX}cache_ts_${key}`);
+      const toRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith(STORAGE_PREFIX)) {
+          toRemove.push(k);
+        }
       }
+      toRemove.forEach(k => localStorage.removeItem(k));
+      localStorage.setItem(`${STORAGE_PREFIX}menu_data_version`, MENU_DATA_VERSION);
     }
   } catch {}
 }
@@ -714,7 +720,7 @@ export function createEntityModel(collectionKey, defaultData = []) {
         sanitized = sanitizeProductData(data);
       }
 
-      const isUuidTable = ["orders", "coupons", "coupon_usages", "users", "user_addresses", "settings", "admin_users"].includes(collectionKey);
+      const isUuidTable = ["orders", "coupons", "coupon_usages", "users", "user_addresses", "settings", "admin_users", "restaurant_tables", "table_sessions"].includes(collectionKey);
       const newId = sanitized.id || (isUuidTable && typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" 
         ? crypto.randomUUID() 
         : `${collectionKey}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`);

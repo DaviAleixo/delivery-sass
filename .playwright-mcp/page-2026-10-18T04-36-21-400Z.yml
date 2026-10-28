@@ -1,0 +1,313 @@
+- generic [ref=f1e5]:
+  - banner [ref=f1e6]:
+    - generic [ref=f1e8]:
+      - generic [ref=f1e9]:
+        - generic [ref=f1e10]: Entrega em até 60-80 min
+        - generic [ref=f1e17]: "|"
+        - generic [ref=f1e18]: 01:00 – 00:00
+      - generic [ref=f1e21]: Alameda Dois de Novembro, 44 - Queluz
+    - generic [ref=f1e27]:
+      - generic [ref=f1e28]:
+        - generic [ref=f1e29]: TE
+        - heading "teste" [level=1] [ref=f1e31]
+      - generic [ref=f1e32]:
+        - button "1" [ref=f1e220] [cursor=pointer]
+        - button "Informações da Loja" [ref=f1e37] [cursor=pointer]
+  - img "Banner" [ref=f1e226]
+  - main [ref=f1e41]:
+    - generic [ref=f1e43]:
+      - button "Todos" [ref=f1e44] [cursor=pointer]
+      - button "teste" [ref=f1e227] [cursor=pointer]
+      - button "teste1" [ref=f1e228] [cursor=pointer]
+      - button "pizzas" [ref=f1e229] [cursor=pointer]
+    - generic [ref=f1e45]:
+      - textbox "Buscar no cardápio..." [ref=f1e47]
+      - button "Filtrar categorias" [ref=f1e48] [cursor=pointer]
+    - generic [ref=f1e230]:
+      - generic [ref=f1e231]:
+        - heading "Mais pedidos" [level=2] [ref=f1e232]
+        - generic [ref=f1e233]: Top 6
+      - generic [ref=f1e234]:
+        - generic [ref=f1e235] [cursor=pointer]:
+          - img "teste" [ref=f1e237]
+          - generic [ref=f1e238]:
+            - heading "teste" [level=3] [ref=f1e239]
+            - generic [ref=f1e240]: R$ 40,00
+        - generic [ref=f1e244] [cursor=pointer]:
+          - img "pizza 1" [ref=f1e246]
+          - generic [ref=f1e247]:
+            - heading "pizza 1" [level=3] [ref=f1e248]
+            - generic [ref=f1e249]: R$ 40,00
+        - generic [ref=f1e253] [cursor=pointer]:
+          - img "Vruum Burguer" [ref=f1e255]
+          - generic [ref=f1e256]:
+            - heading "Vruum Burguer" [level=3] [ref=f1e257]
+            - generic [ref=f1e258]: R$ 40,00
+        - generic [ref=f1e262] [cursor=pointer]:
+          - img "davi" [ref=f1e264]
+          - generic [ref=f1e265]:
+            - heading "davi" [level=3] [ref=f1e266]
+            - generic [ref=f1e267]: R$ 15,00
+        - generic [ref=f1e271] [cursor=pointer]:
+          - img "teste1" [ref=f1e273]
+          - generic [ref=f1e274]:
+            - heading "teste1" [level=3] [ref=f1e275]
+            - generic [ref=f1e276]: R$ 0,01
+        - generic [ref=f1e280] [cursor=pointer]:
+          - img "teste" [ref=f1e282]
+          - generic [ref=f1e283]:
+            - heading "teste" [level=3] [ref=f1e284]
+            - generic [ref=f1e285]: R$ 0,01
+    - generic [ref=f1e289]:
+      - generic [ref=f1e290]:
+        - heading "Últimos pedidos" [level=2] [ref=f1e291]
+        - generic [ref=f1e292]: Últimos 10
+      - generic [ref=f1e293]:
+        - generic [ref=f1e294] [cursor=pointer]:
+          - img "Vruum Burguer" [ref=f1e296]
+          - generic [ref=f1e297]:
+            - heading "Vruum Burguer" [level=3] [ref=f1e298]
+            - generic [ref=f1e299]:
+              - generic [ref=f1e300]: R$ 43,00
+              - button "Adicionar itens ao carrinho" [ref=f1e301]
+        - generic [ref=f1e303] [cursor=pointer]:
+          - img "Vruum Burguer" [ref=f1e305]
+          - generic [ref=f1e306]:
+            - heading "Vruum Burguer" [level=3] [ref=f1e307]
+            - generic [ref=f1e308]:
+              - generic [ref=f1e309]: R$ 40,01
+              - button "Adicionar itens ao carrinho" [ref=f1e310]
+        - generic [ref=f1e312] [cursor=pointer]:
+          - img "teste1" [ref=f1e314]
+          - generic [ref=f1e315]:
+            - heading "teste1" [level=3] [ref=f1e316]
+            - generic [ref=f1e317]:
+              - generic [ref=f1e318]: R$ 40,01
+              - button "Adicionar itens ao carrinho" [ref=f1e319]
+        - generic [ref=f1e321] [cursor=pointer]:
+          - img "teste" [ref=f1e323]
+          - generic [ref=f1e324]:
+            - heading "teste" [level=3] [ref=f1e325]
+            - generic [ref=f1e326]:
+              - generic [ref=f1e327]: R$ 0,02
+              - button "Adicionar itens ao carrinho" [ref=f1e328]
+        - generic [ref=f1e330] [cursor=pointer]:
+          - img "teste" [ref=f1e332]
+          - generic [ref=f1e333]:
+            - heading "teste" [level=3] [ref=f1e334]
+            - generic [ref=f1e335]:
+              - generic [ref=f1e336]: R$ 0,01
+              - button "Adicionar itens ao carrinho" [ref=f1e337]
+        - generic [ref=f1e339] [cursor=pointer]:
+          - img "teste" [ref=f1e341]
+          - generic [ref=f1e342]:
+            - heading "teste" [level=3] [ref=f1e343]
+            - generic [ref=f1e344]:
+              - generic [ref=f1e345]: R$ 0,01
+              - button "Adicionar itens ao carrinho" [ref=f1e346]
+        - generic [ref=f1e348] [cursor=pointer]:
+          - img "teste" [ref=f1e350]
+          - generic [ref=f1e351]:
+            - heading "teste" [level=3] [ref=f1e352]
+            - generic [ref=f1e353]:
+              - generic [ref=f1e354]: R$ 0,01
+              - button "Adicionar itens ao carrinho" [ref=f1e355]
+        - generic [ref=f1e357] [cursor=pointer]:
+          - img "teste" [ref=f1e359]
+          - generic [ref=f1e360]:
+            - heading "teste" [level=3] [ref=f1e361]
+            - generic [ref=f1e362]:
+              - generic [ref=f1e363]: R$ 0,01
+              - button "Adicionar itens ao carrinho" [ref=f1e364]
+        - generic [ref=f1e366] [cursor=pointer]:
+          - img "teste" [ref=f1e368]
+          - generic [ref=f1e369]:
+            - heading "teste" [level=3] [ref=f1e370]
+            - generic [ref=f1e371]:
+              - generic [ref=f1e372]: R$ 28,90
+              - button "Adicionar itens ao carrinho" [ref=f1e373]
+        - generic [ref=f1e375] [cursor=pointer]:
+          - img "teste" [ref=f1e377]
+          - generic [ref=f1e378]:
+            - heading "teste" [level=3] [ref=f1e379]
+            - generic [ref=f1e380]:
+              - generic [ref=f1e381]: R$ 28,90
+              - button "Adicionar itens ao carrinho" [ref=f1e382]
+    - generic [ref=f1e384]:
+      - heading "teste" [level=3] [ref=f1e386]
+      - generic [ref=f1e387]:
+        - generic [ref=f1e389] [cursor=pointer]:
+          - generic [ref=f1e390]:
+            - generic [ref=f1e391]:
+              - heading "Vruum Burguer" [level=3] [ref=f1e393]
+              - paragraph [ref=f1e394]: "988977999"
+            - generic [ref=f1e395]: R$ 40,00
+          - generic [ref=f1e398]:
+            - img "Vruum Burguer" [ref=f1e399]
+            - button "Adicionar produto"
+        - generic [ref=f1e401] [cursor=pointer]:
+          - generic [ref=f1e402]:
+            - generic [ref=f1e403]:
+              - heading "davi" [level=3] [ref=f1e405]
+              - paragraph [ref=f1e406]: testando
+            - generic [ref=f1e407]: R$ 15,00
+          - generic [ref=f1e410]:
+            - img "davi" [ref=f1e411]
+            - button "Adicionar produto"
+        - generic [ref=f1e413] [cursor=pointer]:
+          - generic [ref=f1e414]:
+            - generic [ref=f1e415]:
+              - heading "teste" [level=3] [ref=f1e417]
+              - paragraph [ref=f1e418]: teste
+            - generic [ref=f1e419]: R$ 0,01
+          - generic [ref=f1e422]:
+            - img "teste" [ref=f1e423]
+            - button "Adicionar produto"
+    - generic [ref=f1e424]:
+      - heading "teste1" [level=3] [ref=f1e426]
+      - generic [ref=f1e429] [cursor=pointer]:
+        - generic [ref=f1e430]:
+          - generic [ref=f1e431]:
+            - heading "teste1" [level=3] [ref=f1e433]
+            - paragraph [ref=f1e434]: rtefwefwefwefwefew
+          - generic [ref=f1e435]: R$ 0,01
+        - generic [ref=f1e438]:
+          - img "teste1" [ref=f1e439]
+          - button "Adicionar produto"
+    - generic [ref=f1e440]:
+      - heading "pizzas" [level=3] [ref=f1e442]
+      - generic [ref=f1e443]:
+        - generic [ref=f1e445] [cursor=pointer]:
+          - generic [ref=f1e446]:
+            - generic [ref=f1e447]:
+              - heading "teste" [level=3] [ref=f1e449]
+              - paragraph [ref=f1e450]: dsadasd
+            - generic [ref=f1e451]: R$ 40,00
+          - generic [ref=f1e454]:
+            - img "teste" [ref=f1e455]
+            - button "Adicionar produto"
+        - generic [ref=f1e457] [cursor=pointer]:
+          - generic [ref=f1e458]:
+            - generic [ref=f1e459]:
+              - heading "pizza 1" [level=3] [ref=f1e461]
+              - paragraph [ref=f1e462]: dsadsadasd
+            - generic [ref=f1e463]: R$ 40,00
+          - generic [ref=f1e466]:
+            - img "pizza 1" [ref=f1e467]
+            - button "Adicionar produto"
+  - contentinfo [ref=f1e54]:
+    - generic [ref=f1e55]:
+      - generic [ref=f1e56]:
+        - generic [ref=f1e57]:
+          - generic [ref=f1e58]: TE
+          - heading "teste" [level=4] [ref=f1e60]
+        - paragraph [ref=f1e61]: Os melhores produtos preparados com ingredientes selecionados e entrega rápida para você.
+      - generic [ref=f1e62]:
+        - paragraph [ref=f1e63]: Localização & Contato
+        - generic [ref=f1e64]: Alameda Dois de Novembro, nº 44, Queluz, Conselheiro Lafaiete - MG
+        - link "(31) 98260-7426" [ref=f1e468] [cursor=pointer]:
+          - /url: https://wa.me/31982607426
+        - link "davialeixo_nogueira" [ref=f1e472] [cursor=pointer]:
+          - /url: https://instagram.com/davialeixo_nogueira
+      - generic [ref=f1e69]:
+        - paragraph [ref=f1e70]: Horário de Funcionamento
+        - generic [ref=f1e71]: Aberto Agora
+        - paragraph [ref=f1e74]: 01:00 às 00:00
+    - generic [ref=f1e75]:
+      - paragraph [ref=f1e76]: © 2026 teste. Todos os direitos reservados.
+      - paragraph [ref=f1e77]:
+        - text: Desenvolvido por
+        - link "Davi Aleixo" [ref=f1e78] [cursor=pointer]:
+          - /url: https://instagram.com/davialeixo_nogueira
+        - text: "|"
+        - link "31982607426" [ref=f1e79] [cursor=pointer]:
+          - /url: https://wa.me/5531982607426
+  - generic [ref=f1e478]:
+    - generic [ref=f1e481]:
+      - generic [ref=f1e487]:
+        - heading "Seu Carrinho" [level=3] [ref=f1e488]
+        - generic [ref=f1e489]: 1 item no pedido
+      - button "Fechar carrinho" [ref=f1e490] [cursor=pointer]
+    - generic [ref=f1e494]:
+      - generic [ref=f1e495]:
+        - img "Pizza Grande (8 fatias) (1/2 pizza 1 + 1/2 teste)" [ref=f1e497]
+        - generic [ref=f1e498]:
+          - paragraph [ref=f1e499]: Pizza Grande (8 fatias) (1/2 pizza 1 + 1/2 teste)
+          - generic [ref=f1e500]:
+            - paragraph [ref=f1e501]: • 1/2 pizza 1
+            - paragraph [ref=f1e502]: • 1/2 teste
+          - paragraph [ref=f1e503]: R$ 40,00
+        - generic [ref=f1e504]:
+          - button [ref=f1e505] [cursor=pointer]
+          - generic [ref=f1e509]: "1"
+          - button [ref=f1e510] [cursor=pointer]
+      - generic [ref=f1e512]:
+        - generic [ref=f1e513]:
+          - heading "Complete seu Pedido" [level=4] [ref=f1e518]
+          - generic [ref=f1e519]: Bebidas & Acompanhamentos
+        - generic [ref=f1e520]:
+          - generic [ref=f1e521]:
+            - generic [ref=f1e522]:
+              - generic [ref=f1e523]:
+                - img "davi" [ref=f1e524]
+                - generic [ref=f1e525]: Recomendado
+              - paragraph [ref=f1e526]: davi
+            - generic [ref=f1e527]:
+              - generic [ref=f1e528]: R$ 15,00
+              - button "Pedir" [ref=f1e529] [cursor=pointer]
+          - generic [ref=f1e532]:
+            - generic [ref=f1e533]:
+              - generic [ref=f1e534]:
+                - img "teste1" [ref=f1e535]
+                - generic [ref=f1e536]: Recomendado
+              - paragraph [ref=f1e537]: teste1
+            - generic [ref=f1e538]:
+              - generic [ref=f1e539]: R$ 0,01
+              - button "Pedir" [ref=f1e540] [cursor=pointer]
+          - generic [ref=f1e543]:
+            - generic [ref=f1e544]:
+              - generic [ref=f1e545]:
+                - img "teste" [ref=f1e546]
+                - generic [ref=f1e547]: Recomendado
+              - paragraph [ref=f1e548]: teste
+            - generic [ref=f1e549]:
+              - generic [ref=f1e550]: R$ 0,01
+              - button "Pedir" [ref=f1e551] [cursor=pointer]
+          - generic [ref=f1e554]:
+            - generic [ref=f1e555]:
+              - generic [ref=f1e556]:
+                - img "teste" [ref=f1e557]
+                - generic [ref=f1e558]: Recomendado
+              - paragraph [ref=f1e559]: teste
+            - generic [ref=f1e560]:
+              - generic [ref=f1e561]: R$ 40,00
+              - button "Pedir" [ref=f1e562] [cursor=pointer]
+          - generic [ref=f1e565]:
+            - generic [ref=f1e566]:
+              - generic [ref=f1e567]:
+                - img "pizza 1" [ref=f1e568]
+                - generic [ref=f1e569]: Recomendado
+              - paragraph [ref=f1e570]: pizza 1
+            - generic [ref=f1e571]:
+              - generic [ref=f1e572]: R$ 40,00
+              - button "Pedir" [ref=f1e573] [cursor=pointer]
+          - generic [ref=f1e576]:
+            - generic [ref=f1e577]:
+              - generic [ref=f1e578]:
+                - img "Vruum Burguer" [ref=f1e579]
+                - generic [ref=f1e580]: Recomendado
+              - paragraph [ref=f1e581]: Vruum Burguer
+            - generic [ref=f1e582]:
+              - generic [ref=f1e583]: R$ 40,00
+              - button "Pedir" [ref=f1e584] [cursor=pointer]
+    - generic [ref=f1e587]:
+      - generic [ref=f1e588]:
+        - generic [ref=f1e589]:
+          - generic [ref=f1e590]: Subtotal
+          - generic [ref=f1e591]: R$ 40,00
+        - generic [ref=f1e592]:
+          - generic [ref=f1e593]: Total
+          - generic [ref=f1e594]: R$ 40,00
+      - generic [ref=f1e595]:
+        - button "Adicionar Mais Itens" [ref=f1e596] [cursor=pointer]
+        - button "Finalizar Pedido" [ref=f1e598] [cursor=pointer]

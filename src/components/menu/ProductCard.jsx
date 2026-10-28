@@ -50,7 +50,14 @@ const ProductCard = forwardRef(function ProductCard(
                 className="font-black text-sm sm:text-base text-[#171717] tracking-tight"
                 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
               >
-                R$ {Number(product.price || 0).toFixed(2).replace('.', ',')}
+                {product.pizza_prices && Object.keys(product.pizza_prices).length > 0 ? (
+                  <>
+                    <span className="text-xs font-normal text-stone-500 mr-1">A partir de</span>
+                    R$ {Number(product.price || 0).toFixed(2).replace('.', ',')}
+                  </>
+                ) : (
+                  <>R$ {Number(product.price || 0).toFixed(2).replace('.', ',')}</>
+                )}
               </span>
 
               {product.promotional_price && Number(product.promotional_price) > 0 && (

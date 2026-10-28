@@ -13,8 +13,6 @@ import {
   Search, CheckCircle2, Bike, PackageCheck, RefreshCw,
   MessageCircle, UtensilsCrossed, ShieldCheck
 } from "lucide-react";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link, useSearchParams } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -388,55 +386,71 @@ export default function MyOrdersPage() {
                               </p>
                             </div>
                             <div className="flex items-center gap-2">
-                              {/* Cronômetro de tempo restante de entrega / preparo */}
-                              <OrderCountdownTimer 
-                                order={order} 
-                                deliveryTimeSetting={tenant?.delivery_time || settings?.delivery_time || "40-50 min"} 
-                              />
+                              {/* Cronômetro de tempo restante de entrega / preparo (apenas delivery/retirada) */}
+                              {order.order_type !== 'dine_in' && !order.table_number && (
+                                <OrderCountdownTimer 
+                                  order={order} 
+                                  deliveryTimeSetting={tenant?.delivery_time || settings?.delivery_time || "40-50 min"} 
+                                />
+                              )}
                               
                               <Badge className={`${getStatusColor(order.status)} font-semibold text-xs px-3 py-1 shadow-sm`}>
-                                {getStatusText(order.status, order)}
+                                {order.order_type === 'dine_in' || order.table_number 
+                                  ? (order.status === 'entregue' ? 'Finalizado' : 'Confirmado na Mesa')
+                                  : getStatusText(order.status, order)}
                               </Badge>
                             </div>
                           </div>
 
                           <CardContent className="p-5 sm:p-6 space-y-6">
-                            {/* Linha do Tempo (Stepper) */}
+                            {/* Linha do Tempo (Stepper para delivery/retirada) ou Card de Confirmação na Mesa */}
                             {order.status !== 'cancelado' && (
-                              <div className="pt-2 pb-4">
-                                <div className="relative flex justify-between">
-                                  {/* Linha de fundo */}
-                                  <div className="absolute top-1/2 left-0 right-0 h-1 bg-stone-200 -translate-y-1/2 z-0"></div>
-                                  {/* Linha de progresso */}
-                                  <div 
-                                    className="absolute top-1/2 left-0 h-1 bg-[#047857] -translate-y-1/2 z-0 transition-all duration-500"
-                                    style={{ width: `${(Math.max(0, currentStep) / (getOrderSteps(order.order_type).length - 1)) * 100}%` }}
-                                  ></div>
-
-                                  {getOrderSteps(order.order_type).map((step, idx) => {
-                                    const StepIcon = step.icon;
-                                    const isPassed = currentStep >= idx;
-                                    const isCurrent = currentStep === idx;
-
-                                    return (
-                                      <div key={step.status} className="relative z-10 flex flex-col items-center">
-                                        <div className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300 ${
-                                          isPassed 
-                                            ? 'bg-[#047857] text-white shadow-md ring-4 ring-[#D1E9DF]' 
-                                            : 'bg-stone-200 text-stone-400'
-                                        } ${isCurrent ? 'scale-110 animate-bounce' : ''}`}>
-                                          <StepIcon className="w-4 h-4" />
-                                        </div>
-                                        <span className={`text-[10px] sm:text-xs mt-2 font-medium text-center ${
-                                          isPassed ? 'text-stone-900 font-bold' : 'text-stone-400'
-                                        }`}>
-                                          {step.label}
-                                        </span>
-                                      </div>
-                                    );
-                                  })}
+                              (order.order_type === 'dine_in' || order.table_number) ? (
+                                <div className="bg-emerald-50 border border-emerald-200/90 rounded-2xl p-4 flex items-center gap-3.5 shadow-2xs">
+                                  <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                                    <CheckCircle2 className="w-6 h-6" />
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-black text-emerald-950">Pedido Confirmado na Mesa</p>
+                                    <p className="text-xs text-emerald-800">Seu pedido foi registrado e enviado diretamente para a cozinha.</p>
+                                  </div>
                                 </div>
-                              </div>
+                              ) : (
+                                <div className="pt-2 pb-4">
+                                  <div className="relative flex justify-between">
+                                    {/* Linha de fundo */}
+                                    <div className="absolute top-1/2 left-0 right-0 h-1 bg-stone-200 -translate-y-1/2 z-0"></div>
+                                    {/* Linha de progresso */}
+                                    <div 
+                                      className="absolute top-1/2 left-0 h-1 bg-[#047857] -translate-y-1/2 z-0 transition-all duration-500"
+                                      style={{ width: `${(Math.max(0, currentStep) / (getOrderSteps(order.order_type).length - 1)) * 100}%` }}
+                                    ></div>
+
+                                    {getOrderSteps(order.order_type).map((step, idx) => {
+                                      const StepIcon = step.icon;
+                                      const isPassed = currentStep >= idx;
+                                      const isCurrent = currentStep === idx;
+
+                                      return (
+                                        <div key={step.status} className="relative z-10 flex flex-col items-center">
+                                          <div className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300 ${
+                                            isPassed 
+                                              ? 'bg-[#047857] text-white shadow-md ring-4 ring-[#D1E9DF]' 
+                                              : 'bg-stone-200 text-stone-400'
+                                          } ${isCurrent ? 'scale-110 animate-bounce' : ''}`}>
+                                            <StepIcon className="w-4 h-4" />
+                                          </div>
+                                          <span className={`text-[10px] sm:text-xs mt-2 font-medium text-center ${
+                                            isPassed ? 'text-stone-900 font-bold' : 'text-stone-400'
+                                          }`}>
+                                            {step.label}
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )
                             )}
 
                             {/* Informações de Entrega / Retirada / Consumo no Local */}
@@ -514,7 +528,7 @@ export default function MyOrdersPage() {
 
                             {/* Ações: Contatar Loja & Novo Pedido */}
                             <div className="pt-2 flex flex-col sm:flex-row gap-2.5">
-                              {cleanStorePhone && (
+                              {cleanStorePhone && order.order_type !== 'dine_in' && !order.table_number && (
                                 <a
                                   href={`https://wa.me/55${cleanStorePhone}?text=${encodeURIComponent(`Olá! Gostaria de acompanhar o andamento do meu pedido #${safeOrderId(order.id)}`)}`}
                                   target="_blank"

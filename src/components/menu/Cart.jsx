@@ -273,6 +273,26 @@ export default function Cart({
 
                     <div className="flex-1 min-w-0 pr-1">
                       <p className="font-extrabold text-xs sm:text-sm text-[#171717] truncate">{item.name}</p>
+                      {item.pizza_flavors && item.pizza_flavors.length > 0 && (
+                        <div className="text-[11px] text-amber-800 space-y-0.5 mt-0.5">
+                          {item.pizza_flavors.map((f, fIdx) => (
+                            <div key={fIdx} className="truncate">
+                              <p>
+                                • <span className="font-bold text-amber-900">{f.fraction}</span> {f.name} {f.notes ? <span className="italic text-gray-500">({f.notes})</span> : ''}
+                              </p>
+                              {Array.isArray(f.additionals) && f.additionals.length > 0 && (
+                                <div className="pl-3 text-[10px] text-emerald-800 space-y-0.5">
+                                  {f.additionals.map((fAd, fAdIdx) => (
+                                    <p key={fAdIdx}>
+                                      + {fAd.name} {Number(fAd.price) > 0 ? `(+R$ ${Number(fAd.price).toFixed(2).replace('.', ',')})` : ''}
+                                    </p>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                       {item.additionals && item.additionals.length > 0 && (
                         <p className="text-[11px] text-stone-500 truncate mt-0.5 font-normal">
                           {item.additionals.map(ad => ad.name).join(', ')}

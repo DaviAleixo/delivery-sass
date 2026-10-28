@@ -1,0 +1,346 @@
+- generic:
+  - generic [aria-hidden]:
+    - generic:
+      - generic:
+        - generic:
+          - banner:
+            - generic:
+              - generic:
+                - generic:
+                  - generic: Entrega em até 60-80 min
+                  - generic: "|"
+                  - generic: 01:00 – 00:00
+                - generic: Alameda Dois de Novembro, 44 - Queluz
+            - generic:
+              - generic:
+                - generic:
+                  - generic: TE
+                  - heading [level=1]: teste
+                - generic:
+                  - button
+                  - button
+          - generic:
+            - main:
+              - generic:
+                - generic:
+                  - button: Todos
+                  - button: teste
+                  - button: teste1
+                  - button: pizzas
+              - generic:
+                - generic:
+                  - textbox:
+                    - /placeholder: Buscar no cardápio...
+                - button
+              - generic:
+                - generic:
+                  - heading [level=2]: Mais pedidos
+                  - generic: Top 6
+                - generic:
+                  - generic:
+                    - generic:
+                      - heading [level=3]: teste
+                      - generic: R$ 40,00
+                  - generic:
+                    - generic:
+                      - heading [level=3]: pizza 1
+                      - generic: R$ 40,00
+                  - generic:
+                    - generic:
+                      - heading [level=3]: Vruum Burguer
+                      - generic: R$ 40,00
+                  - generic:
+                    - generic:
+                      - heading [level=3]: davi
+                      - generic: R$ 15,00
+                  - generic:
+                    - generic:
+                      - heading [level=3]: teste1
+                      - generic: R$ 0,01
+                  - generic:
+                    - generic:
+                      - heading [level=3]: teste
+                      - generic: R$ 0,01
+              - generic:
+                - generic:
+                  - heading [level=2]: Últimos pedidos
+                  - generic: Últimos 10
+                - generic:
+                  - generic:
+                    - generic:
+                      - heading [level=3]: Vruum Burguer
+                      - generic:
+                        - generic: R$ 43,00
+                        - button
+                  - generic:
+                    - generic:
+                      - heading [level=3]: Vruum Burguer
+                      - generic:
+                        - generic: R$ 40,01
+                        - button
+                  - generic:
+                    - generic:
+                      - heading [level=3]: teste1
+                      - generic:
+                        - generic: R$ 40,01
+                        - button
+                  - generic:
+                    - generic:
+                      - heading [level=3]: teste
+                      - generic:
+                        - generic: R$ 0,02
+                        - button
+                  - generic:
+                    - generic:
+                      - heading [level=3]: teste
+                      - generic:
+                        - generic: R$ 0,01
+                        - button
+                  - generic:
+                    - generic:
+                      - heading [level=3]: teste
+                      - generic:
+                        - generic: R$ 0,01
+                        - button
+                  - generic:
+                    - generic:
+                      - heading [level=3]: teste
+                      - generic:
+                        - generic: R$ 0,01
+                        - button
+                  - generic:
+                    - generic:
+                      - heading [level=3]: teste
+                      - generic:
+                        - generic: R$ 0,01
+                        - button
+                  - generic:
+                    - generic:
+                      - heading [level=3]: teste
+                      - generic:
+                        - generic: R$ 28,90
+                        - button
+                  - generic:
+                    - generic:
+                      - heading [level=3]: teste
+                      - generic:
+                        - generic: R$ 28,90
+                        - button
+              - generic:
+                - generic:
+                  - heading [level=3]: teste
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - heading [level=3]: Vruum Burguer
+                          - paragraph: "988977999"
+                        - generic: R$ 40,00
+                      - generic:
+                        - button
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - heading [level=3]: davi
+                          - paragraph: testando
+                        - generic: R$ 15,00
+                      - generic:
+                        - button
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - heading [level=3]: teste
+                          - paragraph: teste
+                        - generic: R$ 0,01
+                      - generic:
+                        - button
+              - generic:
+                - generic:
+                  - heading [level=3]: teste1
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - heading [level=3]: teste1
+                          - paragraph: rtefwefwefwefwefew
+                        - generic: R$ 0,01
+                      - generic:
+                        - button
+              - generic:
+                - generic:
+                  - heading [level=3]: pizzas
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - heading [level=3]: teste
+                          - paragraph: dsadasd
+                        - generic: R$ 40,00
+                      - generic:
+                        - button
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - heading [level=3]: pizza 1
+                          - paragraph: dsadsadasd
+                        - generic: R$ 40,00
+                      - generic:
+                        - button
+          - contentinfo:
+            - generic:
+              - generic:
+                - generic:
+                  - generic: TE
+                  - heading [level=4]: teste
+                - paragraph: Os melhores produtos preparados com ingredientes selecionados e entrega rápida para você.
+              - generic:
+                - paragraph: Localização & Contato
+                - generic: Alameda Dois de Novembro, nº 44, Queluz, Conselheiro Lafaiete - MG
+                - link:
+                  - /url: https://wa.me/31982607426
+                  - generic: (31) 98260-7426
+                - link:
+                  - /url: https://instagram.com/davialeixo_nogueira
+                  - generic: davialeixo_nogueira
+              - generic:
+                - paragraph: Horário de Funcionamento
+                - generic: Aberto Agora
+                - paragraph: 01:00 às 00:00
+            - generic:
+              - paragraph: © 2026 teste. Todos os direitos reservados.
+              - paragraph:
+                - text: Desenvolvido por
+                - link:
+                  - /url: https://instagram.com/davialeixo_nogueira
+                  - text: Davi Aleixo
+                - text: "|"
+                - link:
+                  - /url: https://wa.me/5531982607426
+                  - text: "31982607426"
+  - dialog [aria-hidden]:
+    - heading [level=2]: Montador de Pizza
+    - generic:
+      - button
+      - generic:
+        - generic: 🍕 Montador de Pizza
+        - heading [level=2]: pizzas
+        - paragraph: Escolha o tamanho, divida os sabores e monte do seu jeito.
+    - generic:
+      - generic:
+        - generic:
+          - generic: 1. Escolha o Tamanho
+          - generic: Obrigatório
+        - generic:
+          - button:
+            - generic: 🍕
+            - paragraph: Broto (4 fatias)
+            - paragraph: 4 fatias • Até 1 sabor
+          - button:
+            - generic: 🍕
+            - paragraph: Média (6 fatias)
+            - paragraph: 6 fatias • Até 2 sabores
+          - button:
+            - generic: 🍕
+            - paragraph: Grande (8 fatias)
+            - paragraph: 8 fatias • Até 2 sabores
+          - button:
+            - generic: 🍕
+            - paragraph: Família (12 fatias)
+            - paragraph: 12 fatias • Até 3 sabores
+      - generic:
+        - generic:
+          - generic: 2. Divisão de Sabores
+          - generic: "Regra: Maior valor"
+        - generic:
+          - button: 1 Sabor (Inteira)
+          - button: 2 Sabores (1/2 e 1/2)
+      - generic:
+        - generic:
+          - generic: 3. Escolha os Sabores
+          - generic: Toque para trocar
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - generic: "1"
+                - generic:
+                  - paragraph: 1ª Metade (50%)
+                  - heading [level=4]: pizza 1
+              - generic:
+                - generic: R$ 40,00
+                - button: Trocar
+            - paragraph: dsadsadasd
+            - generic:
+              - textbox:
+                - /placeholder: "Obs para esta metade (ex: sem cebola, sem orégano)..."
+          - generic:
+            - generic:
+              - generic:
+                - generic: "2"
+                - generic:
+                  - paragraph: 2ª Metade (50%)
+                  - heading [level=4]: pizza 1
+              - generic:
+                - generic: R$ 40,00
+                - button: Trocar
+            - paragraph: dsadsadasd
+            - generic:
+              - textbox:
+                - /placeholder: "Obs para esta metade (ex: sem cebola, sem orégano)..."
+      - generic:
+        - generic: 4. Borda Recheada & Opcionais
+        - generic:
+          - generic:
+            - generic:
+              - heading [level=4]: EXTRA
+              - paragraph: Escolha até 15
+          - generic:
+            - generic:
+              - generic: Bacon
+              - generic: + R$ 3,00
+            - generic:
+              - generic: maionese
+              - generic: + R$ 2,00
+    - generic:
+      - generic:
+        - generic:
+          - button
+          - generic: "1"
+          - button
+        - button:
+          - generic: Adicionar ao Pedido
+          - generic: R$ 40,00
+    - button:
+      - generic: Close
+  - dialog [ref=f1e194]:
+    - heading "Selecione o 2º Sabor" [level=2] [ref=f1e196]
+    - generic [ref=f1e197]:
+      - generic [ref=f1e198] [cursor=pointer]:
+        - generic [ref=f1e199]:
+          - img "teste" [ref=f1e200]
+          - generic [ref=f1e201]:
+            - heading "teste" [level=4] [ref=f1e202]
+            - paragraph [ref=f1e203]: dsadasd
+        - generic [ref=f1e204]: R$ 40,00
+      - generic [ref=f1e206] [cursor=pointer]:
+        - generic [ref=f1e207]:
+          - img "pizza 1" [ref=f1e208]
+          - generic [ref=f1e209]:
+            - heading "pizza 1" [level=4] [ref=f1e210]
+            - paragraph [ref=f1e211]: dsadsadasd
+        - generic [ref=f1e212]:
+          - generic [ref=f1e213]: R$ 40,00
+          - text: Selecionado
+    - button "Close" [active] [ref=f1e214] [cursor=pointer]

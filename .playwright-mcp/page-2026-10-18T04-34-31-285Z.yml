@@ -1,0 +1,47 @@
+- generic [ref=f1e5]:
+  - banner [ref=f1e6]:
+    - generic [ref=f1e8]:
+      - generic [ref=f1e9]:
+        - generic [ref=f1e10]: Entrega em até 40-50 min
+        - generic [ref=f1e17]: "|"
+        - generic [ref=f1e18]: 18:00 – 23:59
+      - generic [ref=f1e21]: Rua das Flores, 123 - Centro
+    - generic [ref=f1e27]:
+      - generic [ref=f1e28]:
+        - generic [ref=f1e29]: TE
+        - heading "teste" [level=1] [ref=f1e31]
+      - generic [ref=f1e32]:
+        - button "Carrinho" [ref=f1e33] [cursor=pointer]
+        - button "Informações da Loja" [ref=f1e37] [cursor=pointer]
+  - main [ref=f1e41]:
+    - button "Todos" [ref=f1e44] [cursor=pointer]
+    - generic [ref=f1e45]:
+      - textbox "Buscar no cardápio..." [ref=f1e47]
+      - button "Filtrar categorias" [ref=f1e48] [cursor=pointer]
+    - generic [ref=f1e50]:
+      - generic [ref=f1e51]: 🍽️
+      - heading "Nenhum produto encontrado" [level=3] [ref=f1e52]
+      - paragraph [ref=f1e53]: Não há produtos disponíveis nesta categoria no momento.
+  - contentinfo [ref=f1e54]:
+    - generic [ref=f1e55]:
+      - generic [ref=f1e56]:
+        - generic [ref=f1e57]:
+          - generic [ref=f1e58]: TE
+          - heading "teste" [level=4] [ref=f1e60]
+        - paragraph [ref=f1e61]: Os melhores produtos preparados com ingredientes selecionados e entrega rápida para você.
+      - generic [ref=f1e62]:
+        - paragraph [ref=f1e63]: Localização & Contato
+        - generic [ref=f1e64]: Endereço não informado
+      - generic [ref=f1e69]:
+        - paragraph [ref=f1e70]: Horário de Funcionamento
+        - generic [ref=f1e71]: Aberto Agora
+        - paragraph [ref=f1e74]: 18:00 às 23:59
+    - generic [ref=f1e75]:
+      - paragraph [ref=f1e76]: © 2026 teste. Todos os direitos reservados.
+      - paragraph [ref=f1e77]:
+        - text: Desenvolvido por
+        - link "Davi Aleixo" [ref=f1e78] [cursor=pointer]:
+          - /url: https://instagram.com/davialeixo_nogueira
+        - text: "|"
+        - link "31982607426" [ref=f1e79] [cursor=pointer]:
+          - /url: https://wa.me/5531982607426

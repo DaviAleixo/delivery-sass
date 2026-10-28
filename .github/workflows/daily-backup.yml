@@ -1,0 +1,123 @@
+name: Daily Database Backup to Cloudflare R2
+
+on:
+  schedule:
+    # Roda diariamente às 04:00 da manhã no fuso de Brasília (07:00 UTC)
+    - cron: '0 7 * * *'
+  # Permite acionar manualmente a qualquer momento pelo GitHub ("Run workflow")
+  workflow_dispatch:
+
+jobs:
+  backup:
+    name: Backup PostgreSQL & Por Empresa -> Cloudflare R2
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Install PostgreSQL Client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+
+      - name: Generate Per-Company Snapshots (JSON)
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://zecuwijuiqsaoeafonsv.supabase.co' }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          echo "Executando exportação estruturada por empresa..."
+          node scripts/export-data.js
+
+      - name: Generate Database Dump & Compress (.sql.gz)
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "❌ Erro: O segredo SUPABASE_DB_URL não está configurado no GitHub Secrets."
+            exit 1
+          fi
+
+          TIMESTAMP=$(date +"%Y-%m-%d_%H%M%S")
+          mkdir -p backups/banco_completo
+          BACKUP_FILENAME="pedemuleke_backup_${TIMESTAMP}.sql.gz"
+          echo "BACKUP_FILENAME=${BACKUP_FILENAME}" >> $GITHUB_ENV
+          echo "TIMESTAMP=${TIMESTAMP}" >> $GITHUB_ENV
+
+          echo "Exportando banco de dados PostgreSQL do Supabase via pg_dump..."
+          pg_dump "$DATABASE_URL" \
+            --clean \
+            --if-exists \
+            --no-owner \
+            --no-privileges \
+            --schema=public \
+            | gzip -9 > "backups/banco_completo/${BACKUP_FILENAME}"
+
+          SIZE=$(du -h "backups/banco_completo/${BACKUP_FILENAME}" | cut -f1)
+          echo "BACKUP_SIZE=${SIZE}" >> $GITHUB_ENV
+          echo "✓ Dump PostgreSQL gerado: ${BACKUP_FILENAME} (${SIZE})"
+
+      - name: Configure AWS CLI for Cloudflare R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+            echo "❌ Erro: Credenciais do R2 não configuradas no GitHub Secrets."
+            exit 1
+          fi
+          aws configure set aws_access_key_id "$AWS_ACCESS_KEY_ID"
+          aws configure set aws_secret_access_key "$AWS_SECRET_ACCESS_KEY"
+          aws configure set default.region auto
+
+      - name: Sync Backups to Cloudflare R2
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+        run: |
+          R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          TARGET_PATH="s3://${R2_BUCKET_NAME}/backups"
+
+          echo "Sincronizando backups locais (Geral + Por Empresa) para o Cloudflare R2..."
+          aws s3 sync "backups" "${TARGET_PATH}" --endpoint-url "${R2_ENDPOINT}"
+          echo "✓ Sincronização concluída com sucesso no Cloudflare R2!"
+
+      - name: Retention Policy (Delete Backups Older Than 30 Days)
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+        run: |
+          R2_ENDPOINT="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          echo "Verificando política de retenção de 30 dias nos dumps completos..."
+          CUTOFF_DATE=$(date -d "30 days ago" +"%Y-%m-%d")
+
+          aws s3 ls "s3://${R2_BUCKET_NAME}/backups/banco_completo/" --endpoint-url "${R2_ENDPOINT}" | while read -r line; do
+            FILE_NAME=$(echo "$line" | awk '{print $4}')
+            if [[ "$FILE_NAME" == pedemuleke_backup_* ]]; then
+              FILE_DATE=$(echo "$FILE_NAME" | sed -E 's/pedemuleke_backup_([0-9]{4}-[0-9]{2}-[0-9]{2})_.*/\1/')
+              if [[ "$FILE_DATE" < "$CUTOFF_DATE" ]]; then
+                echo "Apagando dump antigo (> 30 dias): $FILE_NAME"
+                aws s3 rm "s3://${R2_BUCKET_NAME}/backups/banco_completo/$FILE_NAME" --endpoint-url "${R2_ENDPOINT}"
+              fi
+            fi
+          done
+          echo "✓ Política de retenção concluída."
+
+      - name: Generate Summary Report
+        run: |
+          echo "### 🛡️ Backup Diário do PedeMuleke Concluído" >> $GITHUB_STEP_SUMMARY
+          echo "- **Data/Hora:** ${TIMESTAMP} (Brasília / UTC-3)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Dump Mestre:** \`${BACKUP_FILENAME}\` (${BACKUP_SIZE})" >> $GITHUB_STEP_SUMMARY
+          echo "- **Estrutura no Cloudflare R2:**" >> $GITHUB_STEP_SUMMARY
+          echo "  - \`backups/banco_completo/\` (Dump PostgreSQL)" >> $GITHUB_STEP_SUMMARY
+          echo "  - \`backups/por_empresa/\` (Pastas individuais por loja em JSON)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Retenção:** 30 dias automáticos" >> $GITHUB_STEP_SUMMARY

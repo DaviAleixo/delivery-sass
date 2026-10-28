@@ -13,10 +13,9 @@ import { AlertCircle, MapPin, Truck, Store, Plus, ArrowLeft, Loader2, Pencil, Cr
 import { matchNeighborhood, isCityAllowed } from "@/utils/neighborhoodMatcher";
 import { User } from "@/entities/User";
 import { UserAddress } from "@/entities/UserAddress";
-import { Order } from "@/entities/Order";
 import { Coupon } from "@/entities/Coupon";
 import { CouponUsage } from "@/entities/CouponUsage";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { base44 } from "@/api/base44Client";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { validateSchema, orderSchema } from "@/schemas";
@@ -181,7 +180,6 @@ export default function OrderModal({
     save_address: true,
   });
   const [isFetchingCep, setIsFetchingCep] = useState(false);
-  const [manualAddress, setManualAddress] = useState("");
   const nameInputRef = useRef(null);
   
   const isTableOnlyStore = deliveryRules?.salon_mode === 'table_only';
@@ -365,10 +363,6 @@ export default function OrderModal({
   const finalTotal = orderType === 'delivery' ? totalAfterDiscount + effectiveDeliveryFee : totalAfterDiscount;
 
   const isDineIn = orderType === 'dine_in';
-  const isTakeaway = orderType === 'takeaway';
-  const formattedTable = tableNumber
-    ? (String(tableNumber).toLowerCase().includes('mesa') ? tableNumber : `Mesa ${tableNumber}`)
-    : "";
 
   useEffect(() => {
     const loadUser = async () => {
@@ -584,7 +578,6 @@ export default function OrderModal({
       : (customerData.customer_name?.trim() || "Cliente");
 
     const resolvedPaymentMethod = isDineIn ? "caixa" : (customerData.payment_method || "dinheiro");
-    const resolvedPhone = customerData.customer_phone ? customerData.customer_phone.replace(/\D/g, "") : (isDineIn ? "" : "");
 
     let deliveryAddress = "";
     if (orderType === 'delivery') {
@@ -598,8 +591,6 @@ export default function OrderModal({
       if (!deliveryAddress) {
         if (newAddressForm.street?.trim()) {
           deliveryAddress = `${newAddressForm.street.trim()}, ${newAddressForm.number?.trim() || 'S/N'}${newAddressForm.complement?.trim() ? ` (${newAddressForm.complement.trim()})` : ''} - ${newAddressForm.neighborhood?.trim() || ''}, ${newAddressForm.city?.trim() || ''}${newAddressForm.state ? `/${newAddressForm.state.trim()}` : ''}`;
-        } else if (manualAddress?.trim()) {
-          deliveryAddress = manualAddress.trim();
         }
       }
 
@@ -740,6 +731,65 @@ export default function OrderModal({
     const finalValue = field === 'customer_phone' ? formatPhone(value) : value;
     setCustomerData(prev => ({ ...prev, [field]: finalValue }));
     if (errors[field]) setErrors(prev => ({ ...prev, [field]: "" }));
+
+    if (field === 'customer_phone') {
+      const cleanDigits = finalValue.replace(/\D/g, "");
+      if (cleanDigits.length >= 10) {
+        setIsSearchingPhone(true);
+        (async () => {
+          try {
+            let foundName = "";
+            let foundEmail = "";
+
+            if (isSupabaseConfigured() && supabase) {
+              try {
+                const activeTenantId = getActiveTenantId();
+                const { data } = await supabase.rpc("lookup_customer_by_phone", {
+                  p_phone: finalValue,
+                  p_tenant_id: activeTenantId || undefined
+                });
+                if (data && data.length > 0) {
+                  foundName = data[0].customer_name || "";
+                  foundEmail = data[0].customer_email || "";
+                }
+              } catch {}
+
+              if (!foundName) {
+                try {
+                  const { data: orderData } = await supabase
+                    .from("orders")
+                    .select("customer_name, customer_email")
+                    .ilike("customer_phone", `%${cleanDigits.slice(-8)}%`)
+                    .order("created_date", { ascending: false })
+                    .limit(1);
+                  if (orderData && orderData.length > 0) {
+                    foundName = orderData[0].customer_name || "";
+                    foundEmail = orderData[0].customer_email || "";
+                  }
+                } catch {}
+              }
+            }
+
+            if (foundName) {
+              setCustomerData(prev => ({
+                ...prev,
+                customer_name: prev.customer_name || foundName,
+                customer_email: prev.customer_email || foundEmail
+              }));
+              setPhoneLookupFeedback(`✓ ${foundName} localizado!`);
+            } else {
+              setPhoneLookupFeedback("");
+            }
+          } catch (err) {
+            console.warn("Erro ao buscar dados do cliente por telefone:", err);
+          } finally {
+            setIsSearchingPhone(false);
+          }
+        })();
+      } else {
+        setPhoneLookupFeedback("");
+      }
+    }
   };
 
   return (
@@ -750,7 +800,7 @@ export default function OrderModal({
         <div className="px-5 py-3.5 sm:py-4 border-b border-stone-100 flex items-center justify-between shrink-0 bg-white">
           <DialogHeader className="p-0 text-left">
             <DialogTitle className="text-lg sm:text-xl font-black text-gray-900 tracking-tight">
-              {isDineIn ? "🍽️ Fazer Pedido na Mesa" : "Finalizar Pedido"}
+              {isDineIn ? "Fazer Pedido na Mesa" : "Finalizar Pedido"}
             </DialogTitle>
             <p className="text-xs text-stone-500 font-medium mt-0.5">
               {isDineIn 
@@ -771,24 +821,19 @@ export default function OrderModal({
 
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
           <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-4 overscroll-contain">
-            {/* SELETOR DE CANAL (se houver mais de uma opção disponível) */}
+            {/* SELETOR DE CANAL: Oculto para mesas (mesa é a única opção). Exibido apenas entre Delivery e Retirada se ambos existirem */}
             {(() => {
-              const availableCount = (showDeliveryTab ? 1 : 0) + (showTakeawayTab ? 1 : 0) + (showDineInTab ? 1 : 0);
+              if (isDineIn) return null;
+              const availableCount = (showDeliveryTab ? 1 : 0) + (showTakeawayTab ? 1 : 0);
               if (availableCount <= 1) return null;
               return (
                 <Tabs value={orderType} onValueChange={(val) => {
                   setOrderType(val);
-                  if (errors.table_number) setErrors(prev => ({ ...prev, table_number: "" }));
                 }} className="w-full">
-                  <TabsList className={`grid w-full ${availableCount === 3 ? 'grid-cols-3' : 'grid-cols-2'} rounded-2xl p-1 bg-stone-100 h-auto gap-1`}>
+                  <TabsList className={`grid w-full ${availableCount === 2 ? 'grid-cols-2' : 'grid-cols-1'} rounded-2xl p-1 bg-stone-100 h-auto gap-1`}>
                     {showDeliveryTab && (
                       <TabsTrigger value="delivery" className="rounded-xl font-bold text-xs sm:text-sm py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-emerald-700">
                         <Truck className="w-3.5 h-3.5 mr-1.5 shrink-0"/>Delivery
-                      </TabsTrigger>
-                    )}
-                    {showDineInTab && (
-                      <TabsTrigger value="dine_in" className="rounded-xl font-bold text-xs sm:text-sm py-2 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-teal-700">
-                        <span className="text-sm mr-1">🍽️</span>Na Mesa
                       </TabsTrigger>
                     )}
                     {showTakeawayTab && (
@@ -811,7 +856,7 @@ export default function OrderModal({
                   <div className="bg-gradient-to-br from-emerald-50 to-teal-50/80 border border-emerald-200/90 rounded-2xl p-3.5 sm:p-4 flex items-center justify-between shadow-xs">
                     <div className="flex items-center gap-3">
                       <div className="w-11 h-11 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-bold text-lg shadow-sm shrink-0">
-                        🍽️
+                        <UtensilsCrossed className="w-5 h-5 text-white" />
                       </div>
                       <div>
                         <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-emerald-800 block">Sua Mesa</span>
@@ -837,7 +882,8 @@ export default function OrderModal({
                 ) : (
                   <div className="bg-stone-50 p-4 rounded-2xl border border-stone-200 space-y-2">
                     <Label className="text-xs font-bold uppercase text-stone-700 flex items-center gap-1.5">
-                      <span>🍽️</span> Número da sua Mesa *
+                      <UtensilsCrossed className="w-4 h-4 text-stone-600" />
+                      <span>Número da sua Mesa *</span>
                     </Label>
                     <Input
                       value={tableNumber}
@@ -1754,8 +1800,8 @@ export default function OrderModal({
               {isSubmitting 
                 ? "Enviando..." 
                 : isDineIn
-                  ? "🍽️ Enviar Pedido para a Cozinha"
-                  : (orderType === 'delivery' && isDeliveryBlocked ? (isCityBlocked ? "Cidade Não Atendida" : "Bairro Não Atendido") : "Confirmar Pedido ➔")}
+                  ? "Enviar Pedido para a Cozinha"
+                  : (orderType === 'delivery' && isDeliveryBlocked ? (isCityBlocked ? "Cidade Não Atendida" : "Bairro Não Atendido") : "Confirmar Pedido")}
             </Button>
           </div>
         </form>

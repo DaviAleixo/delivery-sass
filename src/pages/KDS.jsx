@@ -102,7 +102,6 @@ export default function KDSPage() {
   // Fila Sequencial de Impressão FIFO tolerante a quedas de internet
   const {
     queue: printQueue,
-    isProcessing: isPrinting,
     isOnline,
     autoPrintEnabled,
     setAutoPrintEnabled,
@@ -454,6 +453,7 @@ export default function KDSPage() {
               </span>
             )}
           </Button>
+
           {/* Seletor de Canal */}
           <div className="flex items-center bg-stone-900 border border-stone-800 rounded-xl p-1 text-xs">
             <button

@@ -40,6 +40,7 @@ export default function ComplementsPage() {
     max_quantity: 1,
     required: false,
     active: true,
+    is_pizza_crust: false,
   });
 
   const [showItemsModal, setShowItemsModal] = useState(false);
@@ -102,6 +103,7 @@ export default function ComplementsPage() {
       max_quantity: 1,
       required: false,
       active: true,
+      is_pizza_crust: false,
     });
     setShowGroupModal(true);
   };
@@ -115,6 +117,7 @@ export default function ComplementsPage() {
       max_quantity: group.max_quantity || 1,
       required: Boolean(group.required || group.min_quantity > 0),
       active: group.active !== false,
+      is_pizza_crust: Boolean(group.is_pizza_crust),
     });
     setShowGroupModal(true);
   };
@@ -132,6 +135,7 @@ export default function ComplementsPage() {
         max_quantity: Math.max(1, parseInt(groupForm.max_quantity) || 1),
         required: Boolean(groupForm.required || parseInt(groupForm.min_quantity) > 0),
         active: groupForm.active,
+        is_pizza_crust: Boolean(groupForm.is_pizza_crust),
       };
 
       if (editingGroup) {
@@ -298,40 +302,61 @@ export default function ComplementsPage() {
   const groupLinkedProductsCount = (groupId) => productGroups.filter(pg => pg.group_id === groupId).length;
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-900">Grupos de Adicionais & Complementos</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Crie grupos reutilizáveis (Ponto da Carne, Turbine seu Burger, Molhos) e vincule a múltiplos produtos com 1 clique.
-          </p>
-        </div>
-        <Button onClick={handleOpenCreateGroup} className="bg-[#047857] hover:bg-[#065f46] text-white shadow-sm cursor-pointer">
-          <Plus className="w-4 h-4 mr-2" /> Novo Grupo
-        </Button>
-      </div>
-
-      {/* Lista de Grupos */}
-      {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {[1, 2, 3].map(n => (
-            <Card key={n} className="animate-pulse bg-gray-50 h-48 border rounded-2xl" />
-          ))}
-        </div>
-      ) : groups.length === 0 ? (
-        <Card className="border-dashed border-2 p-12 text-center rounded-2xl">
-          <Layers className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-          <h3 className="text-lg font-bold text-gray-800">Nenhum grupo cadastrado</h3>
-          <p className="text-sm text-gray-500 max-w-md mx-auto mt-1 mb-4">
-            Crie seu primeiro grupo de complementos para organizar adicionais e opções obrigatórias ou opcionais.
-          </p>
-          <Button onClick={handleOpenCreateGroup} className="bg-[#047857] hover:bg-[#065f46] text-white cursor-pointer">
-            <Plus className="w-4 h-4 mr-2" /> Criar Grupo Agora
+    <div className="p-6 sm:p-8 bg-[#F7F9F8] min-h-screen">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-gray-900">
+              Grupos de Adicionais & Complementos
+            </h1>
+            <p className="text-sm text-gray-500 mt-1">
+              Crie grupos reutilizáveis (Bordas Recheadas, Extras, Ponto da Carne) e vincule aos produtos com 1 clique.
+            </p>
+          </div>
+          <Button 
+            onClick={handleOpenCreateGroup} 
+            className="bg-[#047857] hover:bg-[#065f46] text-white shadow-sm font-bold rounded-xl cursor-pointer shrink-0"
+          >
+            <Plus className="w-4 h-4 mr-2" /> Novo Grupo
           </Button>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 items-stretch">
+        </div>
+
+        {/* Card de Dica Rápida para Pizzarias */}
+        <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 flex items-start sm:items-center justify-between gap-3 shadow-2xs">
+          <div className="flex items-start sm:items-center gap-3">
+            <span className="text-2xl shrink-0">🍕</span>
+            <div>
+              <h4 className="text-xs sm:text-sm font-bold text-emerald-950">
+                Como configurar Bordas Recheadas para Pizzas:
+              </h4>
+              <p className="text-xs text-emerald-800 mt-0.5 leading-relaxed">
+                Basta criar um grupo com a palavra <strong>"Borda"</strong> no nome (ex: <em>Bordas Recheadas</em>, Mín: 0 e Máx: 1), adicionar as opções (Catupiry, Cheddar, etc.) e vincular às suas pizzas. O montador de pizza colocará esse grupo automaticamente para a pizza toda!
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Lista de Grupos */}
+        {isLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3].map(n => (
+              <Card key={n} className="animate-pulse bg-white h-52 border rounded-2xl shadow-xs" />
+            ))}
+          </div>
+        ) : groups.length === 0 ? (
+          <Card className="border-dashed border-2 p-12 text-center rounded-2xl bg-white shadow-xs">
+            <Layers className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+            <h3 className="text-lg font-bold text-gray-800">Nenhum grupo cadastrado</h3>
+            <p className="text-sm text-gray-500 max-w-md mx-auto mt-1 mb-4">
+              Crie seu primeiro grupo de complementos para organizar adicionais e opções obrigatórias ou opcionais.
+            </p>
+            <Button onClick={handleOpenCreateGroup} className="bg-[#047857] hover:bg-[#065f46] text-white font-bold rounded-xl cursor-pointer">
+              <Plus className="w-4 h-4 mr-2" /> Criar Grupo Agora
+            </Button>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
           <AnimatePresence>
             {groups.map(group => {
               const grpItems = groupItemsMap(group.id);
@@ -355,6 +380,11 @@ export default function ComplementsPage() {
                           <h3 className="font-bold text-gray-900 text-base sm:text-lg truncate max-w-[180px]" title={group.name}>
                             {group.name}
                           </h3>
+                          {group.is_pizza_crust && (
+                            <Badge className="bg-[#047857] hover:bg-[#065f46] text-white text-[10px] font-bold shrink-0">
+                              🍕 Borda (Pizza Toda)
+                            </Badge>
+                          )}
                           {isRequired ? (
                             <Badge className="bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-semibold shrink-0">
                               Obrigatório (Mín: {group.min_quantity})
@@ -547,6 +577,24 @@ export default function ComplementsPage() {
                   required: checked, 
                   min_quantity: checked ? Math.max(1, groupForm.min_quantity) : 0 
                 })}
+              />
+            </div>
+
+            {/* Flag: Borda / Complemento da Pizza Inteira */}
+            <div className={`flex items-center justify-between p-3.5 rounded-xl border transition-all ${
+              groupForm.is_pizza_crust ? "border-[#047857] bg-[#D1E9DF]/25" : "border-gray-200 bg-gray-50/70"
+            }`}>
+              <div className="space-y-0.5 pr-3">
+                <p className="font-bold text-sm text-gray-900 flex items-center gap-1.5">
+                  <span>🍕 Borda Recheada / Aplicar na Pizza Inteira</span>
+                </p>
+                <p className="text-xs text-gray-500 leading-snug">
+                  Ative se este grupo pertencer ao disco todo da pizza (ex: Bordas Recheadas, Tipo de Massa). Deixe desativado para adicionais por fatia/metade (ex: Bacon Extra, Queijo Extra).
+                </p>
+              </div>
+              <Switch 
+                checked={groupForm.is_pizza_crust}
+                onCheckedChange={checked => setGroupForm(prev => ({ ...prev, is_pizza_crust: checked }))}
               />
             </div>
 
@@ -774,6 +822,7 @@ export default function ComplementsPage() {
           )}
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }

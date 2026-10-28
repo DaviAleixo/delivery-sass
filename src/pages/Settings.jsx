@@ -77,7 +77,10 @@ export default function SettingsPage() {
     free_delivery_threshold: "",
     salon_mode: "full",
     accepts_delivery: true,
-    accepts_takeaway: true
+    accepts_takeaway: true,
+    pizza_pricing_rule: "highest_price",
+    table_service_fee_enabled: false,
+    table_service_fee_rate: 10
   });
 
   const [newNeighborhood, setNewNeighborhood] = useState({
@@ -196,6 +199,9 @@ export default function SettingsPage() {
             salon_mode: tenantData.salon_mode || (tenantData.plan === "showcase" ? "showcase" : (tenantData.plan === "table" ? "table_only" : "full")),
             accepts_delivery: tenantData.accepts_delivery !== false,
             accepts_takeaway: tenantData.accepts_takeaway !== false,
+            pizza_pricing_rule: tenantData.pizza_pricing_rule || "highest_price",
+            table_service_fee_enabled: tenantData.table_service_fee_enabled === true,
+            table_service_fee_rate: Number(tenantData.table_service_fee_rate ?? 10),
           });
           setIsLoading(false);
           return;
@@ -235,7 +241,10 @@ export default function SettingsPage() {
             free_delivery_threshold: "",
             salon_mode: "full",
             accepts_delivery: true,
-            accepts_takeaway: true
+            accepts_takeaway: true,
+            pizza_pricing_rule: currentSettings.pizza_pricing_rule || "highest_price",
+            table_service_fee_enabled: currentSettings.table_service_fee_enabled === true,
+            table_service_fee_rate: Number(currentSettings.table_service_fee_rate ?? 10),
           });
         }
       } else {
@@ -265,7 +274,10 @@ export default function SettingsPage() {
           free_delivery_threshold: "",
           salon_mode: "full",
           accepts_delivery: true,
-          accepts_takeaway: true
+          accepts_takeaway: true,
+          pizza_pricing_rule: "highest_price",
+          table_service_fee_enabled: false,
+          table_service_fee_rate: 10
         });
       }
     } finally {
@@ -793,7 +805,10 @@ export default function SettingsPage() {
         delivery_neighborhoods: settings.delivery_neighborhoods || [],
         accepts_delivery: settings.accepts_delivery !== false,
         accepts_takeaway: settings.accepts_takeaway !== false,
-        salon_mode: settings.salon_mode || "full"
+        pizza_pricing_rule: settings.pizza_pricing_rule || "highest_price",
+        salon_mode: settings.salon_mode || "full",
+        table_service_fee_enabled: settings.table_service_fee_enabled === true,
+        table_service_fee_rate: Number(settings.table_service_fee_rate ?? 10)
       };
 
       const zodValidation = validateSchema(settingsSchema, validationPayload);
@@ -841,6 +856,9 @@ export default function SettingsPage() {
           salon_mode: settings.salon_mode || 'full',
           accepts_delivery: settings.accepts_delivery !== false,
           accepts_takeaway: settings.accepts_takeaway !== false,
+          pizza_pricing_rule: settings.pizza_pricing_rule || 'highest_price',
+          table_service_fee_enabled: settings.table_service_fee_enabled === true,
+          table_service_fee_rate: Number(settings.table_service_fee_rate ?? 10),
           payment_methods: tenantDetails?.payment_methods || null,
         };
 

@@ -100,18 +100,20 @@ export default function VrummMenu({
                 <h1 className="text-base sm:text-lg font-black leading-tight text-white tracking-tight" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
                   {settings?.restaurant_name || resolvedInitialStoreName}
                 </h1>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <div className="flex items-center gap-1.5">
-                    <div className={`w-2 h-2 rounded-full ${storeIsOpen ? 'bg-emerald-400 animate-pulse shadow-sm shadow-emerald-400/50' : 'bg-red-500'}`}></div>
-                    <span className={`text-[11px] font-extrabold tracking-wide ${storeIsOpen ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {storeIsOpen ? 'Aberto agora' : 'Fechado'}
+                {!urlMesa && (
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <div className={`w-2 h-2 rounded-full ${storeIsOpen ? 'bg-emerald-400 animate-pulse shadow-sm shadow-emerald-400/50' : 'bg-red-500'}`}></div>
+                      <span className={`text-[11px] font-extrabold tracking-wide ${storeIsOpen ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {storeIsOpen ? 'Aberto agora' : 'Fechado'}
+                      </span>
+                    </div>
+                    <span className="text-stone-600 text-xs">•</span>
+                    <span className="text-stone-400 text-[11px] font-medium">
+                      {settings?.opening_time && settings?.closing_time ? `${settings.opening_time} - ${settings.closing_time}` : '18:00 - 23:59'}
                     </span>
                   </div>
-                  <span className="text-stone-600 text-xs">•</span>
-                  <span className="text-stone-400 text-[11px] font-medium">
-                    {settings?.opening_time && settings?.closing_time ? `${settings.opening_time} - ${settings.closing_time}` : '18:00 - 23:59'}
-                  </span>
-                </div>
+                )}
               </div>
             </div>
 
@@ -183,8 +185,8 @@ export default function VrummMenu({
         </div>
       )}
 
-      {/* Banner de Pedido em Andamento */}
-      {!isVisualOnly && activeGuestOrder && (
+      {/* Banner de Pedido em Andamento (Oculto em pedidos na mesa / QR Code) */}
+      {!isVisualOnly && !urlMesa && activeGuestOrder && activeGuestOrder.order_type !== 'dine_in' && !activeGuestOrder.table_number && (
         <div className={`${hasTopNotice ? 'pt-3' : 'pt-20'} container mx-auto px-4 max-w-6xl`}>
           <div className="relative">
             <Link to={`${createPageUrl("MyOrders")}?id=${activeGuestOrder.id}`}>

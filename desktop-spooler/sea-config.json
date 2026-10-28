@@ -1,0 +1,4 @@
+{
+  "main": "dist/spooler.cjs",
+  "output": "dist/sea-prep.blob"
+}

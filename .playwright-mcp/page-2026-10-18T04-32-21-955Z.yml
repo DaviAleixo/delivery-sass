@@ -1,0 +1,8 @@
+- generic [ref=e81]:
+  - generic [ref=e85]:
+    - heading "Ops! Algo deu errado ao carregar" [level=2] [ref=e86]
+    - paragraph [ref=e87]: Tivemos uma instabilidade momentânea ao processar esta tela.
+  - generic [ref=e88]: Button is not defined
+  - generic [ref=e89]:
+    - button "Recarregar Página" [ref=e90] [cursor=pointer]
+    - button "Início" [ref=e91] [cursor=pointer]

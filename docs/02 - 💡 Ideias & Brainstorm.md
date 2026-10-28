@@ -6,9 +6,22 @@
 
 ## 💡 Ideias de Recursos e Diferenciais Competitivos
 
-### 🍕 1. Montador de Pizza / Combo em Etapas
-* **Ideia**: Criar um assistente visual para montar produtos complexos (ex: "Pizza Meio a Meio", "Monte seu Hambúrguer em 3 passos: Pão -> Carne -> Queijo -> Molho").
-* **Benefício**: Reduz atrito de pedido e aumenta o ticket médio do restaurante.
+### 🍕 1. Montador de Pizza Fracionada (Meio a Meio, Tamanhos & Bordas)
+* **Contexto**: Pizzaria é um dos maiores mercados de delivery do Brasil e não se encaixa no modelo tradicional de produto único com adicionais. Trata-se de um produto modular e fracionado.
+* **Fluxo no Painel Administrativo**:
+  1. **Configuração da Loja (`tenants`)**: Regra de precificação fracionada (`highest_price` para maior valor ou `average` para média ponderada das metades).
+  2. **Tamanhos & Discos**: Cadastro de tamanhos (Broto 4 fatias máx 1 sabor, Média 6 fatias máx 2 sabores, Grande 8 fatias máx 2 ou 3 sabores, Família 12 fatias máx 3 ou 4 sabores).
+  3. **Sabores & Preços**: Sabores com preço por tamanho ou acréscimo proporcional.
+  4. **Bordas & Massas**: Grupos vinculados com valores adaptados por tamanho.
+* **Fluxo no Cardápio do Cliente (UX Wizard em Etapas)**:
+  1. *Etapa 1*: Escolha do Tamanho (ex: Grande 8 fatias).
+  2. *Etapa 2*: Quantidade de sabores desejada (1 sabor inteiro, 2 sabores meio a meio, 3 sabores...).
+  3. *Etapa 3*: Seleção dos sabores fracionados com campo de observação individual por metade/fatia (ex: "sem cebola na metade de calabresa") e pizza gráfica interativa.
+  4. *Etapa 4*: Escolha da massa (fina, tradicional, pan) e da borda recheada (Catupiry original, Cheddar, Chocolate).
+  5. *Etapa 5*: Resumo claro da composição com valor total e adição ao pedido.
+* **Impressão Térmica / KDS (`desktop-spooler`)**:
+  - Comanda formatada para o pizzaiolo com separação clara de frações `[1/2]` e observações específicas por sabor, borda e massa em destaque.
+* **Benefício**: Permite vender o SaaS para qualquer pizzaria da cidade com paridade total a plataformas consolidadas (Anota AI, Saipos, CardápioWeb).
 
 ### ⭐ 2. Programa de Fidelidade Integrado
 * **Ideia**: A cada X pedidos ou a cada R$ 50 gastos pelo cliente no cardápio, ele ganha selos digitais ou cashback para o próximo pedido.
@@ -32,6 +45,52 @@
   1. **Configuração da Loja**: Toggles no painel (`accepts_delivery` e `accepts_takeaway`) permitindo ao lojista ativar/desativar cada modalidade.
   2. **Regra de Mesa via QR Code**: "Na Mesa" é 100% omitida do fluxo de delivery normal. Só é ativada se o cliente entrar com `?mesa=X` (escaneando a plaquinha física na mesa) ou em planos exclusivos de salão.
   3. **Checkout Adaptativo**: Se a loja só aceita Retirada, o modal de pedido já abre direto em Retirada, ocultando campos de endereço, CEP e taxa de entrega, gerando uma experiência de compra ultra rápida (15 segundos).
+
+### 🍽️ 7. App do Garçom (Comanda Mobile PWA - Fase Futura)
+* **Conceito**: Uma rota web dedicada (`/:slug/garcom`) otimizada para smartphones (PWA que o garçom pode instalar na tela inicial do celular com 1 clique). O motor base de mesas e comandas (`table_sessions` + `RestaurantTable`) já está 100% ativo e integrado no sistema.
+* **Fluxo de Trabalho & Próximas Evoluções**:
+  1. O garçom seleciona o número da mesa em um mapa visual de mesas (livres em verde, ocupadas em amarelo, pré-conta em azul).
+  2. Lança os pratos e adicionais rapidamente pelo celular com os mesmos produtos do cardápio.
+  3. Ao clicar em "Lançar Pedido", o pedido vai instantaneamente para o KDS/Cozinha e para a impressora térmica com a etiqueta `COMANDA MESA (Garçom X)`.
+  4. O cliente pode pedir mais rodadas (bebidas, sobremesas) e tudo vai acumulando na mesma comanda.
+  5. **Transferência de Mesas**: Capacidade de transferir pedidos de uma mesa para outra quando os clientes trocarem de lugar no salão.
+  6. **Botão de Chamar Garçom**: O cliente pelo QR code da mesa (`?mesa=X`) pode tocar em "Chamar Garçom" ou "Pedir Conta", fazendo o celular da equipe vibrar.
+  7. **Divisão de Comanda por Pessoa na Mesa**: Cada pessoa pode fechar sua parte individualmente via Pix ou Cartão na maquininha móvel.
+  8. **Métricas de Giro de Salão & Lotação Passiva (Sem Fricção de Headcount)**:
+     - **Problema de UX no Salão**: Exigir que o garçom conte e digite quantas pessoas sentaram na mesa na hora que os clientes chegam gera estresse, atraso e fricção operacional (em horário de pico ninguém para pra preencher).
+     - **Divisão Orgânica por Pedido (`ordersByCustomer`)**: As pessoas dividem a conta com base no que cada uma consumiu de fato (ex: pessoa 1 paga só o hambúrguer dela, pessoa 2 paga o dela + 2 filhos), em vez de fórmulas matemáticas rígidas de divisão uniforme `total / N`.
+     - **Telemetria de Giro de Mesa Ativa**: Cronômetro de tempo aberta (`⏱️ Aberta há Xm`) e cronômetro de inatividade do último pedido (`🍽️ < 25m` consumo ativo; `⏳ 25-45m` oportunidade de nova rodada/sobremesa/café; `⚠️ > 45m` mesa parada pronta para fechar/liberar).
+     - **Lotação e Capacidade Passiva (Fase Futura)**: A taxa de ocupação do salão pode ser estimada automaticamente cruzando as mesas ativas com a capacidade padrão cadastrada de cada mesa (`capacity`), sem nunca travar o atendimento do garçom com formulários de entrada.
+
+### 🛵 8. App do Entregador / Motoboy (Logística & Rota PWA)
+* **Conceito**: Uma rota web mobile (`/:slug/entregador`) onde o motoboy acessa informando seu telefone cadastrado ou PIN.
+* **Fluxo de Trabalho**:
+  1. O despachante no painel de pedidos vincula o pedido ao motoboy e clica em despachar.
+  2. O celular do motoboy vibra/notifica com o novo pedido a entregar.
+  3. O motoboy visualiza os detalhes: nome do cliente, itens da bag, troco necessário e botão de **1-Clique para abrir GPS (Google Maps / Waze)**.
+  4. Ao chegar no cliente, pode ligar ou mandar WhatsApp direto.
+  5. Ao entregar, clica em "Confirmar Entrega" (opcionalmente digitando os últimos dígitos do telefone do cliente para segurança).
+  6. Tela de extrato do turno: exibe quantas entregas fez na noite, quanto tem a receber de taxa e quanto em dinheiro vivo precisa entregar para o caixa no fechamento.
+
+### 🖨️ 9. Arquitetura do Spooler Desktop (.exe) para Impressão Automática Silenciosa
+* **O Desafio**: O navegador web (Chrome, Edge) por questões de segurança impede que qualquer site envie comandos diretos para a porta USB da impressora térmica sem abrir a caixa de diálogo de confirmação de impressão (`window.print()`).
+* **Três Abordagens Possíveis**:
+  1. **Abordagem 1: Micro-Agente Spooler Local em Background (.exe - Recomendada estilo iFood/Anota AI)**:
+     - Cria-se um mini-serviço em Node.js ou Go empacotado em um único arquivo `pedemuleke-spooler.exe` (~15MB).
+     - Roda na bandeja do Windows (System Tray perto do relógio).
+     - Abre um servidor HTTP local seguro em `http://127.0.0.1:9100`.
+     - O painel web do PedeMuleke, ao aceitar um pedido, faz um `fetch("http://127.0.0.1:9100/print", { method: "POST", body: orderData })`.
+     - O `.exe` recebe os dados do pedido, formata para texto ESC/POS térmico e cospe na impressora padrão do Windows via comando de spooler direto (sem nenhuma tela de confirmação).
+     - **Vantagem**: O lojista não precisa trocar de tela; continua usando o painel web no navegador normalmente e o .exe roda invisível.
+  2. **Abordagem 2: Aplicativo Desktop Nativo (Electron ou Tauri)**:
+     - Empacota o painel administrativo inteiro dentro de uma janela desktop instalável (`PedeMuleke.exe`).
+     - O Electron tem a API nativa `webContents.print({ silent: true, deviceName: 'EPSON TM-T20' })`.
+     - Permite que o restaurante abra o sistema pelo ícone na Área de Trabalho com inicialização automática no Windows.
+     - **Vantagem**: Experiência de software instalado (estilo PDV desktop tradicional).
+  3. **Abordagem 3: O "Truque Kiosk" do Google Chrome (Zero Linhas de Código / Imediato)**:
+     - Cria um atalho no Windows: `"C:\Program Files\Google\Chrome\Application\chrome.exe" --kiosk-printing "https://pedemuleke.com/painel"`.
+     - A flag `--kiosk-printing` faz o Chrome imprimir **instantaneamente e silenciosamente** na impressora padrão sem abrir janela de diálogo!
+     - É a forma mais rápida de testar e validar em clientes reais hoje mesmo.
 
 ---
 
@@ -691,6 +750,192 @@
   3. **Cadastro e Login via WhatsApp Oficial (Meta Cloud API)**:
      - Disparo de código de 6 dígitos (OTP) via WhatsApp Oficial para verificação real do número.
      - Sem senhas difíceis de lembrar: autenticação rápida e segura por WhatsApp.
+
+### 🖨️ 49. Arquitetura do Micro-Spooler Desktop .exe (Impressão Automática Silenciosa Padrão iFood / Anota AI)
+* **O Desafio da Impressão Térmica em Navegadores Web**:
+  - No navegador puro (Chrome/Firefox/Edge), qualquer comando de impressão (`window.print()`) obriga o usuário a interagir com o diálogo do sistema operacional (popup) e clicar em "Imprimir" ou "Enter".
+  - Em cozinhas de alta demanda com 50 a 200 pedidos/dia, operadores de caixa não podem perder 4 segundos por pedido confirmando popups.
+* **A Solução Arquitetural Padrão Indústria**:
+  - Em vez de transformar todo o SaaS em um aplicativo Electron de 400MB que requer atualizações complexas na máquina de cada restaurante, criamos um **Micro-Spooler Local Autônomo** (`pedemuleke-spooler.exe`).
+  - O executável roda silenciosamente no Windows do caixa como um serviço local ouvindo em `http://127.0.0.1:9100`.
+  - O painel web do PedeMuleke (hospedado na Cloudflare) faz um `POST /print` passando os dados do pedido em JSON.
+  - O spooler compõe a comanda térmica com alinhamento milimétrico para 80mm ou 58mm (`ticketFormatter.js`) e dispara direto para o driver da impressora térmica via PowerShell nativo (`Get-Content | Out-Printer`), executando a impressão em < 0.2 segundos sem abrir janelas.
+* **Compatibilidade Total de Conexão (Cabo USB, Rede Wi-Fi/Ethernet e Bluetooth)**:
+  - O Spooler comunica-se diretamente com o subsistema de impressão do Windows (`winspool.drv`).
+  - **Cabo USB**: Conexão padrão de balcão e caixa.
+  - **Rede Local (Ethernet / Wi-Fi via TCP/IP)**: A impressora térmica fica longe (ex: dentro da cozinha ou na área do bar) com um cabo de rede ou Wi-Fi. O Windows a enxerga por IP (ex: `192.168.1.150` na porta 9100) como uma impressora comum. O Spooler a detecta e imprime normalmente!
+  - **Rede Compartilhada do Windows (`\\PC-CAIXA\Impressora`)**: Permite que múltiplos terminais imprimam na mesma impressora compartilhada.
+  - **Bluetooth**: Suporta mini impressoras térmicas portáteis pareadas no Windows.
+* **Visibilidade e Telemetria para o Lojista (Como saber se está ativo)**:
+  - **Pílula de Status Global na Navbar**: Em 100% das telas administrativas (ao lado do status 'Loja Aberta'), há um indicador em tempo real:
+    - `🟢 Impressora Pronta` (pulso verde vivo com nome da impressora conectada).
+    - `⚪ Impressora Offline` (modo navegador ativo com link direto para download do `.exe`).
+  - **Notificação Instantânea**: Ao iniciar o executável, o sistema web solta na hora um toast verde avisando a conexão. Se for fechado, avisa que voltou ao modo navegador.
+  - **Botão "Testar Impressão"**: Permite emitir um ticket teste de 1-segundo a qualquer instante para conferir a bobina física.
+  - **Download 1-Clique no Painel**: Botão direto para baixar o arquivo portátil `pedemuleke-spooler.zip` com instruções simplificadas em 3 passos.
+* **Tolerância a Falhas e Modo Adaptativo**:
+  - Se o `.exe` estiver fechado ou se o restaurante estiver acessando por tablet/celular/iPad, o hook `useFifoPrintQueue.js` detecta a ausência do spooler e faz fallback automático e transparente para a impressão padrão do navegador, sem travar o sistema.
+* **Tecnologia de Distribuição**:
+  - Compilado via **Node.js SEA (Single Executable Application)** nativo do Node 22 com `esbuild` e `postject` gerando um binário Windows `.exe` único e portátil (zero dependência de Node.js instalado no computador do cliente).
+
+### 📱 50. App do Garçom (Comanda Digital Mobile / PWA)
+* **Objetivo**: Atendimento ágil na ponta da mesa sem blocos de papel.
+* **Principais Funcionalidades**:
+  - Interface vertical ultra rápida (PWA instalável no celular do garçom).
+  - Mapa de mesas com status de ocupação (livre, com clientes, aguardando conta).
+  - Lançamento de pedidos, adicionais e observações da cozinha direto na mesa.
+  - Disparo instantâneo: ao salvar, já imprime na cozinha/bar e reflete no KDS.
+  - Solicitação de pré-conta e fechamento de mesa com 1 clique.
+
+### 🛵 51. App do Entregador (Logística & Roteirização Mobile / PWA)
+* **Objetivo**: Organização de rota e acerto financeiro do motoboy.
+* **Principais Funcionalidades**:
+  - Login rápido por código ou link de WhatsApp.
+  - Lista de pedidos despachados para a bag dele com dados de endereço.
+  - Botão de rota: abre direto no **Google Maps** ou **Waze** com o destino já preenchido.
+  - Botão de confirmação de entrega em campo ("Entregue ao Cliente").
+  - Extrato do turno: resumo ao vivo com total de corridas, taxas ganhas e valor em dinheiro a repassar ao caixa no final da noite.
+
+### 🍇 52. Integração com Aiqfome (API V2 & Ecossistema Magalu Delivery Oficial - Em Standby)
+> ⏸️ **Decisão Estratégica do Davi (Outubro/2026)**: Funcionalidade congelada temporariamente. O cadastro e publicação de aplicação de integração no ecossistema do ID Magalu exige CNPJ empresarial ativo. Como o foco atual do PedeMuleke é validação comercial imediata com custo zero e sem burocracias fiscais, a integração fica catalogada e pronta para ser implementada assim que o CNPJ/MEI for formalizado.
+
+* **Por que é uma mina de ouro comparado ao iFood**:
+  - **Líder no Interior**: O aiqfome domina amplamente cidades de 20 mil a 300 mil habitantes no Brasil (onde o iFood é fraco ou ausente).
+  - **Portal Aberto e Acessível**: Enquanto o iFood impõe contratos corporativos complexos para homologação, o aiqfome disponibiliza o portal oficial para desenvolvedores em `developer.aiqfome.com` unificado com o Magalu Delivery.
+  - **Novo Padrão Oficial 2026**: A API V1 foi descontinuada e a **API V2 com ID Magalu** tornou-se o padrão único e definitivo para cardápios e pedidos.
+* **A Grande Mudança Técnica: Autorização por Loja (Store-Level Auth)**:
+  - No modelo antigo (V1), um único token do usuário geria todas as lojas.
+  - No novo modelo (**V2 + ID Magalu**), a autorização é estritamente **por loja**. Cada loja possui seu próprio par de `ACCESS_TOKEN` e `REFRESH_TOKEN` individual, garantindo total isolamento multi-tenant.
+* **Passo a Passo da Arquitetura & Implementação Técnica**:
+  1. **Credenciamento da Plataforma (Você / Davi)**:
+     - Cadastro no portal `developer.aiqfome.com` criando uma aplicação do tipo *Aplicativo de Integração*.
+     - Configuração dos escopos (`aqf:order:read`, `aqf:order:create`, `aqf:store:read`, `aqf:menu:read`).
+     - Obtenção e guarda segura do `CLIENT_ID` e `CLIENT_SECRET` (guardados em variáveis de ambiente das Edge Functions do Supabase).
+     - Cadastro da `REDIRECT_URI` (ex: `https://pedemuleke.com.br/api/integrations/aiqfome/callback` ou Edge Function `functions/v1/aiqfome-callback`).
+  2. **Vínculo Pré-requisito do Lojista (Painel do Geraldo Seller)**:
+     - O dono do restaurante acessa o painel administrativo do aiqfome (**Geraldo**) no menu *Integrações*.
+     - Seleciona sua loja e clica em vincular ao **ID Magalu** (usando obrigatoriamente o mesmo e-mail cadastrado no Geraldo).
+  3. **Conexão no Painel PedeMuleke (OAuth 2.0 com `state`)**:
+     - No painel da loja (*Configurações > Integrações > Aiqfome*), o lojista clica em: **"Conectar Loja Aiqfome"**.
+     - O PedeMuleke redireciona para:
+       `https://id.magalu.com/login?client_id={CLIENT_ID}&response_type=code&redirect_uri={REDIRECT_URI}&scope=aqf:order:read%20aqf:order:create%20aqf:store:read&state={tenant_id}&choose_tenants=true`
+     - **O Segredo do `state`**: O PedeMuleke envia o identificador interno da loja (`tenant_id`) no parâmetro `state` para saber exatamente a qual restaurante vincular os tokens quando o callback retornar.
+  4. **Troca do CODE por Tokens & Persistência Segura**:
+     - O Magalu redireciona para o callback com `?code={CODE}&state={tenant_id}`.
+     - A Edge Function do Supabase dispara um `POST https://id.magalu.com/oauth/token` com `grant_type=authorization_code`, recebendo `access_token`, `refresh_token` e `expires_in` (7200s / 2 horas).
+     - Consulta `GET https://plataforma.aiqfome.io/api/v2/store` para obter o `store_id` oficial da loja no aiqfome.
+     - Grava os dados na tabela `tenant_integrations` vinculada ao restaurante: `store_id`, `access_token`, `refresh_token`, `expires_at`.
+     - Job ou trigger automático roda a cada 90 minutos para renovar o token usando `grant_type=refresh_token`, mantendo a conexão sempre ativa e sem intervenção do lojista.
+  5. **Captura & Recepção de Pedidos no KDS**:
+     - Worker ou polling leve a cada 30-40 segundos consulta:  
+       `GET https://plataforma.aiqfome.io/api/v2/orders?filter[store_ids]={store_id}` (retorna pedidos com `is_read: false`).
+     - Ao detectar novos pedidos:
+       - O pedido é gravado na tabela `orders` do PedeMuleke com badge `[AIQFOME]`, detalhes de entrega ou retirada, cliente e adicionais.
+       - Toca instantaneamente o alarme sonoro contínuo no KDS e na tela de Pedidos.
+       - Entra direto na fila FIFO do `pedemuleke-spooler.exe` para impressão térmica automática de 80mm/58mm.
+       - A Edge Function marca o pedido como lido no aiqfome (`is_read: true`) e permite avançar status diretamente do painel do PedeMuleke.
+
+### 📅 53. Módulo de Reservas & Fila de Espera Digital (Salão, Aniversários & Eventos)
+* **Como os grandes sistemas tratam Reservas**:
+  - **SaaS de Delivery Puro (Anota AI, OlaClick)**: 95% não têm módulo de reserva. Eles focam em giro rápido de motoboy e pedidos online de consumo imediato.
+  - **SaaS de Salão & Gestão Completa (Consumer, Saipos, GrandChef, Totvs Chef)**: Possuem agenda de reservas integrada ao mapa de mesas.
+  - **Plataformas Especializadas (Get In, Tagme, OpenTable)**: Focam estritamente em fila de espera digital no celular e reservas antecipadas (muito comum em restaurantes chiques, churrascarias e bares badalados).
+* **Como funciona na prática quando o SaaS tem**:
+  1. **Agenda no Painel (`/tables`)**: O gerente visualiza o calendário de datas e turnos (Almoço / Jantar).
+  2. **Cadastro da Reserva**: Data, horário, quantidade de pessoas, nome e WhatsApp do cliente, e mesa pré-designada (ex: Mesa 08 para aniversário).
+  3. **Sinal / Caução Anti-No-Show (Opcional)**: Cobrança de valor simbólico via Pix (ex: R$ 50) que se transforma em crédito consumível na comanda para evitar que o cliente reserve e não apareça.
+  4. **Tarja Visual no Mapa de Mesas**: No horário próximo à reserva (ex: 30 minutos antes), a mesa ganha status roxo/especial: `🟣 Reservada para Davi às 20h`.
+  5. **Link Público / Bio do Instagram (`/:slug/reservas`)**: O cliente escolhe a data, horário e quantidade de pessoas sem precisar ficar trocando 20 mensagens no WhatsApp do restaurante.
+  6. **Fila de Espera Digital (Hostess)**: Para salões lotados na sexta/sábado, o atendente cadastra o cliente na porta pelo celular e ele recebe um SMS ou WhatsApp quando a mesa dele liberar ("Sua mesa está pronta!"), liberando o cliente para aguardar no carro ou passear na calçada.
+
+### 🪑 54. Gestão do Salão: Pagamentos Flexíveis, Zero Atrito de Lotação & Giro de Mesa (2.C)
+* **Visão Prática do Davi**:
+  1. **Divisão Engessada Descartada (Opção 1.2)**: A divisão matemática fixa por cabeça ("dividir por 3", "dividir por 4") não reflete a realidade das mesas. Na prática, a Pessoa 1 paga apenas o que consumiu, enquanto a Pessoa 2 pode pagar o dela e o de mais 2 pessoas (ex: filhos ou cônjuge).
+  2. **Zero Atrito na Lotação**: Ninguém quer ser obrigado a contar ou digitar pessoas toda vez que um cliente senta na mesa. Na correria do restaurante, qualquer tela obrigatória de "quantas pessoas?" atrapalha a agilidade do atendimento. O preenchimento deve ser 100% opcional (com valor padrão automático) ou inferido naturalmente pelos pedidos enviados via QR Code.
+* **Solução para Pagamentos Flexíveis (Liquidação Parcial de Comanda)**:
+  - Em vez de forçar divisões matemáticas, o sistema suporta **Abatimento Parcial**:
+    - A Pessoa 1 vai ao caixa ou paga na maquininha móvel: *"Vou pagar R$ 54,00 do meu consumo no Pix"*.
+    - O caixa dá baixa em R$ 54,00. A comanda registra o pagamento parcial e o saldo restante da mesa cai de R$ 150 para R$ 96.
+    - A mesa permanece ocupada até que o saldo restante seja quitado pelas outras pessoas.
+* **Foco no Giro de Mesas & Tempo de Permanência (Ideia 2.C - Aprovada para Desenho)**:
+  - **Objetivo**: Ajudar o dono do restaurante a maximizar o faturamento e a rotatividade das mesas nas noites de pico (sexta/sábado com fila).
+  - **Indicadores Visuais Discretos no Card da Mesa**:
+    1. **Tempo Total da Mesa (`⏱️ 1h 20m`)**: Mostra há quanto tempo a mesa foi aberta.
+    2. **Tempo do Último Pedido (`🍽️ Último pedido há 42m`)**: Revela quando a mesa parou de pedir.
+    3. **Faixas de Alerta por Cores**:
+       - 🟢 **Em Consumo Ativo** (< 25 min do último pedido): Mesa jantando normalmente.
+       - 🟡 **Potencial de Sobremesa / Saideira** (25 a 45 min sem pedidos): Momento perfeito para o garçom passar oferecendo café, sobremesa ou nova bebida.
+       - 🔴 **Mesa Ociosa / Pronta para Fechar** (> 50 min sem consumo): Mesa terminada; oportunidade para levar a pré-conta e liberar o espaço para clientes que aguardam na porta.
+
+### 💵 55. Frente de Caixa Completo: Como Funciona Sangria, Suprimento e Abertura de Gaveta
+* **O que é e Por que Existe**:
+  - Em qualquer restaurante, bar ou lanchonete, a gaveta de dinheiro físico precisa bater centavo por centavo com o relatório no fim da noite.
+  - Hoje o sistema possui o **Fechamento de Caixa do Turno** (que agrupa todos os pedidos finalizados em dinheiro, cartão e Pix, calcula faturamento e taxa de motoboy). No entanto, um Frente de Caixa comercial completo (PDV Financeiro) opera com o ciclo contínuo da gaveta física:
+* **As 4 Etapas do Caixa Diário**:
+  1. **Abertura de Caixa (Fundo de Troco / Suprimento Inicial)**:
+     - Antes de abrir a loja, o dono/gerente coloca um valor em moedas e notas miúdas na gaveta (ex: R$ 150,00 ou R$ 200,00).
+     - O operador registra: `Abertura de Caixa: R$ 150,00`.
+  2. **Suprimento (Entrada de Dinheiro Avulsa)**:
+     - Se o troco acabar no meio da noite e o gerente trouxer mais R$ 50,00 em moedas, isso é um **Suprimento** (entrada de dinheiro que não é proveniente de venda de lanche).
+     - Registro: `Suprimento: R$ 50,00 | Motivo: Troco adicional`.
+  3. **Sangria (Retirada de Segurança / Despesa de Emergência)**:
+     - Por segurança contra assaltos, nunca se deixa acumular R$ 2.000,00 em notas na gaveta. Periodicamente, o gerente retira o excesso e guarda no cofre: isso é uma **Sangria**.
+     - Também é usada para despesas miúdas da loja tiradas da gaveta: *"Tirou R$ 35,00 para pagar o saco de gelo ou o botijão de emergência"*.
+     - Registro: `Sangria: R$ 500,00 | Destino: Cofre da Gerência` com impressão de comprovante na bobina térmica assinado pelo operador.
+  4. **Fechamento Cego & Quebra de Caixa**:
+     - No final do turno, o operador não deve ver na tela quanto dinheiro o sistema acha que tem. Ele apenas conta as notas e moedas físicas e digita: *"Contei R$ 680,00"*.
+     - O sistema faz a fórmula matemática:
+       $$\text{Dinheiro Esperado} = \text{Fundo Inicial} + \text{Vendas em Dinheiro} + \text{Suprimentos} - \text{Sangrias} - \text{Adiantamentos}$$
+     - Se o esperado for R$ 700,00 e o operador digitou R$ 680,00, o sistema acusa **Quebra de Caixa: -R$ 20,00** (falta de caixa a ser apurada).
+
+### 📑 56. Emissão Fiscal Eletrônica (NFC-e / NF-e) & Tributação Inteligente com IA
+* **Como Funciona na Realidade Brasileira**:
+  - Para emitir Nota Fiscal de Consumidor Eletrônica (NFC-e modelo 65) em restaurantes, o software não fala diretamente com a SEFAZ do zero; é necessário um intermediador fiscal (API Gateway) ou biblioteca homologada (ex: **Focus NFe**, **PlugNotas/TecnoSpeed** ou **Nuvem Fiscal**).
+  - **Requisitos Obrigatórios do Restaurante**:
+    1. **Certificado Digital A1 (.pfx)** do restaurante (arquivo criptografado com senha).
+    2. **Inscrição Estadual ativa** e credenciamento na SEFAZ do respectivo estado.
+    3. **Código CSC (Código de Segurança do Contribuinte) e Token CSC** fornecidos pelo portal da SEFAZ para gerar o QR Code impresso no cupom.
+    4. **Classificação Fiscal dos Produtos (NCM, CFOP e CSOSN)**: Cada item precisa do seu código contábil (ex: NCM de hambúrguer `1602.50.00`, refrigerante `2202.10.00`, pizza `1905.90.90`).
+  - **Diferencial com IA (Tributação Rápida)**:
+    - O lojista não entende nada de contabilidade. Ao cadastrar um produto (ex: "X-Bacon Especial"), a IA analisa a descrição e sugere automaticamente: `NCM 1602.50.00, CFOP 5102, Tributação Simples Nacional`. O lojista só clica em "Confirmar" com 1 toque.
+
+### 🤖 57. Robô com IA para Atendimento no WhatsApp (Transcrição de Áudios & Pedidos)
+* **Contexto**: No Brasil, mais de 40% dos clientes de delivery insistem em mandar áudios de 1 a 2 minutos no WhatsApp ou fazer pedidos em texto corrido ("me manda um burguer sem salada e uma coca zero no pix").
+* **Arquitetura da Solução**:
+  1. **Webhook de Entrada (WhatsApp Cloud API ou Gateway)**: Recebe a mensagem de texto ou arquivo de áudio (.ogg).
+  2. **Transcrição de Voz com OpenAI Whisper**: Áudios do cliente são transcritos para texto em menos de 1 segundo.
+  3. **LLM Parser com Contexto do Cardápio**: A IA (Gemini ou GPT-4o-mini) recebe o texto do cliente + a lista de produtos da loja em JSON.
+  4. **Montagem e Confirmação**: A IA responde no WhatsApp com o resumo pronto: *"Entendido! 1x X-Burger (sem salada) + 1x Coca-Cola Zero Lata. Total com entrega: R$ 38,00. Qual o endereço e forma de pagamento?"*.
+  5. **Injeção Direta no KDS**: Ao confirmar, a API gera o pedido direto na tabela `orders` do restaurante, toca a campainha e imprime a comanda na cozinha sem intervenção humana.
+
+### 🛒 58. Recuperador de Carrinho Abandonado, Cashback & Pixel de Anúncios
+* **1. Recuperador de Vendas (WhatsApp)**:
+  - Se o cliente adiciona itens ao carrinho, preenche seu telefone e fecha a aba sem pagar/enviar, o sistema agenda um lembrete automático.
+  - Após 15 ou 20 minutos, o robô dispara uma mensagem amigável: *"Oi Davi, vimos que seu lanche ficou te esperando na sacola! Quer fechar agora? Use o cupom VOLTEI10 para ganhar 10% de desconto: [link_direto_para_o_carrinho]"*.
+* **2. Sistema de Cashback**:
+  - Em vez de dar desconto na hora, o restaurante acumula 5% ou 10% do valor da compra em saldo virtual do cliente vinculado ao seu WhatsApp.
+  - No próximo pedido, o checkout exibe: *"Você tem R$ 6,50 de saldo de cashback! Deseja abater no total?"*. Gera retenção e fidelidade brutal.
+* **3. Pixel de Anúncios (Meta / Google / TikTok)**:
+  - Todo restaurante que investe em anúncios no Instagram (tráfego pago) precisa metrificar quanto dinheiro cada anúncio gerou (ROAS).
+  - Adicionando o Meta Pixel e Google Tag no cabeçalho do cardápio, a loja dispara eventos automáticos de e-commerce: `PageView`, `ViewContent`, `AddToCart`, `InitiateCheckout` e `Purchase` com o `value: R$ total`.
+
+### 💵 59. Gestão de Caixa Básico Profissional (Regras Fundamentais & Arquitetura)
+* **Objetivo**: Fornecer aos restaurantes controle financeiro da gaveta física de dinheiro e do turno de trabalho com padrão profissional, confiabilidade e auditoria, sem transformar o sistema em um ERP complexo.
+* **As 9 Regras de Ouro do Caixa**:
+  1. **Faturamento não é saldo da gaveta**: O faturamento mede o valor total das vendas concluídas (produtos vendidos). O saldo da gaveta mede o dinheiro físico real disponível nas notas e moedas.
+  2. **Sangria não é despesa**: A sangria transfere dinheiro da gaveta física para o cofre ou banco por segurança. Não altera receita nem lucro.
+  3. **Suprimento não é receita de venda**: Injeção de moedas ou troco avulso pelo gerente apenas aumenta o saldo físico para troco; não entra no faturamento.
+  4. **Fundo de troco inicial não é faturamento**: O valor colocado na gaveta ao abrir o turno é apenas patrimônio de giro para troco.
+  5. **Reembolso/Estorno não é apenas cancelamento**: Cancelar um pedido não significa que o dinheiro foi devolvido. Devoluções em dinheiro vivo reduzem a gaveta física; reembolsos eletrônicos (Pix/cartão) não alteram a gaveta.
+  6. **Pix e cartão não são dinheiro físico**: Entram na receita da loja, mas nunca no saldo da gaveta de notas.
+  7. **Dinheiro com entregador não está na gaveta**: O dinheiro recebido pelo motoboy no delivery permanece em posse do entregador até o momento do acerto físico no balcão.
+  8. **Uma movimentação nunca pode ser contabilizada duas vezes**: Trocos, pedidos pagos e sangrias possuem identificadores únicos com travas contra repetição.
+  9. **Fechamento não é simplesmente um relatório diário**: É o encerramento formal de um turno de trabalho com conferência cega, apuração de quebra/sobra e congelamento imutável.
+* **Estrutura da Página `CashManagement.jsx` (3 Abas)**:
+  - **Aba 1 (Caixa Atual)**: Telemetria ao vivo da gaveta (Saldo Esperado = Fundo Inicial + Vendas Balcão + Suprimentos - Sangrias - Saídas de Despesas). Ações rápidas de Abertura, Sangria, Suprimento e Registrar Saída. Tabela com extrato das movimentações do turno.
+  - **Aba 2 (Fechamento de Caixa)**: Faturamento bruto/líquido, pedidos por canal, extrato de motoboys, impressão térmica (80mm/58mm), WhatsApp e **Conferência Obrigatória de Gaveta (Contagem Cega & Quebra de Caixa)** com cálculo automático de diferença (Correto / Sobra / Falta) e confirmação irreversível.
+  - **Aba 3 (Histórico e Auditoria)**: Livro-caixa com todos os turnos anteriores encerrados, valores esperados vs contados, justificativas de quebra e reimpressão de comprovantes.
+* **Próxima Etapa Técnica**: Auditoria técnica das tabelas Supabase (`cash_shifts` e `cash_movements`), com RLS, validação de concorrência (impedir dois turnos abertos para a mesma gaveta) e RPCs atômicas.
 
 ---
 

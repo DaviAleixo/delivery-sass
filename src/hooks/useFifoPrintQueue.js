@@ -1,19 +1,15 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, createContext, useContext } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { Order } from "@/entities/Order";
 import { toast } from "sonner";
 
+const PrintQueueContext = createContext(null);
+
 /**
- * Hook de Gerenciamento de Fila Sequencial de Impressão (FIFO)
+ * Hook interno de Gerenciamento de Fila Sequencial de Impressão (FIFO)
  * com tolerância ativa a falhas e quedas de internet.
- *
- * Garante que:
- * 1. Pedidos represados durante quedas de internet sejam impressos na ordem cronológica exata (FIFO).
- * 2. Somente um pedido é enviado à impressora por vez (com delay seguro para corte de bobina).
- * 3. Previne duplicação de impressão através das colunas `print_status` e `printed_at`.
- * 4. Permite que apenas a máquina designada como "Estação de Impressão" execute o processo automático.
  */
-export function useFifoPrintQueue({
+function useFifoPrintQueueInternal({
   tenantId: propTenantId,
   onPrintSuccess,
   onPrintError,
@@ -23,6 +19,12 @@ export function useFifoPrintQueue({
   const [isOnline, setIsOnline] = useState(
     typeof navigator !== "undefined" ? navigator.onLine : true
   );
+
+  // Estado do Spooler Desktop Local (.exe)
+  const SPOOLER_URL = "http://127.0.0.1:9100";
+  const [isSpoolerOnline, setIsSpoolerOnline] = useState(false);
+  const [spoolerConfig, setSpoolerConfig] = useState(null);
+  const prevSpoolerOnlineRef = useRef(null);
 
   // Preferências locais do terminal
   const [autoPrintEnabled, setAutoPrintEnabledState] = useState(() => {
@@ -49,6 +51,89 @@ export function useFifoPrintQueue({
     isPrintStationRef.current = isPrintStation;
   }, [isPrintStation]);
 
+  // Monitora a conexão com o Spooler Desktop (.exe)
+  const checkSpooler = useCallback(async () => {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1200);
+      const res = await fetch(`${SPOOLER_URL}/status`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const data = await res.json();
+        setIsSpoolerOnline(true);
+        setSpoolerConfig(data);
+        if (prevSpoolerOnlineRef.current === false) {
+          toast.success(`🖨️ Spooler Conectado! Impressão silenciosa ativa na ${data.selectedPrinter || "impressora"}.`, {
+            duration: 4000,
+          });
+        }
+        prevSpoolerOnlineRef.current = true;
+        return data;
+      }
+    } catch (_e) {
+      if (prevSpoolerOnlineRef.current === true) {
+        toast.info("⚪ Spooler Desktop desconectado. Modo janela do navegador ativado.", {
+          duration: 4000,
+        });
+      }
+      prevSpoolerOnlineRef.current = false;
+      setIsSpoolerOnline(false);
+    }
+    return null;
+  }, []);
+
+  useEffect(() => {
+    checkSpooler();
+    const interval = setInterval(checkSpooler, 10000); // Checagem rápida a cada 10s
+    return () => clearInterval(interval);
+  }, [checkSpooler]);
+
+  const testSpoolerPrint = useCallback(async () => {
+    try {
+      const res = await fetch(`${SPOOLER_URL}/test`, { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("🖨️ Cupom de teste impresso com sucesso!");
+        return true;
+      } else {
+        toast.error(`Falha no teste: ${data.error || "Erro desconhecido"}`);
+        return false;
+      }
+    } catch (err) {
+      toast.error("O Spooler Desktop (.exe) não está em execução nesta máquina.");
+      return false;
+    }
+  }, []);
+
+  const fetchSpoolerPrinters = useCallback(async () => {
+    try {
+      const res = await fetch(`${SPOOLER_URL}/printers`);
+      if (res.ok) {
+        const data = await res.json();
+        return data;
+      }
+    } catch (_e) {}
+    return { printers: [], defaultPrinter: "" };
+  }, []);
+
+  const saveSpoolerConfig = useCallback(async (newConfig) => {
+    try {
+      const res = await fetch(`${SPOOLER_URL}/config`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newConfig),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSpoolerConfig(data.config);
+        toast.success("Configuração da impressora salva!");
+        return true;
+      }
+    } catch (_e) {}
+    toast.error("Erro ao salvar configuração do spooler");
+    return false;
+  }, []);
+
   const setAutoPrintEnabled = (value) => {
     setAutoPrintEnabledState(value);
     if (typeof window !== "undefined") {
@@ -72,10 +157,37 @@ export function useFifoPrintQueue({
   }, [propTenantId]);
 
   /**
-   * Executa a impressão física de um pedido através de um iframe oculto
-   * ou abrindo janela com comando print, aguardando término e cooldown.
+   * Executa a impressão física de um pedido:
+   * 1. Tenta envio direto ao Spooler Desktop (.exe) sem nenhum popup de navegador.
+   * 2. Se o .exe não estiver em execução, faz fallback para iframe do navegador.
    */
   const printOrderTicket = useCallback(async (order) => {
+    // 1. Tenta impressão silenciosa via Spooler Desktop Local
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000);
+      const res = await fetch(`${SPOOLER_URL}/print`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setIsSpoolerOnline(true);
+          // Delay suave de 800ms para corte físico de papel
+          await new Promise((r) => setTimeout(r, 800));
+          return true;
+        }
+      }
+    } catch (_spoolerErr) {
+      // Spooler offline ou erro, segue para fallback do navegador
+    }
+
+    // 2. Fallback de navegador (iframe oculto)
     return new Promise((resolve) => {
       try {
         const printUrl = `/PrintOrder?id=${order.id}&auto=true`;
@@ -108,11 +220,9 @@ export function useFifoPrintQueue({
         };
 
         iframe.onload = () => {
-          // Timeout de segurança caso o diálogo seja cancelado ou demore
           setTimeout(cleanupAndResolve, 8000);
         };
 
-        // Fallback para timeout total
         setTimeout(cleanupAndResolve, 10000);
 
         document.body.appendChild(iframe);
@@ -311,5 +421,24 @@ export function useFifoPrintQueue({
     enqueueOrders,
     syncPendingOrders,
     manualPrintOrder,
+    // Spooler Desktop Local (.exe)
+    isSpoolerOnline,
+    spoolerConfig,
+    checkSpooler,
+    testSpoolerPrint,
+    fetchSpoolerPrinters,
+    saveSpoolerConfig,
   };
 }
+
+export function PrintQueueProvider({ children }) {
+  const value = useFifoPrintQueueInternal();
+  return React.createElement(PrintQueueContext.Provider, { value }, children);
+}
+
+export function useFifoPrintQueue(props) {
+  const context = useContext(PrintQueueContext);
+  if (context) return context;
+  return useFifoPrintQueueInternal(props);
+}
+

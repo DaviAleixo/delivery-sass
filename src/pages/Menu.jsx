@@ -11,7 +11,7 @@ import { CouponUsage } from "@/entities/CouponUsage";
 import { ComplementGroup } from "@/entities/ComplementGroup";
 import { ComplementItem } from "@/entities/ComplementItem";
 import { ProductComplementGroup } from "@/entities/ProductComplementGroup";
-import { User } from "@/entities/User";
+import { RestaurantTable, TableSession } from "@/entities/RestaurantTable";
 import { base44 } from "@/api/base44Client";
 import { AnimatePresence, motion } from "framer-motion";
 import ProductCard from "../components/menu/ProductCard";
@@ -24,20 +24,23 @@ import BannerCarousel from "../components/menu/BannerCarousel";
 import UserProfileSheet from "../components/menu/UserProfileSheet";
 import StoreInfoSheet from "../components/menu/StoreInfoSheet";
 import ProductDetailModal from "../components/menu/ProductDetailModal";
-import BrushCategoryStroke from "../components/menu/BrushCategoryStroke";
+import PizzaBuilderModal from "../components/menu/PizzaBuilderModal";
 import { 
-  XCircle, 
   ShoppingBag, 
   Bike, 
   ChevronRight, 
   Search, 
   MapPin, 
   Phone, 
-  ArrowRight,
-  Instagram,
-  Clock,
-  Store
+  ArrowRight, 
+  Instagram, 
+  Store,
+  CheckCircle2,
+  Menu as MenuIcon,
+  SlidersHorizontal,
+  Info
 } from "lucide-react";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { Button } from "@/components/ui/button";
@@ -87,6 +90,8 @@ export default function MenuPage() {
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [pixOnlineOrder, setPixOnlineOrder] = useState(null);
   const [selectedProduct, setSelectedProduct] = useState(null);
+  const [selectedPizzaProduct, setSelectedPizzaProduct] = useState(null);
+  const [tableOrderConfirmed, setTableOrderConfirmed] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [storeIsOpen, setStoreIsOpen] = useState(true);
   const [activeGuestOrder, setActiveGuestOrder] = useState(null);
@@ -94,6 +99,25 @@ export default function MenuPage() {
   const [complementGroups, setComplementGroups] = useState([]);
   const [complementItems, setComplementItems] = useState([]);
   const [productComplementGroups, setProductComplementGroups] = useState([]);
+  const [headerHeight, setHeaderHeight] = useState(88);
+  const headerRef = useRef(null);
+
+  useEffect(() => {
+    if (!headerRef.current) return;
+    const updateHeaderHeight = () => {
+      if (headerRef.current) {
+        setHeaderHeight(headerRef.current.offsetHeight);
+      }
+    };
+    updateHeaderHeight();
+    const observer = new ResizeObserver(updateHeaderHeight);
+    observer.observe(headerRef.current);
+    window.addEventListener("resize", updateHeaderHeight);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", updateHeaderHeight);
+    };
+  }, []);
 
   useEffect(() => {
     if (urlMesa) {
@@ -198,11 +222,22 @@ export default function MenuPage() {
 
   const checkActiveOrders = async () => {
     try {
+      // Pedidos na mesa / QR Code NÃO têm componente de rastreamento
+      if (urlMesa) {
+        setActiveGuestOrder(null);
+        return;
+      }
+
       const user = await base44.auth.me();
 
       if (user?.email) {
         const allOrders = await Order.list("-created_date", 10);
-        const active = allOrders.find(o => o.user_email === user.email && ['pendente', 'confirmado', 'preparando', 'enviado'].includes(o.status));
+        const active = allOrders.find(o => 
+          o.user_email === user.email && 
+          o.order_type !== 'dine_in' && 
+          !o.table_number &&
+          ['pendente', 'confirmado', 'preparando', 'enviado'].includes(o.status)
+        );
         setActiveGuestOrder(active || null);
         return;
       }
@@ -214,7 +249,13 @@ export default function MenuPage() {
       }
 
       const allOrders = await Order.list("-created_date", 10);
-      const active = allOrders.find(o => recentIds.includes(o.id) && !o.user_email && ['pendente', 'confirmado', 'preparando', 'enviado'].includes(o.status));
+      const active = allOrders.find(o => 
+        recentIds.includes(o.id) && 
+        !o.user_email && 
+        o.order_type !== 'dine_in' && 
+        !o.table_number &&
+        ['pendente', 'confirmado', 'preparando', 'enviado'].includes(o.status)
+      );
       setActiveGuestOrder(active || null);
     } catch (_err) {
       console.log("Erro ao verificar pedidos ativos:", _err);
@@ -392,7 +433,18 @@ export default function MenuPage() {
   };
 
   const handleProductClick = (product) => {
-    setSelectedProduct(product);
+    const matchedCat = categories.find(
+      c => c.id === product.category_id || 
+           c.id === product.category ||
+           (product.category && typeof product.category === 'string' && c.name?.toLowerCase() === product.category.toLowerCase()) ||
+           (product.category_id && typeof product.category_id === 'string' && c.name?.toLowerCase() === product.category_id.toLowerCase())
+    );
+
+    if (matchedCat?.type === 'pizza') {
+      setSelectedPizzaProduct(product);
+    } else {
+      setSelectedProduct(product);
+    }
   };
 
   const getCartTotal = () => {
@@ -508,22 +560,65 @@ export default function MenuPage() {
         ? crypto.randomUUID() 
         : undefined);
 
+      const isTableOrder = orderData.order_type === 'dine_in' || Boolean(urlMesa) || Boolean(orderData.table_number);
+      const effectiveTableNumber = orderData.table_number || urlMesa || null;
+      let tableSessionId = orderData.table_session_id || null;
+
+      if (isTableOrder && effectiveTableNumber) {
+        try {
+          const sessions = await TableSession.list("-opened_at", 50);
+          const activeSession = sessions.find(s => 
+            String(s.table_number) === String(effectiveTableNumber) &&
+            (s.status === 'open' || s.status === 'bill_requested')
+          );
+          if (activeSession) {
+            tableSessionId = activeSession.id;
+          } else {
+            const tables = await RestaurantTable.list();
+            const table = tables.find(t => String(t.table_number) === String(effectiveTableNumber));
+            const newSession = await TableSession.create({
+              tenant_id: activeTenantId,
+              table_id: table?.id || null,
+              table_number: String(effectiveTableNumber),
+              customer_name: orderData.customer_name || `Mesa ${effectiveTableNumber}`,
+              customer_phone: orderData.customer_phone || "",
+              people_count: 2,
+              opened_at: new Date().toISOString(),
+              status: "open",
+            });
+            tableSessionId = newSession.id;
+            if (table?.id) {
+              await RestaurantTable.update(table.id, { status: "occupied" }).catch(() => {});
+            }
+          }
+        } catch (_sessErr) {
+          console.warn("Erro ao vincular sessão da mesa no Menu:", _sessErr);
+        }
+      }
+
       const orderPayload = {
         ...orderData,
         ...(deterministicOrderId ? { id: deterministicOrderId } : {}),
         status: isPixOnline ? "aguardando_pagamento" : "pendente",
         payment_status: isPixOnline ? "pending" : "pending_delivery",
         tenant_id: activeTenantId,
+        order_type: isTableOrder ? "dine_in" : (orderData.order_type || "delivery"),
+        table_number: effectiveTableNumber,
+        table_session_id: tableSessionId,
       };
       const createdOrder = await Order.create(orderPayload);
 
-      try {
-        const recentOrders = JSON.parse(localStorage.getItem("vrumburguer_recent_orders") || "[]");
-        if (!recentOrders.includes(createdOrder.id)) {
-          recentOrders.unshift(createdOrder.id);
-          localStorage.setItem("vrumburguer_recent_orders", JSON.stringify(recentOrders.slice(0, 10)));
-        }
-      } catch {}
+      if (!isTableOrder) {
+        try {
+          const recentOrders = JSON.parse(localStorage.getItem("vrumburguer_recent_orders") || "[]");
+          if (!recentOrders.includes(createdOrder.id)) {
+            recentOrders.unshift(createdOrder.id);
+            localStorage.setItem("vrumburguer_recent_orders", JSON.stringify(recentOrders.slice(0, 10)));
+          }
+        } catch {}
+      } else {
+        setActiveGuestOrder(null);
+      }
 
       if (orderData.coupon_code) {
         try {
@@ -552,6 +647,13 @@ export default function MenuPage() {
       }
       setShowOrderModal(false);
       setIsCartVisible(false);
+
+      // Se for pedido de mesa / salão, confirma diretamente na tela sem redirecionar para MyOrders e sem rastreamento
+      if (isTableOrder) {
+        setActiveGuestOrder(null);
+        setTableOrderConfirmed(createdOrder);
+        return;
+      }
       
       if ("Notification" in window && Notification.permission === "granted") {
         new Notification("Pedido Enviado! 🎉", {
@@ -610,6 +712,78 @@ export default function MenuPage() {
     );
   }
 
+  // Modal de Confirmação Direta do Pedido na Mesa (Sem WhatsApp, Sem Stepper de Rastreio)
+  const renderTableOrderConfirmedModal = () => (
+    <Dialog 
+      open={Boolean(tableOrderConfirmed)} 
+      onOpenChange={(open) => {
+        if (!open) setTableOrderConfirmed(null);
+      }}
+    >
+      <DialogContent className="w-[calc(100vw-2rem)] sm:w-full max-w-md rounded-3xl p-6 text-center border-stone-200 shadow-2xl bg-white focus:outline-none">
+        <div className="flex flex-col items-center">
+          <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mb-3.5 shadow-xs">
+            <CheckCircle2 className="w-10 h-10" />
+          </div>
+
+          <span className="text-xs font-black uppercase tracking-wider text-emerald-800 bg-emerald-50 border border-emerald-200/90 px-3.5 py-1 rounded-full mb-2">
+            Mesa {tableOrderConfirmed?.table_number || urlMesa || "Salão"}
+          </span>
+
+          <h3 className="text-xl sm:text-2xl font-black text-stone-900 tracking-tight">
+            Pedido Confirmado!
+          </h3>
+          <p className="text-xs sm:text-sm text-stone-600 mt-1 max-w-xs leading-relaxed">
+            Seu pedido foi enviado para a cozinha e já está sendo preparado pela equipe.
+          </p>
+
+          {/* Resumo rápido dos itens do pedido */}
+          {tableOrderConfirmed && (() => {
+            const itemsList = Array.isArray(tableOrderConfirmed.items) 
+              ? tableOrderConfirmed.items 
+              : (typeof tableOrderConfirmed.items === 'string' ? (() => { try { return JSON.parse(tableOrderConfirmed.items); } catch { return []; } })() : []);
+            
+            const totalFormatted = Number(tableOrderConfirmed.total_amount || tableOrderConfirmed.total || 0).toFixed(2).replace('.', ',');
+            
+            return (
+              <div className="w-full mt-4 p-3.5 bg-stone-50 rounded-2xl border border-stone-200/80 text-left max-h-48 overflow-y-auto space-y-2">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-stone-500 flex justify-between">
+                  <span>Itens Enviados</span>
+                  <span className="text-stone-900 font-extrabold">Total: R$ {totalFormatted}</span>
+                </div>
+                <div className="divide-y divide-stone-200/70 pt-1">
+                  {itemsList.map((item, idx) => (
+                    <div key={idx} className="py-1.5 flex justify-between items-center text-xs">
+                      <span className="font-semibold text-stone-800 truncate pr-2">
+                        {item.quantity}x {item.product_name || item.name}
+                      </span>
+                      <span className="font-bold text-stone-700 shrink-0">
+                        R$ {Number((item.total_price || (item.price * item.quantity)) || 0).toFixed(2).replace('.', ',')}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
+          <div className="mt-4 p-3 bg-stone-100 border border-stone-200 rounded-xl text-left w-full">
+            <p className="text-xs text-stone-700 font-medium leading-relaxed">
+              O pagamento é realizado diretamente no caixa ou com o garçom ao encerrar sua conta.
+            </p>
+          </div>
+
+          <Button
+            onClick={() => setTableOrderConfirmed(null)}
+            className="w-full mt-5 h-12 rounded-2xl bg-[#047857] hover:bg-[#036348] text-white font-black text-sm shadow-md active:scale-[0.98] transition-all cursor-pointer"
+          >
+            Continuar no Cardápio
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+
   // Despacho de Template VIP Personalizado (Modo A)
   const isVrummStore = isVruumRoute || tenant?.slug === "vrumm" || tenant?.slug === "vruum-burguer";
   const effectiveTemplateKey = tenant?.custom_template || (isVrummStore ? "vrumm" : null);
@@ -617,56 +791,61 @@ export default function MenuPage() {
 
   if (CustomMenuTemplate) {
     return (
-      <CustomMenuTemplate
-        tenant={tenant}
-        tenantId={tenantId}
-        settings={settings}
-        resolvedInitialStoreName={resolvedInitialStoreName}
-        products={products}
-        categories={categories}
-        banners={banners}
-        cart={cart}
-        storeIsOpen={storeIsOpen}
-        activeCategory={activeCategory}
-        setActiveCategory={setActiveCategory}
-        handleAddToCart={addToCart}
-        handleCartToggle={handleCartToggle}
-        setIsCartVisible={setIsCartVisible}
-        setShowOrderModal={setShowOrderModal}
-        setSelectedProduct={setSelectedProduct}
-        urlMesa={urlMesa}
-        salonMode={salonMode}
-        isVisualOnly={isVisualOnly}
-        isTableOnly={isTableOnly}
-        hasTopNotice={hasTopNotice}
-        activeGuestOrder={activeGuestOrder}
-        setActiveGuestOrder={setActiveGuestOrder}
-        popularRankedProducts={popularRankedProducts}
-        handleProductClick={handleProductClick}
-        recentOrders={recentOrders}
-        addToCart={addToCart}
-        isSearching={isSearching}
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
-        activeCategoryObj={activeCategoryObj}
-        filteredProducts={filteredProducts}
-        comboCategory={comboCategory}
-        updateCartQuantity={updateCartQuantity}
-        handleCheckout={handleCheckout}
-        complementGroups={complementGroups}
-        productComplementGroups={productComplementGroups}
-        complementItems={complementItems}
-        additionals={additionals}
-        showOrderModal={showOrderModal}
-        getCartTotal={getCartTotal}
-        submitOrder={submitOrder}
-        isSubmitting={isSubmitting}
-        pixOnlineOrder={pixOnlineOrder}
-        setPixOnlineOrder={setPixOnlineOrder}
-        selectedProduct={selectedProduct}
-        isCartVisible={isCartVisible}
-        navigate={navigate}
-      />
+      <>
+        <CustomMenuTemplate
+          tenant={tenant}
+          tenantId={tenantId}
+          settings={settings}
+          resolvedInitialStoreName={resolvedInitialStoreName}
+          products={products}
+          categories={categories}
+          banners={banners}
+          cart={cart}
+          storeIsOpen={storeIsOpen}
+          activeCategory={activeCategory}
+          setActiveCategory={setActiveCategory}
+          handleAddToCart={addToCart}
+          handleCartToggle={handleCartToggle}
+          setIsCartVisible={setIsCartVisible}
+          setShowOrderModal={setShowOrderModal}
+          setSelectedProduct={setSelectedProduct}
+          urlMesa={urlMesa}
+          salonMode={salonMode}
+          isVisualOnly={isVisualOnly}
+          isTableOnly={isTableOnly}
+          hasTopNotice={hasTopNotice}
+          activeGuestOrder={activeGuestOrder}
+          setActiveGuestOrder={setActiveGuestOrder}
+          popularRankedProducts={popularRankedProducts}
+          handleProductClick={handleProductClick}
+          recentOrders={recentOrders}
+          addToCart={addToCart}
+          isSearching={isSearching}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          activeCategoryObj={activeCategoryObj}
+          filteredProducts={filteredProducts}
+          comboCategory={comboCategory}
+          updateCartQuantity={updateCartQuantity}
+          handleCheckout={handleCheckout}
+          complementGroups={complementGroups}
+          productComplementGroups={productComplementGroups}
+          complementItems={complementItems}
+          additionals={additionals}
+          showOrderModal={showOrderModal}
+          getCartTotal={getCartTotal}
+          submitOrder={submitOrder}
+          isSubmitting={isSubmitting}
+          pixOnlineOrder={pixOnlineOrder}
+          setPixOnlineOrder={setPixOnlineOrder}
+          selectedProduct={selectedProduct}
+          isCartVisible={isCartVisible}
+          navigate={navigate}
+          tableOrderConfirmed={tableOrderConfirmed}
+          setTableOrderConfirmed={setTableOrderConfirmed}
+        />
+        {renderTableOrderConfirmedModal()}
+      </>
     );
   }
 
@@ -682,152 +861,112 @@ export default function MenuPage() {
     return settings.address || "Rua das Flores, 123 - Centro";
   })();
 
+  const hasBanners = Boolean(banners && banners.length > 0);
+
   return (
-    <div className="min-h-screen bg-[#F7F9F8] text-[#171717] selection:bg-[#047857] selection:text-white">
-      {/* Header Clean Retail Moderno com Barra Superior */}
-      <header className="fixed top-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-b border-[#E5EAE7] transition-all shadow-xs">
-        {/* Barra Superior Dinâmica (Verde quando Aberto, Vermelha quando Fechado) */}
-        <div className={`w-full py-1.5 sm:py-2 px-3 sm:px-4 transition-colors duration-200 border-b ${
-          storeIsOpen 
-            ? 'bg-[#064e3b] text-white border-[#047857]/40' 
-            : 'bg-[#991b1b] text-white border-[#7f1d1d]'
-        }`}>
-          <div className="container mx-auto max-w-6xl flex items-center justify-center md:justify-between text-[11px] sm:text-xs font-semibold gap-2">
-            {/* Lado Esquerdo: Modo de Atendimento (Delivery / Retirada), Endereço (desktop) ou Horário (mobile) */}
-            <div className="flex items-center gap-2 sm:gap-2.5 overflow-hidden text-ellipsis whitespace-nowrap min-w-0">
-              <span className="flex items-center gap-1.5 font-bold shrink-0">
-                {settings?.accepts_delivery !== false ? (
-                  <>
-                    <span>Entrega em até {settings?.delivery_time || "40 min"}</span>
-                  </>
-                ) : settings?.accepts_takeaway !== false ? (
-                  <>
-                    <Store className="w-3.5 h-3.5 shrink-0 text-amber-300" />
-                    <span>Trabalhamos com retirada no local</span>
-                  </>
-                ) : (
-                  <>
-                    <Store className="w-3.5 h-3.5 shrink-0 text-stone-200" />
-                    <span>Atendimento no local</span>
-                  </>
-                )}
-              </span>
-
-              {/* Separador Pipe no Mobile */}
-              <span className="md:hidden opacity-40 shrink-0">|</span>
-
-              {/* Horas no Mobile */}
-              <span className="md:hidden flex items-center gap-1.5 font-medium opacity-90 shrink-0">
-                <span className={`w-2 h-2 rounded-full shrink-0 animate-pulse ${storeIsOpen ? 'bg-emerald-400' : 'bg-white'}`} />
-                <span>
-                  {storeIsOpen ? (
-                    settings?.opening_time && settings?.closing_time 
-                      ? `${settings.opening_time} - ${settings.closing_time}` 
-                      : '18:00 - 23:59'
-                  ) : (
-                    settings?.opening_time ? `Abre às ${settings.opening_time}` : 'Fechado'
-                  )}
+    <div className="min-h-screen bg-white text-[#171717] selection:bg-[#047857] selection:text-white">
+      {/* Header Clean Retail com Barra Superior e Navbar com base reta */}
+      <header ref={headerRef} className="sticky top-0 z-40 bg-white transition-all">
+        {/* Barra Superior Dinâmica (Verde escuro #044e3a quando Aberto) - Oculta quando acessado via QR Code de Mesa */}
+        {!urlMesa && (
+          <div className={`w-full py-1.5 px-3 sm:px-4 transition-colors duration-200 ${
+            storeIsOpen 
+              ? 'bg-[#044e3a] text-white' 
+              : 'bg-[#991b1b] text-white'
+          }`}>
+            <div className="container mx-auto max-w-6xl flex items-center justify-center md:justify-between text-[11px] sm:text-xs font-semibold gap-2">
+              <div className="flex items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap min-w-0">
+                <span className="flex items-center gap-1.5 font-bold shrink-0">
+                  <Bike className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
+                  <span>Entrega em até {settings?.delivery_time || "60–80 min"}</span>
                 </span>
-              </span>
 
-              {/* Endereço da loja: Visível SOMENTE no Desktop */}
+                <span className="opacity-40 shrink-0">|</span>
+
+                <span className="flex items-center gap-1.5 font-medium opacity-90 shrink-0">
+                  <span className={`w-2 h-2 rounded-full shrink-0 animate-pulse ${storeIsOpen ? 'bg-emerald-400' : 'bg-white'}`} />
+                  <span>
+                    {storeIsOpen ? (
+                      settings?.opening_time && settings?.closing_time 
+                        ? `${settings.opening_time} – ${settings.closing_time}` 
+                        : '01:00 – 00:00'
+                    ) : (
+                      settings?.opening_time ? `Abre às ${settings.opening_time}` : 'Fechado'
+                    )}
+                  </span>
+                </span>
+              </div>
+
+              {/* Endereço da loja: Visível no Desktop */}
               {formattedStoreAddress && (
-                <>
-                  <span className="hidden md:inline opacity-40 shrink-0">|</span>
-                  <span className="hidden md:flex items-center gap-1 opacity-90 truncate max-w-[360px] md:max-w-none">
-                    <MapPin className="w-3.5 h-3.5 shrink-0 text-emerald-300" />
-                    <span className="truncate">{formattedStoreAddress}</span>
-                  </span>
-                </>
-              )}
-            </div>
-
-            {/* Lado Direito: Horário e Status (visível SOMENTE no Desktop) */}
-            <div className="hidden md:flex items-center gap-1.5 font-bold shrink-0 whitespace-nowrap text-[11px] sm:text-xs">
-              {storeIsOpen ? (
-                <>
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 animate-pulse" />
-                  <span>Aberto</span>
-                  <span className="opacity-60">•</span>
-                  <span className="font-medium opacity-90">
-                    {settings?.opening_time && settings?.closing_time 
-                      ? `${settings.opening_time} - ${settings.closing_time}` 
-                      : '18:00 - 23:59'}
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span className="w-2 h-2 rounded-full bg-white shrink-0 animate-pulse" />
-                  <span className="font-black uppercase tracking-wider text-white">Fechado no momento</span>
-                  <span className="opacity-60">•</span>
-                  <span className="font-medium opacity-90">
-                    {settings?.opening_time ? `Abre às ${settings.opening_time}` : 'Fechado'}
-                  </span>
-                </>
+                <div className="hidden md:flex items-center gap-1 text-[11px] opacity-90 truncate max-w-md">
+                  <MapPin className="w-3.5 h-3.5 shrink-0 text-emerald-300" />
+                  <span className="truncate">{formattedStoreAddress}</span>
+                </div>
               )}
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Barra Principal da Loja */}
-        <div className="container mx-auto px-4 sm:px-6 py-2 sm:py-2.5 max-w-6xl">
-          <div className="flex items-center justify-between">
-            {/* Logo e Nome */}
-            <div className="flex items-center gap-3">
-              <motion.div 
-                whileHover={{ scale: 1.05 }}
-                className="w-10 h-10 sm:w-11 sm:h-11 flex-shrink-0 flex items-center justify-center"
-              >
-                {settings?.restaurant_logo ? (
-                  <img src={settings.restaurant_logo} alt="Logo" className="w-full h-full object-contain" />
-                ) : (
-                  <div className="w-10 h-10 rounded-xl bg-white border border-[#E5EAE7] flex items-center justify-center font-black text-sm text-[#171717]">
-                    {(settings?.restaurant_name || resolvedInitialStoreName).substring(0, 2).toUpperCase()}
-                  </div>
-                )}
-              </motion.div>
-              <div>
-                <h1 className="text-base sm:text-lg font-black leading-tight text-[#171717] tracking-tight" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+        {/* Barra Principal da Loja com base reta */}
+        <div className="container mx-auto px-4 sm:px-6 py-2.5 max-w-6xl">
+            <div className="flex items-center justify-between">
+              {/* Avatar Circular e Nome da Loja Centralizado Verticalmente */}
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden border border-gray-200 bg-gray-50 shadow-2xs">
+                  {settings?.restaurant_logo ? (
+                    <img src={settings.restaurant_logo} alt="Logo" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="font-bold text-xs text-gray-800">
+                      {(settings?.restaurant_name || resolvedInitialStoreName).substring(0, 2).toUpperCase()}
+                    </span>
+                  )}
+                </div>
+                <h1 className="text-base sm:text-lg font-black text-gray-950 tracking-tight leading-none" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
                   {settings?.restaurant_name || resolvedInitialStoreName}
                 </h1>
               </div>
-            </div>
 
-            {/* Ações Topo */}
-            <div className="flex items-center gap-1.5">
-              {!isVisualOnly && (
-                <motion.div whileTap={{ scale: 0.9 }}>
-                  <Button
-                    variant="ghost"
-                    size="icon"
+              {/* Ações Topo: Sacola com Contador Verde e Botão de Informações */}
+              <div className="flex items-center gap-1 sm:gap-1.5">
+                {!isVisualOnly && (
+                  <button
+                    type="button"
                     onClick={handleCartToggle}
                     title="Carrinho"
-                    className="relative text-[#171717] hover:text-[#047857] hover:bg-[#D1E9DF]/40 rounded-full h-9 w-9 cursor-pointer"
+                    className="relative w-9 h-9 rounded-full flex items-center justify-center text-gray-700 hover:text-gray-950 hover:bg-gray-100 transition-colors cursor-pointer"
                   >
-                    <ShoppingBag className="w-4 h-4 text-[#171717]" />
+                    <ShoppingBag className="w-5 h-5 text-gray-800" />
                     {cart.reduce((total, item) => total + item.quantity, 0) > 0 && (
-                      <motion.span 
-                        key={cart.reduce((total, item) => total + item.quantity, 0)}
-                        initial={{ scale: 0.5 }}
-                        animate={{ scale: 1 }}
-                        className="absolute -top-1 -right-1 bg-[#047857] text-white text-[10px] font-bold rounded-full w-4 h-4 min-w-4 min-h-4 flex items-center justify-center shadow-xs border border-white leading-none"
+                      <span 
+                        className="absolute -top-0.5 -right-0.5 bg-[#046c4e] text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center border-2 border-white leading-none shadow-2xs"
                       >
                         {cart.reduce((total, item) => total + item.quantity, 0)}
-                      </motion.span>
+                      </span>
                     )}
-                  </Button>
-                </motion.div>
-              )}
-              <StoreInfoSheet settings={settings} />
-              <UserProfileSheet />
+                  </button>
+                )}
+
+                <StoreInfoSheet 
+                  settings={settings}
+                  trigger={
+                    <button 
+                      type="button"
+                      className="w-9 h-9 rounded-full flex items-center justify-center text-gray-700 hover:text-gray-950 hover:bg-gray-100 transition-colors cursor-pointer"
+                      title="Informações da Loja"
+                    >
+                      <Info className="w-5 h-5" />
+                    </button>
+                  }
+                />
+              </div>
             </div>
           </div>
-        </div>
       </header>
 
       {/* Banner de Mesa Conectada via QR Code */}
       {!isVisualOnly && urlMesa && (
-        <div className="pt-24 container mx-auto px-4 max-w-6xl">
+        <div className="mt-3 container mx-auto px-4 max-w-6xl">
           <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-2xl p-3.5 flex items-center justify-between shadow-xs">
             <div className="flex items-center gap-2.5">
               <span className="text-xl">🍽️</span>
@@ -845,7 +984,7 @@ export default function MenuPage() {
 
       {/* Banner de Salão quando loja é mesa-only mas cliente abriu sem QR Code da mesa */}
       {!isVisualOnly && isTableOnly && !urlMesa && (
-        <div className="pt-24 container mx-auto px-4 max-w-6xl">
+        <div className="mt-3 container mx-auto px-4 max-w-6xl">
           <div className="bg-stone-100 border border-stone-200 text-stone-900 rounded-2xl p-3.5 flex items-center justify-between shadow-xs">
             <div className="flex items-center gap-2.5">
               <span className="text-xl">🍽️</span>
@@ -861,9 +1000,9 @@ export default function MenuPage() {
         </div>
       )}
 
-      {/* Banner de Pedido em Andamento */}
-      {!isVisualOnly && activeGuestOrder && (
-        <div className={`${hasTopNotice ? 'pt-3' : 'pt-24'} container mx-auto px-4 max-w-6xl`}>
+      {/* Banner de Pedido em Andamento (Oculto em pedidos na mesa / QR Code) */}
+      {!isVisualOnly && !urlMesa && activeGuestOrder && activeGuestOrder.order_type !== 'dine_in' && !activeGuestOrder.table_number && (
+        <div className="mt-3 container mx-auto px-4 max-w-6xl">
           <div className="relative">
             <Link to={`${createPageUrl("MyOrders")}?id=${activeGuestOrder.id}`}>
               <motion.div 
@@ -912,65 +1051,101 @@ export default function MenuPage() {
         </div>
       )}
 
-      {/* Banners Carrossel */}
-      {banners && banners.length > 0 ? (
-        <div className={!activeGuestOrder && !hasTopNotice ? "pt-[88px]" : "pt-2"}>
+      {/* Banners Carrossel (Full Width, com cantos superiores arredondados logo abaixo da navbar reta) */}
+      {hasBanners && (
+        <div className="w-full">
           <BannerCarousel banners={banners} />
         </div>
-      ) : (
-        !activeGuestOrder && !hasTopNotice && <div className="h-[88px]" />
       )}
 
-      {/* Barra de Categorias Inspirada no Design de Exemplo com Efeito Pincel */}
-      <div className="sticky top-[86px] sm:top-[90px] z-30 bg-[#F7F9F8]/95 backdrop-blur-md border-b border-[#E5EAE7] py-2 sm:py-2.5 shadow-xs">
-        <div className="container mx-auto px-4 sm:px-6 max-w-6xl">
-          <div className="flex items-center gap-0.5 sm:gap-1 overflow-x-auto scrollbar-hide py-1">
-            {displayCategories.map((category, index) => {
-              const isActive = activeCategory === category.id;
-              const isLast = index === displayCategories.length - 1;
-              const nextIsActive = !isLast && activeCategory === displayCategories[index + 1]?.id;
-
-              return (
-                <React.Fragment key={category.id}>
+      {/* Camada Branca Sobreposta com Cantos Superiores Arredondados */}
+      <div 
+        className={`w-full bg-white relative z-10 transition-all ${
+          hasBanners 
+            ? "-mt-6 rounded-t-[24px] sm:rounded-t-[28px]" 
+            : ""
+        }`}
+      >
+        <main className="container mx-auto px-4 sm:px-6 pt-5 pb-36 max-w-6xl space-y-5">
+          {/* Barra de Categorias em Pílulas */}
+          <div 
+            id="menu-categories-row" 
+            className="sticky z-20 bg-white/95 backdrop-blur-md py-1.5 -mx-4 px-4 sm:-mx-6 sm:px-6"
+            style={{ top: `${headerHeight}px` }}
+          >
+            <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide py-1">
+              {displayCategories.map((category) => {
+                const isActive = activeCategory === category.id;
+                return (
                   <button
+                    key={category.id}
                     type="button"
                     onClick={() => {
                       setActiveCategory(category.id);
                       setSearchQuery("");
                     }}
-                    className="flex-shrink-0 flex items-center justify-center transition-all cursor-pointer group focus:outline-none"
+                    className={`flex-shrink-0 px-4 sm:px-5 py-2 rounded-2xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap select-none ${
+                      isActive
+                        ? "bg-[#046c4e] text-white shadow-xs"
+                        : "bg-gray-100/90 text-gray-700 hover:bg-gray-200/80"
+                    }`}
                   >
-                    {isActive ? (
-                      <div className="relative flex items-center justify-center px-4 sm:px-5 py-1.5 sm:py-2 min-w-[76px] select-none">
-                        {/* Efeito Pincel Orgânico (Brush Stroke SVG) */}
-                        <BrushCategoryStroke />
-                        <span className="relative z-10 text-white font-extrabold text-xs sm:text-sm tracking-tight whitespace-nowrap px-1">
-                          {category.name}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center px-3 sm:px-4 py-1.5">
-                        <span className="text-[#171717] group-hover:text-[#047857] font-bold text-xs sm:text-sm transition-colors whitespace-nowrap">
-                          {category.name}
-                        </span>
-                        <span className="w-6 sm:w-7 h-[2px] bg-stone-400/80 rounded-full mt-1.5 group-hover:bg-[#047857] transition-all" />
-                      </div>
-                    )}
+                    {category.name}
                   </button>
-
-                  {!isLast && !isActive && !nextIsActive && (
-                    <div className="h-4 sm:h-5 w-[1px] bg-stone-300/60 shrink-0 self-center my-auto mx-0.5 sm:mx-1" />
-                  )}
-                </React.Fragment>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
-      </div>
 
-      {/* Seção Principal do Cardápio */}
-      <main className="container mx-auto px-4 sm:px-6 pb-36 pt-6 max-w-6xl space-y-9">
-        {/* Carrossel dos Mais Pedidos */}
+          {/* Barra de Busca e Filtro */}
+          <div className="flex items-center gap-2.5">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                id="menu-search-input"
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Buscar no cardápio..."
+                className="w-full bg-gray-50/90 border border-gray-200/80 rounded-2xl pl-10 pr-9 py-2.5 text-xs sm:text-sm text-gray-900 placeholder:text-gray-400 focus:bg-white focus:border-[#046c4e] focus:ring-1 focus:ring-[#046c4e]/30 outline-none shadow-2xs transition-all"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 text-xs font-bold p-1 cursor-pointer"
+                  aria-label="Limpar busca"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                const el = document.getElementById("menu-categories-row");
+                el?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              title="Filtrar categorias"
+              className="w-10 h-10 rounded-2xl border border-gray-200/80 bg-gray-50/90 flex items-center justify-center text-gray-700 hover:text-gray-950 hover:bg-white shadow-2xs shrink-0 cursor-pointer transition-colors"
+            >
+              <SlidersHorizontal className="w-4 h-4" />
+            </button>
+          </div>
+
+        {isSearching && (
+          <div>
+            <div className="flex items-center gap-1.5 text-xs font-black tracking-widest text-[#046c4e] uppercase">
+              <span>BUSCA NO CARDÁPIO</span>
+            </div>
+            <h2 className="text-xl sm:text-2xl font-black text-gray-950 mt-0.5 tracking-tight" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+              Resultados para "{searchQuery}"
+            </h2>
+          </div>
+        )}
+
+        {/* Carrossel dos Mais Pedidos (Inspirado na Foto 1) */}
         {!searchQuery.trim() && (
           <PopularProductsRow
             products={popularRankedProducts}
@@ -980,7 +1155,7 @@ export default function MenuPage() {
           />
         )}
 
-        {/* Carrossel dos Últimos Pedidos */}
+        {/* Carrossel dos Últimos Pedidos (Inspirado na Foto 1) */}
         {!isVisualOnly && !searchQuery.trim() && recentOrders.length > 0 && (
           <RecentOrdersRow
             orders={recentOrders}
@@ -989,41 +1164,6 @@ export default function MenuPage() {
             isStoreOpen={storeIsOpen}
           />
         )}
-
-        {/* Barra de Busca Global */}
-        <div className="space-y-3 pt-1">
-          {isSearching && (
-            <div>
-              <div className="flex items-center gap-1.5 text-xs font-black tracking-widest text-[#047857] uppercase">
-                <span>BUSCA NO CARDÁPIO</span>
-              </div>
-              <h2 className="text-xl sm:text-2xl font-black text-[#171717] mt-0.5 tracking-tight" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
-                Resultados para "{searchQuery}"
-              </h2>
-            </div>
-          )}
-
-          <div className="relative w-full">
-            <Search className="w-4 h-4 text-stone-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Buscar no cardápio..."
-              className="w-full bg-white border border-[#E5EAE7] focus:border-[#047857] focus:ring-2 focus:ring-[#D1E9DF] rounded-2xl pl-11 pr-10 py-3 text-xs sm:text-sm text-[#171717] placeholder:text-stone-400 outline-none transition-all shadow-xs"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery("")}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 p-1 rounded-full text-xs font-bold cursor-pointer"
-                aria-label="Limpar busca"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-        </div>
 
         {/* Lista de Produtos Organizada em Componentes Grandes (Inspirado na Foto 1) */}
         {categorizedSections.map((section) => (
@@ -1124,6 +1264,7 @@ export default function MenuPage() {
           </motion.div>
         )}
       </main>
+    </div>
 
       {/* Rodapé Institucional Clean */}
       <footer className="bg-white border-t border-[#E5EAE7] py-10 px-4">
@@ -1285,6 +1426,9 @@ export default function MenuPage() {
           }}
         />
       )}
+
+      {/* Modal de Confirmação Direta do Pedido na Mesa (Sem WhatsApp, Sem Stepper de Rastreio) */}
+      {renderTableOrderConfirmedModal()}
       
       {selectedProduct && (
         <ProductDetailModal
@@ -1311,6 +1455,40 @@ export default function MenuPage() {
           isVisualOnly={isVisualOnly}
         />
       )}
+
+      {selectedPizzaProduct && (() => {
+        const matchedPizzaCategory = categories.find(c => 
+          c.id === selectedPizzaProduct.category_id || 
+          c.id === selectedPizzaProduct.category ||
+          (selectedPizzaProduct.category && typeof selectedPizzaProduct.category === 'string' && c.name?.toLowerCase() === selectedPizzaProduct.category.toLowerCase()) ||
+          (selectedPizzaProduct.category_id && typeof selectedPizzaProduct.category_id === 'string' && c.name?.toLowerCase() === selectedPizzaProduct.category_id.toLowerCase())
+        );
+
+        const categoryFlavors = products.filter(p => {
+          if (!matchedPizzaCategory) {
+            return p.category === selectedPizzaProduct.category || p.category_id === selectedPizzaProduct.category_id;
+          }
+          return p.category === matchedPizzaCategory.id || 
+                 p.category_id === matchedPizzaCategory.id || 
+                 (p.category && typeof p.category === 'string' && p.category.toLowerCase() === matchedPizzaCategory.name?.toLowerCase());
+        });
+
+        return (
+          <PizzaBuilderModal
+            isOpen={Boolean(selectedPizzaProduct)}
+            onClose={() => setSelectedPizzaProduct(null)}
+            initialProduct={selectedPizzaProduct}
+            category={matchedPizzaCategory}
+            allCategoryProducts={categoryFlavors}
+            allComplementGroups={complementGroups}
+            allComplementItems={complementItems}
+            productComplementGroups={productComplementGroups}
+            pricingRule={tenant?.pizza_pricing_rule || 'highest_price'}
+            onAddToCart={addToCart}
+            isVisualOnly={isVisualOnly}
+          />
+        );
+      })()}
     </div>
   );
 }

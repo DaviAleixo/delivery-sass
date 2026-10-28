@@ -265,3 +265,207 @@ export function aggregatePeakHours(orders = []) {
     peakHourInfo,
   };
 }
+
+/**
+ * Agrupa taxas de serviço (% de atendimento/mesa) de forma cronológica com valor acumulado progressivo
+ * @param {Array} sessions Lista de sessões de mesa (table_sessions)
+ * @param {Array} orders Lista de pedidos (caso haja pedidos com service_fee avulso)
+ * @param {Date} startDate Data inicial
+ * @param {Date} endDate Data final
+ * @param {boolean} isSingleDay Se true, agrega por horário (00h às 23h) para visão intra-turno
+ * @returns {Object} { dailyData, totalServiceFee, totalSessionsCount, avgServiceFee, isHourly }
+ */
+export function aggregateServiceFeeCumulative(
+  sessions = [],
+  orders = [],
+  startDate = null,
+  endDate = null,
+  isSingleDay = false
+) {
+  if (isSingleDay) {
+    // Agregação horária para o dia (00h às 23h)
+    const hoursMap = new Map();
+    for (let h = 0; h < 24; h++) {
+      hoursMap.set(h, {
+        hour: h,
+        displayDate: `${String(h).padStart(2, "0")}h`,
+        dailyServiceFee: 0,
+        sessionsCount: 0,
+        subtotalAmount: 0,
+      });
+    }
+
+    sessions.forEach((session) => {
+      const fee = Number(session.service_fee || 0);
+      const dateStr = session.closed_at || session.created_at;
+      if (!dateStr) return;
+
+      const parts = getBrasiliaParts(dateStr);
+      const h = parts.hour;
+      if (hoursMap.has(h)) {
+        const rec = hoursMap.get(h);
+        rec.dailyServiceFee += fee;
+        rec.subtotalAmount += Number(session.subtotal || session.total_amount || 0);
+        if (fee > 0) rec.sessionsCount += 1;
+      }
+    });
+
+    const sessionIds = new Set(sessions.map((s) => s.id).filter(Boolean));
+    orders.forEach((order) => {
+      const fee = Number(order.service_fee || 0);
+      if (fee <= 0) return;
+      if (order.table_session_id && sessionIds.has(order.table_session_id)) return;
+      if (order.status === "cancelado") return;
+
+      const dateStr = order.created_date;
+      if (!dateStr) return;
+
+      const parts = getBrasiliaParts(dateStr);
+      const h = parts.hour;
+      if (hoursMap.has(h)) {
+        const rec = hoursMap.get(h);
+        rec.dailyServiceFee += fee;
+        rec.subtotalAmount += Number(order.subtotal || order.total_amount || 0);
+        rec.sessionsCount += 1;
+      }
+    });
+
+    let runningCumulative = 0;
+    let totalSessions = 0;
+    const sorted = Array.from(hoursMap.values());
+    const dailyData = sorted.map((h) => {
+      runningCumulative += h.dailyServiceFee;
+      totalSessions += h.sessionsCount;
+      return {
+        dateKey: `${h.hour}h`,
+        displayDate: h.displayDate,
+        dailyServiceFee: Number(h.dailyServiceFee.toFixed(2)),
+        cumulativeServiceFee: Number(runningCumulative.toFixed(2)),
+        sessionsCount: h.sessionsCount,
+        subtotalAmount: Number(h.subtotalAmount.toFixed(2)),
+      };
+    });
+
+    const totalServiceFee = Number(runningCumulative.toFixed(2));
+    const avgServiceFee =
+      totalSessions > 0 ? Number((totalServiceFee / totalSessions).toFixed(2)) : 0;
+
+    return {
+      dailyData,
+      totalServiceFee,
+      totalSessionsCount: totalSessions,
+      avgServiceFee,
+      isHourly: true,
+    };
+  }
+
+  // Agregação diária padrão (Multi-day)
+  const dailyMap = new Map();
+
+  sessions.forEach((session) => {
+    const fee = Number(session.service_fee || 0);
+    const dateStr = session.closed_at || session.created_at;
+    if (!dateStr) return;
+
+    const parts = getBrasiliaParts(dateStr);
+    const dateKey = parts.dateKey;
+
+    if (!dailyMap.has(dateKey)) {
+      dailyMap.set(dateKey, {
+        dateKey,
+        displayDate: `${String(parts.day).padStart(2, "0")}/${String(parts.month).padStart(2, "0")}`,
+        dailyServiceFee: 0,
+        sessionsCount: 0,
+        subtotalAmount: 0,
+      });
+    }
+
+    const rec = dailyMap.get(dateKey);
+    rec.dailyServiceFee += fee;
+    rec.subtotalAmount += Number(session.subtotal || session.total_amount || 0);
+    if (fee > 0) rec.sessionsCount += 1;
+  });
+
+  const sessionIds = new Set(sessions.map((s) => s.id).filter(Boolean));
+  orders.forEach((order) => {
+    const fee = Number(order.service_fee || 0);
+    if (fee <= 0) return;
+    if (order.table_session_id && sessionIds.has(order.table_session_id)) return;
+    if (order.status === "cancelado") return;
+
+    const dateStr = order.created_date;
+    if (!dateStr) return;
+
+    const parts = getBrasiliaParts(dateStr);
+    const dateKey = parts.dateKey;
+
+    if (!dailyMap.has(dateKey)) {
+      dailyMap.set(dateKey, {
+        dateKey,
+        displayDate: `${String(parts.day).padStart(2, "0")}/${String(parts.month).padStart(2, "0")}`,
+        dailyServiceFee: 0,
+        sessionsCount: 0,
+        subtotalAmount: 0,
+      });
+    }
+
+    const rec = dailyMap.get(dateKey);
+    rec.dailyServiceFee += fee;
+    rec.subtotalAmount += Number(order.subtotal || order.total_amount || 0);
+    rec.sessionsCount += 1;
+  });
+
+  // Preenche dias sem vendas dentro do intervalo com 0
+  if (startDate && endDate) {
+    const current = new Date(startDate);
+    const end = new Date(endDate);
+    let safetyCounter = 0;
+    while (current <= end && safetyCounter < 370) {
+      const parts = getBrasiliaParts(current);
+      const key = parts.dateKey;
+      if (!dailyMap.has(key)) {
+        dailyMap.set(key, {
+          dateKey: key,
+          displayDate: `${String(parts.day).padStart(2, "0")}/${String(parts.month).padStart(2, "0")}`,
+          dailyServiceFee: 0,
+          sessionsCount: 0,
+          subtotalAmount: 0,
+        });
+      }
+      current.setDate(current.getDate() + 1);
+      safetyCounter++;
+    }
+  }
+
+  // Ordena cronologicamente por YYYY-MM-DD
+  const sorted = Array.from(dailyMap.values()).sort((a, b) =>
+    a.dateKey.localeCompare(b.dateKey)
+  );
+
+  let runningCumulative = 0;
+  let totalSessions = 0;
+  const dailyData = sorted.map((d) => {
+    runningCumulative += d.dailyServiceFee;
+    totalSessions += d.sessionsCount;
+    return {
+      dateKey: d.dateKey,
+      displayDate: d.displayDate,
+      dailyServiceFee: Number(d.dailyServiceFee.toFixed(2)),
+      cumulativeServiceFee: Number(runningCumulative.toFixed(2)),
+      sessionsCount: d.sessionsCount,
+      subtotalAmount: Number(d.subtotalAmount.toFixed(2)),
+    };
+  });
+
+  const totalServiceFee = Number(runningCumulative.toFixed(2));
+  const avgServiceFee =
+    totalSessions > 0 ? Number((totalServiceFee / totalSessions).toFixed(2)) : 0;
+
+  return {
+    dailyData,
+    totalServiceFee,
+    totalSessionsCount: totalSessions,
+    avgServiceFee,
+    isHourly: false,
+  };
+}

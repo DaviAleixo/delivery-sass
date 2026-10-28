@@ -12,6 +12,7 @@ import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import PDVPage from './pages/PDV';
 import DynamicHead from '@/components/DynamicHead';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import { PrintQueueProvider } from '@/hooks/useFifoPrintQueue';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -207,9 +208,11 @@ function App() {
       <QueryClientProvider client={queryClientInstance}>
         <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <TenantProvider>
-            <DynamicHead />
-            <NavigationTracker />
-            <AuthenticatedApp />
+            <PrintQueueProvider>
+              <DynamicHead />
+              <NavigationTracker />
+              <AuthenticatedApp />
+            </PrintQueueProvider>
           </TenantProvider>
         </Router>
         <Toaster />

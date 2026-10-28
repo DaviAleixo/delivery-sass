@@ -24,7 +24,8 @@ export default function OrderCard({
   getStatusColor,
   getStatusIcon,
   getStatusText,
-  getPaymentMethodText
+  getPaymentMethodText,
+  onPrint
 }) {
   const d = safeDate(order.created_date);
   const total = order.total_amount || order.total || 0;
@@ -90,11 +91,26 @@ export default function OrderCard({
                 {getStatusIcon(order.status)}
                 <span className="ml-1">{getStatusText(order.status)}</span>
               </Badge>
-              <Link to={createPageUrl(`PrintOrder?id=${order.id}`)} target="_blank" onClick={(e) => e.stopPropagation()}>
-                <Button variant="outline" size="icon" className="h-8 w-8 md:h-9 md:w-9">
-                  <Printer className="w-3 h-3 md:w-4 md:h-4" />
+              {onPrint ? (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8 md:h-9 md:w-9 cursor-pointer hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 transition-colors"
+                  title="Imprimir comanda instantaneamente"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPrint(order);
+                  }}
+                >
+                  <Printer className="w-3 h-3 md:w-4 md:h-4 text-gray-700" />
                 </Button>
-              </Link>
+              ) : (
+                <Link to={createPageUrl(`PrintOrder?id=${order.id}`)} target="_blank" onClick={(e) => e.stopPropagation()}>
+                  <Button variant="outline" size="icon" className="h-8 w-8 md:h-9 md:w-9">
+                    <Printer className="w-3 h-3 md:w-4 md:h-4" />
+                  </Button>
+                </Link>
+              )}
               <div className="text-right">
                 <p className="font-bold text-lg md:text-xl text-gray-900">
                   R$ {safeMoney(total)}

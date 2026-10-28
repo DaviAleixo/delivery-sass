@@ -1,10 +1,11 @@
 import React from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Info, Clock, MapPin, Phone, Instagram } from "lucide-react";
+import { Info, Clock, MapPin, Phone, Instagram, User, ChevronRight } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
+import UserProfileSheet from "./UserProfileSheet";
 
-export default function StoreInfoSheet({ settings, dark = false }) {
+export default function StoreInfoSheet({ settings, dark = false, trigger }) {
   if (!settings) return null;
 
   const getOpeningHoursText = () => {
@@ -17,18 +18,20 @@ export default function StoreInfoSheet({ settings, dark = false }) {
   return (
     <Sheet>
       <SheetTrigger asChild>
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          className={`rounded-full h-9 w-9 cursor-pointer transition-colors ${
-            dark 
-              ? "text-stone-300 hover:text-white hover:bg-stone-800/80" 
-              : "text-[#171717] hover:text-[#047857] hover:bg-[#D1E9DF]/40"
-          }`}
-          title="Informações da Loja"
-        >
-          <Info className="w-4 h-4" />
-        </Button>
+        {trigger || (
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className={`rounded-full h-9 w-9 cursor-pointer transition-colors ${
+              dark 
+                ? "text-stone-300 hover:text-white hover:bg-stone-800/80" 
+                : "text-[#171717] hover:text-[#047857] hover:bg-[#D1E9DF]/40"
+            }`}
+            title="Informações da Loja"
+          >
+            <Info className="w-4 h-4" />
+          </Button>
+        )}
       </SheetTrigger>
       <SheetContent className={`p-6 scrollbar-hide ${
         dark 
@@ -141,6 +144,31 @@ export default function StoreInfoSheet({ settings, dark = false }) {
                 </a>
               )}
             </div>
+          </div>
+
+          <Separator className={dark ? "bg-stone-800" : "bg-[#E5EAE7]"} />
+
+          <div>
+            <h4 className={`text-xs font-black uppercase tracking-wider mb-2.5 ${dark ? "text-stone-400" : "text-stone-500"}`}>Minha Conta</h4>
+            <UserProfileSheet 
+              dark={dark} 
+              trigger={
+                <Button 
+                  variant="outline" 
+                  className={`w-full justify-between h-12 rounded-2xl font-bold text-xs sm:text-sm cursor-pointer transition-colors ${
+                    dark 
+                      ? "bg-stone-900 border-stone-800 text-stone-200 hover:bg-stone-800 hover:text-white" 
+                      : "bg-[#F7F9F8] border-[#E5EAE7] text-[#171717] hover:bg-white hover:border-[#047857] hover:text-[#047857]"
+                  }`}
+                >
+                  <span className="flex items-center gap-2.5">
+                    <User className="w-4 h-4 text-[#047857]" />
+                    <span>Meu Perfil, Endereços & Cupons</span>
+                  </span>
+                  <ChevronRight className="w-4 h-4 opacity-50" />
+                </Button>
+              } 
+            />
           </div>
         </div>
       </SheetContent>

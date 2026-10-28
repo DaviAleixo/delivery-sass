@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Order } from "@/entities/Order";
 import { Settings } from "@/entities/Settings";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import { formatInBrasilia } from "@/utils/dateTime";
 
 export default function PrintOrderPage() {
@@ -164,6 +162,31 @@ export default function PrintOrderPage() {
                     </span>
                   )}
                 </div>
+
+                {/* Sabores Fracionados de Pizza */}
+                {Array.isArray(item.pizza_flavors) && item.pizza_flavors.length > 0 && (
+                  <div className="pl-3 space-y-0.5 my-1">
+                    {item.pizza_flavors.map((f, fIdx) => (
+                      <div key={fIdx} className="text-[12px] font-black text-black">
+                        <span>[{f.fraction}] {f.name}</span>
+                        {Array.isArray(f.additionals) && f.additionals.length > 0 && (
+                          <div className="pl-2 space-y-0.5">
+                            {f.additionals.map((fAd, fAdIdx) => (
+                              <span key={fAdIdx} className="block text-[11px] font-bold text-black">
+                                + {fAd.name} {Number(fAd.price) > 0 ? `(+R$ ${Number(fAd.price).toFixed(2).replace('.', ',')})` : ''}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {f.notes && (
+                          <span className="block text-[11px] font-bold text-black pl-2">
+                            • Obs: {f.notes}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {/* Adicionais / Complementos */}
                 {additionals.map((ad, adIdx) => (

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { Product } from "@/entities/Product";
 import { Category } from "@/entities/Category";
 import { Order } from "@/entities/Order";
+import { RestaurantTable, TableSession } from "@/entities/RestaurantTable";
+import { getActiveTenantId } from "@/entities/storage";
 import PDVProductGrid from "../components/pdv/PDVProductGrid";
 import PDVCart from "../components/pdv/PDVCart";
 import PDVPaymentModal from "../components/pdv/PDVPaymentModal";
@@ -9,6 +11,7 @@ import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { validateSchema, orderSchema } from "@/schemas";
 import { toast } from "sonner";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 
 // Som ao adicionar item
 const playBeep = () => {
@@ -29,6 +32,11 @@ const playBeep = () => {
 export default function PDVPage() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [tables, setTables] = useState([]);
+  const [sessions, setSessions] = useState([]);
+  const [orderType, setOrderType] = useState("pickup");
+  const [selectedTableNumber, setSelectedTableNumber] = useState("");
+  const [isSubmittingTableOrder, setIsSubmittingTableOrder] = useState(false);
   const [cart, setCart] = useState([]);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
@@ -39,23 +47,53 @@ export default function PDVPage() {
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
 
   useEffect(() => {
+    const preTable = localStorage.getItem("pdv_preselected_table");
+    if (preTable) {
+      setSelectedTableNumber(preTable);
+      setOrderType("dine_in");
+      localStorage.removeItem("pdv_preselected_table");
+    }
+
     loadData();
     const unsubProduct = Product.subscribe(() => loadData());
     const unsubCategory = Category.subscribe(() => loadData());
+    const unsubTable = RestaurantTable.subscribe(() => loadData());
+    const unsubSession = TableSession.subscribe(() => loadData());
+
     return () => {
       if (typeof unsubProduct === "function") unsubProduct();
       if (typeof unsubCategory === "function") unsubCategory();
+      if (typeof unsubTable === "function") unsubTable();
+      if (typeof unsubSession === "function") unsubSession();
     };
   }, []);
 
   const loadData = async () => {
     try {
-      const [prods, cats] = await Promise.all([
+      const [prods, cats, tbls, sess] = await Promise.all([
         Product.list("-created_date"),
         Category.list("order_index"),
+        RestaurantTable.list().catch(() => []),
+        TableSession.list("-opened_at", 100).catch(() => []),
       ]);
       setProducts(prods || []);
       setCategories(cats || []);
+      
+      let finalTables = tbls || [];
+      if (finalTables.length === 0) {
+        const activeTenantId = getActiveTenantId();
+        if (activeTenantId && isSupabaseConfigured() && supabase) {
+          try {
+            await supabase.rpc("generate_default_tables", {
+              p_tenant_id: activeTenantId,
+              p_count: 10,
+            });
+            finalTables = await RestaurantTable.list().catch(() => []);
+          } catch {}
+        }
+      }
+      setTables(finalTables);
+      setSessions(sess || []);
     } catch (_error) {
       console.error("Erro ao carregar dados no PDV:", _error);
     } finally {
@@ -123,31 +161,233 @@ export default function PDVPage() {
     setShowPayment(true);
   };
 
+  const handleLaunchToTable = async () => {
+    if (cart.length === 0) {
+      toast.error("O carrinho está vazio.");
+      return;
+    }
+    if (!selectedTableNumber) {
+      toast.error("Selecione a mesa do salão.");
+      return;
+    }
+
+    try {
+      setIsSubmittingTableOrder(true);
+      const activeTenantId = getActiveTenantId() || "a0000000-0000-0000-0000-000000000001";
+      const cleanTargetNum = String(selectedTableNumber).replace(/^Mesa\s*/i, "").trim();
+
+      // Localiza a mesa física
+      let table = tables.find(t => String(t.table_number).replace(/^Mesa\s*/i, "").trim() === cleanTargetNum);
+
+      // Se a mesa física não foi encontrada ou não possui ID UUID válido, busca ou cria no Supabase
+      if (!table?.id || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(table.id)) {
+        if (isSupabaseConfigured() && supabase) {
+          const { data: dbTable } = await supabase
+            .from("restaurant_tables")
+            .select("id, table_number, status, tenant_id")
+            .eq("tenant_id", activeTenantId)
+            .eq("table_number", cleanTargetNum)
+            .maybeSingle();
+
+          if (dbTable) {
+            table = dbTable;
+          } else {
+            const { data: createdTbl } = await supabase
+              .from("restaurant_tables")
+              .insert([{
+                tenant_id: activeTenantId,
+                table_number: cleanTargetNum,
+                label: "Salão Principal",
+                capacity: 4,
+                status: "occupied"
+              }])
+              .select()
+              .single();
+            if (createdTbl) table = createdTbl;
+          }
+        }
+      }
+
+      // Garante status occupied na mesa física
+      if (table?.id) {
+        if (isSupabaseConfigured() && supabase) {
+          await supabase
+            .from("restaurant_tables")
+            .update({ status: "occupied", updated_at: new Date().toISOString() })
+            .eq("id", table.id);
+        } else {
+          await RestaurantTable.update(table.id, { status: "occupied" }).catch(() => {});
+        }
+      }
+
+      // Busca sessão ativa ou abre uma nova sessão real com UUID no Supabase
+      let activeSessionId = null;
+      let activeSessionCustomer = customerName.trim() || `Mesa ${cleanTargetNum}`;
+      let activeSessionPhone = customerPhone.trim() || "";
+
+      if (isSupabaseConfigured() && supabase) {
+        const { data: existingSess } = await supabase
+          .from("table_sessions")
+          .select("id, status, customer_name, customer_phone")
+          .eq("tenant_id", activeTenantId)
+          .eq("table_number", cleanTargetNum)
+          .in("status", ["open", "bill_requested"])
+          .order("opened_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (existingSess?.id) {
+          activeSessionId = existingSess.id;
+          if (existingSess.customer_name && !customerName.trim()) {
+            activeSessionCustomer = existingSess.customer_name;
+          }
+          if (existingSess.customer_phone && !customerPhone.trim()) {
+            activeSessionPhone = existingSess.customer_phone;
+          }
+        } else if (table?.id) {
+          const { data: newSess } = await supabase
+            .from("table_sessions")
+            .insert([{
+              tenant_id: activeTenantId,
+              table_id: table.id,
+              table_number: cleanTargetNum,
+              customer_name: activeSessionCustomer,
+              customer_phone: activeSessionPhone || null,
+              people_count: 2,
+              status: "open",
+              opened_at: new Date().toISOString()
+            }])
+            .select("id")
+            .single();
+
+          if (newSess?.id) {
+            activeSessionId = newSess.id;
+          }
+        }
+      }
+
+      const orderData = {
+        tenant_id: activeTenantId,
+        customer_name: activeSessionCustomer,
+        customer_phone: activeSessionPhone || "-",
+        customer_email: customerEmail.trim() || "",
+        total_amount: total,
+        total: total,
+        subtotal: total,
+        status: "confirmado",
+        payment_method: "comanda_mesa",
+        order_type: "dine_in",
+        table_number: cleanTargetNum,
+        table_session_id: activeSessionId,
+        items: cart.map((item) => {
+          const cat = categories.find((c) => c.id === item.category_id || c.id === item.category);
+          const catName = cat?.name || (typeof item.category === "string" && item.category ? item.category : "Geral");
+          return {
+            product_id: item.id,
+            product_name: item.name,
+            name: item.name,
+            product_price: Number(item.price) || 0,
+            price: Number(item.price) || 0,
+            category_name: item.category_name || catName,
+            quantity: item.qty,
+            subtotal: (Number(item.price) || 0) * item.qty,
+            additionals: [],
+          };
+        }),
+      };
+
+      const created = await Order.create(orderData);
+      toast.success(`Pedido de R$ ${total.toFixed(2).replace(".", ",")} lançado na Mesa ${cleanTargetNum}! 🍻`);
+      setLastOrder(created);
+      clearCart();
+      setIsMobileCartOpen(false);
+      await loadData();
+
+      // Dispara eventos locais e cross-tab para atualização em tempo real
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("db_event_orders", { detail: { type: "create", data: created } }));
+        window.dispatchEvent(new CustomEvent("db_event_restaurant_tables", { detail: { type: "update" } }));
+        window.dispatchEvent(new CustomEvent("db_event_table_sessions", { detail: { type: "update" } }));
+      }
+    } catch (err) {
+      console.error("Erro ao lançar pedido na mesa:", err);
+      toast.error("Erro ao lançar pedido na mesa. Tente novamente.");
+    } finally {
+      setIsSubmittingTableOrder(false);
+    }
+  };
+
   const handleFinalize = async (paymentMethod) => {
-    const trimmedName = customerName.trim();
+    const isDineIn = orderType === "dine_in";
+    const trimmedName = customerName.trim() || (isDineIn ? `Mesa ${selectedTableNumber}` : "");
     const rawPhone = customerPhone.replace(/\D/g, "");
 
-    if (!trimmedName || rawPhone.length < 10) {
+    if (!isDineIn && (!trimmedName || rawPhone.length < 10)) {
       toast.error("Nome e telefone do cliente são obrigatórios no PDV.");
       return;
     }
 
+    if (isDineIn && !selectedTableNumber) {
+      toast.error("Selecione uma mesa do salão.");
+      return;
+    }
+
+    const cleanTargetNum = isDineIn ? String(selectedTableNumber).replace(/^Mesa\s*/i, "").trim() : "Balcão";
+    const activeTenantId = getActiveTenantId() || "a0000000-0000-0000-0000-000000000001";
+    let activeSessionId = null;
+
+    if (isDineIn) {
+      let table = tables.find(t => String(t.table_number).replace(/^Mesa\s*/i, "").trim() === cleanTargetNum);
+      if (table?.id) {
+        await RestaurantTable.update(table.id, { status: "occupied" }).catch(() => {});
+      }
+
+      let activeSession = sessions.find(s => 
+        String(s.table_number).replace(/^Mesa\s*/i, "").trim() === cleanTargetNum &&
+        (s.status === 'open' || s.status === 'bill_requested')
+      );
+      if (!activeSession && table?.id) {
+        try {
+          activeSession = await TableSession.create({
+            tenant_id: activeTenantId,
+            table_id: table.id,
+            table_number: cleanTargetNum,
+            customer_name: trimmedName,
+            customer_phone: customerPhone.trim(),
+            people_count: 2,
+            opened_at: new Date().toISOString(),
+            status: "open",
+          });
+        } catch {}
+      }
+      if (activeSession && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(activeSession.id)) {
+        activeSessionId = activeSession.id;
+      }
+    }
+
     const orderData = {
+      tenant_id: activeTenantId,
       customer_name: trimmedName,
       customer_phone: customerPhone.trim(),
       customer_email: customerEmail.trim() || "",
       total_amount: total,
+      total: total,
+      subtotal: total,
       status: "confirmado",
       payment_method: paymentMethod,
-      order_type: "pickup",
-      table_number: "Balcão",
+      order_type: isDineIn ? "dine_in" : "pickup",
+      table_number: cleanTargetNum,
+      table_session_id: activeSessionId,
+      payment_status: "paid",
       items: cart.map((item) => {
         const cat = categories.find((c) => c.id === item.category_id || c.id === item.category);
         const catName = cat?.name || (typeof item.category === "string" && item.category ? item.category : "Geral");
         return {
           product_id: item.id,
           product_name: item.name,
+          name: item.name,
           product_price: Number(item.price) || 0,
+          price: Number(item.price) || 0,
           category_name: item.category_name || catName,
           quantity: item.qty,
           subtotal: (Number(item.price) || 0) * item.qty,
@@ -159,7 +399,7 @@ export default function PDVPage() {
     const zodValidation = validateSchema(orderSchema, {
       ...orderData,
       customer_phone: orderData.customer_phone,
-      order_type: "balcao",
+      order_type: isDineIn ? "mesa" : "balcao",
       items: orderData.items.map(it => ({
         ...it,
         name: it.product_name,
@@ -179,6 +419,13 @@ export default function PDVPage() {
       clearCart();
       setShowPayment(false);
       setIsMobileCartOpen(false);
+      await loadData();
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("db_event_orders", { detail: { type: "create", data: created } }));
+        window.dispatchEvent(new CustomEvent("db_event_restaurant_tables", { detail: { type: "update" } }));
+        window.dispatchEvent(new CustomEvent("db_event_table_sessions", { detail: { type: "update" } }));
+      }
     } catch (err) {
       console.error("Erro ao finalizar pedido no PDV:", err);
       toast.error("Erro ao salvar pedido no PDV. Tente novamente.");
@@ -259,6 +506,13 @@ export default function PDVPage() {
               lastOrder={lastOrder}
               onDismissSuccess={() => setLastOrder(null)}
               onCloseMobile={() => setIsMobileCartOpen(false)}
+              orderType={orderType}
+              onOrderTypeChange={setOrderType}
+              tables={tables}
+              selectedTableNumber={selectedTableNumber}
+              onSelectTableNumber={setSelectedTableNumber}
+              onLaunchToTable={handleLaunchToTable}
+              isSubmittingTableOrder={isSubmittingTableOrder}
             />
           </div>
         </div>
@@ -281,6 +535,13 @@ export default function PDVPage() {
           total={total}
           lastOrder={lastOrder}
           onDismissSuccess={() => setLastOrder(null)}
+          orderType={orderType}
+          onOrderTypeChange={setOrderType}
+          tables={tables}
+          selectedTableNumber={selectedTableNumber}
+          onSelectTableNumber={setSelectedTableNumber}
+          onLaunchToTable={handleLaunchToTable}
+          isSubmittingTableOrder={isSubmittingTableOrder}
         />
       </div>
 

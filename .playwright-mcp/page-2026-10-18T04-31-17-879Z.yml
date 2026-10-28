@@ -1,0 +1,47 @@
+- generic [ref=e5]:
+  - banner [ref=e6]:
+    - generic [ref=e8]:
+      - generic [ref=e9]:
+        - generic [ref=e10]: Entrega em até 40-50 min
+        - generic [ref=e17]: "|"
+        - generic [ref=e18]: 18:00 – 23:59
+      - generic [ref=e21]: Rua das Flores, 123 - Centro
+    - generic [ref=e27]:
+      - generic [ref=e28]:
+        - generic [ref=e29]: VR
+        - heading "Vruum Burguer" [level=1] [ref=e31]
+      - generic [ref=e32]:
+        - button "Carrinho" [ref=e33] [cursor=pointer]
+        - button "Informações da Loja" [ref=e37] [cursor=pointer]
+  - main [ref=e41]:
+    - button "Todos" [ref=e44] [cursor=pointer]
+    - generic [ref=e45]:
+      - textbox "Buscar no cardápio..." [ref=e47]
+      - button "Filtrar categorias" [ref=e48] [cursor=pointer]
+    - generic [ref=e50]:
+      - generic [ref=e51]: 🍽️
+      - heading "Nenhum produto encontrado" [level=3] [ref=e52]
+      - paragraph [ref=e53]: Não há produtos disponíveis nesta categoria no momento.
+  - contentinfo [ref=e54]:
+    - generic [ref=e55]:
+      - generic [ref=e56]:
+        - generic [ref=e57]:
+          - generic [ref=e58]: VR
+          - heading "Vruum Burguer" [level=4] [ref=e60]
+        - paragraph [ref=e61]: Os melhores produtos preparados com ingredientes selecionados e entrega rápida para você.
+      - generic [ref=e62]:
+        - paragraph [ref=e63]: Localização & Contato
+        - generic [ref=e64]: Endereço não informado
+      - generic [ref=e69]:
+        - paragraph [ref=e70]: Horário de Funcionamento
+        - generic [ref=e71]: Aberto Agora
+        - paragraph [ref=e74]: 18:00 às 23:59
+    - generic [ref=e75]:
+      - paragraph [ref=e76]: © 2026 Vruum Burguer. Todos os direitos reservados.
+      - paragraph [ref=e77]:
+        - text: Desenvolvido por
+        - link "Davi Aleixo" [ref=e78] [cursor=pointer]:
+          - /url: https://instagram.com/davialeixo_nogueira
+        - text: "|"
+        - link "31982607426" [ref=e79] [cursor=pointer]:
+          - /url: https://wa.me/5531982607426

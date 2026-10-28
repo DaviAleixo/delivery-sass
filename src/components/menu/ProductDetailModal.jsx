@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Minus, Check, AlertCircle } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Plus, Minus, Check, ArrowLeft, MoreVertical, ChevronDown, AlertCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 export default function ProductDetailModal({ 
   product, 
@@ -16,18 +15,21 @@ export default function ProductDetailModal({
 }) {
   const [quantity, setQuantity] = useState(1);
   const [selectedComplements, setSelectedComplements] = useState({});
+  const [expandedGroups, setExpandedGroups] = useState({});
   const [notes, setNotes] = useState("");
   const [imageError, setImageError] = useState(false);
 
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && product) {
       setQuantity(1);
       setNotes("");
       setImageError(false);
       const initial = {};
+      const expandedState = {};
 
       if (complementGroups && complementGroups.length > 0) {
         complementGroups.forEach(grp => {
+          expandedState[grp.id] = true; // Aberto por padrão
           if (grp.min_quantity === 1 && grp.max_quantity === 1 && grp.items && grp.items.length > 0) {
             const firstItem = grp.items[0];
             initial[firstItem.id] = {
@@ -40,8 +42,11 @@ export default function ProductDetailModal({
             };
           }
         });
+      } else {
+        expandedState["legacy"] = true;
       }
 
+      setExpandedGroups(expandedState);
       setSelectedComplements(initial);
     }
   }, [isOpen, product, complementGroups]);
@@ -54,6 +59,13 @@ export default function ProductDetailModal({
     return Object.values(selectedComplements)
       .filter(c => c.group_id === groupId)
       .reduce((sum, c) => sum + (c.quantity || 1), 0);
+  };
+
+  const toggleGroupExpanded = (groupId) => {
+    setExpandedGroups(prev => ({
+      ...prev,
+      [groupId]: !prev[groupId]
+    }));
   };
 
   const handleSingleSelect = (group, item) => {
@@ -103,13 +115,28 @@ export default function ProductDetailModal({
     setSelectedComplements(next);
   };
 
+  const handleToggleItem = (group, item) => {
+    const isSingleChoice = group.min_quantity === 1 && group.max_quantity === 1;
+    if (isSingleChoice) {
+      handleSingleSelect(group, item);
+      return;
+    }
+
+    const current = selectedComplements[item.id];
+    if (current && current.quantity > 0) {
+      handleItemQtyChange(group, item, -current.quantity);
+    } else {
+      handleItemQtyChange(group, item, 1);
+    }
+  };
+
   const handleLegacyAdditionalToggle = (ad, checked) => {
     const next = { ...selectedComplements };
     if (checked) {
       next[ad.id] = {
         id: ad.id,
         group_id: "legacy",
-        group_name: "Adicionais",
+        group_name: "Extras opcionais",
         name: ad.name,
         price: Number(ad.price) || 0,
         quantity: 1,
@@ -168,254 +195,286 @@ export default function ProductDetailModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-xl max-h-[92vh] overflow-y-auto p-0 rounded-3xl bg-white border-[#E5EAE7] text-[#171717] shadow-2xl scrollbar-hide">
-        {hasValidImage ? (
-          <div className="relative w-full h-56 sm:h-72 bg-[#F7F9F8] overflow-hidden">
+      <DialogContent className="max-w-lg max-h-[92vh] overflow-y-auto overflow-x-hidden p-0 rounded-3xl bg-white border-none text-gray-900 shadow-2xl scrollbar-hide flex flex-col gap-0">
+        <DialogTitle className="sr-only">{product.name}</DialogTitle>
+
+        {/* Imagem Hero no Topo com Botões Flutuantes (Inspirado na Foto 2) */}
+        <div className="relative w-full h-64 sm:h-72 bg-stone-900 overflow-hidden shrink-0">
+          {hasValidImage ? (
             <img 
               src={product.image_url} 
               alt={product.name} 
               onError={() => setImageError(true)}
               className="w-full h-full object-cover"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-            <div className="absolute bottom-4 left-4 right-4 sm:bottom-6 sm:left-6 sm:right-6">
-              <div className="bg-white/95 backdrop-blur-md p-3.5 sm:p-4 rounded-2xl border border-[#E5EAE7] shadow-lg">
-                <h3 
-                  className="text-lg sm:text-2xl font-black text-[#171717] leading-tight"
-                  style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
-                >
-                  {product.name}
-                </h3>
-                <p className="text-base sm:text-lg font-black text-[#171717] mt-0.5">
-                  R$ {Number(product.price || 0).toFixed(2).replace('.', ',')}
-                </p>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <DialogHeader className="p-4 sm:p-6 pb-3 border-b border-[#E5EAE7] bg-[#F7F9F8]">
-            <DialogTitle 
-              className="text-xl sm:text-2xl font-black text-[#171717]"
-              style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
-            >
-              {product.name}
-            </DialogTitle>
-            <p className="text-base sm:text-lg font-black text-[#171717] mt-1">
-              R$ {Number(product.price || 0).toFixed(2).replace('.', ',')}
-            </p>
-          </DialogHeader>
-        )}
-
-        <div className="p-4 sm:p-6 space-y-5">
-          {product.description && (
-            <div className="p-3.5 rounded-2xl bg-[#F7F9F8] border border-[#E5EAE7] text-xs sm:text-sm text-stone-600 leading-relaxed font-normal">
-              {product.description}
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-6xl bg-stone-850">
+              🍔
             </div>
           )}
 
+          {/* Botão Voltar Circular à Esquerda */}
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute top-4 left-4 w-9 h-9 rounded-full bg-black/50 hover:bg-black/75 text-white flex items-center justify-center backdrop-blur-md transition-all shadow-md z-20 cursor-pointer"
+            aria-label="Voltar"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+
+          {/* Botão de Opções / Três Pontos à Direita */}
+          <div className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/50 text-white flex items-center justify-center backdrop-blur-md shadow-md z-20">
+            <MoreVertical className="w-5 h-5" />
+          </div>
+        </div>
+
+        {/* Card do Conteúdo Sobreposto à Foto com Cantos Arredondados */}
+        <div className="relative -mt-6 z-[2] bg-white rounded-t-[24px] pt-6 px-5 sm:px-6 pb-2 space-y-5">
+          {/* Linha Principal: Título, Preço e Stepper de Quantidade do Produto Inline */}
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 
+                className="text-xl sm:text-2xl font-black text-gray-950 tracking-tight leading-tight"
+                style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
+              >
+                {product.name}
+              </h2>
+              <p className="text-lg sm:text-xl font-bold text-gray-900 mt-0.5">
+                R$ {Number(product.price || 0).toFixed(2).replace('.', ',')}
+              </p>
+            </div>
+
+            {/* Stepper de Quantidade do Produto Inspirado na Foto 2 */}
+            {!isVisualOnly && (
+              <div className="flex items-center gap-2 border border-gray-200 rounded-full px-2 py-1 bg-white shadow-2xs shrink-0 mt-0.5">
+                <button
+                  type="button"
+                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                  className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-700 transition-colors cursor-pointer"
+                  aria-label="Diminuir quantidade"
+                >
+                  <Minus className="w-3.5 h-3.5" />
+                </button>
+                <span className="font-bold text-sm text-gray-950 w-4 text-center">
+                  {quantity}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setQuantity(quantity + 1)}
+                  className="w-7 h-7 rounded-full bg-[#046c4e] hover:bg-[#03543d] text-white flex items-center justify-center shadow-xs transition-transform active:scale-90 cursor-pointer"
+                  aria-label="Aumentar quantidade"
+                >
+                  <Plus className="w-4 h-4 stroke-[2.5]" />
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Descrição do Produto em tom suave cinza */}
+          {product.description && (
+            <p className="text-xs sm:text-sm text-gray-400 font-normal leading-relaxed">
+              {product.description}
+            </p>
+          )}
+
+          {/* Grupos de Complementos / Extras Opcionais */}
           {hasGroups ? (
             <div className="space-y-4">
               {complementGroups.map((group) => {
-                const isRequired = group.min_quantity > 0;
                 const isSingleChoice = group.min_quantity === 1 && group.max_quantity === 1;
                 const selectedCount = getGroupSelectedCount(group.id);
                 const isGroupSatisfied = selectedCount >= group.min_quantity;
+                const isExpanded = expandedGroups[group.id] !== false;
 
                 return (
                   <div 
                     key={group.id} 
-                    className="rounded-2xl border border-[#E5EAE7] overflow-hidden bg-white shadow-xs"
+                    className="rounded-2xl border border-gray-200/90 overflow-hidden bg-white shadow-2xs"
                   >
-                    <div className="p-3.5 sm:p-4 bg-[#F7F9F8] border-b border-[#E5EAE7] flex items-center justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <h4 className="font-extrabold text-[#171717] text-sm sm:text-base leading-tight tracking-tight">
-                            {group.name}
-                          </h4>
-                          {isRequired ? (
-                            <span className="bg-amber-100 border border-amber-300 text-amber-900 font-bold text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md">
-                              OBRIGATÓRIO
-                            </span>
-                          ) : (
-                            <span className="bg-stone-200 border border-stone-300 text-stone-600 font-bold text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md">
-                              OPCIONAL
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[11px] sm:text-xs text-stone-500 mt-1 leading-tight font-normal">
-                          {group.description || (
-                            isSingleChoice 
-                              ? "Escolha 1 opção" 
-                              : isRequired 
-                                ? `Escolha de ${group.min_quantity} a ${group.max_quantity} opções`
-                                : `Escolha até ${group.max_quantity} opções`
-                          )}
-                        </p>
-                      </div>
-
-                      <div className="flex items-center gap-1.5 text-xs font-black shrink-0">
-                        <span className={`px-2 py-0.5 rounded-md ${isGroupSatisfied ? "bg-[#D1E9DF] text-[#047857] border border-[#047857]/20" : "bg-white text-stone-600 border border-[#E5EAE7]"}`}>
+                    {/* Cabeçalho do Grupo com Chevron Acordeom */}
+                    <div 
+                      onClick={() => toggleGroupExpanded(group.id)}
+                      className="p-3.5 sm:p-4 flex items-center justify-between cursor-pointer select-none bg-white hover:bg-gray-50/50 transition-colors"
+                    >
+                      <h4 className="font-bold text-sm sm:text-base text-gray-950">
+                        {group.name}
+                      </h4>
+                      <div className="flex items-center gap-2">
+                        <span className="bg-emerald-50 text-[#046c4e] font-bold text-xs px-2.5 py-0.5 rounded-full border border-emerald-200/60">
                           {selectedCount}/{group.max_quantity}
                         </span>
-                        {isGroupSatisfied && <Check className="w-4 h-4 text-[#047857] stroke-[3]" />}
+                        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
                       </div>
                     </div>
 
-                    <div className="divide-y divide-stone-100">
-                      {group.items && group.items.length > 0 ? (
-                        group.items.map((item) => {
-                          const itemQty = selectedComplements[item.id]?.quantity || 0;
-                          const isSelected = itemQty > 0;
-                          const isMaxGroupReached = selectedCount >= group.max_quantity;
-                          const isMaxItemReached = itemQty >= (item.max_quantity || 1);
+                    {/* Lista dos Itens do Grupo */}
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.div 
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          className="divide-y divide-gray-100 border-t border-gray-100 overflow-hidden"
+                        >
+                          {group.items && group.items.length > 0 ? (
+                            group.items.map((item) => {
+                              const itemQty = selectedComplements[item.id]?.quantity || 0;
+                              const isSelected = itemQty > 0;
+                              const isMaxGroupReached = selectedCount >= group.max_quantity;
+                              const isMaxItemReached = itemQty >= (item.max_quantity || 1);
 
-                          if (isSingleChoice) {
-                            return (
-                              <label
-                                key={item.id}
-                                onClick={() => handleSingleSelect(group, item)}
-                                className={`flex items-center justify-between p-3.5 sm:p-4 cursor-pointer transition-colors duration-150 gap-3 ${
-                                  isSelected 
-                                    ? 'bg-[#D1E9DF]/20 text-[#171717]' 
-                                    : 'hover:bg-[#F7F9F8] text-stone-700'
-                                }`}
-                              >
-                                <div className="flex items-center gap-3 min-w-0 flex-1">
-                                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all shrink-0 ${
-                                    isSelected 
-                                      ? 'border-[#047857] bg-[#047857] shadow-xs' 
-                                      : 'border-stone-300 bg-white'
-                                  }`}>
-                                    {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
-                                  </div>
-                                  <div className="min-w-0 flex-1">
-                                    <p className={`text-xs sm:text-sm font-bold leading-tight ${isSelected ? 'text-[#171717]' : 'text-stone-800'}`}>
-                                      {item.name}
-                                    </p>
-                                    {item.description && (
-                                      <p className="text-[11px] text-stone-500 mt-0.5 leading-tight line-clamp-2">
-                                        {item.description}
+                              return (
+                                <div 
+                                  key={item.id}
+                                  className={`p-3.5 sm:p-4 flex items-center justify-between gap-3 transition-colors ${
+                                    isSelected ? 'bg-emerald-50/20' : 'hover:bg-gray-50/60'
+                                  }`}
+                                >
+                                  {/* Lado Esquerdo: Checkbox + Nome + Preço */}
+                                  <div 
+                                    className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer select-none"
+                                    onClick={() => handleToggleItem(group, item)}
+                                  >
+                                    <div className={`w-5 h-5 rounded-md border-2 transition-all flex items-center justify-center shrink-0 ${
+                                      isSelected 
+                                        ? 'border-[#046c4e] bg-[#046c4e] text-white shadow-2xs' 
+                                        : 'border-gray-300 bg-white'
+                                    }`}>
+                                      {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <p className="font-bold text-xs sm:text-sm text-gray-900 leading-tight">
+                                        {item.name}
                                       </p>
-                                    )}
+                                      <p className="text-xs text-gray-500 font-medium mt-0.5">
+                                        {item.price > 0 ? `+ R$ ${Number(item.price).toFixed(2).replace('.', ',')}` : 'Grátis'}
+                                      </p>
+                                    </div>
                                   </div>
-                                </div>
-                                <span className={`text-xs sm:text-sm font-extrabold shrink-0 whitespace-nowrap pl-1 ${
-                                  item.price > 0 ? 'text-[#171717]' : 'text-[#047857]'
-                                }`}>
-                                  {item.price > 0 ? `+ R$ ${Number(item.price).toFixed(2).replace('.', ',')}` : 'Grátis'}
-                                </span>
-                              </label>
-                            );
-                          }
 
-                          return (
-                            <div 
-                              key={item.id}
-                              className={`flex items-center justify-between p-3.5 sm:p-4 transition-colors gap-3 ${
-                                isSelected ? 'bg-[#D1E9DF]/20' : 'hover:bg-[#F7F9F8]'
-                              }`}
-                            >
-                              <div className="min-w-0 flex-1 pr-1">
-                                <p className={`text-xs sm:text-sm font-bold leading-tight ${isSelected ? 'text-[#171717]' : 'text-stone-800'}`}>
-                                  {item.name}
-                                </p>
-                                {item.description && (
-                                  <p className="text-[11px] text-stone-500 mt-0.5 leading-tight line-clamp-2">
-                                    {item.description}
-                                  </p>
-                                )}
-                                <p className={`text-xs font-black mt-1 ${item.price > 0 ? 'text-[#171717]' : 'text-[#047857]'}`}>
-                                  {item.price > 0 ? `+ R$ ${Number(item.price).toFixed(2).replace('.', ',')}` : 'Grátis'}
-                                </p>
-                              </div>
-
-                              {!isVisualOnly && (
-                                <div className="flex items-center gap-1.5 shrink-0">
-                                  {itemQty > 0 ? (
-                                    <div className="flex items-center gap-1 bg-white border border-[#E5EAE7] rounded-xl p-1 shadow-xs">
-                                      <motion.button
-                                        whileTap={{ scale: 0.85 }}
+                                  {/* Lado Direito: Stepper de Quantidade [-] count [+] */}
+                                  {!isSingleChoice && !isVisualOnly && (
+                                    <div className="flex items-center gap-2 border border-gray-200 rounded-full px-2 py-0.5 bg-white shrink-0 shadow-2xs">
+                                      <button
                                         type="button"
+                                        disabled={itemQty === 0}
                                         onClick={() => handleItemQtyChange(group, item, -1)}
-                                        className="w-7 h-7 flex items-center justify-center rounded-lg text-stone-600 hover:bg-[#F7F9F8] hover:text-[#171717] transition-colors cursor-pointer"
+                                        className="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-gray-700 disabled:opacity-30 cursor-pointer"
                                       >
-                                        <Minus className="w-3.5 h-3.5" />
-                                      </motion.button>
-                                      <span className="w-5 text-center font-black text-xs sm:text-sm text-[#171717]">
+                                        <Minus className="w-3 h-3" />
+                                      </button>
+                                      <span className="font-bold text-xs text-gray-900 w-3 text-center">
                                         {itemQty}
                                       </span>
-                                      <motion.button
-                                        whileTap={{ scale: 0.85 }}
+                                      <button
                                         type="button"
                                         disabled={isMaxGroupReached || isMaxItemReached}
                                         onClick={() => handleItemQtyChange(group, item, 1)}
-                                        className="w-7 h-7 flex items-center justify-center rounded-lg text-white bg-[#047857] hover:bg-[#036348] transition-colors disabled:opacity-30 cursor-pointer"
+                                        className="w-5 h-5 flex items-center justify-center text-[#046c4e] hover:text-[#03543d] font-bold disabled:opacity-30 cursor-pointer"
                                       >
-                                        <Plus className="w-3.5 h-3.5" />
-                                      </motion.button>
+                                        <Plus className="w-3 h-3 stroke-[2.5]" />
+                                      </button>
                                     </div>
-                                  ) : (
-                                    <Button
-                                      type="button"
-                                      variant="outline"
-                                      size="sm"
-                                      disabled={isMaxGroupReached}
-                                      onClick={() => handleItemQtyChange(group, item, 1)}
-                                      className="rounded-xl text-[11px] sm:text-xs font-bold border-[#D1E9DF] bg-[#D1E9DF]/40 text-[#047857] hover:bg-[#D1E9DF] hover:border-[#D1E9DF] disabled:opacity-30 h-8 px-3 transition-all cursor-pointer"
-                                    >
-                                      <Plus className="w-3.5 h-3.5 mr-1" /> Adicionar
-                                    </Button>
                                   )}
                                 </div>
-                              )}
-                            </div>
-                          );
-                        })
-                      ) : (
-                        <p className="p-4 text-xs text-stone-500 italic text-center">Nenhuma opção disponível.</p>
+                              );
+                            })
+                          ) : (
+                            <p className="p-4 text-xs text-gray-400 italic text-center">Nenhuma opção disponível.</p>
+                          )}
+                        </motion.div>
                       )}
-                    </div>
+                    </AnimatePresence>
                   </div>
                 );
               })}
             </div>
           ) : additionals && additionals.length > 0 ? (
-            <div className="space-y-3">
-              <h4 className="font-bold text-stone-900 text-sm">Adicionais</h4>
-              <div className="space-y-2">
-                {additionals.map(ad => {
-                  const isChecked = !!selectedComplements[ad.id];
-                  return (
-                    <label 
-                      key={ad.id}
-                      className={`flex items-center justify-between p-3.5 border rounded-2xl cursor-pointer transition-all gap-2 ${
-                        isChecked 
-                          ? 'bg-stone-50 border-stone-900 text-stone-900' 
-                          : 'bg-white border-stone-200 text-stone-700 hover:bg-stone-50'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={(e) => handleLegacyAdditionalToggle(ad, e.target.checked)}
-                          className="w-4 h-4 text-stone-900 rounded border-stone-300 shrink-0 accent-stone-900"
-                        />
-                        <span className="font-semibold text-xs sm:text-sm truncate">{ad.name}</span>
-                      </div>
-                      <span className="text-xs sm:text-sm font-bold text-stone-900 shrink-0 whitespace-nowrap">
-                        + R$ {Number(ad.price || 0).toFixed(2).replace('.', ',')}
-                      </span>
-                    </label>
-                  );
-                })}
+            /* Fallback para Adicionais Legados com a mesma estética */
+            <div className="rounded-2xl border border-gray-200/90 overflow-hidden bg-white shadow-2xs">
+              <div 
+                onClick={() => toggleGroupExpanded("legacy")}
+                className="p-3.5 sm:p-4 flex items-center justify-between cursor-pointer select-none bg-white hover:bg-gray-50/50 transition-colors"
+              >
+                <h4 className="font-bold text-sm sm:text-base text-gray-950">
+                  Extras opcionais
+                </h4>
+                <div className="flex items-center gap-2">
+                  <span className="bg-emerald-50 text-[#046c4e] font-bold text-xs px-2.5 py-0.5 rounded-full border border-emerald-200/60">
+                    {Object.keys(selectedComplements).length}/{additionals.length}
+                  </span>
+                  <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${expandedGroups["legacy"] !== false ? 'rotate-180' : ''}`} />
+                </div>
               </div>
+
+              {expandedGroups["legacy"] !== false && (
+                <div className="divide-y divide-gray-100 border-t border-gray-100">
+                  {additionals.map((ad) => {
+                    const isChecked = !!selectedComplements[ad.id];
+                    return (
+                      <div 
+                        key={ad.id}
+                        className={`p-3.5 sm:p-4 flex items-center justify-between gap-3 transition-colors ${
+                          isChecked ? 'bg-emerald-50/20' : 'hover:bg-gray-50/60'
+                        }`}
+                      >
+                        <div 
+                          className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer select-none"
+                          onClick={() => handleLegacyAdditionalToggle(ad, !isChecked)}
+                        >
+                          <div className={`w-5 h-5 rounded-md border-2 transition-all flex items-center justify-center shrink-0 ${
+                            isChecked 
+                              ? 'border-[#046c4e] bg-[#046c4e] text-white shadow-2xs' 
+                              : 'border-gray-300 bg-white'
+                          }`}>
+                            {isChecked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-bold text-xs sm:text-sm text-gray-900 leading-tight">
+                              {ad.name}
+                            </p>
+                            <p className="text-xs text-gray-500 font-medium mt-0.5">
+                              + R$ {Number(ad.price || 0).toFixed(2).replace('.', ',')}
+                            </p>
+                          </div>
+                        </div>
+
+                        {!isVisualOnly && (
+                          <div className="flex items-center gap-2 border border-gray-200 rounded-full px-2 py-0.5 bg-white shrink-0 shadow-2xs">
+                            <button
+                              type="button"
+                              disabled={!isChecked}
+                              onClick={() => handleLegacyAdditionalToggle(ad, false)}
+                              className="w-5 h-5 flex items-center justify-center text-gray-400 hover:text-gray-700 disabled:opacity-30 cursor-pointer"
+                            >
+                              <Minus className="w-3 h-3" />
+                            </button>
+                            <span className="font-bold text-xs text-gray-900 w-3 text-center">
+                              {isChecked ? 1 : 0}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={isChecked}
+                              onClick={() => handleLegacyAdditionalToggle(ad, true)}
+                              className="w-5 h-5 flex items-center justify-center text-[#046c4e] hover:text-[#03543d] font-bold disabled:opacity-30 cursor-pointer"
+                            >
+                              <Plus className="w-3 h-3 stroke-[2.5]" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           ) : null}
 
+          {/* Campo de Observação para o Preparo */}
           {!isVisualOnly && (
             <div>
-              <label htmlFor="modal-notes" className="block text-xs font-black uppercase tracking-wider text-stone-600 mb-1.5">
+              <label htmlFor="modal-notes" className="block text-xs sm:text-sm font-semibold text-gray-900 mb-2">
                 Alguma observação para o preparo?
               </label>
               <Textarea
@@ -424,76 +483,32 @@ export default function ProductDetailModal({
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={2}
-                className="resize-none rounded-2xl text-xs sm:text-sm bg-[#F7F9F8] border-[#E5EAE7] text-[#171717] placeholder:text-stone-400 focus:border-[#047857] focus:ring-2 focus:ring-[#D1E9DF] focus:bg-white outline-none"
+                className="resize-none rounded-2xl text-xs sm:text-sm bg-gray-50/80 border border-gray-200/80 text-gray-900 placeholder:text-gray-400 focus:border-[#046c4e] focus:bg-white focus:ring-1 focus:ring-[#046c4e]/30 outline-none w-full p-3.5 transition-all"
               />
             </div>
           )}
         </div>
 
-        <div className="sticky bottom-0 bg-white/95 backdrop-blur-md border-t border-[#E5EAE7] p-3.5 pb-6 sm:pb-4 sm:p-5 space-y-2.5 shadow-2xl z-20">
-          {isVisualOnly ? (
-            <div className="flex items-center justify-between gap-3 bg-[#F7F9F8] border border-[#E5EAE7] rounded-2xl p-3.5 sm:p-4">
-              <div>
-                <span className="text-[11px] font-bold uppercase tracking-wider text-stone-500 block">Preço</span>
-                <span className="text-xl font-black text-[#171717]">
-                  R$ {Number(product.price || 0).toFixed(2).replace('.', ',')}
-                </span>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={onClose}
-                className="rounded-xl font-bold border-[#E5EAE7] bg-white text-[#171717] hover:bg-[#F7F9F8] h-10 px-5 cursor-pointer"
-              >
-                Fechar
-              </Button>
+        {/* Botão Fixo Inferior de Ação: "Adicionar ao Pedido R$ 40,00" */}
+        <div className="sticky bottom-0 bg-white/95 backdrop-blur-md border-t border-gray-100 p-4 pt-3 z-30">
+          {!validation.isValid && (
+            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold mb-2">
+              <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-600" />
+              <span>Selecione: <strong>{validation.missingGroup}</strong> para continuar.</span>
             </div>
-          ) : (
-            <>
-              {!validation.isValid && (
-                <div className="flex items-center gap-2 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-600" />
-                  <span>Selecione: <strong>{validation.missingGroup}</strong> para continuar.</span>
-                </div>
-              )}
-
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1 bg-[#F7F9F8] p-1 rounded-2xl border border-[#E5EAE7] flex-shrink-0">
-                  <motion.button
-                    whileTap={{ scale: 0.85 }}
-                    type="button"
-                    onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                    className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl hover:bg-white text-stone-700 hover:text-[#171717] flex items-center justify-center transition-colors cursor-pointer"
-                  >
-                    <Minus className="h-4 w-4" />
-                  </motion.button>
-                  <span className="font-black text-sm sm:text-base w-7 sm:w-8 text-center text-[#171717]">{quantity}</span>
-                  <motion.button
-                    whileTap={{ scale: 0.85 }}
-                    type="button"
-                    onClick={() => setQuantity(quantity + 1)}
-                    className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl hover:bg-white text-stone-700 hover:text-[#171717] flex items-center justify-center transition-colors cursor-pointer"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </motion.button>
-                </div>
-
-                <motion.button
-                  whileHover={{ scale: 1.01 }}
-                  whileTap={{ scale: 0.98 }}
-                  type="button"
-                  disabled={!validation.isValid}
-                  onClick={handleAddToCart}
-                  className="flex-1 min-w-0 bg-[#047857] hover:bg-[#036348] text-white h-11 sm:h-12 rounded-2xl text-xs sm:text-sm font-black shadow-lg shadow-[#047857]/25 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-between px-4 sm:px-5 gap-2 transition-all cursor-pointer"
-                >
-                  <span className="truncate">Adicionar ao Pedido</span>
-                  <span className="shrink-0 font-black text-emerald-100">
-                    R$ {calculateTotal().toFixed(2).replace('.', ',')}
-                  </span>
-                </motion.button>
-              </div>
-            </>
           )}
+
+          <button
+            type="button"
+            disabled={!validation.isValid}
+            onClick={handleAddToCart}
+            className="w-full bg-[#046c4e] hover:bg-[#03543d] text-white h-12 rounded-2xl text-sm font-bold flex items-center justify-between px-6 shadow-md transition-all active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          >
+            <span>Adicionar ao Pedido</span>
+            <span className="font-black text-white">
+              R$ {calculateTotal().toFixed(2).replace('.', ',')}
+            </span>
+          </button>
         </div>
       </DialogContent>
     </Dialog>

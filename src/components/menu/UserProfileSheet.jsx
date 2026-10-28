@@ -262,7 +262,7 @@ function AddressForm({ address, onSave, onCancel, dark = false }) {
   );
 }
 
-export default function UserProfileSheet({ dark = false }) {
+export default function UserProfileSheet({ dark = false, trigger }) {
   const [user, setUser] = useState(null);
   const [addresses, setAddresses] = useState([]);
   const [availableCoupons, setAvailableCoupons] = useState([]);
@@ -277,8 +277,6 @@ export default function UserProfileSheet({ dark = false }) {
   const [resendCooldown, setResendCooldown] = useState(0);
   const [isSubmittingPhone, setIsSubmittingPhone] = useState(false);
   const [phoneError, setPhoneError] = useState("");
-  const [isLookingUpPhone, setIsLookingUpPhone] = useState(false);
-  const [foundNameMessage, setFoundNameMessage] = useState("");
 
   const [isEditingName, setIsEditingName] = useState(false);
   const [newName, setNewName] = useState("");
@@ -577,18 +575,20 @@ export default function UserProfileSheet({ dark = false }) {
   return (
     <Sheet onOpenChange={(open) => open && loadUserData()}>
       <SheetTrigger asChild>
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          className={`rounded-full h-9 w-9 cursor-pointer transition-colors ${
-            dark 
-              ? "text-stone-300 hover:text-white hover:bg-stone-800/80" 
-              : "text-[#171717] hover:text-[#047857] hover:bg-[#D1E9DF]/40"
-          }`}
-          title="Meu Perfil"
-        >
-          <UserIcon className="w-4 h-4" />
-        </Button>
+        {trigger || (
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className={`rounded-full h-9 w-9 cursor-pointer transition-colors ${
+              dark 
+                ? "text-stone-300 hover:text-white hover:bg-stone-800/80" 
+                : "text-[#171717] hover:text-[#047857] hover:bg-[#D1E9DF]/40"
+            }`}
+            title="Meu Perfil"
+          >
+            <UserIcon className="w-4 h-4" />
+          </Button>
+        )}
       </SheetTrigger>
       <SheetContent className={`overflow-y-auto p-6 scrollbar-hide ${
         dark 

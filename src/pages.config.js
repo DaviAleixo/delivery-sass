@@ -50,6 +50,7 @@
 import AdminLogin from './pages/AdminLogin';
 import PDV from './pages/PDV';
 import PDVOrders from './pages/PDVOrders';
+import CashManagement from './pages/CashManagement';
 import Banners from './pages/Banners';
 import Categories from './pages/Categories';
 import Clients from './pages/Clients';
@@ -68,6 +69,7 @@ import Settings from './pages/Settings';
 import SuperAdmin from './pages/SuperAdmin';
 import KDS from './pages/KDS';
 import DeliveryDrivers from './pages/DeliveryDrivers';
+import Tables from './pages/Tables';
 import __Layout from './Layout.jsx';
 
 
@@ -76,6 +78,8 @@ export const PAGES = {
     "SuperAdmin": SuperAdmin,
     "PDV": PDV,
     "PDVOrders": PDVOrders,
+    "CashManagement": CashManagement,
+    "Tables": Tables,
     "KDS": KDS,
     "DeliveryDrivers": DeliveryDrivers,
     "Banners": Banners,

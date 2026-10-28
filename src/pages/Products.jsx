@@ -139,8 +139,6 @@ export default function ProductsPage() {
   const { slug } = useParams();
   const location = useLocation();
   const { tenant } = useTenant();
-  const salonMode = tenant?.salon_mode || (tenant?.plan === 'showcase' ? 'showcase' : (tenant?.plan === 'table' ? 'table_only' : 'full'));
-  const isVisualOnly = salonMode === 'showcase';
 
   useEffect(() => {
     setProducts([]);
@@ -205,10 +203,45 @@ export default function ProductsPage() {
     setIsSubmitting(true);
 
     try {
+      const selectedCatObj = categories.find(c => c.id === productForm.category || c.name === productForm.category);
+      const isPizzaCat = selectedCatObj?.type === "pizza";
+
+      const cleanPizzaPrices = {};
+      if (productForm.pizza_prices && typeof productForm.pizza_prices === "object") {
+        Object.entries(productForm.pizza_prices).forEach(([sizeId, val]) => {
+          if (val !== undefined && val !== null && val !== "") {
+            const parsed = typeof val === "number" ? val : parseBRLToNumber(String(val));
+            if (!isNaN(parsed) && parsed > 0) {
+              cleanPizzaPrices[sizeId] = parsed;
+            }
+          }
+        });
+      }
+
+      let finalPrice = 0;
+      if (isPizzaCat) {
+        const sizePricesList = Object.values(cleanPizzaPrices);
+        if (sizePricesList.length === 0) {
+          toast.error("Por favor, preencha o preço de pelo menos um tamanho da pizza.");
+          setIsSubmitting(false);
+          return;
+        }
+        // Preço base de referência para o catálogo (menor preço dos tamanhos cadastrados)
+        finalPrice = Math.min(...sizePricesList);
+      } else {
+        finalPrice = parseBRLToNumber(productForm.price);
+        if (isNaN(finalPrice) || finalPrice < 0) {
+          toast.error("Por favor, informe um preço válido para o produto.");
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
       const productData = {
         ...productForm,
-        price: parseBRLToNumber(productForm.price),
-        available: Boolean(productForm.available)
+        price: finalPrice,
+        available: Boolean(productForm.available),
+        pizza_prices: cleanPizzaPrices,
       };
 
       const zodValidation = validateSchema(productSchema, productData);
@@ -298,7 +331,8 @@ export default function ProductsPage() {
       price: "",
       category: "",
       image_url: "",
-      available: true
+      available: true,
+      pizza_prices: {},
     });
     setSelectedGroupIds([]);
     setEditingProduct(null);
@@ -311,7 +345,8 @@ export default function ProductsPage() {
       price: product.price !== undefined && product.price !== null ? formatToBRL(product.price) : "",
       category: product.category || "",
       image_url: product.image_url || "",
-      available: product.available !== false
+      available: product.available !== false,
+      pizza_prices: product.pizza_prices || {},
     });
     const linked = productComplementGroups.filter(pcg => pcg.product_id === product.id).map(pcg => pcg.group_id);
     setSelectedGroupIds(linked);
@@ -551,7 +586,13 @@ export default function ProductsPage() {
                         {/* Preço e Ações Principais */}
                         <div className="flex items-center justify-between">
                           <span className="text-lg font-black text-[#171717]">
-                            R$ {Number(product.price || 0).toFixed(2).replace('.', ',')}
+                            {product.pizza_prices && Object.keys(product.pizza_prices).length > 0 ? (
+                              <span className="text-xs font-semibold text-gray-500">
+                                A partir de <span className="text-lg font-black text-[#171717]">R$ {Number(product.price || 0).toFixed(2).replace('.', ',')}</span>
+                              </span>
+                            ) : (
+                              `R$ ${Number(product.price || 0).toFixed(2).replace('.', ',')}`
+                            )}
                           </span>
 
                           <div className="flex gap-1.5">
@@ -681,35 +722,120 @@ export default function ProductsPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="price">Preço (R$) *</Label>
-                  <CurrencyInput
-                    id="price"
-                    value={productForm.price}
-                    onChange={(e) => setProductForm({...productForm, price: e.target.value})}
-                    placeholder="R$ 32,90"
-                    required
-                  />
-                </div>
+              {/* Preço e Categoria (Se for pizza, oculta o preço geral e exibe a categoria em largura total) */}
+              {(() => {
+                const selectedCatObj = categories.find(c => c.id === productForm.category || c.name === productForm.category);
+                const isPizzaCategory = selectedCatObj?.type === "pizza";
 
-                <div>
-                  <Label htmlFor="category">Categoria *</Label>
-                  <Select
-                    value={productForm.category}
-                    onValueChange={(value) => setProductForm({...productForm, category: value})}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map(cat => (
-                         <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                if (isPizzaCategory) {
+                  return (
+                    <div>
+                      <Label htmlFor="category">Categoria *</Label>
+                      <Select
+                        value={productForm.category}
+                        onValueChange={(value) => setProductForm({...productForm, category: value})}
+                      >
+                        <SelectTrigger id="category" className="w-full">
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {categories.map(cat => (
+                             <SelectItem key={cat.id} value={cat.id}>
+                               {cat.type === 'pizza' ? `🍕 ${cat.name}` : cat.name}
+                             </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="price">Preço (R$) *</Label>
+                      <CurrencyInput
+                        id="price"
+                        value={productForm.price}
+                        onChange={(e) => setProductForm({...productForm, price: e.target.value})}
+                        placeholder="R$ 32,90"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="category">Categoria *</Label>
+                      <Select
+                        value={productForm.category}
+                        onValueChange={(value) => setProductForm({...productForm, category: value})}
+                      >
+                        <SelectTrigger id="category">
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {categories.map(cat => (
+                             <SelectItem key={cat.id} value={cat.id}>
+                               {cat.type === 'pizza' ? `🍕 ${cat.name}` : cat.name}
+                             </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Seção Condicional de Preços por Tamanho para Pizzas */}
+              {(() => {
+                const selectedCatObj = categories.find(c => c.id === productForm.category || c.name === productForm.category);
+                if (selectedCatObj?.type !== "pizza") return null;
+
+                const sizes = selectedCatObj.pizza_sizes?.length ? selectedCatObj.pizza_sizes : [
+                  { id: "broto", name: "Broto (4 fatias)" },
+                  { id: "media", name: "Média (6 fatias)" },
+                  { id: "grande", name: "Grande (8 fatias)" },
+                  { id: "familia", name: "Família (12 fatias)" },
+                ];
+
+                return (
+                  <div className="p-3.5 bg-amber-50/80 border border-amber-200 rounded-xl space-y-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">🍕</span>
+                      <div>
+                        <p className="text-xs font-bold text-amber-950">Preços deste Sabor por Tamanho</p>
+                        <p className="text-[11px] text-amber-800">
+                          Defina o valor deste sabor para cada tamanho disponível (Broto, Média, Grande, Família).
+                        </p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      {sizes.map((size) => (
+                        <div key={size.id}>
+                          <Label className="text-[11px] font-semibold text-gray-700">{size.name}</Label>
+                          <CurrencyInput
+                            value={productForm.pizza_prices?.[size.id] !== undefined 
+                              ? (typeof productForm.pizza_prices[size.id] === 'number' 
+                                  ? formatToBRL(productForm.pizza_prices[size.id]) 
+                                  : productForm.pizza_prices[size.id])
+                              : ""}
+                            onChange={(e) => {
+                              setProductForm(prev => ({
+                                ...prev,
+                                pizza_prices: {
+                                  ...(prev.pizza_prices || {}),
+                                  [size.id]: e.target.value
+                                }
+                              }));
+                            }}
+                            placeholder="R$ 0,00"
+                            className="h-8 text-xs bg-white mt-0.5"
+                          />
+                        </div>
                       ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div>
                 <Label htmlFor="image">Imagem do produto</Label>

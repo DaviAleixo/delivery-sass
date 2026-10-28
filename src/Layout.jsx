@@ -1,17 +1,27 @@
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { LayoutDashboard, Package, ShoppingBag, Settings, LogOut, Image as ImageIcon, Tag, BarChart, Folder, Users, Monitor, Layers, Flame, Lock, CreditCard, ExternalLink, RefreshCw, Bike, ChevronRight, ChevronDown } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingBag, Settings, LogOut, Image as ImageIcon, Tag, BarChart, Folder, Users, Monitor, Layers, Flame, Lock, CreditCard, ExternalLink, RefreshCw, Bike, ChevronRight, ChevronDown, Printer, Clock, UtensilsCrossed, Wallet } from "lucide-react";
 import { Settings as SettingsEntity } from "@/entities/Settings";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useAuth } from "@/lib/AuthContext";
-import { getStoreStatusInfo } from "@/utils/storeStatus";
+import { getStoreStatusInfo, getTodayDateKey } from "@/utils/storeStatus";
+import { useFifoPrintQueue } from "@/hooks/useFifoPrintQueue";
+import SpoolerManagerModal from "@/components/admin/SpoolerManagerModal";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { toast as sonnerToast } from "sonner";
 import {
   Sidebar,
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -45,6 +55,18 @@ const navigationItems = [
     pageKey: "PDV",
     url: createPageUrl("PDV"),
     icon: Monitor,
+  },
+  {
+    title: "Gestão de Caixa",
+    pageKey: "CashManagement",
+    url: createPageUrl("CashManagement"),
+    icon: Wallet,
+  },
+  {
+    title: "Salão & Mesas",
+    pageKey: "Tables",
+    url: createPageUrl("Tables"),
+    icon: UtensilsCrossed,
   },
   {
     title: "Entregadores",
@@ -105,13 +127,13 @@ const navigationItems = [
 import { Order } from "@/entities/Order";
 import { soundAlert } from "@/utils/soundAlert";
 import { useToast } from "@/components/ui/use-toast";
-import { Bell, BellOff, Volume2 } from "lucide-react";
 
 export default function Layout({ children, currentPageName }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user: authUser, isAdminAuthenticated: isSessionAuth, isLoadingAuth, logout } = useAuth();
+  const { isSpoolerOnline, spoolerConfig } = useFifoPrintQueue();
   const [user, setUser] = React.useState(null);
   const [settings, setSettings] = React.useState(null);
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
@@ -235,7 +257,23 @@ export default function Layout({ children, currentPageName }) {
     };
 
     checkNewOrders();
-    const interval = setInterval(checkNewOrders, 5000);
+
+    // Polling inteligente e leve: apenas enquanto a aba estiver visível no navegador
+    const interval = setInterval(() => {
+      if (typeof document === "undefined" || document.visibilityState === "visible") {
+        checkNewOrders();
+      }
+    }, 25000);
+
+    // Atualiza imediatamente quando o lojista voltar à aba do painel
+    const handleVisibilityChange = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        checkNewOrders();
+      }
+    };
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+    }
 
     let unsubscribe;
     try {
@@ -249,6 +287,9 @@ export default function Layout({ children, currentPageName }) {
 
     return () => {
       clearInterval(interval);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+      }
       if (unsubscribe && typeof unsubscribe === "function") unsubscribe();
       soundAlert.stopContinuousAlert();
       soundAlert.setPendingCount(0);
@@ -363,8 +404,9 @@ export default function Layout({ children, currentPageName }) {
     return navigationItems
       .filter(item => {
         if (!hasPermission(item.pageKey)) return false;
+        if (item.pageKey === "Tables" && settings?.accepts_dine_in === false) return false;
         if (isVisualOnly) {
-          const hiddenInShowcase = ["Orders", "KDS", "PDV", "DeliveryDrivers", "Clients", "Coupons", "Reports"];
+          const hiddenInShowcase = ["Orders", "KDS", "PDV", "Tables", "DeliveryDrivers", "Clients", "Coupons", "Reports"];
           if (hiddenInShowcase.includes(item.pageKey)) return false;
         } else if (isTableOnly) {
           const hiddenInTableOnly = ["DeliveryDrivers", "Clients"];
@@ -398,7 +440,7 @@ export default function Layout({ children, currentPageName }) {
   const loadSettings = async () => {
     try {
       const segments = location.pathname.split("/").filter(Boolean);
-      const RESERVED = new Set(["menu", "dashboard", "orders", "pedidos", "pdv", "kds", "deliverydrivers", "clients", "products", "categories", "banners", "coupons", "complements", "reports", "settings", "superadmin", "adminlogin", "myorders", "printorder", "home", "api"]);
+      const RESERVED = new Set(["menu", "dashboard", "orders", "pedidos", "pdv", "tables", "kds", "deliverydrivers", "clients", "products", "categories", "banners", "coupons", "complements", "reports", "settings", "superadmin", "adminlogin", "myorders", "printorder", "home", "api"]);
       const slugFromPath = segments.length > 0 && !RESERVED.has(segments[0].toLowerCase()) ? segments[0].toLowerCase() : null;
       const targetSlug = slugFromPath || localStorage.getItem("current_tenant_slug");
       const currentTenantId = localStorage.getItem("current_tenant_id");
@@ -417,7 +459,7 @@ export default function Layout({ children, currentPageName }) {
       }
 
       if (isSupabaseConfigured() && supabase) {
-        let query = supabase.from("tenants").select("id, name, slug, plan, salon_mode, logo_url, banner_url, opening_time, closing_time, open_days, phone, address, whatsapp, instagram, delivery_fee, min_order_value, delivery_fee_type, delivery_neighborhoods, delivery_unlisted_policy, delivery_fallback_fee, free_delivery_threshold, address_city, address_state, address_neighborhood, cep");
+        let query = supabase.from("tenants").select("id, name, slug, plan, salon_mode, logo_url, banner_url, opening_time, closing_time, open_days, phone, address, whatsapp, instagram, delivery_fee, min_order_value, delivery_fee_type, delivery_neighborhoods, delivery_unlisted_policy, delivery_fallback_fee, free_delivery_threshold, address_city, address_state, address_neighborhood, cep, manual_store_open, manual_override_date, accepts_dine_in, accepts_delivery, accepts_takeaway");
         if (targetSlug) {
           query = query.eq("slug", targetSlug);
         } else if (currentTenantId) {
@@ -470,6 +512,82 @@ export default function Layout({ children, currentPageName }) {
       }
     } catch (_error) {
       console.log("Error loading settings", _error);
+    }
+  };
+
+  const [isTogglingStore, setIsTogglingStore] = React.useState(false);
+
+  // Sincronização em tempo real de alterações de configuração/status da loja
+  React.useEffect(() => {
+    const handleSettingsUpdated = (e) => {
+      if (e.detail) {
+        setSettings((prev) => ({ ...prev, ...e.detail }));
+      }
+    };
+    window.addEventListener("settings_updated", handleSettingsUpdated);
+    return () => window.removeEventListener("settings_updated", handleSettingsUpdated);
+  }, []);
+
+  const handleToggleStoreStatus = async () => {
+    const currentStatus = getStoreStatusInfo(settings);
+    const targetTenantId = settings?.id || localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001";
+    setIsTogglingStore(true);
+    try {
+      const todayKey = getTodayDateKey();
+      const newStatus = !currentStatus.isOpen;
+
+      const updatedData = {
+        manual_store_open: newStatus,
+        manual_override_date: todayKey,
+      };
+
+      await SettingsEntity.update(targetTenantId, updatedData);
+
+      const newSettings = { ...settings, ...updatedData, id: targetTenantId };
+      setSettings(newSettings);
+
+      window.dispatchEvent(new CustomEvent("settings_updated", { detail: newSettings }));
+
+      if (!newStatus) {
+        sonnerToast("🔴 Loja fechada manualmente!", {
+          description: "Os clientes verão a loja como fechada até o próximo turno ou reabertura manual.",
+          duration: 6000,
+        });
+      } else {
+        sonnerToast.success("🟢 Loja aberta manualmente!", {
+          description: "Os clientes já podem fazer novos pedidos no cardápio.",
+          duration: 6000,
+        });
+      }
+    } catch (err) {
+      console.error("Erro ao alterar status da loja:", err);
+      sonnerToast.error("Erro ao alterar status da loja. Tente novamente.");
+    } finally {
+      setIsTogglingStore(false);
+    }
+  };
+
+  const handleResetToAuto = async () => {
+    const targetTenantId = settings?.id || localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001";
+    setIsTogglingStore(true);
+    try {
+      const updatedData = {
+        manual_store_open: null,
+        manual_override_date: null,
+      };
+
+      await SettingsEntity.update(targetTenantId, updatedData);
+
+      const newSettings = { ...settings, ...updatedData, id: targetTenantId };
+      setSettings(newSettings);
+
+      window.dispatchEvent(new CustomEvent("settings_updated", { detail: newSettings }));
+      sonnerToast.info("⏱️ Horário resetado para a programação semanal!");
+    } catch (err) {
+      console.error("Erro ao resetar status da loja:", err);
+      sonnerToast.error("Erro ao resetar status da loja.");
+    } finally {
+      setIsTogglingStore(false);
     }
   };
 
@@ -566,6 +684,7 @@ export default function Layout({ children, currentPageName }) {
       Orders: "Pedidos",
       KDS: "KDS (Cozinha)",
       PDV: "PDV (Balcão)",
+      Tables: "Salão & Mesas",
       DeliveryDrivers: "Entregadores",
       Clients: "Clientes",
       Products: "Produtos",
@@ -733,17 +852,101 @@ export default function Layout({ children, currentPageName }) {
                 <h1 className="text-sm md:text-base font-bold text-gray-900">{currentPageTitle}</h1>
               </div>
 
-              <div className="flex items-center gap-3">
-                {/* Status da Loja */}
-                <div 
-                  onClick={() => navigate(`/${activeSlug}/Settings`)}
-                  title="Clique para gerenciar o horário e status da loja"
-                  className="bg-white border border-gray-200 text-gray-800 rounded-full px-3.5 py-1.5 text-xs font-semibold flex items-center gap-2 shadow-2xs hover:bg-gray-50 transition-colors cursor-pointer select-none"
-                >
-                  <span className={`w-2 h-2 rounded-full ${storeStatus.isOpen ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`} />
-                  <span className="text-gray-800 font-bold">{storeStatus.isOpen ? "Loja Aberta" : "Loja Fechada"}</span>
-                  <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
-                </div>
+              <div className="flex items-center gap-2.5">
+                {/* Status do Spooler de Impressão Silenciosa (.exe) - Somente quando ativo */}
+                {isSpoolerOnline && (
+                  <SpoolerManagerModal
+                    trigger={
+                      <button
+                        type="button"
+                        title={`Impressão Silenciosa Conectada (${spoolerConfig?.selectedPrinter || "Impressora Padrão"}). Clique para testar ou configurar.`}
+                        className="bg-emerald-50 border border-emerald-200 text-emerald-800 hover:bg-emerald-100 rounded-full px-3 py-1.5 text-xs font-semibold flex items-center gap-2 shadow-2xs transition-all cursor-pointer select-none"
+                      >
+                        <Printer className="w-3.5 h-3.5 text-emerald-700" />
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="font-bold hidden sm:inline">
+                          Impressora Pronta
+                        </span>
+                      </button>
+                    }
+                  />
+                )}
+
+                {/* Status da Loja com Abertura e Fechamento Manual */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      disabled={isTogglingStore}
+                      className="bg-white border border-gray-200 text-gray-800 rounded-full px-3.5 py-1.5 text-xs font-semibold flex items-center gap-2 shadow-2xs hover:bg-gray-50 transition-colors cursor-pointer select-none outline-none focus:ring-2 focus:ring-emerald-500/20"
+                      title="Clique para abrir ou fechar a loja manualmente"
+                    >
+                      <span className={`w-2 h-2 rounded-full ${storeStatus.isOpen ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`} />
+                      <span className="text-gray-800 font-bold">{storeStatus.isOpen ? "Loja Aberta" : "Loja Fechada"}</span>
+                      {storeStatus.isManual && (
+                        <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 font-bold px-1.5 py-0.2 rounded-full hidden sm:inline">
+                          Manual
+                        </span>
+                      )}
+                      <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                    </button>
+                  </DropdownMenuTrigger>
+
+                  <DropdownMenuContent align="end" className="w-64 p-2 bg-white rounded-2xl border border-gray-150 shadow-xl space-y-1 z-50">
+                    <DropdownMenuLabel className="px-2.5 py-2 text-xs font-normal">
+                      <div className="flex items-center justify-between font-bold text-gray-900 text-xs mb-0.5">
+                        <span>Status Atual:</span>
+                        <span className={`flex items-center gap-1.5 ${storeStatus.isOpen ? "text-emerald-700 font-black" : "text-rose-700 font-black"}`}>
+                          <span className={`w-2 h-2 rounded-full ${storeStatus.isOpen ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`} />
+                          {storeStatus.isOpen ? "Loja Aberta" : "Loja Fechada"}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-gray-500">
+                        {storeStatus.isManual ? "Modo manual forçado para hoje" : "Seguindo os horários da programação"}
+                      </p>
+                    </DropdownMenuLabel>
+
+                    <DropdownMenuSeparator className="my-1 bg-gray-100" />
+
+                    {/* Botão de Abrir ou Fechar Manualmente */}
+                    <DropdownMenuItem
+                      onClick={handleToggleStoreStatus}
+                      className={`cursor-pointer rounded-xl font-bold text-xs p-2.5 flex items-center gap-2.5 transition-colors ${
+                        storeStatus.isOpen 
+                          ? "text-rose-700 hover:bg-rose-50 focus:bg-rose-50 focus:text-rose-800" 
+                          : "text-emerald-700 hover:bg-emerald-50 focus:bg-emerald-50 focus:text-emerald-800"
+                      }`}
+                    >
+                      <span className={`w-2.5 h-2.5 rounded-full ${storeStatus.isOpen ? "bg-rose-500" : "bg-emerald-500 animate-pulse"}`} />
+                      <span>{storeStatus.isOpen ? "Fechar Loja Manualmente" : "Abrir Loja Manualmente"}</span>
+                    </DropdownMenuItem>
+
+                    {/* Voltar para Horário Automático (se estiver em modo manual) */}
+                    {storeStatus.isManual && (
+                      <DropdownMenuItem
+                        onClick={handleResetToAuto}
+                        className="cursor-pointer text-amber-700 hover:bg-amber-50 focus:bg-amber-50 rounded-xl font-bold text-xs p-2.5 flex items-center gap-2.5"
+                      >
+                        <Clock className="w-3.5 h-3.5 text-amber-600" />
+                        <span>Voltar p/ Horário Automático</span>
+                      </DropdownMenuItem>
+                    )}
+
+                    <DropdownMenuSeparator className="my-1 bg-gray-100" />
+
+                    {/* Link para Configurações */}
+                    <DropdownMenuItem
+                      onClick={() => navigate(`/${activeSlug}/Settings`)}
+                      className="cursor-pointer text-gray-600 hover:text-gray-900 hover:bg-gray-50 focus:bg-gray-50 rounded-xl text-xs p-2 flex items-center justify-between"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Settings className="w-3.5 h-3.5 text-gray-400" />
+                        Gerenciar Horários
+                      </span>
+                      <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
 
                 {/* Avatar da Loja / Usuário */}
                 <div 

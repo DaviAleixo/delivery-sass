@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { createPageUrl } from "@/utils";
 import { Order } from "@/entities/Order";
 import { Settings } from "@/entities/Settings";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
-  MapPin, Clock, CheckCircle, X, Bell, BellOff, Volume2, Timer, Check,
-  Calendar, Search, ChefHat, Bike, ShoppingBag, SlidersHorizontal, ChevronRight, ChevronDown, ChevronUp, Pencil, QrCode, RefreshCw, Banknote, Layers
+  Clock, X, Check,
+  Search, ChefHat, Bike, ShoppingBag, SlidersHorizontal, ChevronRight, Pencil, QrCode, Banknote,
+  Volume2, VolumeX, Calendar, ChevronDown, ChevronUp, Layers, CheckCircle, MapPin, RefreshCw
 } from "lucide-react";
 import { AnimatePresence } from "framer-motion";
 import { soundAlert } from "@/utils/soundAlert";
@@ -14,14 +16,13 @@ import OrderCard from "@/components/admin/orders/OrderCard";
 import DispatchOrderModal from "@/components/admin/orders/DispatchOrderModal";
 import ShiftClosingModal from "@/components/admin/orders/ShiftClosingModal";
 import EmptyOrdersIllustration from "@/components/admin/orders/EmptyOrdersIllustration";
+import { useFifoPrintQueue } from "@/hooks/useFifoPrintQueue";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { calculateShiftClosing } from "@/utils/shiftClosingCalculator";
-import { getStoreStatusInfo, getTodayDateKey } from "@/utils/storeStatus";
 import { getBrasiliaParts } from "@/utils/dateTime";
 import { useOrdersRealtime } from "@/hooks/useOrdersRealtime";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
@@ -88,17 +89,12 @@ function isDateWithinDays(dateStr, days = 7) {
 }
 
 export default function OrdersPage() {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [settings, setSettings] = useState(null);
   const [deliveryTime, setDeliveryTime] = useState("60–80 min");
   const [isEditingTime, setIsEditingTime] = useState(false);
   const [customTimeInput, setCustomTimeInput] = useState("");
-  const [soundEnabled, setSoundEnabled] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("vrumburguer_order_sound_enabled") !== "false";
-    }
-    return true;
-  });
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("pendente");
   const [timeFilter, setTimeFilter] = useState("shift"); // "shift" | "today" | "yesterday" | "week" | "all"
@@ -116,6 +112,24 @@ export default function OrdersPage() {
 
   // Estado para Fechamento de Caixa do Turno
   const [shiftClosingOpen, setShiftClosingOpen] = useState(false);
+
+  // Alarme Sonoro de Pedidos Pendentes
+  const [soundEnabled, setSoundEnabled] = useState(() => soundAlert.isEnabled());
+
+  const handleToggleSound = () => {
+    const next = !soundEnabled;
+    setSoundEnabled(next);
+    soundAlert.setEnabled(next);
+    if (next) {
+      soundAlert.playOrderChime();
+      toast.success("🔔 Alarme sonoro ativado!");
+    } else {
+      toast.info("🔕 Alarme sonoro silenciado.");
+    }
+  };
+
+  // Fila de Impressão
+  const { manualPrintOrder } = useFifoPrintQueue();
 
   const knownPendingIds = useRef(new Set());
   const isFirstLoad = useRef(true);
@@ -289,92 +303,6 @@ export default function OrdersPage() {
     setIsLoadingMore(true);
     setOrderLimit(prev => prev + 25);
     setIsLoadingMore(false);
-  };
-
-  const toggleSoundAlert = () => {
-    const nextState = !soundEnabled;
-    soundAlert.setEnabled(nextState);
-    setSoundEnabled(nextState);
-
-    if (nextState) {
-      const currentPending = orders.filter((o) => o.status === "pendente");
-      soundAlert.setPendingCount(currentPending.length);
-      soundAlert.playOrderChime();
-    } else {
-      soundAlert.stopContinuousAlert();
-      soundAlert.setPendingCount(0);
-    }
-  };
-
-  const testSound = () => {
-    soundAlert.playOrderChime();
-  };
-
-  const [isTogglingStore, setIsTogglingStore] = useState(false);
-
-  const storeStatus = getStoreStatusInfo(settings);
-
-  const handleToggleStoreStatus = async () => {
-    const targetTenantId = settings?.id || localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001";
-    setIsTogglingStore(true);
-    try {
-      const todayKey = getTodayDateKey();
-      const newStatus = !storeStatus.isOpen;
-      
-      const updatedData = {
-        manual_store_open: newStatus,
-        manual_override_date: todayKey,
-      };
-
-      await Settings.update(targetTenantId, updatedData);
-      
-      const newSettings = { ...settings, ...updatedData, id: targetTenantId };
-      setSettings(newSettings);
-      
-      window.dispatchEvent(new CustomEvent("settings_updated", { detail: newSettings }));
-
-      if (!newStatus) {
-        toast("🔴 Loja fechada manualmente!", {
-          description: "Deseja conferir e fechar o caixa do turno agora?",
-          action: {
-            label: "🧾 Fechar Caixa",
-            onClick: () => setShiftClosingOpen(true),
-          },
-          duration: 12000,
-        });
-      } else {
-        toast.success("🟢 Loja aberta manualmente!");
-      }
-    } catch (err) {
-      console.error("Erro ao alterar status da loja:", err);
-      toast.error("Erro ao alterar status da loja. Tente novamente.");
-    } finally {
-      setIsTogglingStore(false);
-    }
-  };
-
-  const handleResetToAuto = async () => {
-    const targetTenantId = settings?.id || localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001";
-    setIsTogglingStore(true);
-    try {
-      const updatedData = {
-        manual_store_open: null,
-        manual_override_date: null,
-      };
-
-      await Settings.update(targetTenantId, updatedData);
-      
-      const newSettings = { ...settings, ...updatedData, id: targetTenantId };
-      setSettings(newSettings);
-      
-      window.dispatchEvent(new CustomEvent("settings_updated", { detail: newSettings }));
-      toast.info("⏱️ Horário resetado para a programação semanal!");
-    } catch (err) {
-      console.error("Erro ao resetar status da loja:", err);
-      toast.error("Erro ao resetar status da loja.");
-    } finally {
-      setIsTogglingStore(false);
-    }
   };
 
   const handleSetDeliveryTime = async (newTime) => {
@@ -676,7 +604,7 @@ export default function OrdersPage() {
             {/* Card 2: Fechamento de Caixa */}
             <button
               type="button"
-              onClick={() => setShiftClosingOpen(true)}
+              onClick={() => navigate(createPageUrl("CashManagement") + "?tab=closing")}
               className="bg-white border border-gray-200/90 hover:border-gray-300 rounded-xl px-4 py-2.5 flex items-center gap-3 shadow-2xs hover:bg-gray-50/70 transition-all cursor-pointer"
             >
               <Banknote className="w-4 h-4 text-gray-700 shrink-0" />
@@ -698,6 +626,30 @@ export default function OrdersPage() {
                 </button>
               }
             />
+
+            {/* Card 4: Alarme Sonoro (Ativar / Silenciar) */}
+            <button
+              type="button"
+              onClick={handleToggleSound}
+              className={`border rounded-xl px-4 py-2.5 flex items-center gap-2.5 shadow-2xs transition-all cursor-pointer ${
+                soundEnabled 
+                  ? "bg-emerald-50/80 border-emerald-300 text-emerald-900 hover:bg-emerald-100/70" 
+                  : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"
+              }`}
+              title={soundEnabled ? "Alarme sonoro ativo (toque para silenciar)" : "Alarme silenciado (toque para ativar)"}
+            >
+              {soundEnabled ? (
+                <>
+                  <Volume2 className="w-4 h-4 text-emerald-600 shrink-0 animate-pulse" />
+                  <span className="text-xs font-bold text-emerald-900">Som Ativo</span>
+                </>
+              ) : (
+                <>
+                  <VolumeX className="w-4 h-4 text-gray-400 shrink-0" />
+                  <span className="text-xs font-bold text-gray-600">Silenciado</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
 
@@ -887,6 +839,7 @@ export default function OrdersPage() {
                   getStatusIcon={getStatusIcon}
                   getStatusText={getStatusText}
                   getPaymentMethodText={getPaymentMethodText}
+                  onPrint={manualPrintOrder}
                 />
               ))}
             </AnimatePresence>

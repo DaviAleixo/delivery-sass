@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { createPageUrl } from "@/utils";
 import { Order } from "@/entities/Order";
 import { Category } from "@/entities/Category";
 import { Product } from "@/entities/Product";
 import { Settings } from "@/entities/Settings";
 import { ShiftClosing } from "@/entities/ShiftClosing";
+import { TableSession } from "@/entities/RestaurantTable";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
@@ -28,6 +31,7 @@ import {
   Sparkles,
   Flame,
   Calendar,
+  Percent,
 } from "lucide-react";
 import { subDays, startOfMonth, endOfMonth, startOfYear, endOfYear, startOfDay, endOfDay } from "date-fns";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
@@ -35,13 +39,16 @@ import ShiftClosingModal from "@/components/admin/orders/ShiftClosingModal";
 import DailySalesChart from "@/components/admin/reports/DailySalesChart";
 import PeakHoursChart from "@/components/admin/reports/PeakHoursChart";
 import ShiftClosingHistoryTable from "@/components/admin/reports/ShiftClosingHistoryTable";
+import ServiceFeeAccumulatedChart from "@/components/admin/reports/ServiceFeeAccumulatedChart";
 import {
   aggregateDailySales,
   aggregateCategoryDistribution,
   aggregatePeakHours,
+  aggregateServiceFeeCumulative,
 } from "@/utils/reportsAnalytics";
 
 export default function ReportsPage() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("sales"); // "sales" | "history"
   const [reportPeriod, setReportPeriod] = useState("last_30_days");
   const [customStartDate, setCustomStartDate] = useState("");
@@ -49,6 +56,7 @@ export default function ReportsPage() {
 
   const [isLoading, setIsLoading] = useState(true);
   const [allOrders, setAllOrders] = useState([]);
+  const [tableSessions, setTableSessions] = useState([]);
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
   const [closings, setClosings] = useState([]);
@@ -92,8 +100,9 @@ export default function ReportsPage() {
         localStorage.getItem("current_tenant_id") ||
         "a0000000-0000-0000-0000-000000000001";
 
-      const [ordersList, catsList, prodsList, settingsList, closingsList] =
+      const [sessionsList, ordersList, catsList, prodsList, settingsList, closingsList] =
         await Promise.all([
+          TableSession.list("-closed_at", 1000).catch(() => []),
           Order.list("-created_date", 500).catch(() => []),
           Category.list("order_index").catch(() => []),
           Product.list("-created_date").catch(() => []),
@@ -102,21 +111,43 @@ export default function ReportsPage() {
         ]);
 
       let driversList = [];
+      let resolvedTenantSettings = settingsList?.[0] || null;
+      let finalSessions = Array.isArray(sessionsList) ? sessionsList : [];
+
       if (isSupabaseConfigured() && supabase) {
         try {
-          const { data } = await supabase
+          const { data: tenantData } = await supabase
             .from("tenants")
-            .select("delivery_drivers")
+            .select("*")
             .eq("id", activeTenantId)
             .maybeSingle();
-          if (data?.delivery_drivers) driversList = data.delivery_drivers;
-        } catch {}
+
+          if (tenantData) {
+            resolvedTenantSettings = { ...(resolvedTenantSettings || {}), ...tenantData };
+            if (tenantData.delivery_drivers) driversList = tenantData.delivery_drivers;
+          }
+
+          const { data: remoteSessions } = await supabase
+            .from("table_sessions")
+            .select("*")
+            .eq("tenant_id", activeTenantId)
+            .eq("status", "closed")
+            .order("closed_at", { ascending: false })
+            .limit(1000);
+
+          if (remoteSessions && remoteSessions.length > 0) {
+            finalSessions = remoteSessions;
+          }
+        } catch (err) {
+          console.warn("[ReportsPage] Erro ao buscar complementos no Supabase:", err);
+        }
       }
 
+      setTableSessions(finalSessions);
       setAllOrders(Array.isArray(ordersList) ? ordersList : []);
       setCategories(Array.isArray(catsList) ? catsList : []);
       setProducts(Array.isArray(prodsList) ? prodsList : []);
-      setTenantSettings(settingsList?.[0] || null);
+      setTenantSettings(resolvedTenantSettings);
       setClosings(Array.isArray(closingsList) ? closingsList : []);
       setDrivers(driversList);
     } catch (err) {
@@ -198,6 +229,37 @@ export default function ReportsPage() {
     [periodOrders]
   );
 
+  // 4. Agregação de Sessões de Mesa e Taxas de Serviço Acumuladas
+  const periodSessions = useMemo(() => {
+    const { start, end } = dateRange;
+    const startMs = start.getTime();
+    const endMs = end.getTime();
+
+    return tableSessions.filter((session) => {
+      const dateStr = session.closed_at || session.created_at;
+      if (!dateStr) return false;
+      const sessionMs = new Date(dateStr).getTime();
+      return sessionMs >= startMs && sessionMs <= endMs;
+    });
+  }, [tableSessions, dateRange]);
+
+  const isSingleDay = reportPeriod === "today";
+  const serviceFeeMetrics = useMemo(
+    () =>
+      aggregateServiceFeeCumulative(
+        periodSessions,
+        validOrders,
+        dateRange.start,
+        dateRange.end,
+        isSingleDay
+      ),
+    [periodSessions, validOrders, dateRange, isSingleDay]
+  );
+
+  const isServiceFeeEnabled = tenantSettings?.table_service_fee_enabled === true;
+  const serviceFeeRate = Number(tenantSettings?.table_service_fee_rate ?? 10);
+  const showServiceFeeReport = isServiceFeeEnabled || serviceFeeMetrics.totalServiceFee > 0;
+
   const COLORS = [
     "#dc2626", // vermelho
     "#ea580c", // laranja
@@ -231,7 +293,7 @@ export default function ReportsPage() {
 
           <Button
             type="button"
-            onClick={() => setShiftClosingOpen(true)}
+            onClick={() => navigate(createPageUrl("CashManagement") + "?tab=closing")}
             className="h-10 px-4 bg-gradient-to-r from-stone-900 to-stone-800 hover:from-black hover:to-stone-900 text-white rounded-2xl text-xs font-black shadow-md flex items-center gap-2 cursor-pointer border border-stone-700 self-start sm:self-auto transition-all active:scale-95"
             title="Abrir Fechamento de Caixa do Turno"
           >
@@ -447,6 +509,19 @@ export default function ReportsPage() {
                 <DailySalesChart data={dailySalesData} />
               </CardContent>
             </Card>
+
+            {/* GRÁFICO DE VALOR ACUMULADO DA TAXA DE SERVIÇO (SE CASO ATIVO) */}
+            {showServiceFeeReport && (
+              <ServiceFeeAccumulatedChart
+                data={serviceFeeMetrics.dailyData}
+                totalServiceFee={serviceFeeMetrics.totalServiceFee}
+                totalSessionsCount={serviceFeeMetrics.totalSessionsCount}
+                avgServiceFee={serviceFeeMetrics.avgServiceFee}
+                serviceFeeRate={serviceFeeRate}
+                isEnabled={isServiceFeeEnabled}
+                isHourly={serviceFeeMetrics.isHourly}
+              />
+            )}
 
             {/* 2. GRID: DONUT DE CATEGORIAS + HORÁRIOS DE PICO */}
             <div className="grid lg:grid-cols-2 gap-6">
