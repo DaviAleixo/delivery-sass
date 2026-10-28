@@ -33,7 +33,7 @@ jobs:
       - name: Generate Per-Company Snapshots (JSON)
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://zecuwijuiqsaoeafonsv.supabase.co' }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InplY3V3aWp1aXFzYW9lYWZvbnN2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE2MjUwMTMsImV4cCI6MjEwNzIwMTAxM30.MtFRYa2nlrIDWqVWHj2WVlIwjmpuj8d_O8Xv5TG_x3I' }}
         run: |
           echo "Executando exportação estruturada por empresa..."
           node scripts/export-data.js

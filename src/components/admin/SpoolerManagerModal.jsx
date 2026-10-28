@@ -304,8 +304,10 @@ export default function SpoolerManagerModal({
                       Baixe o pacote para este computador do caixa ou acesse a pasta <code className="bg-white px-1.5 py-0.5 rounded border border-gray-200 text-gray-800 font-mono text-[10px]">desktop-spooler</code>.
                     </p>
                     <a
-                      href="/pedemuleke-spooler.zip"
+                      href="https://pub-90fee729d11445a3b3a6aa0958f66fc8.r2.dev/downloads/pedemuleke-spooler.zip"
                       download="pedemuleke-spooler.zip"
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#047857] hover:bg-[#065f46] text-white text-xs font-bold rounded-lg transition-colors shadow-2xs mt-1"
                     >
                       <Download className="w-3.5 h-3.5" />

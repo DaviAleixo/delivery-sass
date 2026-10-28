@@ -35,6 +35,9 @@ base44/.app.jsonc
 .specs
 supabase/.temp
 
-# Backups
+# Backups & Binaries
 backups/
 *.sql.gz
+public/*.zip
+desktop-spooler/pedemuleke-spooler.exe
+desktop-spooler/pedemuleke-spooler.zip
