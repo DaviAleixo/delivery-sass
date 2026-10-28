@@ -935,7 +935,45 @@
   - **Aba 1 (Caixa Atual)**: Telemetria ao vivo da gaveta (Saldo Esperado = Fundo Inicial + Vendas Balcão + Suprimentos - Sangrias - Saídas de Despesas). Ações rápidas de Abertura, Sangria, Suprimento e Registrar Saída. Tabela com extrato das movimentações do turno.
   - **Aba 2 (Fechamento de Caixa)**: Faturamento bruto/líquido, pedidos por canal, extrato de motoboys, impressão térmica (80mm/58mm), WhatsApp e **Conferência Obrigatória de Gaveta (Contagem Cega & Quebra de Caixa)** com cálculo automático de diferença (Correto / Sobra / Falta) e confirmação irreversível.
   - **Aba 3 (Histórico e Auditoria)**: Livro-caixa com todos os turnos anteriores encerrados, valores esperados vs contados, justificativas de quebra e reimpressão de comprovantes.
-* **Próxima Etapa Técnica**: Auditoria técnica das tabelas Supabase (`cash_shifts` e `cash_movements`), com RLS, validação de concorrência (impedir dois turnos abertos para a mesma gaveta) e RPCs atômicas.
+### 🧪 60. Arquitetura de Homologação (Staging) & Esteira Segura de Deploy (Cloudflare + Git + Supabase)
+> 🚨 **Prioridade de Execução Imediata (Próxima Sessão / Urgente)**: Configurar a esteira profissional para nunca subir código direto na produção (`main`). Qualquer nova funcionalidade passa antes por Homologação (`staging`), é testada no celular/PC e só depois promovida para Produção com 1 comando.
+
+* **O Problema Resolvido**:
+  - Subir código direto na branch `main` é arriscado quando há restaurantes operando ao vivo: um bug de sintaxe ou erro de componente pode derrubar o cardápio público ou a tela de pedidos no meio da noite.
+  - A separação em dois ambientes isola o desenvolvimento da vida real.
+
+* **Os 3 Pilares da Arquitetura**:
+  1. **Git Branches (`staging` vs `main`)**:
+     - `staging`: Ramificação de testes. O Davi desenvolve localmente e sobe para cá.
+     - `main`: Ramificação de produção. Só recebe código estável e validado via `merge`.
+  2. **Cloudflare Pages (Branch Previews Automáticos)**:
+     - O Cloudflare Pages já suporta builds por branch de forma nativa e sem custo.
+     - Ao fazer `git push origin staging`:
+       - Gera automaticamente uma URL dedicada: `https://staging.delivery-sass.pages.dev` (ou subdomínio customizado).
+       - O site oficial de produção (`delivery-sass.pages.dev`) não sofre nenhuma alteração.
+  3. **Estratégia do Banco de Dados (Supabase)**:
+     - **Abordagem Recomendada (2 Projetos Supabase Free)**:
+       - No plano gratuito do Supabase, cada conta pode ter até 2 projetos ativos simultâneos.
+       - Projeto 1: `delivery-prod` (dados reais dos restaurantes parceiros).
+       - Projeto 2: `delivery-staging` (banco de testes, onde podemos criar/apagar 100 pedidos e produtos fakes sem medo).
+       - No Cloudflare Pages (*Settings > Environment variables*):
+         - Variáveis de **Production** (`main`): `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` de Produção.
+         - Variáveis de **Preview** (`staging`): `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` de Homologação.
+     - **Abordagem Alternativa Rápida (Mesmo Banco com Tenant de Teste)**:
+       - Caso queira manter 1 projeto só no início, cria-se uma loja `loja-teste` no banco atual e todos os testes em `staging` ocorrem restritos a essa loja.
+
+* **O Fluxo Diário de Trabalho do Desenvolvedor**:
+  1. **Desenvolvimento Local**:
+     - `git checkout staging`
+     - Trabalha normalmente no código com `npm run dev`.
+  2. **Envio para Homologação**:
+     - `git add . ; git commit -m "feat: nova funcionalidade" ; git push origin staging`
+     - O Cloudflare Pages compila e sobe em `staging.delivery-sass.pages.dev` em ~1 minuto.
+  3. **Validação**:
+     - Abre o link de homologação no celular ou computador, simula pedidos, testa cupons e impressora.
+  4. **Promoção para Produção (1 Comando ou Pull Request)**:
+     - `git checkout main ; git merge staging ; git push origin main`
+     - Pronto! O Cloudflare atualiza a produção oficial na hora.
 
 ---
 

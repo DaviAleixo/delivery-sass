@@ -5,6 +5,7 @@
 ---
 
 ## 🚀 Em Andamento / Foco Atual
+- [ ] 🚨 **Ambiente de Homologação & Pipeline Staging ➔ Produção (Prioridade Máxima / Próxima Sessão)**: Configurar branch `staging` no Git, deploy preview automático no Cloudflare Pages (`staging.delivery-sass.pages.dev`), isolamento de banco/chaves de teste no Supabase e esteira segura de deploy contínuo para `main` sem risco para lojas em produção. ([[02 - 💡 Ideias & Brainstorm]])
 - [x] ☁️ **Armazenamento de Mídia no Cloudflare R2 (Concluído & Ativo)**: Bucket `pedemuleke-media` configurado, Edge Function `r2-upload` criada e deployada no Supabase, credenciais S3 integradas com segurança, pipeline WebP conectado em `Core.js` com CDN global (`r2.dev`) e tráfego ilimitado (zero egress).
 - [x] 🛡️ **Backup Diário Automatizado no Cloudflare R2 (Zero Custo no Supabase Free)**: GitHub Actions diário (`.github/workflows/daily-backup.yml`) às 04:00 BRT com dump master PostgreSQL (`pg_dump` compactado em `.sql.gz`), exportação estruturada em JSON por empresa (`scripts/export-data.js` em `backups/por_empresa/<slug>/`) e sincronização direta no Cloudflare R2 com retenção automática de 30 dias.
 - [x] 📦 **Hospedagem de Binários Pesados no Cloudflare R2 CDN**: `pedemuleke-spooler.zip` (31 MB) transferido do bundle estático para o Cloudflare R2 CDN (`downloads/pedemuleke-spooler.zip`), resolvendo em definitivo o limite de 25 MiB por arquivo do Cloudflare Pages e acelerando deploys da aplicação.
