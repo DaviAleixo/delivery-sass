@@ -16,16 +16,24 @@ Plataforma SaaS multi-tenant de cardápio digital, delivery e PDV para restauran
 
 ---
 
-## 2. Estrutura Oficial de Planos (3 Planos)
+## 2. Estrutura Oficial de Planos & Faixas de Pedidos (Estilo Anota AI + Goomer)
 
-| Recurso / Benefício          | 1. Plano Vitrine / Salão                         | 2. Plano Normal (Delivery Completo)             | 3. Plano Personalizado (VIP)                             |
-| :--------------------------- | :----------------------------------------------- | :---------------------------------------------- | :------------------------------------------------------- |
-| **Mensalidade Fixa**         | **R$ 49,00 / mês**                               | **R$ 89,00 / mês**                              | **R$ 249,00 / mês**                                      |
-| **Foco de Atendimento**      | QR Code de Mesa & Salão (Visual ou Autoatend.)   | Delivery na Rua, KDS, PDV Balcão e Entregadores | Identidade Visual & Front-End 100% Exclusivo             |
-| **Interface do Cardápio**    | Padrão (Sem carrinho no modo visual; ou mesa)    | Layout padrão de alta conversão para delivery   | **Front-End sob medida** (design e animações exclusivas) |
-| **Painel do Lojista**        | Limpo (apenas Produtos, Banners e QR Codes)      | Completo (Pedidos, KDS, Entregadores, PDV)      | Completo + Seletor de Template VIP                       |
-| **Escolha em Configurações** | Lojista escolhe se quer apenas visual ou pedidos | Salão, Retirada no Balcão e Delivery            | Salão, Retirada e Delivery                               |
-| **Comissão por Pedido**      | **R$ 0,00 (ZERO taxa)**                          | **R$ 0,00 (ZERO taxa)**                         | **R$ 0,00 (ZERO taxa)**                                  |
+> 💡 **Modelo Comercial**: Cobrança por assinatura mensal fixa escalonada por **faixas de volume de pedidos** (sem comissões picadas e sem amarras de contrato de 12 meses).
+
+| Recurso / Modalidade | 1. Visual / Catálogo | 2. Autoatendimento Presencial (Salão & Mesas) | 3. Full Delivery + Salão Completo (Carro-Chefe) |
+| :--- | :--- | :--- | :--- |
+| **Público-Alvo** | Confeitarias, docerias e lojas que só precisam de cardápio na bio do Instagram. | Bares, choperias, cafeterias e restaurantes que **não fazem delivery**, mas sofrem com fila e falta de garçom. | Pizzarias, hamburguerias e restaurantes completos com delivery, salão e balcão integrados. |
+| **Faixa 1: Até 150 pedidos/mês** | **R$ 49,90 / mês** *(Fixo)* | **R$ 119,90 / mês** | **R$ 159,90 / mês** |
+| **Faixa 2: Até 350 pedidos/mês** | — | **R$ 169,90 / mês** | **R$ 219,90 / mês** |
+| **Faixa 3: Ilimitado (+350 pedidos)** | — | **R$ 229,90 / mês** | **R$ 299,90 / mês** |
+| **Módulos Inclusos** | Cardápio WebP, Banners, Pizza Builder, Cupons. | QR Code individual por mesa, Pedidos de Mesa/Balcão via celular, KDS Cozinha, Spooler Térmico (.exe), Comanda ao vivo. | Tudo da modalidade 2 + Despacho de Motoboys (3 modelos de remuneração), Rastreio ao vivo, Caixa/Fechamento de Turno e Relatórios. |
+| **Comissão por Pedido** | **R$ 0,00 (ZERO)** | **R$ 0,00 (ZERO)** | **R$ 0,00 (ZERO)** |
+| **Concorrente Direto Superado** | OlaClick (limitações pesadas) | Goomer (cobra o dobro + tablets caros) | Anota AI (cobra R$ 299 a R$ 349 + fidelidade de 1 ano) |
+
+### 🎯 Argumentos de Vendas Principais:
+1. **Autoatendimento Presencial**: *"Economize o salário de 1 garçom (R$ 2.500/mês). O cliente pede no celular e a cozinha recebe na hora."*
+2. **Full Delivery**: *"0% de taxa por pedido. Se você vende R$ 30.000, o iFood come R$ 6.000. No PedeMuleke você paga no máximo R$ 299 e o lucro é 100% seu."*
+3. **Sem Fidelidade**: *"Cancele quando quiser, sem multas contratuais abusivas."*
 
 ---
 

@@ -975,6 +975,30 @@
      - `git checkout main ; git merge staging ; git push origin main`
      - Pronto! O Cloudflare atualiza a produção oficial na hora.
 
+### 💼 61. Estratégia Comercial, Precificação em Faixas (Tiers) & Posicionamento de Vendas
+* **A Grande Oportunidade: Os 3 Segmentos Reais de Mercado**:
+  1. **Visual / Catálogo (Entrada / R$ 49,90 fixo)**:
+     - Indicado para microempreendedores, confeitarias, docerias e lojas que precisam apenas de uma vitrine digital moderna no Instagram/WhatsApp.
+  2. **Autoatendimento Presencial (Salão & Mesas - Sem Delivery / R$ 119 a R$ 229)**:
+     - **A Maior Mina de Ouro**: Bares, choperias, hamburguerias de praça, cafeterias e restaurantes que não querem dor de cabeça com motoboy.
+     - **Dor Central**: Fila no balcão e lentidão de garçom em noites de pico. O dono gasta R$ 2.500/mês para pagar garçons extras na sexta e no sábado.
+     - **Solução PedeMuleke**: O cliente senta na mesa, lê o QR Code, monta o pedido e a cozinha/bar recebe na hora no KDS e na impressora térmica sem intermediários.
+     - **Pitch Matador**: *"Você economiza o custo de 1 garçom (R$ 2.500/mês). O cliente pede sozinho no celular e a cozinha recebe na hora por R$ 119 a R$ 229/mês."*
+     - **Concorrente Batido**: **Goomer** (que cobra mais caro e força o uso de tablets proprietários caros).
+  3. **Full Delivery + Salão Completo (Carro-Chefe / R$ 159 a R$ 299)**:
+     - O pacote completo para pizzarias, sushis e hamburguerias fortes: Cardápio, KDS, Spooler Térmico (.exe), Despacho de Motoboy, Fechamento de Turno/Caixa com contagem cega e Relatórios.
+     - **Pitch Matador contra o iFood**: *"Quanto o iFood tirou do seu bolso mês passado? R$ 2.000? R$ 5.000? Com 0% de taxa por pedido, você paga no máximo R$ 299 e todo o lucro das suas vendas é 100% seu."*
+     - **Concorrente Batido**: **Anota AI** (que cobra R$ 299 a R$ 349 e prende o dono do restaurante em contratos anuais com multas de cancelamento).
+
+* **Por que Faixas de Pedidos (Tiers) e Não Comissão por Centavo**:
+  - Donos de restaurantes têm aversão psicológica a comissões por pedido (trauma do iFood).
+  - Cobrar por pacotes mensais escalonados (Até 150 pedidos, Até 350 pedidos, Ilimitado) reduz o atrito de entrada para quem vende pouco e garante expansão de receita automática (upsell) conforme o restaurante cresce.
+
+* **As 3 Táticas de Venda Prática (Go-To-Market)**:
+  1. **"Setup Sem Preguiça"**: O Davi cadastra os primeiros 20 a 25 produtos a partir de foto/PDF do cardápio físico. Elimina a maior barreira de adoção do lojista (a preguiça de preencher dados).
+  2. **Vídeo de Demonstração de 20s**: Pedido feito no celular ➔ Alarme soando no KDS ➔ Impressora cuspindo o cupom térmico automaticamente. Esse visual converte clientes imediatamente no WhatsApp.
+  3. **Período de Demonstração de 7 Dias**: Liberar o sistema para rodar numa sexta/sábado de pico. Uma vez que o restaurante experimenta a cozinha sem confusão e o cliente pedindo na mesa, ele não consegue mais voltar para a comanda de papel.
+
 ---
 
 ## 🔗 Links Relacionados
