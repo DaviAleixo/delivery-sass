@@ -6,8 +6,7 @@ import { Settings as SettingsEntity } from "@/entities/Settings";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useAuth } from "@/lib/AuthContext";
 import { getStoreStatusInfo, getTodayDateKey } from "@/utils/storeStatus";
-import { useFifoPrintQueue } from "@/hooks/useFifoPrintQueue";
-import SpoolerManagerModal from "@/components/admin/SpoolerManagerModal";
+import PrinterNavbarControl from "@/components/admin/PrinterNavbarControl";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -133,7 +132,6 @@ export default function Layout({ children, currentPageName }) {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user: authUser, isAdminAuthenticated: isSessionAuth, isLoadingAuth, logout } = useAuth();
-  const { isSpoolerOnline, spoolerConfig } = useFifoPrintQueue();
   const [user, setUser] = React.useState(null);
   const [settings, setSettings] = React.useState(null);
   const [isCheckingAuth, setIsCheckingAuth] = React.useState(true);
@@ -853,24 +851,8 @@ export default function Layout({ children, currentPageName }) {
               </div>
 
               <div className="flex items-center gap-2.5">
-                {/* Status do Spooler de Impressão Silenciosa (.exe) - Somente quando ativo */}
-                {isSpoolerOnline && (
-                  <SpoolerManagerModal
-                    trigger={
-                      <button
-                        type="button"
-                        title={`Impressão Silenciosa Conectada (${spoolerConfig?.selectedPrinter || "Impressora Padrão"}). Clique para testar ou configurar.`}
-                        className="bg-emerald-50 border border-emerald-200 text-emerald-800 hover:bg-emerald-100 rounded-full px-3 py-1.5 text-xs font-semibold flex items-center gap-2 shadow-2xs transition-all cursor-pointer select-none"
-                      >
-                        <Printer className="w-3.5 h-3.5 text-emerald-700" />
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                        <span className="font-bold hidden sm:inline">
-                          Impressora Pronta
-                        </span>
-                      </button>
-                    }
-                  />
-                )}
+                {/* Controle e Status Global da Impressora & Auto-Impressão */}
+                <PrinterNavbarControl />
 
                 {/* Status da Loja com Abertura e Fechamento Manual */}
                 <DropdownMenu>

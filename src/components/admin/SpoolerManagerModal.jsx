@@ -21,6 +21,8 @@ import { toast } from "sonner";
 import { useFifoPrintQueue } from "@/hooks/useFifoPrintQueue";
 
 export default function SpoolerManagerModal({
+  open: propOpen,
+  onOpenChange: propOnOpenChange,
   isSpoolerOnline: propIsSpoolerOnline,
   spoolerConfig: propSpoolerConfig,
   checkSpooler: propCheckSpooler,
@@ -38,7 +40,10 @@ export default function SpoolerManagerModal({
   const fetchSpoolerPrinters = propFetchSpoolerPrinters || queueCtx?.fetchSpoolerPrinters;
   const saveSpoolerConfig = propSaveSpoolerConfig || queueCtx?.saveSpoolerConfig;
 
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = propOpen !== undefined;
+  const open = isControlled ? propOpen : internalOpen;
+  const setOpen = isControlled ? propOnOpenChange : setInternalOpen;
   const [printersList, setPrintersList] = useState([]);
   const [selectedPrinter, setSelectedPrinter] = useState("");
   const [paperWidth, setPaperWidth] = useState("80mm");
