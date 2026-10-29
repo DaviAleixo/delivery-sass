@@ -509,6 +509,10 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
         toast.success(`Bem-vindo, ${res.user.full_name || 'Cliente'}!`);
         setAuthStep("phone");
         setOtpCode("");
+        try {
+          window.dispatchEvent(new CustomEvent("customer_auth_changed", { detail: res.user }));
+          window.dispatchEvent(new CustomEvent("customer_address_changed"));
+        } catch {}
         loadUserData();
       } else {
         setPhoneError(res.error || "Código incorreto ou expirado.");
@@ -527,6 +531,11 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
     setAvailableCoupons([]);
     setPhoneInput("");
     setNameInput("");
+    try {
+      localStorage.removeItem("vrumburguer_last_address");
+      window.dispatchEvent(new CustomEvent("customer_auth_changed", { detail: null }));
+      window.dispatchEvent(new CustomEvent("customer_address_changed", { detail: null }));
+    } catch {}
     window.location.reload();
   };
 
@@ -574,15 +583,20 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
 
   const handleSaveAddress = async (addressData) => {
     const phoneToUse = user?.phone || localStorage.getItem("vrumburguer_customer_phone") || "";
+    let saved = null;
     if (isEditingAddress && isEditingAddress.id) {
-      await UserAddress.update(isEditingAddress.id, { ...addressData, user_phone: phoneToUse });
+      saved = await UserAddress.update(isEditingAddress.id, { ...addressData, user_phone: phoneToUse });
     } else {
-      await UserAddress.create({ 
+      saved = await UserAddress.create({ 
         ...addressData, 
         user_email: user?.email,
         user_phone: phoneToUse
       });
     }
+    try {
+      localStorage.setItem("vrumburguer_last_address", JSON.stringify({ ...addressData, ...(saved || {}) }));
+      window.dispatchEvent(new CustomEvent("customer_address_changed", { detail: { ...addressData, ...(saved || {}) } }));
+    } catch {}
     setShowAddressForm(false);
     setIsEditingAddress(null);
     loadUserData();
@@ -591,6 +605,10 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
   const handleDeleteAddress = async (addressId) => {
     if (confirm("Tem certeza que deseja excluir este endereço?")) {
       await UserAddress.delete(addressId);
+      try {
+        localStorage.removeItem("vrumburguer_last_address");
+        window.dispatchEvent(new CustomEvent("customer_address_changed", { detail: null }));
+      } catch {}
       loadUserData();
     }
   };

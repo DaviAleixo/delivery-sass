@@ -18,11 +18,13 @@ import ProductCard from "../components/menu/ProductCard";
 import PopularProductsRow from "../components/menu/PopularProductsRow";
 import RecentOrdersRow from "../components/menu/RecentOrdersRow";
 import Cart from "../components/menu/Cart";
-import OrderModal from "../components/menu/OrderModal";
+import OrderModal, { fetchCustomerAddresses } from "../components/menu/OrderModal";
 import PixOnlineModal from "../components/menu/PixOnlineModal";
 import BannerCarousel from "../components/menu/BannerCarousel";
 import UserProfileSheet from "../components/menu/UserProfileSheet";
 import { User } from "@/entities/User";
+import { UserAddress } from "@/entities/UserAddress";
+import { matchNeighborhood } from "@/utils/neighborhoodMatcher";
 import StoreInfoSheet from "../components/menu/StoreInfoSheet";
 import ProductDetailModal from "../components/menu/ProductDetailModal";
 import PizzaBuilderModal from "../components/menu/PizzaBuilderModal";
@@ -107,11 +109,83 @@ export default function MenuPage() {
   const headerRef = useRef(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [isUserProfileOpen, setIsUserProfileOpen] = useState(false);
+  const [customerSavedAddress, setCustomerSavedAddress] = useState(null);
+
+  const loadCustomerAddress = async () => {
+    try {
+      let u = currentUser;
+      if (!u) {
+        try {
+          u = await User.me();
+          if (u && u.id) setCurrentUser(u);
+        } catch {}
+      }
+
+      let phone = u?.phone || "";
+      let email = u?.email || "";
+
+      if (!phone && !email) {
+        try {
+          const guestInfo = JSON.parse(localStorage.getItem("vrumburguer_guest_info") || "{}");
+          if (guestInfo.customer_phone) phone = guestInfo.customer_phone;
+          if (guestInfo.customer_email) email = guestInfo.customer_email;
+        } catch {}
+      }
+
+      if (phone || email) {
+        const addrs = await fetchCustomerAddresses(phone, email);
+        if (addrs && addrs.length > 0) {
+          const def = addrs.find(a => a.is_default) || addrs[0];
+          setCustomerSavedAddress(def);
+          return;
+        }
+      }
+
+      try {
+        const localAddr = JSON.parse(localStorage.getItem("vrumburguer_last_address") || "null");
+        if (localAddr && (localAddr.neighborhood || localAddr.street)) {
+          setCustomerSavedAddress(localAddr);
+          return;
+        }
+      } catch {}
+
+      setCustomerSavedAddress(null);
+    } catch (_err) {
+      console.warn("Erro ao buscar endereço do cliente:", _err);
+    }
+  };
+
+  useEffect(() => {
+    loadCustomerAddress();
+
+    const handleAddrChange = (e) => {
+      if (e?.detail) setCustomerSavedAddress(e.detail);
+      else loadCustomerAddress();
+    };
+
+    const handleAuthChange = (e) => {
+      if (e?.detail) setCurrentUser(e.detail);
+      else setCurrentUser(null);
+      loadCustomerAddress();
+    };
+
+    window.addEventListener("customer_address_changed", handleAddrChange);
+    window.addEventListener("customer_auth_changed", handleAuthChange);
+
+    return () => {
+      window.removeEventListener("customer_address_changed", handleAddrChange);
+      window.removeEventListener("customer_auth_changed", handleAuthChange);
+    };
+  }, [isUserProfileOpen]);
 
   useEffect(() => {
     User.me().then(u => {
-      if (u && u.id) setCurrentUser(u);
-      else setCurrentUser(null);
+      if (u && u.id) {
+        setCurrentUser(u);
+        loadCustomerAddress();
+      } else {
+        setCurrentUser(null);
+      }
     }).catch(() => setCurrentUser(null));
   }, []);
 
@@ -819,6 +893,75 @@ export default function MenuPage() {
   const effectiveTemplateKey = tenant?.custom_template || (isVrummStore ? "vrumm" : null);
   const CustomMenuTemplate = getCustomMenuTemplate(effectiveTemplateKey);
 
+  const getDeliveryFeeDisplay = () => {
+    const acceptsDelivery = (settings?.accepts_delivery !== false) && (tenant?.accepts_delivery !== false);
+    const isSalonOnly = salonMode === 'table_only';
+    if (!acceptsDelivery || isSalonOnly || urlMesa || isVisualOnly) {
+      return null;
+    }
+
+    const feeType = settings?.delivery_fee_type || tenant?.delivery_fee_type || 'fixed';
+    const registeredNeighborhoods = (Array.isArray(settings?.delivery_neighborhoods) && settings.delivery_neighborhoods.length > 0)
+      ? settings.delivery_neighborhoods
+      : (Array.isArray(tenant?.delivery_neighborhoods) ? tenant.delivery_neighborhoods : []);
+    const activeNeighborhoods = registeredNeighborhoods.filter(n => n && n.active !== false && n.fee !== undefined && n.fee !== null);
+
+    // Caso 1: Loja configurada para taxa por bairro
+    if (feeType === 'neighborhood' && activeNeighborhoods.length > 0) {
+      // Se o cliente tem endereço e bairro identificados:
+      if (customerSavedAddress && customerSavedAddress.neighborhood) {
+        const match = matchNeighborhood(customerSavedAddress.neighborhood, registeredNeighborhoods);
+        if (match && match.matched) {
+          const fee = Number(match.fee || 0);
+          const neighborhoodName = match.neighborhood?.name || customerSavedAddress.neighborhood;
+          return {
+            title: fee === 0 ? `Entrega Grátis • ${neighborhoodName}` : `Entrega: R$ ${fee.toFixed(2).replace('.', ',')} • ${neighborhoodName}`,
+            subtitle: "Valor calculado para seu endereço cadastrado"
+          };
+        }
+
+        // Se não encontrou o bairro no cadastro:
+        const unlistedPolicy = settings?.delivery_unlisted_policy || tenant?.delivery_unlisted_policy || 'block';
+        const fallbackFee = Number(settings?.delivery_fallback_fee ?? tenant?.delivery_fallback_fee ?? 10);
+        if (unlistedPolicy === 'block') {
+          return {
+            title: "Entrega indisponível para seu bairro",
+            subtitle: `Toque para conferir seu endereço (${customerSavedAddress.neighborhood})`
+          };
+        } else {
+          return {
+            title: fallbackFee === 0 ? `Entrega Grátis • ${customerSavedAddress.neighborhood}` : `Entrega: R$ ${fallbackFee.toFixed(2).replace('.', ',')} • ${customerSavedAddress.neighborhood}`,
+            subtitle: "Taxa padrão para localidades fora da rota principal"
+          };
+        }
+      }
+
+      // Cliente sem endereço identificado (visitante ou sem endereço cadastrado):
+      const fees = activeNeighborhoods.map(n => Number(n.fee || 0));
+      const minFee = Math.min(...fees);
+      return {
+        title: minFee === 0 ? "Entrega a partir de Grátis" : `Entrega a partir de R$ ${minFee.toFixed(2).replace('.', ',')}`,
+        subtitle: "Valor calculado conforme seu endereço"
+      };
+    }
+
+    // Caso 2: Taxa fixa (ou sem bairros cadastrados)
+    const fixedFee = Number(settings?.delivery_fee ?? tenant?.delivery_fee ?? 0);
+    if (customerSavedAddress && customerSavedAddress.neighborhood) {
+      return {
+        title: fixedFee === 0 ? "Entrega Grátis" : `Entrega: R$ ${fixedFee.toFixed(2).replace('.', ',')}`,
+        subtitle: `Entregamos no seu endereço (${customerSavedAddress.neighborhood})`
+      };
+    }
+
+    return {
+      title: fixedFee === 0 ? "Entrega Grátis" : `Entrega: R$ ${fixedFee.toFixed(2).replace('.', ',')}`,
+      subtitle: "Valor calculado conforme seu endereço"
+    };
+  };
+
+  const deliveryFeeDisplay = getDeliveryFeeDisplay();
+
   if (CustomMenuTemplate) {
     return (
       <>
@@ -827,6 +970,8 @@ export default function MenuPage() {
           tenantId={tenantId}
           settings={settings}
           resolvedInitialStoreName={resolvedInitialStoreName}
+          deliveryFeeDisplay={deliveryFeeDisplay}
+          customerSavedAddress={customerSavedAddress}
           products={products}
           categories={categories}
           banners={banners}
@@ -1178,6 +1323,27 @@ export default function MenuPage() {
               </button>
             )}
           </div>
+
+          {/* Card de Frete Dinâmico (Conforme Modelo da Foto de Referência) */}
+          {!isVisualOnly && !urlMesa && !searchQuery.trim() && deliveryFeeDisplay && (
+            <div 
+              onClick={() => setIsUserProfileOpen(true)}
+              className="bg-[#F0FDF4] border border-[#D1E9DF] hover:bg-[#E6F8EE] rounded-2xl p-3.5 sm:p-4 transition-all cursor-pointer flex items-center justify-between gap-3 shadow-2xs"
+            >
+              <div className="flex-1 min-w-0 pr-1">
+                <h3 
+                  className="font-bold text-sm sm:text-base text-[#046c4e] tracking-tight leading-tight"
+                  style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
+                >
+                  {deliveryFeeDisplay.title}
+                </h3>
+                <p className="text-xs sm:text-sm text-stone-600 mt-0.5 leading-snug font-normal">
+                  {deliveryFeeDisplay.subtitle}
+                </p>
+              </div>
+              <ChevronRight className="w-5 h-5 text-[#046c4e] shrink-0" />
+            </div>
+          )}
 
         {isSearching && (
           <div>

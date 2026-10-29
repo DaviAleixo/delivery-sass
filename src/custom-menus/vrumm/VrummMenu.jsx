@@ -76,6 +76,8 @@ export default function VrummMenu({
   selectedProduct,
   setSelectedProduct,
   navigate,
+  deliveryFeeDisplay,
+  customerSavedAddress,
 }) {
   const [isUserProfileOpen, setIsUserProfileOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
@@ -332,6 +334,27 @@ export default function VrummMenu({
 
       {/* Seção Principal do Cardápio */}
       <main className="container mx-auto px-4 sm:px-6 pb-36 pt-6 max-w-6xl space-y-9">
+        {/* Card de Frete Dinâmico */}
+        {!isVisualOnly && !urlMesa && !searchQuery.trim() && deliveryFeeDisplay && (
+          <div 
+            onClick={() => setIsUserProfileOpen(true)}
+            className="bg-gradient-to-r from-emerald-950/40 via-stone-900 to-emerald-950/30 border border-emerald-500/40 hover:border-emerald-500/60 rounded-2xl p-3.5 sm:p-4 transition-all cursor-pointer flex items-center justify-between gap-3 shadow-lg"
+          >
+            <div className="flex-1 min-w-0 pr-1">
+              <h3 
+                className="font-bold text-sm sm:text-base text-emerald-400 tracking-tight leading-tight"
+                style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
+              >
+                {deliveryFeeDisplay.title}
+              </h3>
+              <p className="text-xs sm:text-sm text-stone-300 mt-0.5 leading-snug font-normal">
+                {deliveryFeeDisplay.subtitle}
+              </p>
+            </div>
+            <ChevronRight className="w-5 h-5 text-emerald-400 shrink-0" />
+          </div>
+        )}
+
         {/* Carrossel dos Mais Pedidos */}
         {!searchQuery.trim() && (
           <VrummPopularProductsRow
