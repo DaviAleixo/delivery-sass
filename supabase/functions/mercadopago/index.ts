@@ -386,6 +386,62 @@ serve(async (req: Request) => {
       });
     }
 
+    // 4. Estorno Total ou Parcial de Pagamento PIX
+    if (action === "refund_payment") {
+      const { accessToken, paymentId, amount } = body;
+      if (!accessToken || !paymentId) {
+        return new Response(JSON.stringify({ error: "accessToken e paymentId são obrigatórios" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      const refundBody: any = {};
+      if (amount && Number(amount) > 0) {
+        refundBody.amount = Number(Number(amount).toFixed(2));
+      }
+
+      console.log(`[MercadoPago Refund] Iniciando estorno do pagamento ${paymentId}. Valor: ${amount || 'Total'}`);
+
+      const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}/refunds`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${accessToken}`,
+          "X-Idempotency-Key": `ref_${paymentId}_${Date.now()}`
+        },
+        body: Object.keys(refundBody).length > 0 ? JSON.stringify(refundBody) : undefined
+      });
+
+      const mpData = await mpRes.json();
+
+      if (!mpRes.ok) {
+        console.error("[MercadoPago Refund Error]", mpData);
+        let errorMsg = mpData.message || "Erro ao processar estorno no Mercado Pago";
+        const msgLower = String(mpData.message || "").toLowerCase();
+        if (msgLower.includes("insufficient_amount") || msgLower.includes("insufficient") || String(mpData.error).includes("insufficient")) {
+          errorMsg = "Saldo insuficiente na sua conta Mercado Pago para efetuar o estorno automático.";
+        }
+        return new Response(JSON.stringify({
+          success: false,
+          error: errorMsg,
+          details: mpData
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        refundId: mpData.id,
+        status: mpData.status,
+        amount: mpData.amount
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
     return new Response(JSON.stringify({ error: "Ação não suportada: " + action }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" }

@@ -15,6 +15,7 @@ import TableQRCodeModal from "@/components/admin/TableQRCodeModal";
 import OrderCard from "@/components/admin/orders/OrderCard";
 import DispatchOrderModal from "@/components/admin/orders/DispatchOrderModal";
 import ShiftClosingModal from "@/components/admin/orders/ShiftClosingModal";
+import CancelOrderModal from "@/components/admin/orders/CancelOrderModal";
 import EmptyOrdersIllustration from "@/components/admin/orders/EmptyOrdersIllustration";
 import { useFifoPrintQueue } from "@/hooks/useFifoPrintQueue";
 import {
@@ -27,6 +28,8 @@ import { getBrasiliaParts } from "@/utils/dateTime";
 import { useOrdersRealtime } from "@/hooks/useOrdersRealtime";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { toast } from "sonner";
+import { refundPixPayment } from "@/services/mercadoPagoService";
+import { useTenant } from "@/lib/TenantContext";
 
 /**
  * Determina se o pedido pertence ao turno de trabalho atual da hamburgueria.
@@ -112,6 +115,10 @@ export default function OrdersPage() {
 
   // Estado para Fechamento de Caixa do Turno
   const [shiftClosingOpen, setShiftClosingOpen] = useState(false);
+
+  // Estado para Cancelamento Profissional de Pedido
+  const [cancellingOrder, setCancellingOrder] = useState(null);
+  const { tenant } = useTenant();
 
   // Alarme Sonoro de Pedidos Pendentes
   const [soundEnabled, setSoundEnabled] = useState(() => soundAlert.isEnabled());
@@ -341,6 +348,13 @@ export default function OrdersPage() {
   };
 
   const handleOrderStatusClick = (orderId, newStatus) => {
+    if (newStatus === "cancelado") {
+      const target = orders.find((o) => o.id === orderId);
+      if (target) {
+        setCancellingOrder(target);
+        return;
+      }
+    }
     if (newStatus === "enviado") {
       const target = orders.find((o) => o.id === orderId);
       const activeDrivers = (drivers || []).filter((d) => d.active !== false);
@@ -352,6 +366,99 @@ export default function OrdersPage() {
       }
     }
     updateOrderStatus(orderId, newStatus);
+  };
+
+  const handleConfirmCancelOrder = async ({
+    orderId,
+    cancelReason,
+    refundPix,
+    refundPixAmount,
+    revertCashback,
+    mpAccessToken
+  }) => {
+    const targetOrder = orders.find((o) => o.id === orderId);
+    if (!targetOrder) return;
+
+    let pixRefundStatus = targetOrder.pix_refund_status || "none";
+    let pixRefundId = targetOrder.pix_refund_id || null;
+    let pixRefundAmountDone = 0;
+
+    // 1. Estorno do PIX Online Mercado Pago
+    if (refundPix && targetOrder.mp_payment_id) {
+      const tokenToUse = mpAccessToken || tenant?.payment_methods?.mp_access_token || settings?.payment_methods?.mp_access_token || "";
+      if (tokenToUse) {
+        try {
+          const refundRes = await refundPixPayment({
+            accessToken: tokenToUse,
+            paymentId: targetOrder.mp_payment_id,
+            amount: refundPixAmount || targetOrder.total_amount || targetOrder.total
+          });
+
+          if (refundRes.success) {
+            pixRefundStatus = "refunded";
+            pixRefundId = String(refundRes.refundId || "");
+            pixRefundAmountDone = Number(refundPixAmount || targetOrder.total_amount || targetOrder.total);
+            toast.success(`✓ Pix de R$ ${pixRefundAmountDone.toFixed(2).replace('.', ',')} estornado com sucesso ao cliente!`);
+          } else {
+            pixRefundStatus = "failed";
+            toast.error(`Aviso Mercado Pago: ${refundRes.error}. Faça o estorno manual pelo app.`);
+          }
+        } catch (err) {
+          console.error("Erro ao estornar PIX:", err);
+          pixRefundStatus = "failed";
+          toast.error("Erro ao conectar com Mercado Pago para estorno.");
+        }
+      } else {
+        toast.error("Token do Mercado Pago não configurado na loja.");
+      }
+    }
+
+    // 2. Reversão atômica de Cashback via RPC
+    if (revertCashback && isSupabaseConfigured() && supabase) {
+      try {
+        const { data: revData, error: revErr } = await supabase.rpc("revert_order_cashback", {
+          p_order_id: String(orderId)
+        });
+
+        if (!revErr && revData) {
+          if (Number(revData.cashback_refunded || 0) > 0) {
+            toast.success(`🪙 R$ ${Number(revData.cashback_refunded).toFixed(2).replace('.', ',')} de saldo de cashback devolvido à carteira do cliente.`);
+          }
+          if (Number(revData.cashback_reversed || 0) > 0) {
+            toast.info(`Bônus de cashback de R$ ${Number(revData.cashback_reversed).toFixed(2).replace('.', ',')} revogado.`);
+          }
+        }
+      } catch (cbErr) {
+        console.warn("Erro ao reverter cashback:", cbErr);
+      }
+    }
+
+    // 3. Atualizar status e dados do cancelamento na tabela orders
+    const nowIso = new Date().toISOString();
+    const updatePayload = {
+      status: "cancelado",
+      cancel_reason: cancelReason,
+      cancelled_at: nowIso,
+      pix_refund_status: pixRefundStatus,
+      pix_refund_id: pixRefundId,
+      pix_refund_amount: pixRefundAmountDone,
+    };
+
+    setOrders((prev) => {
+      const next = prev.map((o) => (o.id === orderId ? { ...o, ...updatePayload } : o));
+      const remainingPending = next.filter((o) => o.status === "pendente");
+      soundAlert.setPendingCount(remainingPending.length);
+      return next;
+    });
+
+    try {
+      await Order.update(orderId, updatePayload);
+      toast.success(`Pedido #${String(orderId).slice(-4).toUpperCase()} cancelado com sucesso.`);
+      loadOrdersOnly();
+    } catch (err) {
+      console.error("Erro ao salvar cancelamento:", err);
+      toast.error("Erro ao persistir cancelamento do pedido.");
+    }
   };
 
   const handleConfirmDispatch = async ({ driver, orderIds, tripId }) => {
@@ -836,6 +943,7 @@ export default function OrdersPage() {
                   isExpanded={expandedOrders.has(order.id)}
                   onToggleExpansion={() => toggleOrderExpansion(order.id)}
                   onUpdateStatus={handleOrderStatusClick}
+                  onRequestCancel={(ord) => setCancellingOrder(ord)}
                   deliveryTime={deliveryTime}
                   safeDate={safeDate}
                   safeMoney={safeMoney}
@@ -916,6 +1024,18 @@ export default function OrdersPage() {
           drivers={drivers}
           tenantSettings={settings}
           storeName={settings?.restaurant_name || localStorage.getItem("current_tenant_name") || "Vruum Burguer"}
+        />
+
+        {/* Modal Profissional de Cancelamento de Pedido com Estorno Pix e Cashback */}
+        <CancelOrderModal
+          open={Boolean(cancellingOrder)}
+          onOpenChange={(isOpen) => {
+            if (!isOpen) setCancellingOrder(null);
+          }}
+          order={cancellingOrder}
+          tenant={tenant}
+          settings={settings}
+          onConfirmCancel={handleConfirmCancelOrder}
         />
       </div>
     </div>

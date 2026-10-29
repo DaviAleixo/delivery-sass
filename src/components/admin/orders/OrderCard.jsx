@@ -18,6 +18,7 @@ export default function OrderCard({
   isExpanded,
   onToggleExpansion,
   onUpdateStatus,
+  onRequestCancel,
   deliveryTime,
   safeDate,
   safeMoney,
@@ -29,6 +30,15 @@ export default function OrderCard({
 }) {
   const d = safeDate(order.created_date);
   const total = order.total_amount || order.total || 0;
+
+  const handleCancel = (e) => {
+    e?.stopPropagation();
+    if (onRequestCancel) {
+      onRequestCancel(order);
+    } else {
+      onUpdateStatus(order.id, "cancelado");
+    }
+  };
 
   return (
     <motion.div
@@ -98,6 +108,16 @@ export default function OrderCard({
                 {Number(order.cashback_earned || 0) > 0 && (
                   <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-800 border-emerald-300 font-bold">
                     ✨ +R$ {safeMoney(order.cashback_earned)} cashback
+                  </Badge>
+                )}
+                {order.status === "cancelado" && order.cancel_reason && (
+                  <Badge variant="outline" className="text-xs bg-red-50 text-red-800 border-red-300 font-bold">
+                    Motivo: {order.cancel_reason}
+                  </Badge>
+                )}
+                {order.pix_refund_status === "refunded" && (
+                  <Badge className="text-xs bg-sky-600 text-white font-bold">
+                    ✓ Pix Estornado {order.pix_refund_amount ? `(R$ ${safeMoney(order.pix_refund_amount)})` : ''}
                   </Badge>
                 )}
               </div>
@@ -284,7 +304,7 @@ export default function OrderCard({
                         Confirmar Pedido
                       </Button>
                       <Button
-                        onClick={() => onUpdateStatus(order.id, "cancelado")}
+                        onClick={handleCancel}
                         variant="outline"
                         className="text-red-600 hover:text-red-700 border-red-200 text-xs md:text-sm flex-1 md:flex-none cursor-pointer"
                       >
@@ -302,7 +322,7 @@ export default function OrderCard({
                         Iniciar Preparo
                       </Button>
                       <Button
-                        onClick={() => onUpdateStatus(order.id, "cancelado")}
+                        onClick={handleCancel}
                         variant="outline"
                         className="text-red-600 hover:text-red-700 border-red-200 text-xs md:text-sm flex-1 md:flex-none cursor-pointer"
                       >
@@ -320,7 +340,7 @@ export default function OrderCard({
                         Enviar para Entrega
                       </Button>
                       <Button
-                        onClick={() => onUpdateStatus(order.id, "cancelado")}
+                        onClick={handleCancel}
                         variant="outline"
                         className="text-red-600 hover:text-red-700 border-red-200 text-xs md:text-sm flex-1 md:flex-none cursor-pointer"
                       >
@@ -338,7 +358,7 @@ export default function OrderCard({
                         Marcar como Entregue
                       </Button>
                       <Button
-                        onClick={() => onUpdateStatus(order.id, "cancelado")}
+                        onClick={handleCancel}
                         variant="outline"
                         className="text-red-600 hover:text-red-700 border-red-200 text-xs md:text-sm flex-1 md:flex-none cursor-pointer"
                       >

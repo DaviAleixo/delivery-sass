@@ -127,3 +127,45 @@ export async function checkPaymentStatus({ accessToken, paymentId, orderId }) {
     return { status: "pending", isApproved: false };
   }
 }
+
+/**
+ * Realiza o estorno de um pagamento PIX junto ao Mercado Pago
+ */
+export async function refundPixPayment({ accessToken, paymentId, amount }) {
+  if (!accessToken || !paymentId) {
+    return {
+      success: false,
+      error: "Access token e Payment ID do Mercado Pago são obrigatórios para o estorno",
+    };
+  }
+
+  try {
+    const res = await fetch(MP_FUNCTION_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "refund_payment",
+        accessToken: accessToken.trim(),
+        paymentId,
+        amount: amount ? Number(amount) : undefined,
+      }),
+    });
+
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      return {
+        success: false,
+        error: data.error || "Falha ao processar estorno no Mercado Pago",
+        details: data,
+      };
+    }
+
+    return data;
+  } catch (err) {
+    console.error("[Mercado Pago Service] Erro ao estornar PIX:", err);
+    return {
+      success: false,
+      error: err.message || "Erro de conexão ao estornar pagamento no Mercado Pago",
+    };
+  }
+}
