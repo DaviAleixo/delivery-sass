@@ -264,7 +264,7 @@ function AddressForm({ address, onSave, onCancel, dark = false }) {
   );
 }
 
-export default function UserProfileSheet({ dark = false, trigger }) {
+export default function UserProfileSheet({ dark = false, trigger, open, onOpenChange }) {
   const [user, setUser] = useState(null);
   const [addresses, setAddresses] = useState([]);
   const [availableCoupons, setAvailableCoupons] = useState([]);
@@ -595,7 +595,13 @@ export default function UserProfileSheet({ dark = false, trigger }) {
   };
 
   return (
-    <Sheet onOpenChange={(open) => open && loadUserData()}>
+    <Sheet 
+      {...(open !== undefined ? { open } : {})}
+      onOpenChange={(isOpen) => {
+        if (onOpenChange) onOpenChange(isOpen);
+        if (isOpen) loadUserData();
+      }}
+    >
       <SheetTrigger asChild>
         {trigger || (
           <Button 

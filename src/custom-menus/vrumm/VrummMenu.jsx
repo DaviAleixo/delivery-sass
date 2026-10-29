@@ -24,6 +24,7 @@ import VrummProductDetailModal from "./VrummProductDetailModal";
 import BannerCarousel from "@/components/menu/BannerCarousel";
 import StoreInfoSheet from "@/components/menu/StoreInfoSheet";
 import UserProfileSheet from "@/components/menu/UserProfileSheet";
+import { User } from "@/entities/User";
 import OrderModal from "@/components/menu/OrderModal";
 import PixOnlineModal from "@/components/menu/PixOnlineModal";
 
@@ -76,6 +77,16 @@ export default function VrummMenu({
   setSelectedProduct,
   navigate,
 }) {
+  const [isUserProfileOpen, setIsUserProfileOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+
+  useEffect(() => {
+    User.me().then(u => {
+      if (u && u.id) setCurrentUser(u);
+      else setCurrentUser(null);
+    }).catch(() => setCurrentUser(null));
+  }, []);
+
   return (
     <div className="min-h-screen bg-[#0d0a09] text-stone-100 selection:bg-red-600 selection:text-white">
       {/* Header Dark Glass Moderno */}
@@ -143,7 +154,7 @@ export default function VrummMenu({
                 </motion.div>
               )}
               <StoreInfoSheet settings={settings} dark />
-              <UserProfileSheet dark />
+              <UserProfileSheet dark open={isUserProfileOpen} onOpenChange={setIsUserProfileOpen} />
             </div>
           </div>
         </div>
@@ -246,6 +257,33 @@ export default function VrummMenu({
                 Horário de funcionamento: {settings?.opening_time || '18:00'} às {settings?.closing_time || '23:59'}. Você pode explorar o cardápio e montar seu pedido à vontade!
               </p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Banner Superior de Cashback no Vrumm */}
+      {!isVisualOnly && settings?.cashback_enabled && Number(settings?.cashback_rate || 0) > 0 && (
+        <div className={`${!activeGuestOrder && !hasTopNotice && storeIsOpen ? "pt-[68px]" : "pt-3"} container mx-auto px-4 max-w-6xl`}>
+          <div 
+            onClick={() => setIsUserProfileOpen(true)}
+            className="bg-gradient-to-r from-emerald-950/40 via-stone-900 to-emerald-950/30 border border-emerald-500/40 hover:border-emerald-500/60 rounded-2xl p-3.5 sm:p-4 transition-all cursor-pointer flex items-center justify-between gap-3 shadow-lg"
+          >
+            <div className="flex-1 min-w-0 pr-1">
+              <h3 
+                className="font-bold text-sm sm:text-base text-emerald-400 tracking-tight leading-tight"
+                style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
+              >
+                {currentUser 
+                  ? `Cashback de ${Number(settings.cashback_rate)}% ativado` 
+                  : `Cashback de ${Number(settings.cashback_rate)}% disponível`}
+              </h3>
+              <p className="text-xs sm:text-sm text-stone-300 mt-1 leading-snug font-normal">
+                {currentUser 
+                  ? `Faça um pedido e ganhe ${Number(settings.cashback_rate)}% do valor de volta para usar nas próximas compras.` 
+                  : `Crie sua conta para ganhar ${Number(settings.cashback_rate)}% do valor de volta e usar nas próximas compras.`}
+              </p>
+            </div>
+            <ChevronRight className="w-5 h-5 text-emerald-400 shrink-0" />
           </div>
         </div>
       )}

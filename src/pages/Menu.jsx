@@ -22,6 +22,7 @@ import OrderModal from "../components/menu/OrderModal";
 import PixOnlineModal from "../components/menu/PixOnlineModal";
 import BannerCarousel from "../components/menu/BannerCarousel";
 import UserProfileSheet from "../components/menu/UserProfileSheet";
+import { User } from "@/entities/User";
 import StoreInfoSheet from "../components/menu/StoreInfoSheet";
 import ProductDetailModal from "../components/menu/ProductDetailModal";
 import PizzaBuilderModal from "../components/menu/PizzaBuilderModal";
@@ -100,6 +101,15 @@ export default function MenuPage() {
   const [productComplementGroups, setProductComplementGroups] = useState([]);
   const [headerHeight, setHeaderHeight] = useState(88);
   const headerRef = useRef(null);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isUserProfileOpen, setIsUserProfileOpen] = useState(false);
+
+  useEffect(() => {
+    User.me().then(u => {
+      if (u && u.id) setCurrentUser(u);
+      else setCurrentUser(null);
+    }).catch(() => setCurrentUser(null));
+  }, []);
 
   useEffect(() => {
     if (!headerRef.current) return;
@@ -959,7 +969,7 @@ export default function MenuPage() {
                   </button>
                 )}
 
-                <UserProfileSheet />
+                <UserProfileSheet open={isUserProfileOpen} onOpenChange={setIsUserProfileOpen} />
 
                 <StoreInfoSheet 
                   settings={settings}
@@ -1061,6 +1071,33 @@ export default function MenuPage() {
             >
               ✕
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Banner Superior de Cashback (Conforme Modelo Solicitado) */}
+      {!isVisualOnly && settings?.cashback_enabled && Number(settings?.cashback_rate || 0) > 0 && (
+        <div className="mt-3 container mx-auto px-4 max-w-6xl">
+          <div 
+            onClick={() => setIsUserProfileOpen(true)}
+            className="bg-[#F0FDF4] border border-[#D1E9DF] hover:bg-[#E6F8EE] rounded-2xl p-3.5 sm:p-4 transition-all cursor-pointer flex items-center justify-between gap-3 shadow-2xs"
+          >
+            <div className="flex-1 min-w-0 pr-1">
+              <h3 
+                className="font-bold text-sm sm:text-base text-[#046c4e] tracking-tight leading-tight"
+                style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
+              >
+                {currentUser 
+                  ? `Cashback de ${Number(settings.cashback_rate)}% ativado` 
+                  : `Cashback de ${Number(settings.cashback_rate)}% disponível`}
+              </h3>
+              <p className="text-xs sm:text-sm text-stone-600 mt-1 leading-snug font-normal">
+                {currentUser 
+                  ? `Faça um pedido e ganhe ${Number(settings.cashback_rate)}% do valor de volta para usar nas próximas compras.` 
+                  : `Crie sua conta para ganhar ${Number(settings.cashback_rate)}% do valor de volta e usar nas próximas compras.`}
+              </p>
+            </div>
+            <ChevronRight className="w-5 h-5 text-[#046c4e] shrink-0" />
           </div>
         </div>
       )}
