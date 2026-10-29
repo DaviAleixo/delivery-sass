@@ -16,6 +16,8 @@
   - [x] **Painel de Configurações do Lojista**: Aba Geral em `Settings.jsx` com switch liga/desliga, % de retorno (1% a 30%), dias de validade e % máx de abatimento.
   - [x] **Checkout & Resumo Financeiro**: Abatimento com switch 1-clique em `OrderModal.jsx`, recálculo dinâmico do total e registro automático de transações.
   - [x] **Painel de Pedidos & Impressão Térmica**: `OrderCard.jsx` e `PrintOrder.jsx` detalham desconto de cashback e cashback gerado na comanda da cozinha e entregador.
+  - [x] **Banner de Topo no Cardápio (UX Persuasiva & Isca de Cadastro)**: Banner verde exatamente no modelo solicitado exibido entre o topo da loja e os banners carrossel. Mostra 'Cashback de X% ativado' para clientes cadastrados e 'Cashback de X% disponível: Crie sua conta para ganhar...' para visitantes, abrindo com 1 toque o modal de perfil e autenticação.
+  - [x] **Saldo de Cashback no Modal 'Meu Perfil' & Botão na Navbar**: Card de saldo de cashback adicionado em `UserProfileSheet.jsx` (mostrando o valor mesmo zerado em R$ 0,00, a taxa % e a validade), acompanhado de botão de acesso rápido a perfil na Navbar do cliente.
   - [x] **Banco de Dados**: Migração SQL executada e validada em Homologação (`staging`) e Produção (`jqwtnzdsaivbjudvjhld`). ([[02 - 💡 Ideias & Brainstorm]])
 
 - [x] 🛡️ **Governança Estrita de Planos & Isolamento de Funcionalidades no Painel (Concluído)**:
