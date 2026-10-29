@@ -8,6 +8,7 @@ import '@/index.css'
 if (import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
     dsn: import.meta.env.VITE_SENTRY_DSN,
+    environment: import.meta.env.VITE_APP_ENV || (import.meta.env.PROD ? 'production' : 'development'),
     integrations: [
       Sentry.browserTracingIntegration(),
       Sentry.replayIntegration({

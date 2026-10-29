@@ -999,6 +999,58 @@
   2. **Vídeo de Demonstração de 20s**: Pedido feito no celular ➔ Alarme soando no KDS ➔ Impressora cuspindo o cupom térmico automaticamente. Esse visual converte clientes imediatamente no WhatsApp.
   3. **Período de Demonstração de 7 Dias**: Liberar o sistema para rodar numa sexta/sábado de pico. Uma vez que o restaurante experimenta a cozinha sem confusão e o cliente pedindo na mesa, ele não consegue mais voltar para a comanda de papel.
 
+### 💳 62. Arquitetura de Cartão de Crédito Online, Bandeiras (Visa, Master, Elo) & Gateways nas Grandes Plataformas (Padrão iFood / Uber / Stripe)
+* **Contexto**: Como as gigantes de delivery (iFood, Rappi, Uber) e e-commerces globais processam pagamentos com cartão de crédito direto no aplicativo com alta conversão, zero atrito, blindagem contra vazamento de dados e proteção total contra chargebacks (golpes).
+
+* **1. Os 6 Atores do Ecossistema de Cartões (Como o Dinheiro se Move)**:
+  1. **Portador (Cardholder)**: O cliente com fome digitando os dados no cardápio.
+  2. **Estabelecimento / SaaS (PedeMuleke)**: A plataforma onde a compra é iniciada.
+  3. **Gateway / Subadquirente (Mercado Pago, Asaas, Pagar.me, Stripe)**: Fornece as APIs, SDKs com tokenização, cálculo de parcelas e telas seguras.
+  4. **Adquirente / Credenciadora (Stone, Cielo, Rede, Getnet, Adyen)**: A empresa que liquida financeiramente a transação com os bancos e o Banco Central.
+  5. **Bandeira (Brand / Card Scheme: Visa, Mastercard, Elo, Hipercard, Amex)**: A rede global que conecta adquirentes aos bancos emissores, definindo as regras de segurança e intercâmbio.
+  6. **Banco Emissor (Issuer: Nubank, Itaú, Bradesco, Inter, Santander)**: Quem emite o cartão para o cliente, analisa o limite disponível e aprova ou recusa a cobrança.
+
+* **2. Detecção de Bandeira em Tempo Real no Frontend (BIN & Algoritmo de Luhn)**:
+  - **BIN (Bank Identification Number)**: Os primeiros 6 a 8 dígitos do cartão identificam univocamente a bandeira, o banco emissor e o tipo (Crédito vs Débito):
+    - **Visa**: Sempre inicia com `4` (tamanho 16 ou 13 dígitos).
+    - **Mastercard**: Inicia com `51` a `55` ou faixa `2221` a `2720` (tamanho 16 dígitos).
+    - **Elo**: Inicia com faixas brasileiras específicas (`4011`, `4312`, `5041`, `6362`, `6363`...).
+    - **American Express (Amex)**: Inicia com `34` ou `37` (tamanho 15 dígitos e CVV de 4 dígitos).
+    - **Hipercard**: Inicia com `6062` (muito forte no Nordeste do Brasil).
+  - **Algoritmo de Luhn (Módulo 10)**: Validação matemática rápida executada no navegador que checa se o número digitado é plausível antes mesmo de mandar qualquer requisição para a internet, economizando requisições de API e dando feedback imediato ao usuário (borda vermelha ou verde).
+  - **UX Dinâmica**: Conforme o cliente digita os primeiros 4 dígitos, o campo exibe dinamicamente o ícone estilizado da bandeira (ex: logotipo da Visa ou Mastercard).
+
+* **3. Tokenização & Blindagem Absoluta PCI-DSS (A Regra de Ouro do SaaS)**:
+  - **O Que NUNCA Fazer**: O banco de dados do PedeMuleke (Supabase) **JAMAIS** pode armazenar o número completo do cartão (PAN de 16 dígitos) nem o código de segurança (CVV). Tocar nesses dados em texto puro exige certificação de segurança internacional **PCI-DSS Nível 1** (auditorias anuais com custo de centenas de milhares de dólares).
+  - **Como as Grandes Plataformas Fazem (Client-Side Tokenization)**:
+    1. O cliente digita os dados no modal do checkout.
+    2. O SDK JavaScript oficial do gateway (ex: `MercadoPago.js`, `Stripe.js` ou `Pagarme.js`) intercepta os campos diretamente na memória do navegador.
+    3. O SDK envia os dados criptografados direto para os servidores blindados do gateway (PCI-DSS compliant).
+    4. O gateway devolve para a aplicação um **token efêmero** (ex: `tok_1a2b3c...`).
+    5. O frontend do PedeMuleke envia para a Edge Function apenas o `token` e os metadados públicos seguros:
+       - Bandeira (`card_brand: "visa"`)
+       - Últimos 4 dígitos (`card_last4: "4242"`)
+       - Mês/Ano de validade (`exp_month: 12`, `exp_year: 2029`)
+  - **Resultado**: 100% de conformidade com a LGPD e PCI-DSS com zero risco para o SaaS. Se o banco do Supabase sofrer um vazamento hipotético, nenhum dado de cartão de cliente é comprometido.
+
+* **4. Autenticação 3DS 2.0 (3-D Secure / Zero Chargeback)**:
+  - **O Maior Pesadelo do Delivery Online**: Golpistas que usam cartões de terceiros clonados na internet para pedir comida cara (combo de sushi/hambúrguer gourmet de R$ 300). No dia seguinte, o dono real do cartão avisa o banco, a compra é estornada (chargeback) e o restaurante toma o prejuízo da comida e da entrega.
+  - **A Solução das Gigantes (3DS 2.0)**:
+    - Ao tentar aprovar o pagamento, o gateway abre um desafio invisível ou modal nativo do banco emissor.
+    - O cliente recebe um pop-up ou notificação push no app do Nubank/Itaú/Inter: *"Confirma a compra de R$ 89,90 no PedeMuleke?"* e autoriza com digital ou reconhecimento facial.
+    - **Liability Shift (Transferência de Responsabilidade)**: Quando a compra passa pelo 3DS autenticado, a bandeira/banco assume o risco de fraude. Mesmo se houver contestação futura, o dinheiro permanece garantido na conta do restaurante.
+
+* **5. Motor Antifraude Integrado (ClearSale / Konduto / Cybersource)**:
+  - As grandes plataformas nunca aprovam um cartão puramente pelo saldo. Um motor antifraude roda em paralelo em 300ms analisando:
+    - **Device Fingerprint**: O mesmo celular tentou passar 5 cartões com nomes diferentes nos últimos 10 minutos? (Fraude óbvia).
+    - **Geolocalização vs Endereço de Entrega**: O IP da conexão é da Bahia, mas o pedido está sendo entregue no interior de São Paulo?
+    - **Velocidade de Digitação e Histórico do Telefone**: Clientes legítimos costumam ter WhatsApp com foto e histórico estável.
+
+* **6. Split de Pagamento Multi-Tenant (Modelo de Repasse)**:
+  - No modelo SaaS profissional de delivery, a plataforma pode optar por:
+    - **Modo 1 (Gateway Próprio do Restaurante)**: O restaurante conecta sua própria conta do Mercado Pago/Asaas (via OAuth ou API Key). O dinheiro da venda cai 100% na conta dele, e o PedeMuleke cobra a mensalidade fixa separadamente via Asaas SaaS. (Abordagem atual: zero risco tributário para o Davi).
+    - **Modo 2 (Split Nativo no Marketplace)**: Uma única conta mestre processa todas as vendas e divide o dinheiro em tempo real na adquirente: R$ 90,00 vai para o restaurante e R$ 2,00 (ou comissão) vai para a conta bancária do PedeMuleke no mesmo segundo.
+
 ---
 
 ## 🔗 Links Relacionados
