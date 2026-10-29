@@ -18,6 +18,7 @@ import {
   Loader2, 
   Copy,
   Plus,
+  ChevronRight,
   ShieldCheck,
   ArrowLeft,
   RefreshCw,
@@ -604,18 +605,17 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
     >
       <SheetTrigger asChild>
         {trigger || (
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className={`rounded-full h-9 w-9 cursor-pointer transition-colors ${
+          <button 
+            type="button"
+            className={`w-9 h-9 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
               dark 
                 ? "text-stone-300 hover:text-white hover:bg-stone-800/80" 
-                : "text-[#171717] hover:text-[#047857] hover:bg-[#D1E9DF]/40"
+                : "text-gray-700 hover:text-gray-950 hover:bg-gray-100"
             }`}
             title="Meu Perfil"
           >
-            <UserIcon className="w-4 h-4" />
-          </Button>
+            <UserIcon className="w-5 h-5" />
+          </button>
         )}
       </SheetTrigger>
       <SheetContent className={`overflow-y-auto p-6 scrollbar-hide ${
@@ -624,7 +624,7 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
           : "bg-white text-[#171717] border-l border-[#E5EAE7]"
       }`}>
         <SheetHeader className={`pb-3.5 border-b ${dark ? "border-stone-800" : "border-[#E5EAE7]"}`}>
-          <div className="flex items-center justify-between pr-8">
+          <div>
             <SheetTitle 
               className={`text-xl sm:text-2xl font-black ${dark ? "text-white" : "text-[#171717]"}`}
               style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
@@ -632,14 +632,9 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
               {user ? "Meu Perfil" : "Acessar Conta"}
             </SheetTitle>
             {user && (
-              <span className={`inline-flex items-center gap-1.5 text-[11px] font-black px-2.5 py-0.5 rounded-full border ${
-                dark 
-                  ? "bg-emerald-950/60 border-emerald-500/40 text-emerald-400" 
-                  : "bg-[#D1E9DF]/70 border-[#D1E9DF] text-[#047857]"
-              }`}>
-                <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${dark ? "bg-emerald-400" : "bg-[#047857]"}`} />
-                Conectado
-              </span>
+              <p className={`text-xs mt-0.5 ${dark ? "text-stone-400" : "text-stone-500"}`}>
+                Gerencie seus dados, endereços e benefícios
+              </p>
             )}
           </div>
         </SheetHeader>
@@ -647,158 +642,149 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
         <div className="py-6">
           {user ? (
             <div className="space-y-6">
-              {/* Card do Usuário Logado */}
-              <div className={`p-4.5 rounded-3xl border transition-all flex items-center gap-4 ${
+              {/* Card do Usuário Logado (Conforme Foto 1) */}
+              <div className={`p-4 rounded-3xl border transition-all flex items-center justify-between gap-3 shadow-2xs ${
                 dark 
-                  ? "bg-stone-900/90 border-stone-800 shadow-md" 
-                  : "bg-gradient-to-br from-[#F7F9F8] to-[#EBF3EF] border-[#D1E9DF] shadow-2xs"
+                  ? "bg-stone-900/90 border-stone-800" 
+                  : "bg-[#F9FAFB] border-stone-200/80"
               }`}>
-                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-2xl shrink-0 ${
-                  dark 
-                    ? "bg-red-950/80 border border-red-500/40 text-red-400 shadow-inner" 
-                    : "bg-[#047857] text-white shadow-md shadow-[#047857]/20 ring-4 ring-white"
-                }`}>
-                  {user.full_name?.charAt(0)?.toUpperCase() || "C"}
-                </div>
-                <div className="flex-1 min-w-0">
-                  {isEditingName ? (
-                    <form onSubmit={handleSaveName} className="space-y-1.5 py-0.5">
-                      <div className="flex items-center gap-1.5">
-                        <Input
-                          value={newName}
-                          onChange={(e) => setNewName(e.target.value)}
-                          placeholder="Seu nome"
-                          autoFocus
-                          className={`h-8 text-sm rounded-xl px-2.5 ${
-                            dark 
-                              ? "bg-stone-950 border-stone-700 text-white" 
-                              : "bg-white border-stone-200 text-[#171717] focus-visible:ring-[#047857]"
-                          }`}
-                        />
-                        <Button
-                          type="submit"
-                          size="sm"
-                          disabled={isSavingName}
-                          className={`h-8 px-2.5 rounded-xl shrink-0 cursor-pointer ${
-                            dark 
-                              ? "bg-red-600 hover:bg-red-500 text-white" 
-                              : "bg-[#047857] hover:bg-[#065f46] text-white shadow-2xs"
-                          }`}
-                          title="Salvar nome"
-                        >
-                          {isSavingName ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setIsEditingName(false)}
-                          className={`h-8 px-2 rounded-xl shrink-0 cursor-pointer ${
-                            dark ? "text-stone-400 hover:text-white" : "text-stone-400 hover:text-stone-700"
-                          }`}
-                          title="Cancelar"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    </form>
-                  ) : (
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <p className={`font-black text-lg leading-tight truncate ${dark ? "text-white" : "text-[#171717]"}`}>
-                          {user.full_name || "Cliente"}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setNewName(user.full_name || "");
-                            setIsEditingName(true);
-                          }}
-                          title="Alterar nome"
-                          className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                            dark 
-                              ? "text-stone-400 hover:text-red-400" 
-                              : "text-stone-400 hover:text-[#047857] hover:bg-[#D1E9DF]/40"
-                          }`}
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                      <div className={`inline-flex items-center gap-1.5 text-xs font-bold mt-1.5 px-2.5 py-0.5 rounded-full ${
-                        dark 
-                          ? "text-emerald-400 bg-stone-950/80 border border-stone-800" 
-                          : "text-[#047857] bg-white/90 border border-[#D1E9DF] shadow-2xs"
-                      }`}>
-                        <PhoneCall className="w-3 h-3" />
-                        <span>{user.phone || "WhatsApp Conectado"}</span>
-                      </div>
+                <div className="flex items-center gap-3.5 min-w-0">
+                  {/* Avatar Circular com botãozinho de edição */}
+                  <div className="relative shrink-0">
+                    <div className={`w-14 h-14 rounded-full flex items-center justify-center font-black text-2xl shadow-sm ${
+                      dark 
+                        ? "bg-red-900/80 border border-red-500/40 text-red-200" 
+                        : "bg-[#0b3827] text-white"
+                    }`}>
+                      {user.full_name?.charAt(0)?.toUpperCase() || "D"}
                     </div>
-                  )}
+                    <button 
+                      type="button" 
+                      onClick={() => { setNewName(user.full_name || ""); setIsEditingName(true); }}
+                      className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-white border border-stone-200 text-stone-700 flex items-center justify-center shadow-xs hover:bg-stone-50 cursor-pointer"
+                      title="Alterar foto / nome"
+                    >
+                      <Pencil className="w-2.5 h-2.5" />
+                    </button>
+                  </div>
+
+                  <div className="min-w-0">
+                    {isEditingName ? (
+                      <form onSubmit={handleSaveName} className="space-y-1.5 py-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <Input
+                            value={newName}
+                            onChange={(e) => setNewName(e.target.value)}
+                            placeholder="Seu nome"
+                            autoFocus
+                            className="h-8 text-sm rounded-xl px-2.5 bg-white border-stone-200 text-[#171717]"
+                          />
+                          <Button
+                            type="submit"
+                            size="sm"
+                            disabled={isSavingName}
+                            className="h-8 px-2.5 rounded-xl bg-[#047857] hover:bg-[#065f46] text-white cursor-pointer"
+                          >
+                            {isSavingName ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setIsEditingName(false)}
+                            className="h-8 px-2 rounded-xl text-stone-400 hover:text-stone-700 cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className={`font-extrabold text-base truncate ${dark ? "text-white" : "text-stone-900"}`}>
+                            {user.full_name || "Cliente"}
+                          </span>
+                          <button 
+                            type="button" 
+                            onClick={() => { setNewName(user.full_name || ""); setIsEditingName(true); }}
+                            className="text-stone-400 hover:text-stone-700 p-0.5 cursor-pointer"
+                            title="Editar nome"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <div className={`mt-1 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                          dark 
+                            ? "bg-emerald-950/70 border border-emerald-500/30 text-emerald-400" 
+                            : "bg-[#EBF3EF] border border-[#D1E9DF] text-[#047857]"
+                        }`}>
+                          <PhoneCall className="w-3 h-3" />
+                          <span>{user.phone || "WhatsApp Conectado"}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border ${
+                    dark 
+                      ? "bg-emerald-950/80 border-emerald-500/40 text-emerald-400" 
+                      : "bg-[#E6F4EA] border-[#CEEAD6] text-[#137333]"
+                  }`}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#137333]" />
+                    Conectado
+                  </span>
+                  <ChevronRight className="w-4 h-4 text-stone-400" />
                 </div>
               </div>
 
-              {/* Card de Cashback da Loja (Mesmo com R$ 0,00) */}
-              <div className={`p-4 rounded-3xl border transition-all ${
+              {/* Card de Cashback da Loja (Idêntico à Foto 1) */}
+              <div className={`rounded-3xl p-5 text-white relative overflow-hidden shadow-sm transition-all ${
                 dark 
-                  ? "bg-gradient-to-br from-amber-950/40 via-stone-900 to-stone-900 border-amber-900/50 shadow-md" 
-                  : "bg-gradient-to-br from-amber-500/10 via-amber-50/70 to-emerald-500/10 border-amber-300/80 shadow-2xs"
+                  ? "bg-gradient-to-br from-[#0c2f21] to-[#082218] border border-emerald-900/50" 
+                  : "bg-gradient-to-br from-[#123e2c] via-[#0d3424] to-[#0a2c1e] border border-emerald-900/30"
               }`}>
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-11 h-11 rounded-2xl flex items-center justify-center font-black shrink-0 ${
-                      dark 
-                        ? "bg-amber-500/20 text-amber-400 border border-amber-500/30" 
-                        : "bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-md shadow-amber-500/20"
-                    }`}>
-                      <Coins className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className={`text-xs font-black uppercase tracking-wider ${dark ? "text-amber-400" : "text-amber-950"}`}>
-                          Cashback da Loja
-                        </span>
-                        {Number(cashbackData?.rate || 0) > 0 && (
-                          <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
-                            dark ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" : "bg-amber-200/90 text-amber-900"
-                          }`}>
-                            +{cashbackData.rate}% de volta
-                          </span>
-                        )}
-                      </div>
-                      <p className={`text-[11px] mt-0.5 leading-tight ${dark ? "text-stone-400" : "text-stone-600"}`}>
-                        Saldo acumulado para seus pedidos
-                      </p>
-                    </div>
+                {/* Marca d'água decorativa % grande */}
+                <span className="absolute -right-3 -top-6 text-9xl font-black text-white/[0.04] pointer-events-none select-none">
+                  %
+                </span>
+
+                <p className="text-[11px] font-bold tracking-wider text-emerald-300 uppercase">
+                  CASHBACK DA LOJA
+                </p>
+
+                <div className="flex items-start justify-between gap-3 mt-1 relative z-10">
+                  <div className="flex-1 pr-1">
+                    <h2 className="text-3xl font-black text-white tracking-tight">
+                      {Number(cashbackData?.rate || 5)}% de volta
+                    </h2>
+                    <p className="text-xs text-emerald-100/75 leading-relaxed mt-1.5 max-w-[210px] font-normal">
+                      Faça seus pedidos e ganhe saldo de volta para usar nas próximas compras.
+                    </p>
                   </div>
 
-                  <div className="text-right shrink-0">
-                    <div className={`text-xl sm:text-2xl font-black ${
-                      Number(cashbackData?.balance || 0) > 0 
-                        ? (dark ? "text-emerald-400" : "text-emerald-700") 
-                        : (dark ? "text-stone-400" : "text-stone-600")
-                    }`}>
+                  <div className="bg-[#072418]/90 border border-emerald-500/20 rounded-2xl py-2.5 px-3.5 text-center min-w-[110px] shrink-0">
+                    <span className="text-[10px] font-medium text-emerald-300/90 block">
+                      Saldo acumulado
+                    </span>
+                    <span className="text-xl font-black text-white block mt-0.5">
                       R$ {Number(cashbackData?.balance || 0).toFixed(2).replace('.', ',')}
-                    </div>
+                    </span>
                   </div>
                 </div>
 
-                {Number(cashbackData?.balance || 0) > 0 && cashbackData?.expires_at && (
-                  <div className="mt-3 pt-2.5 border-t border-amber-200/50 flex items-center justify-between text-[11px]">
-                    <span className={dark ? "text-stone-400" : "text-stone-600"}>
-                      Validade do saldo:
+                <div className="bg-[#092b1d]/90 border border-emerald-500/20 rounded-2xl p-2.5 px-3 flex items-center justify-between mt-4 relative z-10">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-7 h-7 rounded-full bg-[#051c13] flex items-center justify-center shrink-0 text-amber-400">
+                      <Coins className="w-4 h-4" />
+                    </div>
+                    <span className="text-xs text-emerald-100 font-medium truncate">
+                      O valor cai automaticamente na sua conta.
                     </span>
-                    <strong className={dark ? "text-amber-400" : "text-amber-900 font-bold"}>
-                      {new Date(cashbackData.expires_at).toLocaleDateString('pt-BR')}
-                    </strong>
                   </div>
-                )}
-
-                {Number(cashbackData?.balance || 0) === 0 && (
-                  <div className="mt-2.5 pt-2 border-t border-amber-200/40 flex items-center gap-1 text-[11px] text-stone-500">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                    <span>Faça seu pedido e ganhe {cashbackData?.rate || 5}% de volta automaticamente!</span>
-                  </div>
-                )}
+                  <ChevronRight className="w-4 h-4 text-emerald-300 shrink-0 ml-1" />
+                </div>
               </div>
 
               <Separator className={dark ? "bg-stone-800" : "bg-stone-100"} />
@@ -906,6 +892,7 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
+                        <ChevronRight className="w-4 h-4 text-stone-400 ml-0.5" />
                       </div>
                     </div>
                   ))}
@@ -914,16 +901,30 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
 
               <Separator className={dark ? "bg-stone-800" : "bg-stone-100"} />
 
-              {/* Botão Meus Pedidos */}
+              {/* Card Branco de Histórico de Pedidos (Conforme Foto 1) */}
               <Link to={createPageUrl("MyOrders")} className="block">
-                <Button className={`w-full font-black rounded-2xl h-12 shadow-sm flex items-center justify-center gap-2.5 transition-all active:scale-[0.99] cursor-pointer ${
+                <div className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 shadow-2xs ${
                   dark 
-                    ? "bg-stone-900 hover:bg-stone-800 border border-stone-800 text-white" 
-                    : "bg-[#171717] hover:bg-black text-white shadow-md shadow-stone-900/10"
+                    ? "bg-stone-900/90 border-stone-800 hover:bg-stone-850" 
+                    : "bg-white border-stone-200/90 hover:bg-stone-50/80"
                 }`}>
-                  <ShoppingBag className={`w-4 h-4 ${dark ? "text-red-500" : "text-[#D1E9DF]"}`} />
-                  <span>Ver Histórico de Pedidos</span>
-                </Button>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                      dark ? "bg-stone-800 text-stone-200" : "bg-stone-100 text-stone-800"
+                    }`}>
+                      <ShoppingBag className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className={`font-bold text-sm leading-tight ${dark ? "text-white" : "text-stone-900"}`}>
+                        Ver Histórico de Pedidos
+                      </p>
+                      <p className="text-xs text-stone-500 mt-0.5">
+                        Acompanhe todos os seus pedidos
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-stone-400 shrink-0" />
+                </div>
               </Link>
 
               <Separator className={dark ? "bg-stone-800" : "bg-stone-100"} />

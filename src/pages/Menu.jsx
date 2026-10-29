@@ -949,7 +949,7 @@ export default function MenuPage() {
                 </h1>
               </div>
 
-              {/* Ações Topo: Sacola com Contador Verde e Botão de Informações */}
+              {/* Ações Topo: Sacola com Contador Verde e Botão de Meu Perfil */}
               <div className="flex items-center gap-1 sm:gap-1.5">
                 {!isVisualOnly && (
                   <button
@@ -970,19 +970,6 @@ export default function MenuPage() {
                 )}
 
                 <UserProfileSheet open={isUserProfileOpen} onOpenChange={setIsUserProfileOpen} />
-
-                <StoreInfoSheet 
-                  settings={settings}
-                  trigger={
-                    <button 
-                      type="button"
-                      className="w-9 h-9 rounded-full flex items-center justify-center text-gray-700 hover:text-gray-950 hover:bg-gray-100 transition-colors cursor-pointer"
-                      title="Informações da Loja"
-                    >
-                      <Info className="w-5 h-5" />
-                    </button>
-                  }
-                />
               </div>
             </div>
           </div>
