@@ -80,6 +80,10 @@ export default function MenuPage() {
     min_order_value: tenant?.min_order_value ?? 20.00,
     delivery_time: tenant?.delivery_time || "40-50 min",
     payment_methods: tenant?.payment_methods || null,
+    cashback_enabled: tenant?.cashback_enabled ?? false,
+    cashback_rate: Number(tenant?.cashback_rate ?? 5),
+    cashback_validity_days: tenant?.cashback_validity_days ?? 15,
+    cashback_max_discount_percentage: Number(tenant?.cashback_max_discount_percentage ?? 50),
   }));
   const [banners, setBanners] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -363,6 +367,10 @@ export default function MenuPage() {
         salon_mode: currentTenant?.salon_mode || "full",
         accepts_delivery: currentTenant?.accepts_delivery !== false,
         accepts_takeaway: currentTenant?.accepts_takeaway !== false,
+        cashback_enabled: currentTenant?.cashback_enabled ?? tenant?.cashback_enabled ?? false,
+        cashback_rate: Number(currentTenant?.cashback_rate ?? tenant?.cashback_rate ?? 5),
+        cashback_validity_days: currentTenant?.cashback_validity_days ?? tenant?.cashback_validity_days ?? 15,
+        cashback_max_discount_percentage: Number(currentTenant?.cashback_max_discount_percentage ?? tenant?.cashback_max_discount_percentage ?? 50),
       };
 
       setSettings(resolvedSettings);
@@ -1063,7 +1071,7 @@ export default function MenuPage() {
       )}
 
       {/* Banner Superior de Cashback (Conforme Modelo Solicitado) */}
-      {!isVisualOnly && settings?.cashback_enabled && Number(settings?.cashback_rate || 0) > 0 && (
+      {!isVisualOnly && Boolean(settings?.cashback_enabled ?? tenant?.cashback_enabled) && Number(settings?.cashback_rate ?? tenant?.cashback_rate ?? 5) > 0 && (
         <div className="mt-3 container mx-auto px-4 max-w-6xl">
           <div 
             onClick={() => setIsUserProfileOpen(true)}
@@ -1075,13 +1083,13 @@ export default function MenuPage() {
                 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
               >
                 {currentUser 
-                  ? `Cashback de ${Number(settings.cashback_rate)}% ativado` 
-                  : `Cashback de ${Number(settings.cashback_rate)}% disponível`}
+                  ? `Cashback de ${Number(settings?.cashback_rate ?? tenant?.cashback_rate ?? 5)}% ativado` 
+                  : `Cashback de ${Number(settings?.cashback_rate ?? tenant?.cashback_rate ?? 5)}% disponível`}
               </h3>
               <p className="text-xs sm:text-sm text-stone-600 mt-1 leading-snug font-normal">
                 {currentUser 
-                  ? `Faça um pedido e ganhe ${Number(settings.cashback_rate)}% do valor de volta para usar nas próximas compras.` 
-                  : `Crie sua conta para ganhar ${Number(settings.cashback_rate)}% do valor de volta e usar nas próximas compras.`}
+                  ? `Faça um pedido e ganhe ${Number(settings?.cashback_rate ?? tenant?.cashback_rate ?? 5)}% do valor de volta para usar nas próximas compras.` 
+                  : `Crie sua conta para ganhar ${Number(settings?.cashback_rate ?? tenant?.cashback_rate ?? 5)}% do valor de volta e usar nas próximas compras.`}
               </p>
             </div>
             <ChevronRight className="w-5 h-5 text-[#046c4e] shrink-0" />

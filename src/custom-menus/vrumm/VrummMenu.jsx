@@ -261,7 +261,7 @@ export default function VrummMenu({
       )}
 
       {/* Banner Superior de Cashback no Vrumm */}
-      {!isVisualOnly && settings?.cashback_enabled && Number(settings?.cashback_rate || 0) > 0 && (
+      {!isVisualOnly && Boolean(settings?.cashback_enabled ?? tenant?.cashback_enabled) && Number(settings?.cashback_rate ?? tenant?.cashback_rate ?? 5) > 0 && (
         <div className={`${!activeGuestOrder && !hasTopNotice && storeIsOpen ? "pt-[68px]" : "pt-3"} container mx-auto px-4 max-w-6xl`}>
           <div 
             onClick={() => setIsUserProfileOpen(true)}
