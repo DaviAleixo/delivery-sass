@@ -1075,6 +1075,42 @@
 
 ---
 
+### 💸 11. Cancelamento Profissional de Pedidos & Estorno Automático PIX (Mercado Pago Refund API)
+* **Contexto**: Em operações reais de delivery (padrão iFood/Aiqfome), cancelamentos acontecem diariamente (falta de ingrediente na cozinha, restaurante lotado, erro de endereço, ou desistência do cliente). Em pedidos pagos antecipadamente via PIX Online, a devolução do dinheiro precisa ser **imediata, segura e profissional**, sem atrito manual.
+* **1. Como Funciona a Infraestrutura do Mercado Pago (PIX Refund API)**:
+  - **Zero Risco Financeiro para o SaaS**: O dinheiro do PIX cai diretamente na conta Mercado Pago do próprio restaurante (`mp_access_token` do lojista). O SaaS PedeMuleke não custodia valores.
+  - **Endpoint Oficial do Mercado Pago**:
+    `POST https://api.mercadopago.com/v1/payments/{payment_id}/refunds`
+  - **Velocidade**: A devolução é processada via **Mecanismo Especial do Banco Central (PIX)** em 2 a 5 segundos diretamente na conta de onde o cliente pagou (Nubank, Itaú, Bradesco, Inter, etc).
+  - **Custo Zero de Estorno**: O Mercado Pago não cobra taxa para devolver o Pix e ainda devolve a taxa de transação original do lojista.
+  - **Estorno Parcial ou Total**: Permite devolver o valor integral ou apenas a diferença (ex: acabou a batata frita do combo, devolve R$ 12,00 e manda o restante do pedido).
+* **2. UX no Painel do Restaurante (Fluxo ao Cancelar)**:
+  - Ao clicar em **"Cancelar Pedido"** no card de pedidos:
+    - O sistema abre o modal inteligente de cancelamento:
+      1. **Motivo do Cancelamento** (obrigatório para relatórios): *Falta de insumos / Loja fechada por imprevisto / Fora da área de entrega / Solicitação do cliente / Outros*.
+      2. **Decisão de Reembolso PIX**:
+         - Se o pedido foi pago via PIX Online (`payment_method === 'pix_online'` e `payment_status === 'paid'`):
+           - `[✓] Estornar PIX automaticamente agora via Mercado Pago (R$ XX,XX)`
+           - `[ ] Cancelar apenas o pedido (acerto manual / outro acordo)`
+    - Ao confirmar:
+      - O backend aciona a API de estorno do Mercado Pago usando as credenciais daquela loja.
+      - O pedido é atualizado para `status: "cancelado"` e `payment_status: "refunded"`.
+      - Registra metadados: `refund_id`, `cancelled_at`, `cancellation_reason`.
+* **3. Devolução Atômica de Cashback e Cupons**:
+  - Se o cliente utilizou saldo de **Cashback** no pedido cancelado:
+    - O sistema estorna o saldo usado de volta para a carteira dele (`customer_cashback_wallets`) com lançamento `type: "refund"`.
+    - O cashback futuro que ele ganharia nesta compra é automaticamente anulado.
+  - Se usou **Cupom de uso único**:
+    - O registro de uso em `coupon_usages` é liberado para o cliente poder reutilizar o cupom em outra compra.
+* **4. Blindagem Anti-Prejuízo (Cancelamento pelo Cliente)**:
+  - **Status "Pendente"**: O cliente pode cancelar pelo cardápio web e ter o estorno processado se a cozinha ainda não viu.
+  - **Status "Confirmado" / "Preparando" / "Enviado"**: O botão de cancelamento direto pelo cliente é **bloqueado**. A tela avisa: *"Seu lanche já está no fogo! Para alterações ou cancelamentos, contate o restaurante via WhatsApp"*. Isso impede que o restaurante tome prejuízo de comida descartada e motoboy deslocado.
+* **5. Notificação Transparente no Cardápio do Cliente**:
+  - Na tela de status do pedido (MyOrders / Rastreador):
+    - Alerta visual suave: *"Pedido cancelado pelo restaurante. Motivo: [Motivo]. O valor de R$ XX,XX foi devolvido via Pix para a sua conta bancária."*
+
+---
+
 ## 🔗 Links Relacionados
 * [[00 - 🏠 Inicio]] — Menu Principal
 * [[01 - 🗺️ Roadmap & Backlog]] — Tarefas aprovadas e em andamento
