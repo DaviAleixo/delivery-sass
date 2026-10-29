@@ -132,17 +132,21 @@ export default function AdminLoginPage() {
               // 2. Acesso Restaurante (Lojista / Colaborador)
               let tenantSlug = null;
               let tenantName = "Restaurante";
+              let tenantPlan = "basic";
+              let tenantSalonMode = "full";
 
               if (profile.tenant_id) {
                 const { data: tenantData } = await supabase
                   .from("tenants")
-                  .select("slug, name")
+                  .select("slug, name, plan, salon_mode")
                   .eq("id", profile.tenant_id)
                   .maybeSingle();
 
                 if (tenantData) {
                   tenantSlug = tenantData.slug;
                   tenantName = tenantData.name;
+                  tenantPlan = tenantData.plan || "basic";
+                  tenantSalonMode = tenantData.salon_mode || "full";
                 }
               }
 
@@ -166,8 +170,10 @@ export default function AdminLoginPage() {
                 if (tenantName) localStorage.setItem("current_tenant_name", tenantName);
               }
 
-              // Redireciona exclusivamente para o Dashboard do Restaurante
-              const targetUrl = tenantSlug ? `/${tenantSlug}/dashboard` : createPageUrl("Dashboard");
+              // Redireciona conforme o plano contratado (Visual ➔ Produtos | Autoatendimento/Completo ➔ Dashboard)
+              const isVisual = tenantPlan === "showcase" || tenantSalonMode === "showcase";
+              const targetPage = isVisual ? "Products" : "Dashboard";
+              const targetUrl = tenantSlug ? `/${tenantSlug}/${targetPage}` : createPageUrl(targetPage);
               navigate(targetUrl, { replace: true });
               return;
             } else {

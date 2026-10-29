@@ -25,7 +25,11 @@ import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { toast } from "sonner";
 
 export default function SubscriptionTab({ tenantData, onUpdateTenant }) {
-  const planName = tenantData?.plan === "premium" ? "Plano Premium (White-Label)" : "Plano Pro Delivery";
+  const planName = 
+    tenantData?.plan === "custom" ? "Plano Personalizado (White-Label VIP)" :
+    tenantData?.plan === "table" || tenantData?.salon_mode === "table_only" ? "Plano Autoatendimento (QR Code Mesas & Salão)" :
+    tenantData?.plan === "showcase" || tenantData?.salon_mode === "showcase" ? "Plano Visual (Cardápio Digital Vitrine)" :
+    "Plano Pro Delivery & Balcão";
   const monthlyPrice = parseFloat(tenantData?.monthly_price) || 149.00;
   const status = tenantData?.subscription_status || "pending";
   const paymentLink = tenantData?.payment_link || "https://sandbox.asaas.com/i/r7wwc9plm0m0fp4n";

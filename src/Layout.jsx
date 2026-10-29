@@ -181,7 +181,8 @@ export default function Layout({ children, currentPageName }) {
 
   // Alerta Global de Novos Pedidos para TODAS as abas do Painel Administrativo do RESTAURANTE (nunca SuperAdmin)
   React.useEffect(() => {
-    if (isPublicPage || !isAdminAuthenticated || currentPageName === "SuperAdmin") {
+    const isVisualOnly = settings?.salon_mode === "showcase" || settings?.plan === "showcase";
+    if (isPublicPage || !isAdminAuthenticated || currentPageName === "SuperAdmin" || isVisualOnly) {
       soundAlert.stopContinuousAlert();
       soundAlert.setPendingCount(0);
       return;
@@ -395,20 +396,20 @@ export default function Layout({ children, currentPageName }) {
 
   const allowedNavigationItems = React.useMemo(() => {
     const plan = settings?.plan;
-    const salonMode = settings?.salon_mode || (plan === "showcase" || plan === "table" ? "showcase" : "full");
-    const isVisualOnly = salonMode === "showcase";
-    const isTableOnly = salonMode === "table_only";
+    const salonMode = settings?.salon_mode || (plan === "showcase" ? "showcase" : (plan === "table" ? "table_only" : "full"));
+    const isVisualOnly = salonMode === "showcase" || plan === "showcase";
+    const isTableOnly = salonMode === "table_only" || plan === "table";
 
     return navigationItems
       .filter(item => {
         if (!hasPermission(item.pageKey)) return false;
-        if (item.pageKey === "Tables" && settings?.accepts_dine_in === false) return false;
+        if (item.pageKey === "Tables" && (settings?.accepts_dine_in === false || isVisualOnly)) return false;
         if (isVisualOnly) {
-          const hiddenInShowcase = ["Orders", "KDS", "PDV", "Tables", "DeliveryDrivers", "Clients", "Coupons", "Reports"];
-          if (hiddenInShowcase.includes(item.pageKey)) return false;
+          const allowedInShowcase = ["Products", "Categories", "Complements", "Banners", "Settings"];
+          return allowedInShowcase.includes(item.pageKey);
         } else if (isTableOnly) {
-          const hiddenInTableOnly = ["DeliveryDrivers", "Clients"];
-          if (hiddenInTableOnly.includes(item.pageKey)) return false;
+          const hiddenInTableOnly = ["DeliveryDrivers"];
+          return !hiddenInTableOnly.includes(item.pageKey);
         }
         return true;
       })
@@ -416,12 +417,13 @@ export default function Layout({ children, currentPageName }) {
         ...item,
         url: `/${activeSlug}/${item.pageKey}`
       }));
-  }, [hasPermission, activeSlug, settings?.plan, settings?.salon_mode]);
+  }, [hasPermission, activeSlug, settings?.plan, settings?.salon_mode, settings?.accepts_dine_in]);
 
   // Se o usuário tentar acessar uma tela para a qual não tem permissão, redireciona
   React.useEffect(() => {
-    if (!isPublicPage && isAdminAuthenticated && user) {
-      if (!hasPermission(currentPageName)) {
+    if (!isPublicPage && isAdminAuthenticated && user && allowedNavigationItems.length > 0) {
+      const isAllowedByPlan = allowedNavigationItems.some(item => item.pageKey === currentPageName);
+      if (!hasPermission(currentPageName) || !isAllowedByPlan) {
         const firstAllowed = allowedNavigationItems[0];
         if (firstAllowed) {
           toast({
@@ -852,7 +854,7 @@ export default function Layout({ children, currentPageName }) {
 
               <div className="flex items-center gap-2.5">
                 {/* Controle e Status Global da Impressora & Auto-Impressão */}
-                <PrinterNavbarControl />
+                {!(settings?.salon_mode === "showcase" || settings?.plan === "showcase") && <PrinterNavbarControl />}
 
                 {/* Status da Loja com Abertura e Fechamento Manual */}
                 <DropdownMenu>

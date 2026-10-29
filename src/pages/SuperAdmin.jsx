@@ -304,10 +304,15 @@ export default function SuperAdminPage() {
       if (isSupabaseConfigured() && supabase) {
         const monthlyPrice = 
           newTenant.plan === "custom" ? 249.00 : 
-          newTenant.plan === "showcase" || newTenant.plan === "table" ? 49.00 : 89.00;
+          newTenant.plan === "table" ? 79.00 :
+          newTenant.plan === "showcase" ? 49.00 : 89.00;
 
         const defaultSalonMode = 
-          newTenant.plan === "showcase" || newTenant.plan === "table" ? "showcase" : "full";
+          newTenant.plan === "showcase" ? "showcase" :
+          newTenant.plan === "table" ? "table_only" : "full";
+
+        const defaultDelivery = newTenant.plan !== "showcase" && newTenant.plan !== "table" && newTenant.accepts_delivery !== false;
+        const defaultTakeaway = newTenant.plan !== "showcase" && newTenant.accepts_takeaway !== false;
 
         // 1. Cria a loja no Supabase com novo código sequencial e credenciais de login
         const { data, error } = await supabase.rpc("create_new_tenant", {
@@ -339,7 +344,8 @@ export default function SuperAdminPage() {
             cpfCnpj: newTenant.cpf_cnpj.trim() || undefined,
             plan: 
               newTenant.plan === "custom" ? "custom_vip" : 
-              newTenant.plan === "showcase" || newTenant.plan === "table" ? "showcase_salon" : "standard_delivery",
+              newTenant.plan === "table" ? "table_salon" :
+              newTenant.plan === "showcase" ? "showcase_digital" : "standard_delivery",
             monthlyPrice: monthlyPrice,
             dueDays: 3,
           });
@@ -362,8 +368,8 @@ export default function SuperAdminPage() {
                 subscription_status: "pending",
                 custom_template: newTenant.custom_template && newTenant.custom_template !== "default" ? newTenant.custom_template : null,
                 salon_mode: defaultSalonMode,
-                accepts_delivery: newTenant.accepts_delivery !== false,
-                accepts_takeaway: newTenant.accepts_takeaway !== false,
+                accepts_delivery: defaultDelivery,
+                accepts_takeaway: defaultTakeaway,
               })
               .eq("id", newTenantId);
           } else {
@@ -378,8 +384,8 @@ export default function SuperAdminPage() {
                 monthly_price: monthlyPrice,
                 custom_template: newTenant.custom_template && newTenant.custom_template !== "default" ? newTenant.custom_template : null,
                 salon_mode: defaultSalonMode,
-                accepts_delivery: newTenant.accepts_delivery !== false,
-                accepts_takeaway: newTenant.accepts_takeaway !== false,
+                accepts_delivery: defaultDelivery,
+                accepts_takeaway: defaultTakeaway,
               })
               .eq("id", newTenantId);
           }
@@ -492,7 +498,9 @@ export default function SuperAdminPage() {
       description: `Acessando o painel de ${tenant.name}...`,
     });
 
-    navigate(`/${tenant.slug}/Dashboard`);
+    const isVisual = tenant.plan === "showcase" || tenant.salon_mode === "showcase";
+    const targetPage = isVisual ? "Products" : "Dashboard";
+    navigate(`/${tenant.slug}/${targetPage}`);
   };
 
   // 6. Abrir Modal de Edição de Empresa
@@ -543,13 +551,21 @@ export default function SuperAdminPage() {
           throw new Error(data.message || "Erro ao atualizar empresa.");
         }
 
-        // Atualização adicional direta para o custom_template e canais de atendimento (garantia de sincronismo)
+        // Atualização adicional direta para o custom_template, salon_mode e canais de atendimento (garantia de sincronismo)
+        const computedSalonMode = 
+          editForm.plan === "showcase" ? "showcase" : 
+          editForm.plan === "table" ? "table_only" : "full";
+
+        const computedDelivery = editForm.plan !== "showcase" && editForm.plan !== "table" && editForm.accepts_delivery !== false;
+        const computedTakeaway = editForm.plan !== "showcase" && editForm.accepts_takeaway !== false;
+
         await supabase
           .from("tenants")
           .update({
             custom_template: editForm.custom_template === "default" ? null : editForm.custom_template,
-            accepts_delivery: editForm.accepts_delivery !== false,
-            accepts_takeaway: editForm.accepts_takeaway !== false,
+            salon_mode: computedSalonMode,
+            accepts_delivery: computedDelivery,
+            accepts_takeaway: computedTakeaway,
           })
           .eq("id", editingTenant.id);
 
@@ -650,7 +666,8 @@ export default function SuperAdminPage() {
     if (!t.is_active) return acc;
     const defaultPrice = 
       t.plan === "custom" ? 249.00 : 
-      t.plan === "showcase" || t.plan === "table" ? 49.00 : 89.00;
+      t.plan === "table" ? 79.00 :
+      t.plan === "showcase" ? 49.00 : 89.00;
     return acc + (parseFloat(t.monthly_price) || defaultPrice);
   }, 0);
   const pendingInvoicesCount = tenants.filter((t) => t.subscription_status === "pending" || t.subscription_status === "overdue").length;
@@ -933,18 +950,22 @@ export default function SuperAdminPage() {
                               </span>
                             )}
                           </div>
-                        ) : t.plan === "showcase" || t.plan === "table" ? (
-                          <Badge className="bg-amber-950/60 border-amber-700 text-amber-300">
-                            📱 Vitrine / Salão
+                        ) : t.plan === "showcase" || t.salon_mode === "showcase" ? (
+                          <Badge className="bg-sky-950/70 border-sky-600 text-sky-300 font-medium">
+                            👁️ Visual Vitrine
+                          </Badge>
+                        ) : t.plan === "table" || t.salon_mode === "table_only" ? (
+                          <Badge className="bg-amber-950/70 border-amber-600 text-amber-300 font-medium">
+                            🍽️ Autoatendimento (Mesas)
                           </Badge>
                         ) : (
                           <div className="flex flex-col gap-1 items-start">
-                            <Badge className="bg-slate-800 border-slate-700 text-slate-300">
+                            <Badge className="bg-emerald-950/70 border-emerald-600 text-emerald-300 font-medium">
                               {t.accepts_delivery === false && t.accepts_takeaway !== false
                                 ? "🛍️ Só Retirada"
                                 : t.accepts_delivery !== false && t.accepts_takeaway === false
                                 ? "🛵 Só Delivery"
-                                : "🛵 Delivery & Retirada"}
+                                : "🛵 Delivery Completo"}
                             </Badge>
                           </div>
                         )}
@@ -1347,9 +1368,10 @@ export default function SuperAdminPage() {
                   onChange={(e) => setNewTenant({ ...newTenant, plan: e.target.value })}
                   className="mt-1 w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
                 >
-                  <option value="showcase">Plano Vitrine / Salão (R$ 49,00/mês — QR Code & Mesas)</option>
-                  <option value="basic">Plano Normal (R$ 89,00/mês — Delivery Completo)</option>
-                  <option value="custom">Plano Personalizado (R$ 249,00/mês — Front-End Exclusivo)</option>
+                  <option value="showcase">👁️ Plano Visual (R$ 49,00/mês — Cardápio Digital sem Pedidos)</option>
+                  <option value="table">🍽️ Plano Autoatendimento (R$ 79,00/mês — QR Code Mesas & KDS)</option>
+                  <option value="basic">🛵 Plano Normal (R$ 89,00/mês — Delivery Completo & Balcão)</option>
+                  <option value="custom">👑 Plano Personalizado (R$ 249,00/mês — VIP Front-End Exclusivo)</option>
                 </select>
               </div>
 
@@ -1584,9 +1606,10 @@ export default function SuperAdminPage() {
                     <SelectValue placeholder="Selecione o plano" />
                   </SelectTrigger>
                   <SelectContent className="bg-slate-900 border-slate-800 text-white">
-                    <SelectItem value="showcase">Vitrine / Salão (R$ 49/mês — QR Code & Mesas)</SelectItem>
-                    <SelectItem value="basic">Normal (R$ 89/mês — Delivery Completo)</SelectItem>
-                    <SelectItem value="custom">Personalizado (R$ 249/mês — Front-End Exclusivo)</SelectItem>
+                    <SelectItem value="showcase">👁️ Visual (R$ 49/mês — Cardápio Digital sem Pedidos)</SelectItem>
+                    <SelectItem value="table">🍽️ Autoatendimento (R$ 79/mês — QR Code Mesas & KDS)</SelectItem>
+                    <SelectItem value="basic">🛵 Normal (R$ 89/mês — Delivery Completo & Balcão)</SelectItem>
+                    <SelectItem value="custom">👑 Personalizado (R$ 249/mês — Front-End Exclusivo)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

@@ -943,6 +943,11 @@ export default function SettingsPage() {
     );
   }
 
+  const currentPlan = tenantDetails?.plan || settings.plan;
+  const currentSalonMode = tenantDetails?.salon_mode || settings.salon_mode || (currentPlan === "showcase" ? "showcase" : (currentPlan === "table" ? "table_only" : "full"));
+  const isVisualOnly = currentSalonMode === "showcase" || currentPlan === "showcase";
+  const isTableOnly = currentSalonMode === "table_only" || currentPlan === "table";
+
   return (
     <div className="p-4 sm:p-8 bg-stone-50/60 min-h-screen">
       <div className="max-w-4xl mx-auto space-y-6">
@@ -1005,31 +1010,35 @@ export default function SettingsPage() {
             <span>Horários de Funcionamento</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab("entregas")}
-            className={`flex items-center gap-2 py-3 px-4 font-bold text-xs sm:text-sm border-b-2 transition-all whitespace-nowrap cursor-pointer ${
-              activeTab === "entregas"
-                ? "border-rose-600 text-rose-600"
-                : "border-transparent text-stone-500 hover:text-stone-800"
-            }`}
-          >
-            <Bike className="w-4 h-4" />
-            <span>Taxas & Bairros</span>
-          </button>
+          {!isVisualOnly && !isTableOnly && (
+            <button
+              type="button"
+              onClick={() => setActiveTab("entregas")}
+              className={`flex items-center gap-2 py-3 px-4 font-bold text-xs sm:text-sm border-b-2 transition-all whitespace-nowrap cursor-pointer ${
+                activeTab === "entregas"
+                  ? "border-rose-600 text-rose-600"
+                  : "border-transparent text-stone-500 hover:text-stone-800"
+              }`}
+            >
+              <Bike className="w-4 h-4" />
+              <span>Taxas & Bairros</span>
+            </button>
+          )}
 
-          <button
-            type="button"
-            onClick={() => setActiveTab("pagamentos")}
-            className={`flex items-center gap-2 py-3 px-4 font-bold text-xs sm:text-sm border-b-2 transition-all whitespace-nowrap cursor-pointer ${
-              activeTab === "pagamentos"
-                ? "border-emerald-600 text-emerald-600 bg-emerald-50/40 rounded-t-lg"
-                : "border-transparent text-stone-500 hover:text-stone-800"
-            }`}
-          >
-            <Wallet className="w-4 h-4" />
-            <span>Formas de Pagamento</span>
-          </button>
+          {!isVisualOnly && (
+            <button
+              type="button"
+              onClick={() => setActiveTab("pagamentos")}
+              className={`flex items-center gap-2 py-3 px-4 font-bold text-xs sm:text-sm border-b-2 transition-all whitespace-nowrap cursor-pointer ${
+                activeTab === "pagamentos"
+                  ? "border-emerald-600 text-emerald-600 bg-emerald-50/40 rounded-t-lg"
+                  : "border-transparent text-stone-500 hover:text-stone-800"
+              }`}
+            >
+              <Wallet className="w-4 h-4" />
+              <span>Formas de Pagamento</span>
+            </button>
+          )}
 
           <button
             type="button"
@@ -1074,6 +1083,8 @@ export default function SettingsPage() {
                 isUploadingLogo={isUploadingLogo}
                 isFetchingCep={isFetchingCep}
                 cepError={cepError}
+                isVisualOnly={isVisualOnly}
+                isTableOnly={isTableOnly}
               />
             )}
 

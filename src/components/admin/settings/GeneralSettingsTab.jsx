@@ -14,6 +14,8 @@ export default function GeneralSettingsTab({
   isUploadingLogo,
   isFetchingCep,
   cepError,
+  isVisualOnly = false,
+  isTableOnly = false,
 }) {
   return (
     <div className="space-y-6">
@@ -72,98 +74,100 @@ export default function GeneralSettingsTab({
         </CardContent>
       </Card>
 
-      {/* Canais de Atendimento: Delivery & Retirada */}
-      <Card className="border-0 shadow-md">
-        <CardHeader>
-          <CardTitle className="text-xl font-bold text-stone-900 flex items-center gap-2">
-            <span>🛵</span> Canais de Atendimento (Delivery & Retirada)
-          </CardTitle>
-          <p className="text-xs text-stone-500">
-            Defina como seus clientes remotos podem receber os pedidos. Ideal para lojas que atendem apenas entrega, apenas retirada no balcão ou ambos.
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Opção 1: Delivery */}
-            <div
-              onClick={() => handleInputChange("accepts_delivery", !(settings.accepts_delivery !== false))}
-              className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
-                settings.accepts_delivery !== false
-                  ? "border-emerald-600 bg-emerald-50/40 shadow-xs"
-                  : "border-stone-200 hover:border-stone-300 bg-stone-50/60 opacity-70"
-              }`}
-            >
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-100/80 text-emerald-800 flex items-center justify-center font-bold text-xl">
-                    🛵
+      {/* Canais de Atendimento: Delivery & Retirada (apenas para lojas que operam delivery/retirada) */}
+      {!isVisualOnly && !isTableOnly && (
+        <Card className="border-0 shadow-md">
+          <CardHeader>
+            <CardTitle className="text-xl font-bold text-stone-900 flex items-center gap-2">
+              <span>🛵</span> Canais de Atendimento (Delivery & Retirada)
+            </CardTitle>
+            <p className="text-xs text-stone-500">
+              Defina como seus clientes remotos podem receber os pedidos. Ideal para lojas que atendem apenas entrega, apenas retirada no balcão ou ambos.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Opção 1: Delivery */}
+              <div
+                onClick={() => handleInputChange("accepts_delivery", !(settings.accepts_delivery !== false))}
+                className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
+                  settings.accepts_delivery !== false
+                    ? "border-emerald-600 bg-emerald-50/40 shadow-xs"
+                    : "border-stone-200 hover:border-stone-300 bg-stone-50/60 opacity-70"
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-100/80 text-emerald-800 flex items-center justify-center font-bold text-xl">
+                      🛵
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.accepts_delivery !== false}
+                      onChange={(e) => handleInputChange("accepts_delivery", e.target.checked)}
+                      className="accent-emerald-600 h-5 w-5 rounded cursor-pointer"
+                      onClick={(e) => e.stopPropagation()}
+                    />
                   </div>
-                  <input
-                    type="checkbox"
-                    checked={settings.accepts_delivery !== false}
-                    onChange={(e) => handleInputChange("accepts_delivery", e.target.checked)}
-                    className="accent-emerald-600 h-5 w-5 rounded cursor-pointer"
-                    onClick={(e) => e.stopPropagation()}
-                  />
+                  <h4 className="font-bold text-sm text-stone-900 flex items-center gap-1.5">
+                    Aceitar Pedidos para Delivery
+                  </h4>
+                  <p className="text-xs text-stone-500 mt-1.5 leading-relaxed">
+                    Clientes informam o endereço e pagam a taxa de entrega. O pedido entra na fila de despacho de entregadores.
+                  </p>
                 </div>
-                <h4 className="font-bold text-sm text-stone-900 flex items-center gap-1.5">
-                  Aceitar Pedidos para Delivery
-                </h4>
-                <p className="text-xs text-stone-500 mt-1.5 leading-relaxed">
-                  Clientes informam o endereço e pagam a taxa de entrega. O pedido entra na fila de despacho de entregadores.
-                </p>
+                <div className="mt-3 pt-2 border-t border-stone-200/60 flex items-center justify-between">
+                  <span className={`text-[11px] font-bold ${settings.accepts_delivery !== false ? "text-emerald-700" : "text-stone-400"}`}>
+                    {settings.accepts_delivery !== false ? "✓ Ativo no cardápio" : "✕ Desativado"}
+                  </span>
+                </div>
               </div>
-              <div className="mt-3 pt-2 border-t border-stone-200/60 flex items-center justify-between">
-                <span className={`text-[11px] font-bold ${settings.accepts_delivery !== false ? "text-emerald-700" : "text-stone-400"}`}>
-                  {settings.accepts_delivery !== false ? "✓ Ativo no cardápio" : "✕ Desativado"}
-                </span>
+
+              {/* Opção 2: Retirada */}
+              <div
+                onClick={() => handleInputChange("accepts_takeaway", !(settings.accepts_takeaway !== false))}
+                className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
+                  settings.accepts_takeaway !== false
+                    ? "border-emerald-600 bg-emerald-50/40 shadow-xs"
+                    : "border-stone-200 hover:border-stone-300 bg-stone-50/60 opacity-70"
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="w-10 h-10 rounded-xl bg-amber-100/80 text-amber-800 flex items-center justify-center font-bold text-xl">
+                      🛍️
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={settings.accepts_takeaway !== false}
+                      onChange={(e) => handleInputChange("accepts_takeaway", e.target.checked)}
+                      className="accent-emerald-600 h-5 w-5 rounded cursor-pointer"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </div>
+                  <h4 className="font-bold text-sm text-stone-900 flex items-center gap-1.5">
+                    Aceitar Retirada no Balcão
+                  </h4>
+                  <p className="text-xs text-stone-500 mt-1.5 leading-relaxed">
+                    O cliente faz o pedido pelo celular e vai buscar na sua loja com frete grátis. Não exige endereço nem taxa.
+                  </p>
+                </div>
+                <div className="mt-3 pt-2 border-t border-stone-200/60 flex items-center justify-between">
+                  <span className={`text-[11px] font-bold ${settings.accepts_takeaway !== false ? "text-emerald-700" : "text-stone-400"}`}>
+                    {settings.accepts_takeaway !== false ? "✓ Ativo no cardápio" : "✕ Desativado"}
+                  </span>
+                </div>
               </div>
             </div>
 
-            {/* Opção 2: Retirada */}
-            <div
-              onClick={() => handleInputChange("accepts_takeaway", !(settings.accepts_takeaway !== false))}
-              className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
-                settings.accepts_takeaway !== false
-                  ? "border-emerald-600 bg-emerald-50/40 shadow-xs"
-                  : "border-stone-200 hover:border-stone-300 bg-stone-50/60 opacity-70"
-              }`}
-            >
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="w-10 h-10 rounded-xl bg-amber-100/80 text-amber-800 flex items-center justify-center font-bold text-xl">
-                    🛍️
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={settings.accepts_takeaway !== false}
-                    onChange={(e) => handleInputChange("accepts_takeaway", e.target.checked)}
-                    className="accent-emerald-600 h-5 w-5 rounded cursor-pointer"
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                </div>
-                <h4 className="font-bold text-sm text-stone-900 flex items-center gap-1.5">
-                  Aceitar Retirada no Balcão
-                </h4>
-                <p className="text-xs text-stone-500 mt-1.5 leading-relaxed">
-                  O cliente faz o pedido pelo celular e vai buscar na sua loja com frete grátis. Não exige endereço nem taxa.
-                </p>
+            {settings.accepts_delivery === false && settings.accepts_takeaway === false && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium">
+                ⚠️ Atenção: Se ambos estiverem desativados, seus clientes remotos não conseguirão finalizar pedidos. Recomendamos manter pelo menos um canal ativo.
               </div>
-              <div className="mt-3 pt-2 border-t border-stone-200/60 flex items-center justify-between">
-                <span className={`text-[11px] font-bold ${settings.accepts_takeaway !== false ? "text-emerald-700" : "text-stone-400"}`}>
-                  {settings.accepts_takeaway !== false ? "✓ Ativo no cardápio" : "✕ Desativado"}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {settings.accepts_delivery === false && settings.accepts_takeaway === false && (
-            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-medium">
-              ⚠️ Atenção: Se ambos estiverem desativados, seus clientes remotos não conseguirão finalizar pedidos. Recomendamos manter pelo menos um canal ativo.
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Precificação de Pizzas Fracionadas (Meio a Meio) */}
       <Card className="border-0 shadow-md">
@@ -261,84 +265,86 @@ export default function GeneralSettingsTab({
       </Card>
 
       {/* Taxa de Serviço do Salão & Mesas (10% Opcional) */}
-      <Card className="border-0 shadow-md">
-        <CardHeader>
-          <CardTitle className="text-xl font-bold text-stone-900 flex items-center gap-2">
-            <span>🛎️</span> Taxa de Serviço do Salão & Mesas
-          </CardTitle>
-          <p className="text-xs text-stone-500">
-            Defina se o restaurante inclui a taxa de serviço opcional para atendimento nas comandas e pré-contas de mesa.
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div
-            onClick={() => handleInputChange("table_service_fee_enabled", !settings.table_service_fee_enabled)}
-            className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
-              settings.table_service_fee_enabled
-                ? "border-emerald-600 bg-emerald-50/40 shadow-xs"
-                : "border-stone-200 hover:border-stone-300 bg-stone-50/60 opacity-80"
-            }`}
-          >
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-100/90 text-emerald-800 flex items-center justify-center font-bold text-xl shrink-0">
-                🛎️
+      {!isVisualOnly && (
+        <Card className="border-0 shadow-md">
+          <CardHeader>
+            <CardTitle className="text-xl font-bold text-stone-900 flex items-center gap-2">
+              <span>🛎️</span> Taxa de Serviço do Salão & Mesas
+            </CardTitle>
+            <p className="text-xs text-stone-500">
+              Defina se o restaurante inclui a taxa de serviço opcional para atendimento nas comandas e pré-contas de mesa.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div
+              onClick={() => handleInputChange("table_service_fee_enabled", !settings.table_service_fee_enabled)}
+              className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                settings.table_service_fee_enabled
+                  ? "border-emerald-600 bg-emerald-50/40 shadow-xs"
+                  : "border-stone-200 hover:border-stone-300 bg-stone-50/60 opacity-80"
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100/90 text-emerald-800 flex items-center justify-center font-bold text-xl shrink-0">
+                  🛎️
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-stone-900 flex items-center gap-2">
+                    <span>Cobrar Taxa de Serviço nas Mesas</span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      settings.table_service_fee_enabled 
+                        ? "bg-emerald-100 text-emerald-800" 
+                        : "bg-stone-200 text-stone-600"
+                    }`}>
+                      {settings.table_service_fee_enabled ? "Ativo" : "Desativado"}
+                    </span>
+                  </h4>
+                  <p className="text-xs text-stone-500 mt-1 leading-relaxed">
+                    Quando ativado, a taxa é calculada automaticamente na comanda, no cupom impresso de pré-conta e no recebimento da mesa.
+                    Quando desativado, o total da mesa é 100% livre de taxa de serviço.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h4 className="font-bold text-sm text-stone-900 flex items-center gap-2">
-                  <span>Cobrar Taxa de Serviço nas Mesas</span>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    settings.table_service_fee_enabled 
-                      ? "bg-emerald-100 text-emerald-800" 
-                      : "bg-stone-200 text-stone-600"
-                  }`}>
-                    {settings.table_service_fee_enabled ? "Ativo" : "Desativado"}
-                  </span>
-                </h4>
-                <p className="text-xs text-stone-500 mt-1 leading-relaxed">
-                  Quando ativado, a taxa é calculada automaticamente na comanda, no cupom impresso de pré-conta e no recebimento da mesa.
-                  Quando desativado, o total da mesa é 100% livre de taxa de serviço.
-                </p>
-              </div>
-            </div>
 
-            <div className="flex items-center gap-3 shrink-0 self-end sm:self-center" onClick={(e) => e.stopPropagation()}>
-              <input
-                type="checkbox"
-                id="table_service_fee_enabled"
-                checked={Boolean(settings.table_service_fee_enabled)}
-                onChange={(e) => handleInputChange("table_service_fee_enabled", e.target.checked)}
-                className="accent-emerald-600 h-5 w-5 rounded cursor-pointer"
-              />
-            </div>
-          </div>
-
-          {settings.table_service_fee_enabled && (
-            <div className="p-4 bg-white rounded-2xl border border-emerald-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <Label htmlFor="table_service_fee_rate" className="text-xs font-bold text-stone-800 block">
-                  Porcentagem da Taxa de Serviço (%)
-                </Label>
-                <p className="text-[11px] text-stone-500 mt-0.5">
-                  Padrão no Brasil é 10%, mas você pode personalizar se necessário.
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Input
-                  id="table_service_fee_rate"
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="1"
-                  value={settings.table_service_fee_rate ?? 10}
-                  onChange={(e) => handleInputChange("table_service_fee_rate", Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
-                  className="w-24 h-9 text-center font-bold text-sm bg-stone-50 border-stone-300 rounded-xl"
+              <div className="flex items-center gap-3 shrink-0 self-end sm:self-center" onClick={(e) => e.stopPropagation()}>
+                <input
+                  type="checkbox"
+                  id="table_service_fee_enabled"
+                  checked={Boolean(settings.table_service_fee_enabled)}
+                  onChange={(e) => handleInputChange("table_service_fee_enabled", e.target.checked)}
+                  className="accent-emerald-600 h-5 w-5 rounded cursor-pointer"
                 />
-                <span className="text-sm font-black text-stone-700">%</span>
               </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
+
+            {settings.table_service_fee_enabled && (
+              <div className="p-4 bg-white rounded-2xl border border-emerald-200/90 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <Label htmlFor="table_service_fee_rate" className="text-xs font-bold text-stone-800 block">
+                    Porcentagem da Taxa de Serviço (%)
+                  </Label>
+                  <p className="text-[11px] text-stone-500 mt-0.5">
+                    Padrão no Brasil é 10%, mas você pode personalizar se necessário.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="table_service_fee_rate"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={settings.table_service_fee_rate ?? 10}
+                    onChange={(e) => handleInputChange("table_service_fee_rate", Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
+                    className="w-24 h-9 text-center font-bold text-sm bg-stone-50 border-stone-300 rounded-xl"
+                  />
+                  <span className="text-sm font-black text-stone-700">%</span>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Informações de Contato e Localização */}
       <Card className="border-0 shadow-md">

@@ -5,6 +5,22 @@
 ---
 
 ## 🚀 Em Andamento / Foco Atual
+
+- [x] 🛡️ **Governança Estrita de Planos & Isolamento de Funcionalidades no Painel (Concluído)**:
+  - [x] Separação nítida dos 3 perfis de contratação: **Plano Visual** (`showcase`), **Plano Autoatendimento** (`table`) e **Plano Completo** (`basic`/`custom`).
+  - [x] Sincronização automática no Supabase via RPCs `create_new_tenant` e `update_tenant_info`: define `salon_mode`, `accepts_delivery` e `accepts_takeaway` no momento da criação ou edição.
+  - [x] No **Plano Visual** (Vitrine / Cardápio Digital sem Pedidos):
+    - O painel exibe estritamente **Produtos**, **Categorias**, **Complementos**, **Banners** e **Configurações**.
+    - Oculta e barra rotas de Pedidos, KDS, PDV, Caixa, Salão, Entregadores, Clientes, Cupons e Relatórios.
+    - Desativação completa do alarme sonoro de campainha e do polling de rede de novos pedidos.
+    - Login administrativo e Impersonate do SuperAdmin redirecionam diretamente para a tela de Produtos.
+    - Ocultação de abas de frete, bairros e formas de pagamento nas configurações.
+  - [x] No **Plano Autoatendimento** (QR Code de Mesas, KDS & Salão):
+    - Painel habilitado para Salão & Mesas, KDS Cozinha, Pedidos de Mesa, PDV Balcão e Caixa.
+    - Oculta o módulo de Entregadores/motoboys e configurações de frete/raio de entrega.
+  - [x] No **Plano Completo**: Todas as funcionalidades liberadas (Delivery, Balcão e Salão).
+  - [x] Proteção dura de rotas em `Layout.jsx`: interceptação imediata de tentativas de acesso via URL direta fora do plano contratado com toast informativo. ([[02 - 💡 Ideias & Brainstorm]])
+
 - [x] 🚨 **Ambiente de Homologação & Pipeline Staging ➔ Produção (Concluído & 100% Isolado)**:
   - [x] Branch local e remota `staging` criada e isolada da `main` no GitHub.
   - [x] Documentação e template de variáveis `.env.example` versionado com separação de ambientes (`production` | `staging` | `development`).
@@ -22,12 +38,12 @@
 - [x] **Configuração de Pagamentos (Asaas Sandbox)**: Conta conectada, API key validada e emissão de assinaturas testada.
 - [x] **Decisão de Hospedagem**: Definido uso de **Cloudflare Pages** (gratuito, comercial e tráfego ilimitado).
 
-
 ---
 
 ## 📋 Backlog Priorizado (Fase 1: Supabase First)
 
 ### 🔐 Multi-Tenant & Segurança
+
 - [x] Implementar isolamento completo com `tenant_id` em todas as consultas e mutations.
 - [x] Configurar Row Level Security (RLS) definitivo para o schema de dados.
 - [x] **Código Numérico da Loja (1, 2, 3...)**: Cada restaurante possui um número simples sequencial para login ultra rápido e sem atrito. Apenas o Davi utiliza o identificador textual 'superadmin'.
@@ -41,6 +57,7 @@
 - [x] **Otimização de Log Ingestion & Polling Invisível (Redução de 80% no Supabase)**: Ajuste dos intervalos de polling global no `Layout.jsx` (de 5s para 25s) e no `Tables.jsx` (de 3s para 15s), implementação de detecção de aba inativa via `document.visibilityState` (pausando consultas com aba em segundo plano e reativando no foco com `visibilitychange`), eliminação de recargas redundantes de dados estáticos (produtos/categorias) e resolução definitiva dos erros de SQL que geravam linhas de log no PostgreSQL. ([[02 - 💡 Ideias & Brainstorm]])
 
 ### 🛎️ Experiência de Pedidos & KDS
+
 - [x] **Ciclo de Vida de Pedidos & KDS**: Botões de "Confirmar", "Avançar Status" e "Cancelar" com persistência no Supabase, RLS ajustado e toasts instantâneos.
 - [x] **Sanitização Inteligente em Updates Parciais**: Atualizações de status não zeram campos nem mutam dados de itens/cliente.
 - [x] **Alerta Sonoro Inteligente & Repetição Contínua (KDS & Pedidos)**: Campainha ativa por padrão. Detecção instantânea de qualquer pedido pendente existente ao carregar ou ao religar o som (mesmo pedidos antigos), liberação de áudio para inspeção de lojas em Modo SuperAdmin, e centralização exclusiva do controle no topo da tela de Pedidos (removido botão duplicado da barra lateral).
@@ -63,6 +80,7 @@
 - [x] **Abertura/Fechamento Manual da Loja Blindada (Dropdown na Navbar)**: Corrigido erro PGRST205 (tabela `public.settings` inexistente no Supabase) mapeando transparentemente para a tabela `public.tenants` e atualizando a RPC `update_tenant_settings` para suportar `manual_store_open`, `manual_override_date` e `delivery_time`. Pílula na Top Navbar com Dropdown interativo: permite ao lojista abrir ou fechar a loja manualmente em 1-clique a partir de qualquer tela, restaurar para o horário automático e sincronizar instantaneamente o status com o cardápio dos clientes. ([[02 - 💡 Ideias & Brainstorm]]).
 
 ### 🛍️ Cardápio & Vendas
+
 - [x] **Formas de Pagamento Modulares (Dinheiro, Crédito, Débito, Alimentação e PIX Online)**: Painel em Configurações para ativar Dinheiro (com troco), Cartão de Crédito, Débito e Vale Refeição na Maquininha, e PIX Online Mercado Pago com sincronização em tempo real no checkout.
 - [x] **Persistência Blindada de Formas de Pagamento**: Resolução dos problemas de RLS com RPC `update_tenant_payment_methods` e `update_tenant_settings`, unificação do alias `vruum-burguer`/`vrumm` e isolamento dos formulários de configurações para nunca perder o estado ao navegar entre abas ou telas.
 - [x] **PIX Online Automático Mercado Pago**: Edge Function `mercadopago` no Supabase com geração de QR Code Copia e Cola, polling de 3s e confirmação automática do pedido em tempo real. Sanitização rigorosa de `payer.email` com TLDs públicos válidos e mensagens amigáveis de instrução para cadastro de chave Pix.
@@ -94,9 +112,10 @@
   - **Abertura de Mesa sem Atrito (Sem Trava de Lotação/Pessoas)**: Removida a exigência/seletor de quantidade de pessoas na abertura da mesa. O garçom abre a mesa instantaneamente apenas informando o cliente/identificador opcional, e divisões de conta acontecem organicamente pelas pessoas que de fato pediram itens.
   - **Taxa de Serviço de Mesa Configurável (Ativar/Desativar e % Customizada)**: Na aba Configurações Gerais, o lojista ativa ou desativa com 1 clique a cobrança de taxa de serviço no Salão (`table_service_fee_enabled`) e define o percentual desejado (`table_service_fee_rate`, padrão 10%). Quando desativado, o total da comanda, o cupom térmico impresso, o resumo no WhatsApp e o modal de recebimento liquidam a mesa 100% livre de taxa de serviço.
   - [x] **Gráfico de Valor Acumulado das % de Serviço nos Relatórios (Condicional se Ativo)**: Na tela de Relatórios (`Reports.jsx`), inclusão de card analítico dedicado (`ServiceFeeAccumulatedChart.jsx`) com Recharts (`ComposedChart`) exibindo a curva acumulada (Running Total em R$) e barras diárias/horárias das taxas de serviço retidas. Apresenta 3 mini-KPIs (Total Acumulado de Serviço, Comandas c/ Serviço e Média por Mesa) e badge dinâmico da taxa vigente. Renderizado de forma inteligente: visível quando a taxa de serviço estiver ativa nas configurações ou quando houver receita de serviço registrada no período selecionado.
-  - *Nota: App do Garçom (PWA de bolso) e Módulo de Lotação com estatísticas avançadas de permanência média reservados para etapa futura conforme alinhamento do Davi.* ([[02 - 💡 Ideias & Brainstorm]]).
+  - _Nota: App do Garçom (PWA de bolso) e Módulo de Lotação com estatísticas avançadas de permanência média reservados para etapa futura conforme alinhamento do Davi._ ([[02 - 💡 Ideias & Brainstorm]]).
 
 ### 💳 Cobrança & Monetização SaaS (Asaas)
+
 - [x] Criar conta/ambiente Sandbox no Asaas e validar chave de API.
 - [x] Testar criação programática de Cliente e Assinatura Recorrente via API.
 - [x] Adicionar coluna de Mensalidade (Asaas), status e botão de copiar fatura no Painel **SuperAdmin** do Davi.
@@ -107,6 +126,7 @@
 - [ ] **Módulo Financeiro SaaS no SuperAdmin**: Dashboard executivo com MRR, ARR, inadimplência Asaas e lucro líquido em tempo real ([[02 - 💡 Ideias & Brainstorm]]).
 
 ### 💵 Frente de Caixa & Gestão de Caixa (PDV)
+
 - [x] **Layout & Arquitetura da Nova Página 'Gestão de Caixa' (`CashManagement.jsx`)**:
   - **Aba 1: Caixa Atual**: Status em tempo real (Aberto/Fechado), operador, horário, fundo de troco inicial, vendas do turno, sangrias, suprimentos, saídas operacionais e cálculo de dinheiro esperado na gaveta física com extrato do turno.
   - **Aba 2: Fechamento de Caixa Migrado**: Incorporação do fechamento em página inteira com KPIs de faturamento bruto/líquido, pedidos por canal, acerto individual de motoboys, impressão térmica (80mm/58mm), WhatsApp e **Conferência Obrigatória de Gaveta (Contagem Cega & Quebra de Caixa)** com apuração de sobra/falta e justificativa.
@@ -119,6 +139,7 @@
 - [ ] **Cancelamentos & Estornos Auditáveis**: Separação de reembolso físico em dinheiro (reduz gaveta) vs estorno eletrônico (Pix/cartão) sem duplicidade.
 
 ### 🤖 Automação com IA, Marketing & Recuperação de Vendas
+
 - [ ] **Robô com IA para WhatsApp, Instagram e Facebook**: Atendimento inteligente integrado com IA (transcrição de áudios via Whisper e LLM para tirar pedidos em linguagem natural e esclarecer dúvidas do cardápio 24/7).
 - [ ] **Recuperador de Vendas (Carrinho Abandonado no WhatsApp)**: Detecção de desistência no checkout e envio automático de mensagem amigável no WhatsApp após 15 a 30 minutos com cupom de incentivo exclusivo para finalizar a compra.
 - [ ] **Programa de Cashback do Cliente**: Retenção de % do valor gasto em carteira virtual do cliente para abater nos próximos pedidos.
@@ -126,10 +147,12 @@
 - [ ] **Integração com Plataformas de Anúncios (Meta Pixel, Google Tag & TikTok Pixel)**: Campo em Configurações para rastreamento de conversões com eventos nativos (`PageView`, `ViewContent`, `AddToCart`, `InitiateCheckout`, `Purchase` com valor).
 
 ### 📑 Emissão Fiscal para Restaurantes (NFC-e / NF-e)
+
 - [ ] **Emissão de NFC-e (Cupom Fiscal Eletrônico do Consumidor)**: Integração com API fiscal homologada (Focus NFe, PlugNotas/TecnoSpeed ou Nuvem Fiscal) com upload de Certificado Digital A1 (.pfx), CSC da SEFAZ estadual e geração de chave de acesso/QR Code impresso na bobina térmica.
 - [ ] **Tributação Automatizada com IA**: Assistente inteligente que identifica o produto (hambúrguer, refrigerante, pizza, cerveja) e preenche automaticamente NCM, CFOP, CEST e regras de tributação (Simples Nacional / ICMS ST).
 
 ### 📱 Módulos Operacionais Mobile (Garçom & Entregador)
+
 - [ ] **App do Garçom (Comanda Digital Mobile / PWA)**:
   - Interface mobile ágil e adaptada para tela vertical de celular para atendimento no salão.
   - Seleção visual de mesas (livres, ocupadas, aguardando conta).
@@ -146,6 +169,7 @@
 ---
 
 ## 🔮 Fase 2: Backend Dedicado & Integrações
+
 - [ ] **Disparador WhatsApp Automático**: Notificar o cliente quando o pedido sair para entrega ou for aprovado.
 - [ ] **Configuração e Homologação da Meta Cloud API Oficial**: Criação do App no Meta for Developers, configuração do Phone Number ID, Token Permanente (System User) e aprovação de templates para OTP e status de pedidos.
 - [x] **Autenticação por WhatsApp API Oficial (OTP) & Separação de Visitante (Lógica Pronta & Fallback Simulado)**:
@@ -191,7 +215,7 @@
 - [x] **Ajuste de Tipografia & Contraste do Cupom Térmico (`PrintOrder.jsx`)**: Substituído tons de cinza por preto puro (#000), aplicada fonte encorpada de alta legibilidade (`font-black`/`font-bold`), margem 0mm, `@media print` calibrado para bobinas térmicas de 80mm e 58mm e corte de 2 vias.
 - [ ] **Domínio Próprio para Restaurantes (Cloudflare for SaaS)**: Suporte a domínio/subdomínio personalizado do cliente (ex: `cardapio.pizzaria.com.br`) com SSL HTTPS automático (Cloudflare Custom Hostnames) e resolução direta por hostname no `TenantContext.jsx` ([[02 - 💡 Ideias & Brainstorm]]).
 - [ ] ⏸️ **Integração Oficial Aiqfome & Magalu Delivery (API V2 + ID Magalu - Em Standby)**:
-  - *Status*: Pausado temporariamente pelo Davi. O cadastro de parceiro de integração no portal do Magalu exige CNPJ ativo. Reservado para a etapa pós-validação comercial quando o CNPJ/MEI for formalizado. ([[02 - 💡 Ideias & Brainstorm]]).
+  - _Status_: Pausado temporariamente pelo Davi. O cadastro de parceiro de integração no portal do Magalu exige CNPJ ativo. Reservado para a etapa pós-validação comercial quando o CNPJ/MEI for formalizado. ([[02 - 💡 Ideias & Brainstorm]]).
 - [x] **Montador de Pizza Fracionada (Abordagem por Tipo de Categoria - Concluído & Integrado)**:
   - **Modelagem no Supabase**: Colunas `type` e `pizza_sizes` em `categories`, `pizza_prices` em `products` e `pizza_pricing_rule` em `tenants`.
   - **Projeção de Colunas & Cache (`storage.js`)**: Incluídas as colunas `type` e `pizza_sizes` em `TABLE_COLUMNS.categories` e `pizza_prices` em `TABLE_COLUMNS.products`, com bump de versão de cache (`delivery_menu_v1_2`) garantindo limpeza instantânea de dados antigos nos navegadores.
@@ -205,6 +229,7 @@
 ---
 
 ## ✅ Concluído (Entregas Realizadas)
+
 - [x] **Cardápio Público**: Visualização de produtos, categorias com rolagem suave e banners rotativos dinâmicos.
 - [x] **Carrinho Drawer**: Adição, remoção, cálculo de adicionais e totais em tempo real.
 - [x] **Checkout Flexível**: Modais separados para Entrega (com endereço completo) e Retirada.
@@ -214,7 +239,8 @@
 ---
 
 ## 🔗 Links Relacionados
-* [[00 - 🏠 Inicio]] — Voltar ao painel inicial
-* [[02 - 💡 Ideias & Brainstorm]] — Ideias não estruturadas e discussões
-* [[03 - 🚀 Especificacao SaaS]] — Visão estratégica e planos de monetização
-* [[04 - 🗄️ Modelagem & Supabase]] — Estrutura de tabelas e RLS
+
+- [[00 - 🏠 Inicio]] — Voltar ao painel inicial
+- [[02 - 💡 Ideias & Brainstorm]] — Ideias não estruturadas e discussões
+- [[03 - 🚀 Especificacao SaaS]] — Visão estratégica e planos de monetização
+- [[04 - 🗄️ Modelagem & Supabase]] — Estrutura de tabelas e RLS
