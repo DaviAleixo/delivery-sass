@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle, MapPin, Truck, Store, Plus, ArrowLeft, Loader2, Pencil, CreditCard, Banknote, Home, Building2, AlertTriangle, CheckCircle2, Zap, UtensilsCrossed, PhoneCall, Gift } from "lucide-react";
+import { AlertCircle, MapPin, Truck, Store, Plus, ArrowLeft, Loader2, Pencil, CreditCard, Banknote, Home, Building2, AlertTriangle, CheckCircle2, Zap, UtensilsCrossed, PhoneCall, Gift, Coins, Sparkles } from "lucide-react";
 import { matchNeighborhood, isCityAllowed } from "@/utils/neighborhoodMatcher";
 import { User } from "@/entities/User";
 import { UserAddress } from "@/entities/UserAddress";
@@ -221,6 +221,48 @@ export default function OrderModal({
   const [pendingCoupon, setPendingCoupon] = useState("");
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState(null);
+
+  // Cashback do Lojista
+  const cashbackEnabled = Boolean(deliveryRules?.cashback_enabled);
+  const cashbackRate = Number(deliveryRules?.cashback_rate || 0);
+  const cashbackValidityDays = Number(deliveryRules?.cashback_validity_days || 15);
+  const cashbackMaxDiscountPct = Number(deliveryRules?.cashback_max_discount_percentage || 50);
+  const isCashbackActive = cashbackEnabled && cashbackRate > 0;
+
+  const [cashbackWallet, setCashbackWallet] = useState(null);
+  const [useCashback, setUseCashback] = useState(false);
+  const [isLoadingCashback, setIsLoadingCashback] = useState(false);
+
+  const loadCashbackWallet = async (phone) => {
+    if (!isCashbackActive || !phone) {
+      setCashbackWallet(null);
+      return;
+    }
+    const cleanPhone = String(phone).replace(/\D/g, "");
+    if (!cleanPhone || cleanPhone.length < 8) {
+      setCashbackWallet(null);
+      return;
+    }
+    const tenantIdToUse = deliveryRules?.id || deliveryRules?.tenant_id || (typeof window !== "undefined" ? localStorage.getItem("current_tenant_id") : null);
+    if (!tenantIdToUse) return;
+
+    try {
+      setIsLoadingCashback(true);
+      if (isSupabaseConfigured() && supabase) {
+        const { data, error } = await supabase.rpc("get_customer_cashback_balance", {
+          p_tenant_id: tenantIdToUse,
+          p_phone: cleanPhone
+        });
+        if (!error && data) {
+          setCashbackWallet(data);
+        }
+      }
+    } catch (err) {
+      console.warn("Erro ao carregar saldo de cashback:", err);
+    } finally {
+      setIsLoadingCashback(false);
+    }
+  };
   const [couponError, setCouponError] = useState("");
 
   useEffect(() => {

@@ -29,6 +29,8 @@ export const orderSchema = z.object({
   notes: z.string().optional().nullable().default(""),
   coupon_code: z.string().optional().nullable(),
   discount_amount: z.coerce.number().optional().default(0),
+  cashback_discount: z.coerce.number().optional().default(0),
+  cashback_earned: z.coerce.number().optional().default(0),
   delivery_fee: z.coerce.number().min(0).default(0),
   subtotal: z.coerce.number().min(0).default(0),
   total_amount: z.coerce.number().min(0).default(0),

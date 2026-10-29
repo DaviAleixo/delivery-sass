@@ -63,6 +63,15 @@ const VrummProductCard = forwardRef(function VrummProductCard(
               )}
             </div>
 
+            {cashbackRate > 0 && !isVisualOnly && (() => {
+              const cbVal = (Number(product.price || 0) * cashbackRate) / 100;
+              return cbVal >= 0.05 ? (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-400 bg-amber-950/60 border border-amber-800/80 px-1.5 py-0.5 rounded-md mt-0.5 w-fit">
+                  🎁 +R$ {cbVal.toFixed(2).replace('.', ',')} de volta
+                </span>
+              ) : null;
+            })()}
+
             {/* Botão + visível no rodapé quando não há foto e não é apenas visual */}
             {!hasValidImage && !isVisualOnly && (
               <motion.button

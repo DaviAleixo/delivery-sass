@@ -346,6 +346,140 @@ export default function GeneralSettingsTab({
         </Card>
       )}
 
+      {/* Programa de Cashback & Fidelidade da Loja */}
+      {!isVisualOnly && (
+        <Card className="border-0 shadow-md">
+          <CardHeader>
+            <CardTitle className="text-xl font-bold text-stone-900 flex items-center gap-2">
+              <span>🎁</span> Programa de Cashback da Loja
+            </CardTitle>
+            <p className="text-xs text-stone-500">
+              Devolva uma porcentagem em crédito virtual para o cliente gastar no próximo pedido dentro da sua loja. Aumenta a fidelidade e a recompra semanal.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div
+              onClick={() => handleInputChange("cashback_enabled", !settings.cashback_enabled)}
+              className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                settings.cashback_enabled
+                  ? "border-[#047857] bg-[#D1E9DF]/20 shadow-xs ring-2 ring-[#047857]/20"
+                  : "border-stone-200 hover:border-stone-300 bg-stone-50/60 opacity-80"
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100/90 text-emerald-800 flex items-center justify-center font-bold text-xl shrink-0">
+                  💰
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-stone-900 flex items-center gap-2">
+                    <span>Ativar Cashback para Clientes</span>
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      settings.cashback_enabled 
+                        ? "bg-emerald-100 text-emerald-800" 
+                        : "bg-stone-200 text-stone-600"
+                    }`}>
+                      {settings.cashback_enabled ? "Ativo" : "Desativado"}
+                    </span>
+                  </h4>
+                  <p className="text-xs text-stone-500 mt-1 leading-relaxed">
+                    Quando ativado, os clientes cadastrados acumulam crédito a cada pedido concluído para abater na próxima compra.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 shrink-0 self-end sm:self-center" onClick={(e) => e.stopPropagation()}>
+                <input
+                  type="checkbox"
+                  id="cashback_enabled"
+                  checked={Boolean(settings.cashback_enabled)}
+                  onChange={(e) => handleInputChange("cashback_enabled", e.target.checked)}
+                  className="accent-[#047857] h-5 w-5 rounded cursor-pointer"
+                />
+              </div>
+            </div>
+
+            {settings.cashback_enabled && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+                {/* Porcentagem de Cashback */}
+                <div className="p-4 bg-white rounded-2xl border border-emerald-200/90 flex flex-col justify-between gap-2">
+                  <div>
+                    <Label htmlFor="cashback_rate" className="text-xs font-bold text-stone-800 block">
+                      % de Volta por Pedido
+                    </Label>
+                    <p className="text-[11px] text-stone-500 mt-0.5">
+                      Padrão recomendado: 5% a 10%.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Input
+                      id="cashback_rate"
+                      type="number"
+                      min="1"
+                      max="30"
+                      step="0.5"
+                      value={settings.cashback_rate ?? 5}
+                      onChange={(e) => handleInputChange("cashback_rate", Math.max(0.5, Math.min(30, Number(e.target.value) || 0)))}
+                      className="w-24 h-9 text-center font-bold text-sm bg-stone-50 border-stone-300 rounded-xl"
+                    />
+                    <span className="text-sm font-black text-stone-700">%</span>
+                  </div>
+                </div>
+
+                {/* Validade do Saldo em Dias */}
+                <div className="p-4 bg-white rounded-2xl border border-emerald-200/90 flex flex-col justify-between gap-2">
+                  <div>
+                    <Label htmlFor="cashback_validity_days" className="text-xs font-bold text-stone-800 block">
+                      Validade do Saldo
+                    </Label>
+                    <p className="text-[11px] text-stone-500 mt-0.5">
+                      Gera urgência para recomprar logo.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Input
+                      id="cashback_validity_days"
+                      type="number"
+                      min="3"
+                      max="90"
+                      step="1"
+                      value={settings.cashback_validity_days ?? 15}
+                      onChange={(e) => handleInputChange("cashback_validity_days", Math.max(1, Math.min(180, Number(e.target.value) || 0)))}
+                      className="w-24 h-9 text-center font-bold text-sm bg-stone-50 border-stone-300 rounded-xl"
+                    />
+                    <span className="text-sm font-bold text-stone-700">dias</span>
+                  </div>
+                </div>
+
+                {/* Trava Máxima de Abatimento por Pedido */}
+                <div className="p-4 bg-white rounded-2xl border border-emerald-200/90 flex flex-col justify-between gap-2">
+                  <div>
+                    <Label htmlFor="cashback_max_discount_percentage" className="text-xs font-bold text-stone-800 block">
+                      Abatimento Máximo
+                    </Label>
+                    <p className="text-[11px] text-stone-500 mt-0.5">
+                      Trava anti-prejuízo (máx do pedido).
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Input
+                      id="cashback_max_discount_percentage"
+                      type="number"
+                      min="10"
+                      max="100"
+                      step="5"
+                      value={settings.cashback_max_discount_percentage ?? 50}
+                      onChange={(e) => handleInputChange("cashback_max_discount_percentage", Math.max(10, Math.min(100, Number(e.target.value) || 0)))}
+                      className="w-24 h-9 text-center font-bold text-sm bg-stone-50 border-stone-300 rounded-xl"
+                    />
+                    <span className="text-sm font-black text-stone-700">% máx</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Informações de Contato e Localização */}
       <Card className="border-0 shadow-md">
         <CardHeader>

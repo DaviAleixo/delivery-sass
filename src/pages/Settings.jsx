@@ -80,7 +80,11 @@ export default function SettingsPage() {
     accepts_takeaway: true,
     pizza_pricing_rule: "highest_price",
     table_service_fee_enabled: false,
-    table_service_fee_rate: 10
+    table_service_fee_rate: 10,
+    cashback_enabled: false,
+    cashback_rate: 5,
+    cashback_validity_days: 15,
+    cashback_max_discount_percentage: 50
   });
 
   const [newNeighborhood, setNewNeighborhood] = useState({
@@ -202,6 +206,10 @@ export default function SettingsPage() {
             pizza_pricing_rule: tenantData.pizza_pricing_rule || "highest_price",
             table_service_fee_enabled: tenantData.table_service_fee_enabled === true,
             table_service_fee_rate: Number(tenantData.table_service_fee_rate ?? 10),
+            cashback_enabled: tenantData.cashback_enabled === true,
+            cashback_rate: Number(tenantData.cashback_rate ?? 5),
+            cashback_validity_days: Number(tenantData.cashback_validity_days ?? 15),
+            cashback_max_discount_percentage: Number(tenantData.cashback_max_discount_percentage ?? 50),
           });
           setIsLoading(false);
           return;
@@ -859,6 +867,10 @@ export default function SettingsPage() {
           pizza_pricing_rule: settings.pizza_pricing_rule || 'highest_price',
           table_service_fee_enabled: settings.table_service_fee_enabled === true,
           table_service_fee_rate: Number(settings.table_service_fee_rate ?? 10),
+          cashback_enabled: settings.cashback_enabled === true,
+          cashback_rate: Number(settings.cashback_rate ?? 5),
+          cashback_validity_days: Number(settings.cashback_validity_days ?? 15),
+          cashback_max_discount_percentage: Number(settings.cashback_max_discount_percentage ?? 50),
           payment_methods: tenantDetails?.payment_methods || null,
         };
 

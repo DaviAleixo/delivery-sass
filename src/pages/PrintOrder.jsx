@@ -101,7 +101,9 @@ export default function PrintOrderPage() {
     : (order.order_type === 'delivery' ? 5.00 : 0);
 
   const discountAmount = Number(order.discount_amount || order.discount || 0);
-  const totalAmount = Number(order.total_amount || order.total || (subtotal + deliveryFee - discountAmount));
+  const cashbackDiscount = Number(order.cashback_discount || 0);
+  const cashbackEarned = Number(order.cashback_earned || 0);
+  const totalAmount = Number(order.total_amount || order.total || (subtotal + deliveryFee - discountAmount - cashbackDiscount));
 
   const orderTypeTitle = order.order_type === 'delivery'
     ? 'PARA ENTREGA'
@@ -294,6 +296,17 @@ export default function PrintOrderPage() {
               <div className="flex justify-between font-black">
                 <span>Desconto / Cupom:</span>
                 <span>- R$ {discountAmount.toFixed(2).replace(".", ",")}</span>
+              </div>
+            )}
+            {cashbackDiscount > 0 && (
+              <div className="flex justify-between font-black">
+                <span>Desconto Cashback:</span>
+                <span>- R$ {cashbackDiscount.toFixed(2).replace(".", ",")}</span>
+              </div>
+            )}
+            {cashbackEarned > 0 && (
+              <div className="text-[11px] font-bold text-center border border-dashed border-black py-0.5 my-1">
+                🎁 Cashback gerado nesta compra: R$ {cashbackEarned.toFixed(2).replace(".", ",")}
               </div>
             )}
             <div className="flex justify-between font-black text-lg pt-1.5 border-t-2 border-black">

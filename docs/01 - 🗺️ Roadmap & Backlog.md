@@ -6,6 +6,18 @@
 
 ## 🚀 Em Andamento / Foco Atual
 
+- [x] 🎁 **Módulo de Cashback & Fidelidade Multi-Tenant da Loja (100% Concluído & Integrado)**:
+  - [x] **Store Credit Mercantil**: 100% bancado pela margem do restaurante, zero custo financeiro para o dono do SaaS.
+  - [x] **Isolamento Multi-Tenant**: Saldo amarrado a `(tenant_id, phone)`. O saldo acumulado na Hamburgueria A só pode ser resgatado na Hamburgueria A.
+  - [x] **Experiência 100% Nativa na Web**: Sem custos ou dependência de envio de mensagens pagas por WhatsApp API.
+  - [x] **Exclusivo para Clientes Cadastrados**: Apenas clientes com conta verificada acumulam e abatem cashback.
+  - [x] **Isca & Propaganda para Clientes Não Cadastrados**: Exibição de tag com valor de cashback nos produtos e banner chamativo de conversão no checkout incentivando o cadastro em 10 segundos.
+  - [x] **Travas de Segurança Anti-Prejuízo**: Validade configurável em dias com expiração automática (`cashback_validity_days`), teto máximo de desconto por pedido (`cashback_max_discount_percentage`), e incidência restrita a produtos (nunca sobre taxa de entrega).
+  - [x] **Painel de Configurações do Lojista**: Aba Geral em `Settings.jsx` com switch liga/desliga, % de retorno (1% a 30%), dias de validade e % máx de abatimento.
+  - [x] **Checkout & Resumo Financeiro**: Abatimento com switch 1-clique em `OrderModal.jsx`, recálculo dinâmico do total e registro automático de transações.
+  - [x] **Painel de Pedidos & Impressão Térmica**: `OrderCard.jsx` e `PrintOrder.jsx` detalham desconto de cashback e cashback gerado na comanda da cozinha e entregador.
+  - [x] **Banco de Dados**: Migração SQL executada e validada em Homologação (`staging`) e Produção (`jqwtnzdsaivbjudvjhld`). ([[02 - 💡 Ideias & Brainstorm]])
+
 - [x] 🛡️ **Governança Estrita de Planos & Isolamento de Funcionalidades no Painel (Concluído)**:
   - [x] Separação nítida dos 3 perfis de contratação: **Plano Visual** (`showcase`), **Plano Autoatendimento** (`table`) e **Plano Completo** (`basic`/`custom`).
   - [x] Sincronização automática no Supabase via RPCs `create_new_tenant` e `update_tenant_info`: define `salon_mode`, `accepts_delivery` e `accepts_takeaway` no momento da criação ou edição.

@@ -640,6 +640,19 @@ export default function MenuPage() {
           console.log("Erro ao registrar uso do cupom:", error);
         }
       }
+
+      // Processamento atômico de Cashback da Loja
+      if (orderData.cashback_discount > 0 || orderData.cashback_earned > 0) {
+        try {
+          if (isSupabaseConfigured() && supabase) {
+            await supabase.rpc("process_order_cashback", {
+              p_order_id: String(createdOrder.id)
+            });
+          }
+        } catch (cbErr) {
+          console.warn("Erro ao processar cashback do pedido:", cbErr);
+        }
+      }
       
       if (!isPixOnline) {
         setCart([]);
@@ -1179,6 +1192,7 @@ export default function MenuPage() {
                     isStoreOpen={storeIsOpen}
                     isPopular={idx === 0 && section.id === "all"}
                     isVisualOnly={isVisualOnly}
+                    cashbackRate={settings?.cashback_enabled ? Number(settings?.cashback_rate || 0) : 0}
                   />
                 ))}
               </AnimatePresence>

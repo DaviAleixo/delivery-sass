@@ -90,6 +90,16 @@ export default function OrderCard({
                     {order.driver_name}
                   </Badge>
                 )}
+                {Number(order.cashback_discount || 0) > 0 && (
+                  <Badge variant="outline" className="text-xs bg-amber-50 text-amber-800 border-amber-300 font-bold">
+                    🎁 Cashback: -R$ {safeMoney(order.cashback_discount)}
+                  </Badge>
+                )}
+                {Number(order.cashback_earned || 0) > 0 && (
+                  <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-800 border-emerald-300 font-bold">
+                    ✨ +R$ {safeMoney(order.cashback_earned)} cashback
+                  </Badge>
+                )}
               </div>
             </div>
             <div className="flex flex-wrap items-center justify-between md:justify-end gap-2.5">
@@ -229,6 +239,28 @@ export default function OrderCard({
                         </div>
                       ))}
                     </div>
+                    {(Number(order.delivery_fee || 0) > 0 || Number(order.discount_amount || 0) > 0 || Number(order.cashback_discount || 0) > 0) && (
+                      <div className="mt-3 pt-2 border-t border-gray-100 text-xs space-y-1 text-gray-600">
+                        {Number(order.delivery_fee || 0) > 0 && (
+                          <div className="flex justify-between">
+                            <span>Taxa de entrega:</span>
+                            <span className="font-semibold">R$ {safeMoney(order.delivery_fee)}</span>
+                          </div>
+                        )}
+                        {Number(order.discount_amount || 0) > 0 && (
+                          <div className="flex justify-between text-emerald-600 font-semibold">
+                            <span>Desconto Cupom ({order.coupon_code || ''}):</span>
+                            <span>- R$ {safeMoney(order.discount_amount)}</span>
+                          </div>
+                        )}
+                        {Number(order.cashback_discount || 0) > 0 && (
+                          <div className="flex justify-between text-amber-700 font-bold">
+                            <span>Desconto Cashback:</span>
+                            <span>- R$ {safeMoney(order.cashback_discount)}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 

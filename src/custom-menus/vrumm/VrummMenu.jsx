@@ -365,6 +365,7 @@ export default function VrummMenu({
                 isStoreOpen={storeIsOpen}
                 isPopular={idx === 0}
                 isVisualOnly={isVisualOnly}
+                cashbackRate={settings?.cashback_enabled ? Number(settings?.cashback_rate || 0) : 0}
               />
             ))}
           </AnimatePresence>
