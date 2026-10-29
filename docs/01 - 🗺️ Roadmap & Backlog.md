@@ -10,7 +10,8 @@
   - [x] Documentação e template de variáveis `.env.example` versionado com separação de ambientes (`production` | `staging` | `development`).
   - [x] Badge visual inteligente `StagingBanner.jsx` integrado no frontend (ativo apenas quando o ambiente for staging/preview).
   - [x] Tag de ambiente configurada no Sentry (`environment: staging/production`) para evitar poluição de erros entre ambientes.
-  - [ ] Publicar branch `staging` no GitHub (`origin/staging`) e validar Branch Deployment no Cloudflare Pages (`https://staging.delivery-sass.pages.dev`).
+  - [x] Publicar branch `staging` no GitHub (`origin/staging`) com rastreamento ativo.
+  - [ ] Validar Branch Deployment no Cloudflare Pages (`https://staging.delivery-sass.pages.dev`).
   - [ ] Configurar variáveis de Preview no Cloudflare Pages e apontamento do banco Supabase de testes. ([[02 - 💡 Ideias & Brainstorm]])
 - [x] ☁️ **Armazenamento de Mídia no Cloudflare R2 (Concluído & Ativo)**: Bucket `pedemuleke-media` configurado, Edge Function `r2-upload` criada e deployada no Supabase, credenciais S3 integradas com segurança, pipeline WebP conectado em `Core.js` com CDN global (`r2.dev`) e tráfego ilimitado (zero egress).
 - [x] 🛡️ **Backup Diário Automatizado no Cloudflare R2 (Zero Custo no Supabase Free)**: GitHub Actions diário (`.github/workflows/daily-backup.yml`) às 04:00 BRT com dump master PostgreSQL (`pg_dump` compactado em `.sql.gz`), exportação estruturada em JSON por empresa (`scripts/export-data.js` em `backups/por_empresa/<slug>/`) e sincronização direta no Cloudflare R2 com retenção automática de 30 dias.
