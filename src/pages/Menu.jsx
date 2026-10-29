@@ -959,6 +959,8 @@ export default function MenuPage() {
                   </button>
                 )}
 
+                <UserProfileSheet />
+
                 <StoreInfoSheet 
                   settings={settings}
                   trigger={

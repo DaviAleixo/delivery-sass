@@ -20,7 +20,9 @@ import {
   Plus,
   ShieldCheck,
   ArrowLeft,
-  RefreshCw
+  RefreshCw,
+  Coins,
+  Sparkles
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -267,6 +269,7 @@ export default function UserProfileSheet({ dark = false, trigger }) {
   const [addresses, setAddresses] = useState([]);
   const [availableCoupons, setAvailableCoupons] = useState([]);
   const [couponUsages, setCouponUsages] = useState([]);
+  const [cashbackData, setCashbackData] = useState(null);
   const [isEditingAddress, setIsEditingAddress] = useState(null);
   const [showAddressForm, setShowAddressForm] = useState(false);
   
@@ -391,9 +394,28 @@ export default function UserProfileSheet({ dark = false, trigger }) {
       });
       setAvailableCoupons(validCoupons);
 
+      // Carrega saldo de cashback do cliente nesta loja
+      if (cleanPhone) {
+        try {
+          const currentTenantId = localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001";
+          if (isSupabaseConfigured() && supabase) {
+            const { data: cbData, error: cbErr } = await supabase.rpc("get_customer_cashback_balance", {
+              p_tenant_id: currentTenantId,
+              p_phone: cleanPhone
+            });
+            if (!cbErr && cbData) {
+              setCashbackData(cbData);
+            }
+          }
+        } catch (cbErr) {
+          console.warn("Erro ao buscar cashback no perfil:", cbErr);
+        }
+      }
+
     } catch (_error) {
       setUser(null);
       setAddresses([]);
+      setCashbackData(null);
     }
   };
 
@@ -707,6 +729,70 @@ export default function UserProfileSheet({ dark = false, trigger }) {
                     </div>
                   )}
                 </div>
+              </div>
+
+              {/* Card de Cashback da Loja (Mesmo com R$ 0,00) */}
+              <div className={`p-4 rounded-3xl border transition-all ${
+                dark 
+                  ? "bg-gradient-to-br from-amber-950/40 via-stone-900 to-stone-900 border-amber-900/50 shadow-md" 
+                  : "bg-gradient-to-br from-amber-500/10 via-amber-50/70 to-emerald-500/10 border-amber-300/80 shadow-2xs"
+              }`}>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-11 h-11 rounded-2xl flex items-center justify-center font-black shrink-0 ${
+                      dark 
+                        ? "bg-amber-500/20 text-amber-400 border border-amber-500/30" 
+                        : "bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-md shadow-amber-500/20"
+                    }`}>
+                      <Coins className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={`text-xs font-black uppercase tracking-wider ${dark ? "text-amber-400" : "text-amber-950"}`}>
+                          Cashback da Loja
+                        </span>
+                        {Number(cashbackData?.rate || 0) > 0 && (
+                          <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+                            dark ? "bg-amber-500/20 text-amber-300 border border-amber-500/30" : "bg-amber-200/90 text-amber-900"
+                          }`}>
+                            +{cashbackData.rate}% de volta
+                          </span>
+                        )}
+                      </div>
+                      <p className={`text-[11px] mt-0.5 leading-tight ${dark ? "text-stone-400" : "text-stone-600"}`}>
+                        Saldo acumulado para seus pedidos
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="text-right shrink-0">
+                    <div className={`text-xl sm:text-2xl font-black ${
+                      Number(cashbackData?.balance || 0) > 0 
+                        ? (dark ? "text-emerald-400" : "text-emerald-700") 
+                        : (dark ? "text-stone-400" : "text-stone-600")
+                    }`}>
+                      R$ {Number(cashbackData?.balance || 0).toFixed(2).replace('.', ',')}
+                    </div>
+                  </div>
+                </div>
+
+                {Number(cashbackData?.balance || 0) > 0 && cashbackData?.expires_at && (
+                  <div className="mt-3 pt-2.5 border-t border-amber-200/50 flex items-center justify-between text-[11px]">
+                    <span className={dark ? "text-stone-400" : "text-stone-600"}>
+                      Validade do saldo:
+                    </span>
+                    <strong className={dark ? "text-amber-400" : "text-amber-900 font-bold"}>
+                      {new Date(cashbackData.expires_at).toLocaleDateString('pt-BR')}
+                    </strong>
+                  </div>
+                )}
+
+                {Number(cashbackData?.balance || 0) === 0 && (
+                  <div className="mt-2.5 pt-2 border-t border-amber-200/40 flex items-center gap-1 text-[11px] text-stone-500">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                    <span>Faça seu pedido e ganhe {cashbackData?.rate || 5}% de volta automaticamente!</span>
+                  </div>
+                )}
               </div>
 
               <Separator className={dark ? "bg-stone-800" : "bg-stone-100"} />
