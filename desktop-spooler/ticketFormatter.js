@@ -294,6 +294,10 @@ export function formatOrderToThermalText(order, options = {}) {
   lines.push("FORMA DE PAGAMENTO:");
   const wrappedPayment = wordWrap(`>> ${paymentMethod} <<`, width);
   wrappedPayment.forEach((p) => lines.push(p));
+  if (order.card_brand) {
+    const wrappedBrand = wordWrap(`* BANDEIRA: ${cleanText(order.card_brand).toUpperCase()} (LEVAR MAQUININHA) *`, width);
+    wrappedBrand.forEach((b) => lines.push(b));
+  }
   lines.push(divider("-", width));
 
   // Rodapé e avanço de papel para guilhotina não cortar o texto

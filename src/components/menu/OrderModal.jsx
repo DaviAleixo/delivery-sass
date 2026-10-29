@@ -21,6 +21,7 @@ import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { validateSchema, orderSchema } from "@/schemas";
 import { getActiveTenantId } from "@/entities/storage";
 import WhatsAppAuthModal from "./WhatsAppAuthModal";
+import { CARD_BRANDS, MEAL_VOUCHER_BRANDS } from "@/constants/paymentBrands";
 
 export const parseAddressString = (addrStr) => {
   if (!addrStr || typeof addrStr !== 'string') return null;
@@ -207,6 +208,7 @@ export default function OrderModal({
     customer_phone: "",
     customer_email: "",
     payment_method: "",
+    card_brand: "",
     notes: ""
   });
   const [changeFor, setChangeFor] = useState("");
@@ -634,6 +636,7 @@ export default function OrderModal({
       customer_name: resolvedCustomerName,
       customer_phone: customerData.customer_phone || (isDineIn ? "" : ""),
       payment_method: resolvedPaymentMethod,
+      card_brand: isCardOrMeal ? (customerData.card_brand || null) : null,
       notes: finalNotes,
       change_for: (!isDineIn && customerData.payment_method === 'dinheiro' && changeFor.trim()) ? changeFor.trim() : null,
       user_email: user?.email,
@@ -1558,6 +1561,146 @@ export default function OrderModal({
                           </div>
                         )}
                       </>
+                    );
+                  })()}
+
+                  {/* Seleção de Bandeira para Cartão de Crédito e Débito */}
+                  {(customerData.payment_method === 'cartao_credito' || customerData.payment_method === 'cartao_debito') && (() => {
+                    const pm = activePaymentMethods || deliveryRules?.payment_methods || {};
+                    const acceptedCardIds = Array.isArray(pm.accepted_card_brands) && pm.accepted_card_brands.length > 0
+                      ? pm.accepted_card_brands
+                      : CARD_BRANDS.map(b => b.id);
+                    const availableBrands = CARD_BRANDS.filter(b => acceptedCardIds.includes(b.id));
+
+                    return (
+                      <div className="mt-2.5 p-3.5 bg-blue-50/70 border border-blue-200 rounded-2xl space-y-2.5 animate-in fade-in slide-in-from-top-1 duration-200">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs font-bold text-blue-950 flex items-center gap-1.5">
+                            <CreditCard className="w-3.5 h-3.5 text-blue-700" />
+                            Qual a bandeira do seu cartão?
+                          </Label>
+                          {customerData.card_brand && (
+                            <button
+                              type="button"
+                              onClick={() => handleInputChange('card_brand', '')}
+                              className="text-[11px] text-blue-800 hover:text-blue-950 underline font-medium"
+                            >
+                              Limpar
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-blue-900/80 leading-snug">
+                          O entregador levará a maquininha compatível com a sua bandeira:
+                        </p>
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 pt-0.5">
+                          {availableBrands.map((brand) => {
+                            const isSelected = customerData.card_brand === brand.name;
+                            return (
+                              <button
+                                key={brand.id}
+                                type="button"
+                                onClick={() => handleInputChange('card_brand', isSelected ? '' : brand.name)}
+                                className={`p-2 rounded-xl text-xs font-bold border transition-all flex flex-col items-center justify-center gap-1 active:scale-95 ${
+                                  isSelected
+                                    ? 'border-blue-600 bg-blue-600 text-white shadow-xs ring-2 ring-blue-500/20'
+                                    : 'border-blue-200/90 bg-white text-stone-800 hover:border-blue-300 hover:bg-blue-50/50'
+                                }`}
+                              >
+                                <span className={`text-[10px] tracking-wider font-black px-1.5 py-0.5 rounded ${
+                                  isSelected ? 'bg-white/20 text-white' : (brand.badgeBg || 'bg-stone-100 text-stone-700')
+                                }`}>
+                                  {brand.tag}
+                                </span>
+                                <span className="truncate max-w-full">{brand.name}</span>
+                              </button>
+                            );
+                          })}
+                          <button
+                            type="button"
+                            onClick={() => handleInputChange('card_brand', customerData.card_brand === 'Outra' ? '' : 'Outra')}
+                            className={`p-2 rounded-xl text-xs font-bold border transition-all flex flex-col items-center justify-center gap-1 active:scale-95 ${
+                              customerData.card_brand === 'Outra'
+                                ? 'border-blue-600 bg-blue-600 text-white shadow-xs ring-2 ring-blue-500/20'
+                                : 'border-blue-200/90 bg-white text-stone-700 hover:border-blue-300 hover:bg-blue-50/50'
+                            }`}
+                          >
+                            <span className="text-[10px] tracking-wider font-black px-1.5 py-0.5 rounded bg-stone-100 text-stone-600">
+                              OUTRO
+                            </span>
+                            <span className="truncate max-w-full">Outra</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Seleção de Bandeira para Vale Alimentação / Refeição */}
+                  {customerData.payment_method === 'alimentacao' && (() => {
+                    const pm = activePaymentMethods || deliveryRules?.payment_methods || {};
+                    const acceptedMealIds = Array.isArray(pm.accepted_meal_brands) && pm.accepted_meal_brands.length > 0
+                      ? pm.accepted_meal_brands
+                      : MEAL_VOUCHER_BRANDS.map(b => b.id);
+                    const availableMealBrands = MEAL_VOUCHER_BRANDS.filter(b => acceptedMealIds.includes(b.id));
+
+                    return (
+                      <div className="mt-2.5 p-3.5 bg-amber-50/90 border border-amber-200 rounded-2xl space-y-2.5 animate-in fade-in slide-in-from-top-1 duration-200">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                            <UtensilsCrossed className="w-3.5 h-3.5 text-amber-700" />
+                            Qual o seu Vale-Alimentação / Refeição?
+                          </Label>
+                          {customerData.card_brand && (
+                            <button
+                              type="button"
+                              onClick={() => handleInputChange('card_brand', '')}
+                              className="text-[11px] text-amber-800 hover:text-amber-950 underline font-medium"
+                            >
+                              Limpar
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-amber-900/80 leading-snug">
+                          O entregador levará a maquininha credenciada para o seu benefício:
+                        </p>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-0.5">
+                          {availableMealBrands.map((brand) => {
+                            const isSelected = customerData.card_brand === (brand.shortName || brand.name);
+                            return (
+                              <button
+                                key={brand.id}
+                                type="button"
+                                onClick={() => handleInputChange('card_brand', isSelected ? '' : (brand.shortName || brand.name))}
+                                className={`p-2 rounded-xl text-xs font-bold border transition-all flex flex-col items-center justify-center gap-1 active:scale-95 ${
+                                  isSelected
+                                    ? 'border-amber-600 bg-amber-600 text-white shadow-xs ring-2 ring-amber-500/20'
+                                    : 'border-amber-200/90 bg-white text-stone-800 hover:border-amber-300 hover:bg-amber-50/50'
+                                }`}
+                              >
+                                <span className={`text-[10px] tracking-wider font-black px-1.5 py-0.5 rounded ${
+                                  isSelected ? 'bg-white/20 text-white' : (brand.badgeBg || 'bg-stone-100 text-stone-700')
+                                }`}>
+                                  {brand.tag}
+                                </span>
+                                <span className="truncate max-w-full">{brand.shortName || brand.name}</span>
+                              </button>
+                            );
+                          })}
+                          <button
+                            type="button"
+                            onClick={() => handleInputChange('card_brand', customerData.card_brand === 'Outro' ? '' : 'Outro')}
+                            className={`p-2 rounded-xl text-xs font-bold border transition-all flex flex-col items-center justify-center gap-1 active:scale-95 ${
+                              customerData.card_brand === 'Outro'
+                                ? 'border-amber-600 bg-amber-600 text-white shadow-xs ring-2 ring-amber-500/20'
+                                : 'border-amber-200/90 bg-white text-stone-700 hover:border-amber-300 hover:bg-amber-50/50'
+                            }`}
+                          >
+                            <span className="text-[10px] tracking-wider font-black px-1.5 py-0.5 rounded bg-stone-100 text-stone-600">
+                              OUTRO
+                            </span>
+                            <span className="truncate max-w-full">Outro</span>
+                          </button>
+                        </div>
+                      </div>
                     );
                   })()}
 

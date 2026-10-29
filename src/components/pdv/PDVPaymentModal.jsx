@@ -5,6 +5,7 @@ import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import { parseBRLToNumber } from "@/utils/moneyMask";
 import { Label } from "@/components/ui/label";
 import { Banknote, CreditCard, Smartphone, CheckCircle } from "lucide-react";
+import { CARD_BRANDS, MEAL_VOUCHER_BRANDS } from "@/constants/paymentBrands";
 
 const PAYMENT_METHODS = [
   {
@@ -33,6 +34,7 @@ const PAYMENT_METHODS = [
 export default function PDVPaymentModal({ total, customerName, customerPhone, onConfirm, onClose }) {
   const [paymentMethod, setPaymentMethod] = useState(null);
   const [receivedAmount, setReceivedAmount] = useState("");
+  const [selectedBrand, setSelectedBrand] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const inputRef = useRef(null);
 
@@ -63,7 +65,7 @@ export default function PDVPaymentModal({ total, customerName, customerPhone, on
   const handleConfirm = async () => {
     if (!canConfirm || isSubmitting) return;
     setIsSubmitting(true);
-    await onConfirm(paymentMethod);
+    await onConfirm(paymentMethod, selectedBrand || null);
     setIsSubmitting(false);
   };
 
@@ -111,6 +113,53 @@ export default function PDVPaymentModal({ total, customerName, customerPhone, on
             })}
           </div>
 
+          {/* Seleção de Bandeira do Cartão no PDV (opcional) */}
+          {paymentMethod === "cartao" && (
+            <div className="bg-purple-50/70 border border-purple-200 rounded-2xl p-3 space-y-2 animate-in fade-in duration-150">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-purple-950">Bandeira do Cartão / Voucher (Opcional):</span>
+                {selectedBrand && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedBrand("")}
+                    className="text-[11px] text-purple-700 underline font-medium"
+                  >
+                    Limpar
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-4 gap-1.5">
+                {[...CARD_BRANDS.slice(0, 4), ...MEAL_VOUCHER_BRANDS.slice(0, 3)].map((b) => {
+                  const isSel = selectedBrand === b.name;
+                  return (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => setSelectedBrand(isSel ? "" : b.name)}
+                      className={`py-1 px-1.5 rounded-lg text-xs font-bold border transition-all text-center truncate ${
+                        isSel
+                          ? "bg-purple-600 text-white border-purple-600 shadow-xs"
+                          : "bg-white text-stone-700 border-purple-200 hover:bg-purple-100/50"
+                      }`}
+                    >
+                      {b.shortName || b.name}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => setSelectedBrand(selectedBrand === "Outro" ? "" : "Outro")}
+                  className={`py-1 px-1.5 rounded-lg text-xs font-bold border transition-all text-center truncate ${
+                    selectedBrand === "Outro"
+                      ? "bg-purple-600 text-white border-purple-600 shadow-xs"
+                      : "bg-white text-stone-700 border-purple-200 hover:bg-purple-100/50"
+                  }`}
+                >
+                  Outro
+                </button>
+              </div>
+            </div>
+          )}
           {/* Seção de troco (apenas dinheiro) */}
           {paymentMethod === "dinheiro" && (
             <div className="space-y-3">

@@ -448,7 +448,7 @@ export default function OrdersPage() {
     return icons[status];
   };
 
-  const getPaymentMethodText = (method) => {
+  const getPaymentMethodText = (method, cardBrand) => {
     const methods = {
       dinheiro: "Dinheiro",
       pix: "PIX",
@@ -460,7 +460,11 @@ export default function OrdersPage() {
       caixa: "Pagar no Caixa (Mesa)",
       pagar_no_caixa: "Pagar no Caixa (Mesa)"
     };
-    return methods[method] || method || "-";
+    const base = methods[method] || method || "-";
+    if (cardBrand) {
+      return `${base} (${cardBrand})`;
+    }
+    return base;
   };
 
   // Filtro por período de tempo (Turno aberto, Hoje, Ontem, Semana, Todos)

@@ -20,6 +20,7 @@ import {
 import { testMercadoPagoCredentials } from "@/services/mercadoPagoService";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { toast } from "sonner";
+import { CARD_BRANDS, MEAL_VOUCHER_BRANDS } from "@/constants/paymentBrands";
 
 export default function PaymentMethodsTab({ tenantData, onUpdateTenant }) {
   const [isSaving, setIsSaving] = useState(false);
@@ -37,6 +38,8 @@ export default function PaymentMethodsTab({ tenantData, onUpdateTenant }) {
       accept_card_meal: Boolean(pm.accept_card_meal),
       accept_online_mp: Boolean(pm.accept_online_mp),
       mp_access_token: pm.mp_access_token || "",
+      accepted_card_brands: Array.isArray(pm.accepted_card_brands) ? pm.accepted_card_brands : CARD_BRANDS.map(b => b.id),
+      accepted_meal_brands: Array.isArray(pm.accepted_meal_brands) ? pm.accepted_meal_brands : MEAL_VOUCHER_BRANDS.map(b => b.id),
     };
   });
 
@@ -56,6 +59,8 @@ export default function PaymentMethodsTab({ tenantData, onUpdateTenant }) {
               accept_card_meal: Boolean(pm.accept_card_meal),
               accept_online_mp: Boolean(pm.accept_online_mp),
               mp_access_token: pm.mp_access_token || "",
+              accepted_card_brands: Array.isArray(pm.accepted_card_brands) ? pm.accepted_card_brands : CARD_BRANDS.map(b => b.id),
+              accepted_meal_brands: Array.isArray(pm.accepted_meal_brands) ? pm.accepted_meal_brands : MEAL_VOUCHER_BRANDS.map(b => b.id),
             });
             if (pm.mp_access_token && (pm.mp_access_token.startsWith("APP_USR-") || pm.mp_access_token.startsWith("TEST-"))) {
               testMercadoPagoCredentials(pm.mp_access_token).then((res) => {
@@ -78,6 +83,8 @@ export default function PaymentMethodsTab({ tenantData, onUpdateTenant }) {
           accept_card_meal: Boolean(pm.accept_card_meal),
           accept_online_mp: Boolean(pm.accept_online_mp),
           mp_access_token: pm.mp_access_token || "",
+          accepted_card_brands: Array.isArray(pm.accepted_card_brands) ? pm.accepted_card_brands : CARD_BRANDS.map(b => b.id),
+          accepted_meal_brands: Array.isArray(pm.accepted_meal_brands) ? pm.accepted_meal_brands : MEAL_VOUCHER_BRANDS.map(b => b.id),
         });
       }
     };
@@ -145,6 +152,32 @@ export default function PaymentMethodsTab({ tenantData, onUpdateTenant }) {
         console.warn("Falha no auto-save imediato:", _e);
       }
     }
+  };
+
+  const toggleCardBrand = (brandId) => {
+    const current = config.accepted_card_brands || CARD_BRANDS.map(b => b.id);
+    const updated = current.includes(brandId)
+      ? current.filter(id => id !== brandId)
+      : [...current, brandId];
+    updateSetting("accepted_card_brands", updated);
+  };
+
+  const toggleAllCardBrands = (selectAll) => {
+    const updated = selectAll ? CARD_BRANDS.map(b => b.id) : [];
+    updateSetting("accepted_card_brands", updated);
+  };
+
+  const toggleMealBrand = (brandId) => {
+    const current = config.accepted_meal_brands || MEAL_VOUCHER_BRANDS.map(b => b.id);
+    const updated = current.includes(brandId)
+      ? current.filter(id => id !== brandId)
+      : [...current, brandId];
+    updateSetting("accepted_meal_brands", updated);
+  };
+
+  const toggleAllMealBrands = (selectAll) => {
+    const updated = selectAll ? MEAL_VOUCHER_BRANDS.map(b => b.id) : [];
+    updateSetting("accepted_meal_brands", updated);
   };
 
   const handleSave = async (e) => {
@@ -284,6 +317,64 @@ export default function PaymentMethodsTab({ tenantData, onUpdateTenant }) {
             />
           </div>
 
+          {/* Bandeiras de Cartão de Crédito / Débito Aceitas */}
+          {(config.accept_card_credit || config.accept_card_debit) && (
+            <div className="p-4 rounded-xl border border-blue-200 bg-blue-50/40 space-y-3 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-blue-700" />
+                  <span className="text-xs font-bold text-blue-950 uppercase tracking-wider">
+                    Bandeiras de Cartão Aceitas na Maquininha
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => toggleAllCardBrands(true)}
+                    className="text-blue-700 hover:underline font-bold"
+                  >
+                    Marcar Todas
+                  </button>
+                  <span className="text-blue-300">|</span>
+                  <button
+                    type="button"
+                    onClick={() => toggleAllCardBrands(false)}
+                    className="text-stone-500 hover:underline"
+                  >
+                    Limpar
+                  </button>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {CARD_BRANDS.map((brand) => {
+                  const isSelected = (config.accepted_card_brands || []).includes(brand.id);
+                  return (
+                    <button
+                      key={brand.id}
+                      type="button"
+                      onClick={() => toggleCardBrand(brand.id)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-1.5 cursor-pointer select-none active:scale-95 ${
+                        isSelected
+                          ? `${brand.bgClass} shadow-sm ring-2 ring-offset-1 ring-blue-500/50`
+                          : "bg-white text-stone-400 border-stone-200 hover:border-stone-300 hover:text-stone-600 opacity-60"
+                      }`}
+                    >
+                      <span>{brand.name}</span>
+                      {isSelected ? (
+                        <CheckCircle2 className="w-3.5 h-3.5 ml-0.5" />
+                      ) : (
+                        <span className="w-3.5 h-3.5 rounded-full border border-stone-300" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-blue-900/80">
+                O cliente poderá informar a bandeira do cartão dele ao fechar o pedido para o entregador levar a máquina compatível.
+              </p>
+            </div>
+          )}
+
           {/* Opção Vale Alimentação / Refeição */}
           <div className="flex items-center justify-between p-3.5 rounded-xl border border-stone-200 bg-stone-50/50 hover:bg-stone-50 transition-colors">
             <div className="flex items-center gap-3">
@@ -304,6 +395,64 @@ export default function PaymentMethodsTab({ tenantData, onUpdateTenant }) {
               onCheckedChange={(val) => updateSetting("accept_card_meal", val)}
             />
           </div>
+
+          {/* Bandeiras de Vales e Benefícios Aceitas */}
+          {config.accept_card_meal && (
+            <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/40 space-y-3 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <UtensilsCrossed className="w-4 h-4 text-amber-700" />
+                  <span className="text-xs font-bold text-amber-950 uppercase tracking-wider">
+                    Bandeiras de Vales & Benefícios Aceitas na Maquininha
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => toggleAllMealBrands(true)}
+                    className="text-amber-800 hover:underline font-bold"
+                  >
+                    Marcar Todas
+                  </button>
+                  <span className="text-amber-300">|</span>
+                  <button
+                    type="button"
+                    onClick={() => toggleAllMealBrands(false)}
+                    className="text-stone-500 hover:underline"
+                  >
+                    Limpar
+                  </button>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {MEAL_VOUCHER_BRANDS.map((brand) => {
+                  const isSelected = (config.accepted_meal_brands || []).includes(brand.id);
+                  return (
+                    <button
+                      key={brand.id}
+                      type="button"
+                      onClick={() => toggleMealBrand(brand.id)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-1.5 cursor-pointer select-none active:scale-95 ${
+                        isSelected
+                          ? `${brand.bgClass} shadow-sm ring-2 ring-offset-1 ring-amber-500/50`
+                          : "bg-white text-stone-400 border-stone-200 hover:border-stone-300 hover:text-stone-600 opacity-60"
+                      }`}
+                    >
+                      <span>{brand.name}</span>
+                      {isSelected ? (
+                        <CheckCircle2 className="w-3.5 h-3.5 ml-0.5" />
+                      ) : (
+                        <span className="w-3.5 h-3.5 rounded-full border border-stone-300" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-amber-900/80">
+                Marque apenas as bandeiras que sua máquina realmente passa (ex: Alelo, Sodexo/Pluxee, Ticket, Caju) para evitar surpresas na entrega.
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 

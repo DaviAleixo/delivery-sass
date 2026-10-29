@@ -76,6 +76,14 @@ export default function OrderCard({
                     ✓ PAGO VIA PIX
                   </Badge>
                 )}
+                {order.card_brand && (() => {
+                  const b = getPaymentBrandInfo(order.card_brand);
+                  return (
+                    <Badge variant="outline" className={`text-xs font-bold shadow-xs ${b?.badgeBg || 'bg-stone-100 text-stone-800 border-stone-300'}`}>
+                      💳 {b?.name || order.card_brand}
+                    </Badge>
+                  );
+                })()}
                 {order.driver_name && (
                   <Badge variant="outline" className="text-xs bg-orange-50 text-orange-800 border-orange-300 font-bold">
                     <Bike className="w-3 h-3 mr-1 text-orange-600" />
@@ -175,7 +183,15 @@ export default function OrderCard({
                       )}
                       <div className="flex items-center gap-2 text-gray-600 text-xs md:text-sm">
                         <CreditCard className="w-3 h-3 md:w-4 md:h-4" />
-                        <span className="font-medium text-stone-800">{getPaymentMethodText(order.payment_method)}</span>
+                        <span className="font-medium text-stone-800">{getPaymentMethodText(order.payment_method, order.card_brand)}</span>
+                        {order.card_brand && (() => {
+                          const b = getPaymentBrandInfo(order.card_brand);
+                          return (
+                            <span className={`text-xs font-extrabold px-2 py-0.5 rounded border ${b?.badgeBg || 'bg-stone-100 text-stone-800 border-stone-300'}`}>
+                              💳 Maquininha: {b?.name || order.card_brand}
+                            </span>
+                          );
+                        })()}
                         {order.payment_status === 'paid' && (
                           <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 text-[10px] font-extrabold uppercase">
                             ✓ Pago Online

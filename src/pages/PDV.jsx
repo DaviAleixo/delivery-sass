@@ -317,7 +317,7 @@ export default function PDVPage() {
     }
   };
 
-  const handleFinalize = async (paymentMethod) => {
+  const handleFinalize = async (paymentMethod, cardBrand) => {
     const isDineIn = orderType === "dine_in";
     const trimmedName = customerName.trim() || (isDineIn ? `Mesa ${selectedTableNumber}` : "");
     const rawPhone = customerPhone.replace(/\D/g, "");
@@ -375,6 +375,7 @@ export default function PDVPage() {
       subtotal: total,
       status: "confirmado",
       payment_method: paymentMethod,
+      card_brand: cardBrand || null,
       order_type: isDineIn ? "dine_in" : "pickup",
       table_number: cleanTargetNum,
       table_session_id: activeSessionId,

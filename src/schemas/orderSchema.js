@@ -24,6 +24,7 @@ export const orderSchema = z.object({
   customer_address: z.string().optional().nullable(),
   delivery_address: z.string().optional().nullable(),
   payment_method: z.string().optional().nullable().default("caixa"),
+  card_brand: z.string().optional().nullable(),
   change_for: z.coerce.number().optional().nullable(),
   notes: z.string().optional().nullable().default(""),
   coupon_code: z.string().optional().nullable(),

@@ -261,6 +261,11 @@ export default function PrintOrderPage() {
           <div className="border-t-2 border-dashed border-black pt-2 my-2 space-y-1 text-black text-[13px]">
             <p className="font-black text-[14px] uppercase border-b border-black pb-0.5 mb-1">PAGAMENTO</p>
             <p><b>FORMA:</b> <span className="font-black uppercase">{getPaymentMethodLabel(order.payment_method)}</span></p>
+            {order.card_brand && (
+              <div className="bg-stone-100 border-2 border-black p-1.5 my-1.5 text-center font-black text-[13px] uppercase tracking-wide">
+                * BANDEIRA: {order.card_brand.toUpperCase()} (LEVAR MAQUININHA) *
+              </div>
+            )}
             
             {order.payment_status === 'paid' ? (
               <div className="text-center py-1 font-black text-[13px] border-2 border-black my-1 bg-stone-100">
