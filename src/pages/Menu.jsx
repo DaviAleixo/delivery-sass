@@ -37,7 +37,6 @@ import {
   Store,
   CheckCircle2,
   Menu as MenuIcon,
-  SlidersHorizontal,
   Info
 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -1097,41 +1096,27 @@ export default function MenuPage() {
             </div>
           </div>
 
-          {/* Barra de Busca e Filtro */}
-          <div className="flex items-center gap-2.5">
-            <div className="relative flex-1">
-              <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input
-                id="menu-search-input"
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar no cardápio..."
-                className="w-full bg-gray-50/90 border border-gray-200/80 rounded-2xl pl-10 pr-9 py-2.5 text-xs sm:text-sm text-gray-900 placeholder:text-gray-400 focus:bg-white focus:border-[#046c4e] focus:ring-1 focus:ring-[#046c4e]/30 outline-none shadow-2xs transition-all"
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 text-xs font-bold p-1 cursor-pointer"
-                  aria-label="Limpar busca"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                const el = document.getElementById("menu-categories-row");
-                el?.scrollIntoView({ behavior: 'smooth' });
-              }}
-              title="Filtrar categorias"
-              className="w-10 h-10 rounded-2xl border border-gray-200/80 bg-gray-50/90 flex items-center justify-center text-gray-700 hover:text-gray-950 hover:bg-white shadow-2xs shrink-0 cursor-pointer transition-colors"
-            >
-              <SlidersHorizontal className="w-4 h-4" />
-            </button>
+          {/* Barra de Busca */}
+          <div className="relative w-full">
+            <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              id="menu-search-input"
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar no cardápio..."
+              className="w-full bg-gray-50/90 border border-gray-200/80 rounded-2xl pl-10 pr-9 py-2.5 text-xs sm:text-sm text-gray-900 placeholder:text-gray-400 focus:bg-white focus:border-[#046c4e] focus:ring-1 focus:ring-[#046c4e]/30 outline-none shadow-2xs transition-all"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 text-xs font-bold p-1 cursor-pointer"
+                aria-label="Limpar busca"
+              >
+                ✕
+              </button>
+            )}
           </div>
 
         {isSearching && (
