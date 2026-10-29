@@ -23,9 +23,19 @@
   - Comanda formatada para o pizzaiolo com separação clara de frações `[1/2]` e observações específicas por sabor, borda e massa em destaque.
 * **Benefício**: Permite vender o SaaS para qualquer pizzaria da cidade com paridade total a plataformas consolidadas (Anota AI, Saipos, CardápioWeb).
 
-### ⭐ 2. Programa de Fidelidade Integrado
-* **Ideia**: A cada X pedidos ou a cada R$ 50 gastos pelo cliente no cardápio, ele ganha selos digitais ou cashback para o próximo pedido.
-* **Benefício**: Faz o cliente voltar a comprar direto no cardápio da loja em vez de procurar no iFood.
+### ⭐ 2. Programa de Cashback & Fidelidade da Loja (Zero Custo para o SaaS)
+* **Conceito Financeiro**: O cashback **não custa nem 1 centavo para o dono do SaaS**. Trata-se de um crédito virtual de loja (*Store Credit*), concedido pelo próprio restaurante a partir da margem dele, válido única e exclusivamente para abater em pedidos futuros dentro daquele mesmo restaurante. O SaaS atua apenas como o software que gerencia o livro-razão de saldos.
+* **Por que é superior ao cupom tradicional**: O cupom queima margem na hora da compra; o cashback força o cliente a voltar e injetar dinheiro novo na loja para poder utilizar o saldo que acumulou.
+* **Regras de Ouro e Travas Anti-Prejuízo (Lojista)**:
+  1. **Validade com Escassez (7 a 15 dias)**: Acelera o ciclo de recompra do cliente. Se o saldo não for usado, expira automaticamente sem ônus para o lojista.
+  2. **Trava de Abatimento Máximo (ex: 30% ou 50%)**: O saldo acumulado nunca quita 100% de uma refeição, obrigando o cliente a pagar a diferença em dinheiro/pix/cartão.
+  3. **Blindagem de Frete**: O desconto de cashback incide apenas sobre o valor dos produtos, preservando a taxa integral repassada ao entregador.
+  4. **Margem Saudável (5% a 10%)**: Custo de retenção irrisório comparado aos 12% a 27% de comissão do iFood.
+* **Experiência do Cliente 100% Nativa no Cardápio Web (Sem necessidade de disparos de WhatsApp)**:
+  - O saldo é atrelado unicamente ao número de telefone do cliente informado no pedido (sem download de app nem criação de senhas).
+  - Animação de comemoração no checkout informando quanto saldo foi gerado para a próxima compra.
+  - Reconhecimento automático no próximo pedido com botão de 1-toque no carrinho: *"💳 Você possui R$ X de saldo! Deseja abater deste pedido?"*.
+* **Benefício Estratégico para o SaaS PedeMuleke**: Gera **Lock-in absoluto** (retenção máxima). Um restaurante com milhares de reais em saldo de cashback distribuído aos seus clientes fiéis na plataforma não pode cancelar a assinatura sem gerar atrito grave com sua própria clientela. Pode ser reservado como diferencial premium dos planos Completo / VIP.
 
 ### 📊 3. Relatório de Horários de Pico & Produtos Mais Vendidos
 * **Ideia**: Gráficos analíticos no Dashboard que mostram quais dias e faixas de horário geram mais pedidos (ex: Sexta das 19h às 22h).
@@ -1050,6 +1060,18 @@
   - No modelo SaaS profissional de delivery, a plataforma pode optar por:
     - **Modo 1 (Gateway Próprio do Restaurante)**: O restaurante conecta sua própria conta do Mercado Pago/Asaas (via OAuth ou API Key). O dinheiro da venda cai 100% na conta dele, e o PedeMuleke cobra a mensalidade fixa separadamente via Asaas SaaS. (Abordagem atual: zero risco tributário para o Davi).
     - **Modo 2 (Split Nativo no Marketplace)**: Uma única conta mestre processa todas as vendas e divide o dinheiro em tempo real na adquirente: R$ 90,00 vai para o restaurante e R$ 2,00 (ou comissão) vai para a conta bancária do PedeMuleke no mesmo segundo.
+
+---
+
+### 📍 10. Validação Estrita de Bairro por CEP & Exibição de Frete Dinâmico (Estilo iFood / Aiqfome)
+* **Contexto**: Quando o restaurante opera com política de taxas por bairro selecionado, pedidos não podem ser despachados para localidades fora da rota de entrega da loja.
+* **1. Bloqueio Inteligente por CEP no Checkout**:
+  - **Cliente Novo**: Ao preencher o CEP e preencher o endereço, o sistema cruza o bairro com a lista de bairros cadastrados no painel do restaurante. Se o bairro não for atendido, **a compra é bloqueada na hora** com mensagem clara: *"Desculpe, o [Nome da Loja] ainda não realiza entregas no bairro [Nome do Bairro]. Você pode optar por Retirar no Balcão ou informar outro endereço."*
+  - **Cliente com Conta / Endereço Salvo**: O sistema valida automaticamente o endereço salvo na abertura do carrinho. Se o bairro salvo não fizer parte da área de entrega (ou se o lojista removeu o bairro), o checkout bloqueia a entrega com aviso proativo e sugere retirar na loja.
+* **2. Frete Transparente no Cardápio (UX iFood / Aiqfome)**:
+  - **Cliente Reconhecido (com endereço/bairro salvo)**: O cabeçalho do cardápio (logo abaixo do nome da loja, ao lado do tempo de entrega) exibe a taxa exata calculada para o bairro dele: ex: `🛵 Entrega: R$ 6,50` ou `🛵 Entrega Grátis acima de R$ 50`.
+  - **Cliente Novo (sem endereço salvo)**: Exibe `🛵 Entrega a partir de R$ 5,00` (com base no menor frete da loja) ou `🛵 Entrega a calcular`.
+* **Benefício**: Evita atrito de o restaurante ter que cancelar pedidos no WhatsApp por não entregar no bairro do cliente, e melhora a conversão visual com frete transparente desde o primeiro segundo no cardápio.
 
 ---
 
