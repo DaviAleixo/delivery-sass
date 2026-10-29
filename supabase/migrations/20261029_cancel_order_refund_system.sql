@@ -122,3 +122,4 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.revert_order_cashback(TEXT) TO authenticated, service_role, anon;
+
