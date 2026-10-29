@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { Plus } from "lucide-react";
 
 const VrummProductCard = forwardRef(function VrummProductCard(
-  { product, onProductClick, _isStoreOpen = true, _isPopular = false, isVisualOnly = false },
+  { product, onProductClick, _isStoreOpen = true, _isPopular = false, isVisualOnly = false, cashbackRate = 0 },
   ref
 ) {
   const [imageError, setImageError] = useState(false);
