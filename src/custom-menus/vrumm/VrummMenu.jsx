@@ -153,6 +153,7 @@ export default function VrummMenu({
                   </Button>
                 </motion.div>
               )}
+              <StoreInfoSheet settings={settings} dark />
               <UserProfileSheet dark open={isUserProfileOpen} onOpenChange={setIsUserProfileOpen} />
             </div>
           </div>

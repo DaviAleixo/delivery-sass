@@ -977,6 +977,19 @@ export default function MenuPage() {
                   </button>
                 )}
 
+                <StoreInfoSheet 
+                  settings={settings}
+                  trigger={
+                    <button 
+                      type="button"
+                      className="w-9 h-9 rounded-full flex items-center justify-center text-gray-700 hover:text-gray-950 hover:bg-gray-100 transition-colors cursor-pointer"
+                      title="Informações da Loja"
+                    >
+                      <Info className="w-5 h-5" />
+                    </button>
+                  }
+                />
+
                 <UserProfileSheet open={isUserProfileOpen} onOpenChange={setIsUserProfileOpen} />
               </div>
             </div>
