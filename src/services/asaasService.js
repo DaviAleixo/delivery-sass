@@ -3,8 +3,23 @@
  * Garante segurança total da API Key e bypass de CORS do navegador.
  */
 
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://zecuwijuiqsaoeafonsv.supabase.co';
 const ASAAS_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/asaas`;
+
+async function getAuthHeaders() {
+  const headers = { 'Content-Type': 'application/json' };
+  if (isSupabaseConfigured() && supabase) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+    } catch {}
+  }
+  return headers;
+}
 
 /**
  * Cria o cliente e a assinatura recorrente mensal no Asaas para uma loja
@@ -21,9 +36,7 @@ export async function createAsaasCustomerAndSubscription({
   try {
     const res = await fetch(ASAAS_FUNCTION_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: await getAuthHeaders(),
       body: JSON.stringify({
         action: 'create_customer_and_subscription',
         name,
@@ -80,9 +93,7 @@ export async function updateAsaasCustomer({
   try {
     const res = await fetch(ASAAS_FUNCTION_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: await getAuthHeaders(),
       body: JSON.stringify({
         action: 'update_customer',
         customerId,
@@ -121,9 +132,7 @@ export async function getAsaasSubscription(subscriptionId) {
   try {
     const res = await fetch(ASAAS_FUNCTION_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: await getAuthHeaders(),
       body: JSON.stringify({
         action: 'get_subscription',
         subscriptionId

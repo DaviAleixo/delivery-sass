@@ -61,6 +61,18 @@ export const AuthProvider = ({ children }) => {
         }
       }
 
+      let resolvedPermissions = ["*"];
+      if (member.role !== "super_admin" && member.role !== "admin") {
+        const { data: adminProfile } = await supabase
+          .from("admin_users")
+          .select("permissions")
+          .eq("id", authUser.id)
+          .maybeSingle();
+        if (Array.isArray(adminProfile?.permissions) && adminProfile.permissions.length > 0) {
+          resolvedPermissions = adminProfile.permissions;
+        }
+      }
+
       const sessionUser = {
         id: member.id,
         user_id: authUser.id,
@@ -70,7 +82,7 @@ export const AuthProvider = ({ children }) => {
         tenant_id: member.tenant_id,
         tenant_slug: tenantSlug,
         tenant_name: tenantName,
-        permissions: ["*"],
+        permissions: resolvedPermissions,
       };
 
       // Sincroniza retrocompatibilidade com localStorage para código síncrono legado

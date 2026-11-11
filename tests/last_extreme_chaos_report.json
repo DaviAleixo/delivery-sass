@@ -1,0 +1,350 @@
+{
+  "runTag": "EXTREME_CHAOS_1794378386825",
+  "startedAt": "2026-11-11T06:26:26.826Z",
+  "tenantsCount": 20,
+  "checks": [
+    {
+      "name": "discover_20_tenants",
+      "passed": true,
+      "detail": "20 empresas encontradas via tenants_public"
+    },
+    {
+      "name": "auth_all_17_test_admins",
+      "passed": true,
+      "detail": "17/17 admins de teste autenticados"
+    },
+    {
+      "name": "sec_15_private_tables_anon_blocked",
+      "passed": true,
+      "detail": "Todas as 15 tabelas privadas retornaram 0 linhas ou erro para anon"
+    },
+    {
+      "name": "sec_tenants_public_clean",
+      "passed": true,
+      "detail": "tenants_public não expõe nenhum campo financeiro/credencial"
+    },
+    {
+      "name": "sec_direct_anon_writes_blocked",
+      "passed": true,
+      "detail": "Todos os 6 INSERT/UPDATE diretos como anon foram rejeitados por RLS (0 linhas afetadas)"
+    },
+    {
+      "name": "sec_19_admin_rpcs_anon_blocked",
+      "passed": true,
+      "detail": "19/19 RPCs administrativas negaram execução anônima"
+    },
+    {
+      "name": "sec_cross_tenant_admin_vs_pedemuleke_and_b",
+      "passed": true,
+      "detail": "Cross-tenant (Admin 04 -> PedeMuleke & Loja 05): 0 vazamentos RLS, 0 RPCs aceitas"
+    },
+    {
+      "name": "sec_edge_functions_auth_and_tenant_guard",
+      "passed": true,
+      "detail": "asaas(anon=401, lojista=403), mp(test_anon=401, refund_cross=403)"
+    },
+    {
+      "name": "sec_fuzzing_tampering_and_business_guards",
+      "passed": true,
+      "detail": "Price tamper recalculado=71.8 (esperado 71.8); 7/7 payloads inválidos/cross-tenant/showcase/vruum/bairro bloqueados=true"
+    },
+    {
+      "name": "race_20x_cashback_credit_no_duplicate",
+      "passed": true,
+      "detail": "20 chamadas simultâneas: saldo=R$ 20.00 (esperado R$ 20.00), transações 'credit'=1"
+    },
+    {
+      "name": "race_20x_cashback_double_spend_prevented",
+      "passed": true,
+      "detail": "Saldo inicial=R$25.00, 20 pedidos simultâneos: total abatido=R$25.00 em 1 pedido(s), saldo final=R$0.00"
+    },
+    {
+      "name": "race_30x_coupon_usage_limit_1",
+      "passed": true,
+      "detail": "30 pedidos simultâneos para UNICO5 (limit=1): exatamente 1/30 aceito"
+    },
+    {
+      "name": "race_40x_table_session_and_dine_in_single_session",
+      "passed": true,
+      "detail": "20 open_table_session + 20 pedidos dine_in na mesa 1: 1 sessão aberta no DB, 20/20 pedidos vinculados ao mesmo session_id"
+    },
+    {
+      "name": "massive_burst_all_expectations_met",
+      "passed": true,
+      "detail": "823/823 pedidos elegíveis gravados no DB; 277 bloqueados por regra (Vruum sem produto / showcase / table_only); falhas inesperadas=0"
+    },
+    {
+      "name": "massive_burst_zero_order_number_collisions",
+      "passed": true,
+      "detail": "0 colisões de order_number em 823 pedidos gravados nas lojas ativas"
+    },
+    {
+      "name": "massive_burst_kds_and_reads_and_spooler12x",
+      "passed": true,
+      "detail": "Leituras concorrentes=120/120 (3145ms avg); KDS status updates=75/75; Spooler 12x pollers=57 jobs únicos, 0 duplicados"
+    }
+  ],
+  "vulnerabilitiesFound": [],
+  "bugsAndBottlenecksFound": [],
+  "concurrency": {
+    "cashback20x": {
+      "balance": 20,
+      "creditTxCount": 1
+    },
+    "doubleSpend20x": {
+      "initialBal": 25,
+      "totalDiscountGiven": 25,
+      "ordersWithCb": 1,
+      "finalBal": 0
+    },
+    "coupon30x": {
+      "attempts": 30,
+      "discountedCount": 1
+    },
+    "table40x": {
+      "openSessionsInDb": 1,
+      "dineOrdersSucceeded": 20
+    }
+  },
+  "massiveBurst": {
+    "totalRequestsSent": 1100,
+    "expectedAccepted": 823,
+    "succeededAndPersisted": 823,
+    "blockedByBusinessRules": 277,
+    "unexpectedFailures": [],
+    "durationSec": 10.16,
+    "throughputReqPerSec": 108.25,
+    "avgLatencyMs": 3949,
+    "p95LatencyMs": 6482,
+    "maxLatencyMs": 6490,
+    "orderNumberCollisions": 0,
+    "concurrentReads": "120/120",
+    "kdsUpdates": "75/75",
+    "spooler12xPoll": {
+      "uniqueJobs": 57,
+      "duplicates": 0
+    }
+  },
+  "perTenantSummary": [
+    {
+      "code": 1,
+      "slug": "vruum-burguer",
+      "name": "Vruum Burguer",
+      "mode": "full",
+      "sent": 55,
+      "createdInDb": 0,
+      "rejected": 55,
+      "avgLatencyMs": 4014,
+      "sampleRejectReason": "Produto não encontrado no cardápio desta loja."
+    },
+    {
+      "code": 2,
+      "slug": "teste",
+      "name": "PedeMuleke",
+      "mode": "full",
+      "sent": 55,
+      "createdInDb": 55,
+      "rejected": 0,
+      "avgLatencyMs": 4010,
+      "sampleRejectReason": null
+    },
+    {
+      "code": 3,
+      "slug": "visual",
+      "name": "visual",
+      "mode": "showcase",
+      "sent": 55,
+      "createdInDb": 0,
+      "rejected": 55,
+      "avgLatencyMs": 3361,
+      "sampleRejectReason": "Este cardápio funciona apenas em modo vitrine e não recebe pedidos online."
+    },
+    {
+      "code": 5,
+      "slug": "test-empresa-04",
+      "name": "Empresa Teste 04",
+      "mode": "full",
+      "sent": 55,
+      "createdInDb": 55,
+      "rejected": 0,
+      "avgLatencyMs": 3853,
+      "sampleRejectReason": null
+    },
+    {
+      "code": 6,
+      "slug": "test-empresa-05",
+      "name": "Empresa Teste 05",
+      "mode": "full",
+      "sent": 55,
+      "createdInDb": 55,
+      "rejected": 0,
+      "avgLatencyMs": 3909,
+      "sampleRejectReason": null
+    },
+    {
+      "code": 7,
+      "slug": "test-empresa-06",
+      "name": "Empresa Teste 06",
+      "mode": "full",
+      "sent": 55,
+      "createdInDb": 55,
+      "rejected": 0,
+      "avgLatencyMs": 3780,
+      "sampleRejectReason": null
+    },
+    {
+      "code": 8,
+      "slug": "test-empresa-07",
+      "name": "Empresa Teste 07",
+      "mode": "full",
+      "sent": 55,
+      "createdInDb": 55,
+      "rejected": 0,
+      "avgLatencyMs": 3789,
+      "sampleRejectReason": null
+    },
+    {
+      "code": 9,
+      "slug": "test-empresa-08",
+      "name": "Empresa Teste 08",
+      "mode": "table_only",
+      "sent": 55,
+      "createdInDb": 36,
+      "rejected": 19,
+      "avgLatencyMs": 4078,
+      "sampleRejectReason": "Delivery não está disponível para este estabelecimento."
+    },
+    {
+      "code": 10,
+      "slug": "test-empresa-09",
+      "name": "Empresa Teste 09",
+      "mode": "showcase",
+      "sent": 55,
+      "createdInDb": 0,
+      "rejected": 55,
+      "avgLatencyMs": 4137,
+      "sampleRejectReason": "Este cardápio funciona apenas em modo vitrine e não recebe pedidos online."
+    },
+    {
+      "code": 11,
+      "slug": "test-empresa-10",
+      "name": "Empresa Teste 10",
+      "mode": "full",
+      "sent": 55,
+      "createdInDb": 55,
+      "rejected": 0,
+      "avgLatencyMs": 3931,
+      "sampleRejectReason": null
+    },
+    {
+      "code": 12,
+      "slug": "test-empresa-11",
+      "name": "Empresa Teste 11",
+      "mode": "full",
+      "sent": 55,
+      "createdInDb": 55,
+      "rejected": 0,
+      "avgLatencyMs": 3741,
+      "sampleRejectReason": null
+    },
+    {
+      "code": 13,
+      "slug": "test-empresa-12",
+      "name": "Empresa Teste 12",
+      "mode": "full",
+      "sent": 55,
+      "createdInDb": 55,
+      "rejected": 0,
+      "avgLatencyMs": 3928,
+      "sampleRejectReason": null
+    },
+    {
+      "code": 14,
+      "slug": "test-empresa-13",
+      "name": "Empresa Teste 13",
+      "mode": "full",
+      "sent": 55,
+      "createdInDb": 55,
+      "rejected": 0,
+      "avgLatencyMs": 3888,
+      "sampleRejectReason": null
+    },
+    {
+      "code": 15,
+      "slug": "test-empresa-14",
+      "name": "Empresa Teste 14",
+      "mode": "table_only",
+      "sent": 55,
+      "createdInDb": 36,
+      "rejected": 19,
+      "avgLatencyMs": 4061,
+      "sampleRejectReason": "Delivery não está disponível para este estabelecimento."
+    },
+    {
+      "code": 16,
+      "slug": "test-empresa-15",
+      "name": "Empresa Teste 15",
+      "mode": "showcase",
+      "sent": 55,
+      "createdInDb": 0,
+      "rejected": 55,
+      "avgLatencyMs": 4206,
+      "sampleRejectReason": "Este cardápio funciona apenas em modo vitrine e não recebe pedidos online."
+    },
+    {
+      "code": 17,
+      "slug": "test-empresa-16",
+      "name": "Empresa Teste 16",
+      "mode": "full",
+      "sent": 55,
+      "createdInDb": 55,
+      "rejected": 0,
+      "avgLatencyMs": 3514,
+      "sampleRejectReason": null
+    },
+    {
+      "code": 18,
+      "slug": "test-empresa-17",
+      "name": "Empresa Teste 17",
+      "mode": "full",
+      "sent": 55,
+      "createdInDb": 55,
+      "rejected": 0,
+      "avgLatencyMs": 4656,
+      "sampleRejectReason": null
+    },
+    {
+      "code": 19,
+      "slug": "test-empresa-18",
+      "name": "Empresa Teste 18",
+      "mode": "full",
+      "sent": 55,
+      "createdInDb": 55,
+      "rejected": 0,
+      "avgLatencyMs": 4053,
+      "sampleRejectReason": null
+    },
+    {
+      "code": 20,
+      "slug": "test-empresa-19",
+      "name": "Empresa Teste 19",
+      "mode": "full",
+      "sent": 55,
+      "createdInDb": 55,
+      "rejected": 0,
+      "avgLatencyMs": 4051,
+      "sampleRejectReason": null
+    },
+    {
+      "code": 21,
+      "slug": "test-empresa-20",
+      "name": "Empresa Teste 20",
+      "mode": "table_only",
+      "sent": 55,
+      "createdInDb": 36,
+      "rejected": 19,
+      "avgLatencyMs": 4018,
+      "sampleRejectReason": "Delivery não está disponível para este estabelecimento."
+    }
+  ]
+}

@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { subscribeTableRealtime } from "@/lib/realtimeHub";
 import {
   sanitizeOrderData,
   sanitizeProductData,
@@ -100,6 +101,7 @@ const MULTI_TENANT_COLLECTIONS = new Set([
   "customers",
   "restaurant_tables",
   "table_sessions",
+  "shift_closings",
 ]);
 
 const RESERVED_ROUTE_SLUGS = new Set([
@@ -464,11 +466,13 @@ export function createEntityModel(collectionKey, defaultData = []) {
       const fetchPromise = (async () => {
         if (isSupabaseConfigured() && supabase) {
           try {
-            // Suporte transparente para 'settings' consultando a tabela 'tenants'
+            // Suporte transparente para 'settings' consultando tenants (autenticado) ou tenants_public (público)
             if (collectionKey === "settings") {
               const activeTenantId = getActiveTenantId() || "a0000000-0000-0000-0000-000000000001";
+              const { data: { session } } = await supabase.auth.getSession();
+              const targetTable = session?.user ? "tenants" : "tenants_public";
               const { data: tenantData, error: tenantErr } = await supabase
-                .from("tenants")
+                .from(targetTable)
                 .select("*")
                 .eq("id", activeTenantId)
                 .maybeSingle();
@@ -583,11 +587,13 @@ export function createEntityModel(collectionKey, defaultData = []) {
       const fetchPromise = (async () => {
         if (isSupabaseConfigured() && supabase) {
           try {
-            // Suporte transparente para 'settings' consultando a tabela 'tenants'
+            // Suporte transparente para 'settings' consultando tenants (autenticado) ou tenants_public (público)
             if (collectionKey === "settings") {
               const activeTenantId = getActiveTenantId() || "a0000000-0000-0000-0000-000000000001";
+              const { data: { session } } = await supabase.auth.getSession();
+              const targetTable = session?.user ? "tenants" : "tenants_public";
               const { data: tenantData, error: tenantErr } = await supabase
-                .from("tenants")
+                .from(targetTable)
                 .select("*")
                 .eq("id", activeTenantId)
                 .maybeSingle();
@@ -693,7 +699,9 @@ export function createEntityModel(collectionKey, defaultData = []) {
             const targetId = (id && id !== "settings-main" && id !== "a1b2c3d4-e5f6-7890-abcd-111122223333") 
               ? id 
               : (getActiveTenantId() || "a0000000-0000-0000-0000-000000000001");
-            const { data: tenantData } = await supabase.from("tenants").select("*").eq("id", targetId).maybeSingle();
+            const { data: { session } } = await supabase.auth.getSession();
+            const targetTable = session?.user ? "tenants" : "tenants_public";
+            const { data: tenantData } = await supabase.from(targetTable).select("*").eq("id", targetId).maybeSingle();
             if (tenantData) {
               return {
                 ...tenantData,
@@ -727,15 +735,19 @@ export function createEntityModel(collectionKey, defaultData = []) {
         sanitized = sanitizeProductData(data);
       }
 
-      const isUuidTable = ["orders", "coupons", "coupon_usages", "users", "user_addresses", "settings", "admin_users", "restaurant_tables", "table_sessions", "production_sectors", "print_jobs"].includes(collectionKey);
+      const isUuidTable = ["orders", "coupons", "coupon_usages", "users", "user_addresses", "settings", "admin_users", "restaurant_tables", "table_sessions", "production_sectors", "print_jobs", "shift_closings", "customers", "system_issues"].includes(collectionKey);
+      const createdAtOnlyTables = new Set(["shift_closings", "customer_cashback_transactions", "customer_cashback_wallets", "customer_sessions", "system_issues", "tenant_admins", "whatsapp_otp_codes"]);
       const newId = sanitized.id || (isUuidTable && typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" 
         ? crypto.randomUUID() 
         : `${collectionKey}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`);
       
       const activeTenantId = getActiveTenantId();
+      const timestampField = createdAtOnlyTables.has(collectionKey)
+        ? { created_at: new Date().toISOString() }
+        : { created_date: new Date().toISOString() };
       const newItem = {
         id: newId,
-        created_date: new Date().toISOString(),
+        ...timestampField,
         ...(MULTI_TENANT_COLLECTIONS.has(collectionKey) && activeTenantId && !sanitized.tenant_id ? { tenant_id: activeTenantId } : {}),
         ...sanitized,
       };
@@ -747,7 +759,12 @@ export function createEntityModel(collectionKey, defaultData = []) {
             .insert([newItem])
             .select("id")
             .single();
-          if (!error && created) {
+          if (error) {
+            console.warn(`[Supabase] Erro ao criar em ${collectionKey}:`, error);
+            if (collectionKey === "shift_closings") {
+              throw error;
+            }
+          } else if (created) {
             invalidateCache(collectionKey);
             const items = getCollection(collectionKey, defaultData);
             const updated = [newItem, ...items];
@@ -758,6 +775,9 @@ export function createEntityModel(collectionKey, defaultData = []) {
           }
         } catch (_err) {
           console.warn(`[Supabase] Erro ao criar em ${collectionKey}:`, _err);
+          if (collectionKey === "shift_closings") {
+            throw _err;
+          }
         }
       }
 
@@ -895,28 +915,21 @@ export function createEntityModel(collectionKey, defaultData = []) {
       if (typeof window === "undefined") return () => {};
 
       // Realtime do Supabase somente é aberto quando explicitamente solicitado COM filtro específico
-      // Isso impede abertura acidental de canais globais sem filtro de tenant
-      const allowSupabaseRealtime = collectionKey === "orders" && Boolean(options?.filter);
+      // Compartilha canal único por (tabela, filtro) via realtimeHub para evitar WebSockets duplicados
+      const REALTIME_TABLES = new Set(["orders", "table_sessions", "restaurant_tables", "print_jobs"]);
+      const allowSupabaseRealtime = REALTIME_TABLES.has(collectionKey) && Boolean(options?.filter);
 
       if (allowSupabaseRealtime && isSupabaseConfigured() && supabase) {
-        const channelFilter = options?.filter ? { filter: options.filter } : {};
-        const channelName = `rt_${collectionKey}_${Math.random().toString(36).substr(2, 6)}`;
-        const channel = supabase
-          .channel(channelName)
-          .on(
-            "postgres_changes",
-            { event: "*", schema: "public", table: collectionKey, ...channelFilter },
-            (payload) => {
-              invalidateCache(collectionKey);
-              const type = payload.eventType === "INSERT" ? "create" : payload.eventType === "UPDATE" ? "update" : "delete";
-              callback({ type, data: payload.new || payload.old, id: payload.new?.id || payload.old?.id });
-            }
-          )
-          .subscribe();
-
-        return () => {
-          supabase.removeChannel(channel);
-        };
+        return subscribeTableRealtime({
+          table: collectionKey,
+          filter: options.filter,
+          onEvent: (payload) => {
+            invalidateCache(collectionKey);
+            const type = payload.eventType === "INSERT" ? "create" : payload.eventType === "UPDATE" ? "update" : "delete";
+            callback({ type, data: payload.new || payload.old, id: payload.new?.id || payload.old?.id });
+          },
+          ...(typeof options?.onSubscribed === "function" ? { onSubscribed: options.onSubscribed } : {}),
+        });
       }
 
       const handler = (e) => {

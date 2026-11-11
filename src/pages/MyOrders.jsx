@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Order } from "@/entities/Order";
 import { Settings } from "@/entities/Settings";
 import { base44 } from "@/api/base44Client";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useTenant } from "@/lib/TenantContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -129,9 +130,8 @@ export default function MyOrdersPage() {
       const savedPhone = localStorage.getItem("vrumburguer_customer_phone") || "";
       if (savedPhone && !phoneSearch) setPhoneSearch(savedPhone);
 
-      // Buscar todos os pedidos e configurações
-      const [allOrders, settingsData] = await Promise.all([
-        Order.list("-created_date"),
+      // Buscar apenas os pedidos autorizados do usuário/navegador (sem Order.list() global!)
+      const [settingsData] = await Promise.all([
         Settings.list()
       ]);
 
@@ -140,43 +140,46 @@ export default function MyOrdersPage() {
       }
 
       let filtered = [];
-      if (highlightOrderId) {
-        // Pedido específico vindo da URL
-        const found = (allOrders || []).filter(o => o.id === highlightOrderId);
-        if (found.length > 0) {
-          filtered = found;
-        } else {
-          // Busca direta do pedido pelo ID se não veio na listagem geral
-          try {
-            const direct = await Order.get(highlightOrderId);
-            if (direct) {
-              filtered = [direct];
+      if (isSupabaseConfigured() && supabase) {
+        try {
+          const tokenEntries = JSON.parse(localStorage.getItem("vrumburguer_recent_orders_tokens") || "[]");
+          if (Array.isArray(tokenEntries) && tokenEntries.length > 0) {
+            const { data: tokOrders } = await supabase.rpc("get_public_orders_by_tokens", {
+              p_tokens: tokenEntries,
+            });
+            if (Array.isArray(tokOrders)) {
+              filtered = [...filtered, ...tokOrders];
             }
-          } catch {}
+          }
+
+          if (highlightOrderId) {
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlToken = urlParams.get("token");
+            const matchedEntry = Array.isArray(tokenEntries)
+              ? tokenEntries.find((t) => t.id === highlightOrderId)
+              : null;
+            const effectiveToken = urlToken || matchedEntry?.tracking_token;
+            if (effectiveToken) {
+              const { data: trackRes } = await supabase.rpc("get_order_by_tracking_token", {
+                p_order_id: highlightOrderId,
+                p_tracking_token: effectiveToken,
+              });
+              if (trackRes?.success && trackRes?.order) {
+                filtered.push(trackRes.order);
+              }
+            }
+          }
+        } catch {}
+      } else {
+        const allOrders = await Order.list("-created_date", 25);
+        if (highlightOrderId) {
+          filtered = (allOrders || []).filter(o => o.id === highlightOrderId);
         }
-      }
-
-      // Se logado, inclui os do email
-      if (loggedUser?.email) {
-        const userOrders = (allOrders || []).filter(o => o.user_email === loggedUser.email);
-        filtered = [...filtered, ...userOrders];
-      }
-
-      // Inclui os pedidos salvos no navegador (Guest Checkout)
-      if (localIds.length > 0) {
-        const guestOrders = (allOrders || []).filter(o => localIds.includes(o.id));
-        filtered = [...filtered, ...guestOrders];
-      }
-
-      // Inclui todos os pedidos vinculados ao telefone do cliente (salvos permanentemente)
-      if (savedPhone) {
-        const phoneClean = savedPhone.replace(/\D/g, "");
-        if (phoneClean.length >= 8) {
-          const phoneOrders = (allOrders || []).filter(o => {
-            const op = (o.customer_phone || "").replace(/\D/g, "");
-            return op === phoneClean || (op.length >= 8 && op.endsWith(phoneClean.slice(-8)));
-          });
-          filtered = [...filtered, ...phoneOrders];
+        if (loggedUser?.email) {
+          filtered = [...filtered, ...(allOrders || []).filter(o => o.user_email === loggedUser.email)];
+        }
+        if (localIds.length > 0) {
+          filtered = [...filtered, ...(allOrders || []).filter(o => localIds.includes(o.id))];
         }
       }
 
@@ -200,8 +203,20 @@ export default function MyOrdersPage() {
       const cleanInput = phoneSearch.replace(/\D/g, "");
       localStorage.setItem("vrumburguer_customer_phone", phoneSearch);
 
-      const allOrders = await Order.list("-created_date");
-      const matches = (allOrders || []).filter(o => {
+      let baseList = orders;
+      if (isSupabaseConfigured() && supabase) {
+        const tokenEntries = JSON.parse(localStorage.getItem("vrumburguer_recent_orders_tokens") || "[]");
+        if (Array.isArray(tokenEntries) && tokenEntries.length > 0) {
+          const { data: tokOrders } = await supabase.rpc("get_public_orders_by_tokens", {
+            p_tokens: tokenEntries,
+          });
+          if (Array.isArray(tokOrders)) baseList = tokOrders;
+        }
+      } else {
+        baseList = await Order.list("-created_date", 25);
+      }
+
+      const matches = (baseList || []).filter(o => {
         const orderPhoneClean = (o.customer_phone || "").replace(/\D/g, "");
         return orderPhoneClean.includes(cleanInput) || cleanInput.includes(orderPhoneClean);
       });

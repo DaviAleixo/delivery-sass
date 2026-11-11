@@ -22,8 +22,10 @@ if (import.meta.env.VITE_SENTRY_DSN) {
     replaysSessionSampleRate: 0.1,
     replaysOnErrorSampleRate: 1.0,
     beforeSend(event, hint) {
-      // Captura automática de exceções para a Central de Pendências do SuperAdmin
-      if (hint?.originalException) {
+      // Evita recursão infinita para mensagens já disparadas pelo próprio issueTracker
+      const msg = String(event?.message || hint?.originalException?.message || '');
+      const alreadyTagged = /^\[(SENTRY|CHECKOUT|WEBHOOK|PRINTER|MANUAL)\]/i.test(msg.trim());
+      if (hint?.originalException && !alreadyTagged && !event?.tags?.from_issue_tracker) {
         import('@/services/issueTracker')
           .then(({ autoCaptureSentryEvent }) => {
             autoCaptureSentryEvent(event, hint);

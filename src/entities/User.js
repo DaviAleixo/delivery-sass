@@ -40,6 +40,18 @@ function getStoreGuestKey() {
   return `guest_info_${slug}`;
 }
 
+export function getStoredCustomerToken() {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(getStoreUserKey());
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.customer_token || null;
+  } catch {
+    return null;
+  }
+}
+
 export const User = {
   ...baseUserModel,
 

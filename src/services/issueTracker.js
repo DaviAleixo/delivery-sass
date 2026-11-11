@@ -4,6 +4,7 @@ import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 // Cache em memória para anti-spam / deduplicação de erros automáticos (5 minutos)
 const recentErrorSignatures = new Map();
 const DEDUPLICATION_WINDOW_MS = 5 * 60 * 1000;
+let isReportingInternal = false;
 
 /**
  * Cadastra uma pendência no sistema (Manualmente ou via Integrações / Sentry)
@@ -18,27 +19,34 @@ export async function reportIssue({
   tenant_name = null,
   metadata = {},
   error = null,
+  skipSentry = false,
 }) {
-  let sentryEventId = null;
+  let sentryEventId = metadata?.sentry_event_id || null;
 
   // 1. Conexão direta com Sentry (envia erro / mensagem com contexto)
-  try {
-    Sentry.withScope((scope) => {
-      scope.setLevel(severity === "urgent" ? "error" : severity === "warning" ? "warning" : "info");
-      scope.setTag("source", source);
-      if (path) scope.setTag("path", path);
-      if (tenant_id) scope.setTag("tenant_id", tenant_id);
-      if (tenant_name) scope.setTag("tenant_name", tenant_name);
-      scope.setExtra("custom_metadata", metadata);
+  if (!skipSentry && !isReportingInternal) {
+    isReportingInternal = true;
+    try {
+      Sentry.withScope((scope) => {
+        scope.setLevel(severity === "urgent" ? "error" : severity === "warning" ? "warning" : "info");
+        scope.setTag("source", source);
+        scope.setTag("from_issue_tracker", "true");
+        if (path) scope.setTag("path", path);
+        if (tenant_id) scope.setTag("tenant_id", tenant_id);
+        if (tenant_name) scope.setTag("tenant_name", tenant_name);
+        scope.setExtra("custom_metadata", metadata);
 
-      if (error && (error instanceof Error || typeof error === "object")) {
-        sentryEventId = Sentry.captureException(error);
-      } else {
-        sentryEventId = Sentry.captureMessage(`[${source.toUpperCase()}] ${title}`);
-      }
-    });
-  } catch (sentryErr) {
-    console.warn("[Sentry] Falha ao despachar evento:", sentryErr);
+        if (error && (error instanceof Error || typeof error === "object")) {
+          sentryEventId = Sentry.captureException(error);
+        } else {
+          sentryEventId = Sentry.captureMessage(`[${source.toUpperCase()}] ${title}`);
+        }
+      });
+    } catch (sentryErr) {
+      console.warn("[Sentry] Falha ao despachar evento:", sentryErr);
+    } finally {
+      isReportingInternal = false;
+    }
   }
 
   // 2. Persistência no Supabase (Tabela public.system_issues)
@@ -118,9 +126,12 @@ export async function reportIssue({
  * Captura automática disparada pelo hook beforeSend do Sentry
  */
 export async function autoCaptureSentryEvent(event, hint) {
+  if (isReportingInternal) return;
   try {
     const error = hint?.originalException;
-    const message = event?.message || error?.message || "Erro detectado no sistema";
+    const rawMessage = String(event?.message || error?.message || "Erro detectado no sistema");
+    // Remove prefixos repetidos [SENTRY] / [CHECKOUT] caso ocorram
+    const message = rawMessage.replace(/^(\[(SENTRY|CHECKOUT|WEBHOOK|PRINTER|MANUAL)\]\s*)+/i, "").trim() || rawMessage;
     const path = typeof window !== "undefined" ? window.location.pathname : null;
     const currentTenantId = typeof window !== "undefined" ? localStorage.getItem("current_tenant_id") : null;
     const currentTenantName = typeof window !== "undefined" ? localStorage.getItem("current_tenant_name") : null;
@@ -157,6 +168,7 @@ export async function autoCaptureSentryEvent(event, hint) {
       path,
       tenant_id: currentTenantId,
       tenant_name: currentTenantName,
+      skipSentry: true,
       metadata: {
         sentry_event_id: event?.event_id,
         level: event?.level,

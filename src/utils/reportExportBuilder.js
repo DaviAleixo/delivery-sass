@@ -240,6 +240,17 @@ export function buildReportData({
 }
 
 /**
+ * Sanitiza células CSV contra CSV Formula Injection (=, +, -, @, \t, \r) e escapa aspas duplas.
+ */
+function sanitizeCsvCell(value) {
+  let str = String(value ?? "");
+  if (/^[\s]*[=+\-@\t\r]/.test(str)) {
+    str = `'${str}`;
+  }
+  return `"${str.replace(/"/g, '""')}"`;
+}
+
+/**
  * Dispara o download de uma planilha em formato .CSV compatível com Excel brasileiro.
  */
 export function exportReportToCSV(reportData, customFilename = null) {
@@ -252,18 +263,18 @@ export function exportReportToCSV(reportData, customFilename = null) {
   const lines = [];
 
   // Cabeçalho do CSV
-  lines.push(`"${storeName} - Relatório Gerencial"`);
-  lines.push(`"Período: ${periodLabel}"`);
-  lines.push(`"Data de Emissão: ${reportData.generatedAtFormatted}"`);
+  lines.push(sanitizeCsvCell(`${storeName} - Relatório Gerencial`));
+  lines.push(sanitizeCsvCell(`Período: ${periodLabel}`));
+  lines.push(sanitizeCsvCell(`Data de Emissão: ${reportData.generatedAtFormatted}`));
   lines.push("");
 
   // Resumo Financeiro
   lines.push('"RESUMO EXECUTIVO"');
-  lines.push(`"Faturamento Líquido";"R$ ${summary.totalGrossRevenue.toFixed(2).replace(".", ",")}"`);
-  lines.push(`"Total de Pedidos";"${summary.totalOrdersCount}"`);
-  lines.push(`"Ticket Médio";"R$ ${summary.averageTicket.toFixed(2).replace(".", ",")}"`);
-  lines.push(`"Pedidos Cancelados";"${summary.canceledOrdersCount}"`);
-  lines.push(`"Receita Perdida por Cancelamento";"R$ ${summary.totalCanceledRevenue.toFixed(2).replace(".", ",")}"`);
+  lines.push(`"Faturamento Líquido";${sanitizeCsvCell(`R$ ${summary.totalGrossRevenue.toFixed(2).replace(".", ",")}`)}`);
+  lines.push(`"Total de Pedidos";${sanitizeCsvCell(summary.totalOrdersCount)}`);
+  lines.push(`"Ticket Médio";${sanitizeCsvCell(`R$ ${summary.averageTicket.toFixed(2).replace(".", ",")}`)}`);
+  lines.push(`"Pedidos Cancelados";${sanitizeCsvCell(summary.canceledOrdersCount)}`);
+  lines.push(`"Receita Perdida por Cancelamento";${sanitizeCsvCell(`R$ ${summary.totalCanceledRevenue.toFixed(2).replace(".", ",")}`)}`);
   lines.push("");
 
   if (reportType === "financial" || reportType === "all") {
@@ -271,7 +282,13 @@ export function exportReportToCSV(reportData, customFilename = null) {
     lines.push('"Canal";"Qtd. Transações";"Faturamento Total (R$)";"% Representatividade";"Ticket Médio (R$)"');
     paymentMethodsList.forEach((m) => {
       lines.push(
-        `"${m.label}";"${m.count}";"R$ ${m.revenue.toFixed(2).replace(".", ",")}";"${m.percentage}%";"R$ ${m.averageTicket.toFixed(2).replace(".", ",")}"`
+        [
+          sanitizeCsvCell(m.label),
+          sanitizeCsvCell(m.count),
+          sanitizeCsvCell(`R$ ${m.revenue.toFixed(2).replace(".", ",")}`),
+          sanitizeCsvCell(`${m.percentage}%`),
+          sanitizeCsvCell(`R$ ${m.averageTicket.toFixed(2).replace(".", ",")}`),
+        ].join(";")
       );
     });
     lines.push("");
@@ -282,7 +299,13 @@ export function exportReportToCSV(reportData, customFilename = null) {
     lines.push('"Produto";"Categoria";"Qtd. Vendida";"Faturamento (R$)";"% Participação"');
     productsList.forEach((p) => {
       lines.push(
-        `"${p.name}";"${p.category}";"${p.quantity}";"R$ ${p.revenue.toFixed(2).replace(".", ",")}";"${p.percentage}%"`
+        [
+          sanitizeCsvCell(p.name),
+          sanitizeCsvCell(p.category),
+          sanitizeCsvCell(p.quantity),
+          sanitizeCsvCell(`R$ ${p.revenue.toFixed(2).replace(".", ",")}`),
+          sanitizeCsvCell(`${p.percentage}%`),
+        ].join(";")
       );
     });
     lines.push("");
@@ -293,7 +316,16 @@ export function exportReportToCSV(reportData, customFilename = null) {
     lines.push('"Pedido #";"Data / Hora";"Cliente";"Canal";"Forma de Pagamento";"Subtotal (R$)";"Taxa (R$)";"Total Líquido (R$)"');
     ordersDetailedList.forEach((o) => {
       lines.push(
-        `"${o.orderNumber}";"${o.dateTimeFormatted}";"${o.customerName}";"${o.channel}";"${o.paymentMethod}";"R$ ${o.subtotal.toFixed(2).replace(".", ",")}";"R$ ${o.fee.toFixed(2).replace(".", ",")}";"R$ ${o.total.toFixed(2).replace(".", ",")}"`
+        [
+          sanitizeCsvCell(o.orderNumber),
+          sanitizeCsvCell(o.dateTimeFormatted),
+          sanitizeCsvCell(o.customerName),
+          sanitizeCsvCell(o.channel),
+          sanitizeCsvCell(o.paymentMethod),
+          sanitizeCsvCell(`R$ ${o.subtotal.toFixed(2).replace(".", ",")}`),
+          sanitizeCsvCell(`R$ ${o.fee.toFixed(2).replace(".", ",")}`),
+          sanitizeCsvCell(`R$ ${o.total.toFixed(2).replace(".", ",")}`),
+        ].join(";")
       );
     });
     lines.push("");

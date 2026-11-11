@@ -28,6 +28,7 @@ import { User } from "@/entities/User";
 import { Order } from "@/entities/Order";
 import OrderModal from "@/components/menu/OrderModal";
 import PixOnlineModal from "@/components/menu/PixOnlineModal";
+import { clearCheckoutIdempotencyKey } from "@/utils/checkoutIdempotency";
 
 export default function VrummMenu({
   tenant,
@@ -604,6 +605,7 @@ export default function VrummMenu({
         minOrderValue={settings?.min_order_value || 0}
         deliveryTime={settings?.delivery_time || "40-50 min"}
         deliveryRules={settings}
+        tenantId={tenantId || tenant?.id || localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001"}
         initialTableNumber={urlMesa || ""}
         onSubmit={submitOrder}
         isSubmitting={isSubmitting}
@@ -613,12 +615,7 @@ export default function VrummMenu({
       {pixOnlineOrder && (
         <PixOnlineModal
           isOpen={Boolean(pixOnlineOrder)}
-          onClose={async () => {
-            try {
-              if (pixOnlineOrder?.id) {
-                await Order.delete(pixOnlineOrder.id);
-              }
-            } catch (_e) {}
+          onClose={() => {
             setPixOnlineOrder(null);
             setShowOrderModal(true);
           }}
@@ -626,13 +623,17 @@ export default function VrummMenu({
           accessToken={tenant?.payment_methods?.mp_access_token}
           tenant={tenant}
           onPaymentApproved={(paidOrder) => {
+            clearCheckoutIdempotencyKey(tenantId || tenant?.id || localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001");
             setPixOnlineOrder(null);
             updateCartQuantity(0, 0); // clear cart
-            navigate(`${createPageUrl("MyOrders")}?id=${paidOrder.id}`);
+            const tq = paidOrder.tracking_token ? `&token=${paidOrder.tracking_token}` : "";
+            navigate(`${createPageUrl("MyOrders")}?id=${paidOrder.id}${tq}`);
           }}
           onPaymentConvertedToDelivery={(convertedOrder) => {
+            clearCheckoutIdempotencyKey(tenantId || tenant?.id || localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001");
             setPixOnlineOrder(null);
-            navigate(`${createPageUrl("MyOrders")}?id=${convertedOrder.id}`);
+            const tq = convertedOrder.tracking_token ? `&token=${convertedOrder.tracking_token}` : "";
+            navigate(`${createPageUrl("MyOrders")}?id=${convertedOrder.id}${tq}`);
           }}
         />
       )}

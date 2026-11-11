@@ -4,6 +4,7 @@ import { createPageUrl } from "@/utils";
 import { LayoutDashboard, Package, ShoppingBag, Settings, LogOut, Image as ImageIcon, Tag, BarChart, Folder, Users, Monitor, Layers, Flame, Lock, CreditCard, ExternalLink, RefreshCw, Bike, ChevronRight, ChevronDown, UtensilsCrossed, Wallet } from "lucide-react";
 import { Settings as SettingsEntity } from "@/entities/Settings";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { isRealtimeChannelActive } from "@/lib/realtimeHub";
 import { useAuth } from "@/lib/AuthContext";
 import { getStoreStatusInfo } from "@/utils/storeStatus";
 import PrinterNavbarControl from "@/components/admin/PrinterNavbarControl";
@@ -143,7 +144,9 @@ export default function Layout({ children, currentPageName }) {
 
   const publicPages = ["Menu", "MyOrders", "AdminLogin", "Home", "PrintOrder", "PrintShiftClosing", "SuperAdmin"];
   const isPublicPage = publicPages.includes(currentPageName);
-  const isAdminAuthenticated = isSessionAuth || (typeof window !== "undefined" && localStorage.getItem("admin_auth") === "authenticated");
+  const isAdminAuthenticated = isSupabaseConfigured()
+    ? isSessionAuth
+    : (isSessionAuth || (typeof window !== "undefined" && localStorage.getItem("admin_auth") === "authenticated"));
 
   React.useEffect(() => {
     if (authUser) {
@@ -256,12 +259,19 @@ export default function Layout({ children, currentPageName }) {
 
     checkNewOrders();
 
-    // Polling inteligente e leve: apenas enquanto a aba estiver visível no navegador
+    const activeTenantId = typeof window !== "undefined" ? localStorage.getItem("current_tenant_id") : null;
+    const rtFilter = activeTenantId ? `tenant_id=eq.${activeTenantId}` : null;
+    let tickCount = 0;
+
+    // Fallback inteligente: quando Realtime está ativo, reconcilia apenas a cada ~60s (e pula se a tela ativa já é Orders/KDS)
     const interval = setInterval(() => {
-      if (typeof document === "undefined" || document.visibilityState === "visible") {
-        checkNewOrders();
-      }
-    }, 25000);
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      if (currentPageName === "Orders" || currentPageName === "KDS") return;
+      tickCount += 1;
+      const hasRealtime = Boolean(rtFilter && isRealtimeChannelActive("orders", rtFilter));
+      if (hasRealtime && tickCount % 2 !== 0) return;
+      checkNewOrders();
+    }, 30000);
 
     // Atualiza imediatamente quando o lojista voltar à aba do painel
     const handleVisibilityChange = () => {
@@ -275,11 +285,10 @@ export default function Layout({ children, currentPageName }) {
 
     let unsubscribe;
     try {
-      const activeTenantId = typeof window !== "undefined" ? localStorage.getItem("current_tenant_id") : null;
       if (activeTenantId) {
         unsubscribe = Order.subscribe(() => {
           checkNewOrders();
-        }, { filter: `tenant_id=eq.${activeTenantId}` });
+        }, { filter: rtFilter });
       }
     } catch (_e) {}
 
@@ -309,26 +318,39 @@ export default function Layout({ children, currentPageName }) {
               .maybeSingle();
 
             if (member) {
+              let resolvedPerms = ["*"];
+              if (member.role !== "super_admin" && member.role !== "admin") {
+                const { data: adminProf } = await supabase
+                  .from("admin_users")
+                  .select("permissions")
+                  .eq("id", session.user.id)
+                  .maybeSingle();
+                if (Array.isArray(adminProf?.permissions) && adminProf.permissions.length > 0) {
+                  resolvedPerms = adminProf.permissions;
+                }
+              }
               setUser({
                 id: member.id,
                 user_id: session.user.id,
                 username: member.username,
                 role: member.role,
                 tenant_id: member.tenant_id,
-                permissions: ["*"],
+                permissions: resolvedPerms,
               });
               return;
             }
           }
         } catch (_authErr) {}
+        setUser(null);
+        return;
       }
 
-      // 2. Fallback de transição: admin_user em localStorage
+      // 2. Fallback apenas quando Supabase não está configurado (modo demonstração offline)
       const storedAdmin = localStorage.getItem("admin_user");
       if (storedAdmin) {
         let username = "admin";
         let role = "admin";
-        let permissions = ["*"];
+        let permissions = [];
         let id = null;
 
         try {
@@ -338,7 +360,7 @@ export default function Layout({ children, currentPageName }) {
           } else if (typeof parsed === "object" && parsed !== null) {
             username = parsed.username || parsed.name || parsed.email?.split("@")[0] || "admin";
             role = parsed.role || "admin";
-            permissions = Array.isArray(parsed.permissions) ? parsed.permissions : ["*"];
+            permissions = Array.isArray(parsed.permissions) ? parsed.permissions : [];
             id = parsed.id || null;
           }
         } catch {
@@ -354,17 +376,6 @@ export default function Layout({ children, currentPageName }) {
         return;
       }
 
-      // Se autenticado como admin sem admin_user salvo
-      if (localStorage.getItem("admin_auth") === "authenticated") {
-        setUser({
-          id: null,
-          username: "admin",
-          role: "admin",
-          permissions: ["*"],
-        });
-        return;
-      }
-
       setUser(null);
     } catch (_error) {
       console.log("User not authenticated", _error);
@@ -373,12 +384,9 @@ export default function Layout({ children, currentPageName }) {
   };
 
   const userPermissions = React.useMemo(() => {
-    if (!user) return ["*"];
+    if (!user) return [];
     if (user.role === "admin" || user.role === "super_admin" || user.role === "owner") return ["*"];
-    if (Array.isArray(user.permissions) && user.permissions.length > 0) {
-      return user.permissions;
-    }
-    return ["*"];
+    return Array.isArray(user.permissions) ? user.permissions : [];
   }, [user]);
 
   const hasPermission = React.useCallback((pageKey) => {
@@ -458,7 +466,9 @@ export default function Layout({ children, currentPageName }) {
       }
 
       if (isSupabaseConfigured() && supabase) {
-        let query = supabase.from("tenants").select("id, name, slug, plan, salon_mode, logo_url, banner_url, opening_time, closing_time, open_days, phone, address, whatsapp, instagram, delivery_fee, min_order_value, delivery_fee_type, delivery_neighborhoods, delivery_unlisted_policy, delivery_fallback_fee, free_delivery_threshold, address_city, address_state, address_neighborhood, cep, manual_store_open, manual_override_date, accepts_dine_in, accepts_delivery, accepts_takeaway");
+        const { data: { session } } = await supabase.auth.getSession();
+        const tenantTable = session?.user ? "tenants" : "tenants_public";
+        let query = supabase.from(tenantTable).select("id, name, slug, plan, salon_mode, logo_url, banner_url, opening_time, closing_time, open_days, phone, address, whatsapp, instagram, delivery_fee, min_order_value, delivery_fee_type, delivery_neighborhoods, delivery_unlisted_policy, delivery_fallback_fee, free_delivery_threshold, address_city, address_state, address_neighborhood, cep, manual_store_open, manual_override_date, accepts_dine_in, accepts_delivery, accepts_takeaway");
         if (targetSlug) {
           query = query.eq("slug", targetSlug);
         } else if (currentTenantId) {
@@ -544,7 +554,7 @@ export default function Layout({ children, currentPageName }) {
       setSettings(newSettings);
 
       window.dispatchEvent(new CustomEvent("settings_updated", { detail: newSettings }));
-      sonnerToast.info("⏱️ Horário resetado para a programação semanal!");
+      sonnerToast.success(newStatus ? "🟢 Loja aberta manualmente!" : "🔴 Loja fechada manualmente!");
     } catch (err) {
       console.error("Erro ao resetar status da loja:", err);
       sonnerToast.error("Erro ao resetar status da loja.");
@@ -603,7 +613,10 @@ export default function Layout({ children, currentPageName }) {
   }
 
   if (isTenantSuspended) {
-    const paymentLink = settings?.payment_link || "https://sandbox.asaas.com/i/r7wwc9plm0m0fp4n";
+    const rawPayLink = settings?.payment_link || "https://sandbox.asaas.com/i/r7wwc9plm0m0fp4n";
+    const paymentLink = /^https?:\/\//i.test(String(rawPayLink).trim())
+      ? String(rawPayLink).trim()
+      : "https://sandbox.asaas.com/i/r7wwc9plm0m0fp4n";
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-slate-900 border border-rose-900/60 rounded-3xl p-8 text-center shadow-2xl space-y-5">

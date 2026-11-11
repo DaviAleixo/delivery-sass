@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { S3Client, PutObjectCommand } from "npm:@aws-sdk/client-s3@3.540.0";
 
 const corsHeaders = {
@@ -8,25 +9,26 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-// Configurações do Cloudflare R2
-const R2_ACCOUNT_ID = Deno.env.get("R2_ACCOUNT_ID") || "eeb3a4e1bf264227d2ea7419ec833f80";
-const R2_ACCESS_KEY_ID = Deno.env.get("R2_ACCESS_KEY_ID") || "b4cfbd9041e298754df958859021f65b";
-const R2_SECRET_ACCESS_KEY = Deno.env.get("R2_SECRET_ACCESS_KEY") || "c2eb33f38697b08e38d65623d32f5d7d806ad87e6a7cec85daebf79b9c55388a";
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+
+// Sem credenciais hardcoded no código-fonte: configurar exclusivamente via Supabase Edge Function Secrets
+const R2_ACCOUNT_ID = Deno.env.get("R2_ACCOUNT_ID") || "";
+const R2_ACCESS_KEY_ID = Deno.env.get("R2_ACCESS_KEY_ID") || "";
+const R2_SECRET_ACCESS_KEY = Deno.env.get("R2_SECRET_ACCESS_KEY") || "";
 const R2_BUCKET_NAME = Deno.env.get("R2_BUCKET_NAME") || "pedemuleke-media";
 const R2_PUBLIC_URL = (Deno.env.get("R2_PUBLIC_URL") || "https://pub-90fee729d11445a3b3a6aa0958f66fc8.r2.dev").replace(/\/+$/, "");
 
-// Cliente S3 configurado para a Cloudflare R2
-const r2Client = new S3Client({
-  region: "auto",
-  endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-  credentials: {
-    accessKeyId: R2_ACCESS_KEY_ID,
-    secretAccessKey: R2_SECRET_ACCESS_KEY,
-  },
-});
+const ALLOWED_IMAGE_MIME_TO_EXT: Record<string, string> = {
+  "image/webp": "webp",
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/jpg": "jpg",
+};
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024; // 5 MB
 
 function sanitizeName(name: string): string {
-  return name.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 30);
+  return String(name || "").replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 30);
 }
 
 serve(async (req: Request) => {
@@ -34,38 +36,74 @@ serve(async (req: Request) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
+  if (req.method !== "POST") {
+    return new Response(
+      JSON.stringify({ error: "Método não permitido." }),
+      { status: 405, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
   try {
+    // 1. Autenticação JWT obrigatória (bloqueia anônimos)
+    const authHeader = req.headers.get("Authorization") || "";
+    const jwt = authHeader.replace(/^Bearer\s+/i, "").trim();
+    if (!jwt || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      return new Response(
+        JSON.stringify({ error: "Autenticação obrigatória para enviar imagens." }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const { data: userRes, error: authErr } = await supabaseAdmin.auth.getUser(jwt);
+    if (authErr || !userRes?.user) {
+      return new Response(
+        JSON.stringify({ error: "Sessão inválida ou expirada." }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { data: adminProfile } = await supabaseAdmin
+      .from("tenant_admins")
+      .select("tenant_id, role, is_active")
+      .eq("user_id", userRes.user.id)
+      .eq("is_active", true)
+      .maybeSingle();
+
+    if (!adminProfile) {
+      return new Response(
+        JSON.stringify({ error: "Apenas usuários administrativos autorizados podem fazer upload." }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const contentType = req.headers.get("content-type") || "";
     let fileBuffer: Uint8Array | null = null;
     let fileName = "upload.webp";
     let mimeType = "image/webp";
-    let tenantId = "global";
+    let requestedTenantId = "";
 
-    // Suporte 1: multipart/form-data
     if (contentType.includes("multipart/form-data")) {
       const formData = await req.formData();
       const fileEntry = formData.get("file");
-      tenantId = (formData.get("tenantId") as string) || "global";
+      requestedTenantId = String(formData.get("tenantId") || "");
 
       if (fileEntry && typeof fileEntry === "object" && "arrayBuffer" in fileEntry) {
         const file = fileEntry as File;
         fileName = file.name || "upload.webp";
-        mimeType = file.type || "image/webp";
-        const buffer = await file.arrayBuffer();
-        fileBuffer = new Uint8Array(buffer);
+        mimeType = String(file.type || "").toLowerCase();
+        fileBuffer = new Uint8Array(await file.arrayBuffer());
       }
-    } 
-    // Suporte 2: JSON payload (com dataUrl ou base64)
-    else if (contentType.includes("application/json")) {
+    } else if (contentType.includes("application/json")) {
       const body = await req.json();
-      tenantId = body.tenantId || "global";
-      fileName = body.fileName || "upload.webp";
-      mimeType = body.mimeType || "image/webp";
+      requestedTenantId = String(body.tenantId || "");
+      fileName = String(body.fileName || "upload.webp");
+      mimeType = String(body.mimeType || "image/webp").toLowerCase();
 
       if (body.dataUrl) {
-        const matches = body.dataUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+        const matches = String(body.dataUrl).match(/^data:([A-Za-z0-9.+-]+\/[A-Za-z0-9.+-]+);base64,(.+)$/);
         if (matches && matches.length === 3) {
-          mimeType = matches[1];
+          mimeType = matches[1].toLowerCase();
           const binaryStr = atob(matches[2]);
           fileBuffer = new Uint8Array(binaryStr.length);
           for (let i = 0; i < binaryStr.length; i++) {
@@ -73,7 +111,7 @@ serve(async (req: Request) => {
           }
         }
       } else if (body.base64) {
-        const binaryStr = atob(body.base64);
+        const binaryStr = atob(String(body.base64));
         fileBuffer = new Uint8Array(binaryStr.length);
         for (let i = 0; i < binaryStr.length; i++) {
           fileBuffer[i] = binaryStr.charCodeAt(i);
@@ -88,27 +126,66 @@ serve(async (req: Request) => {
       );
     }
 
-    // Organização de pastas no R2 por tenant
-    const cleanTenant = sanitizeName(tenantId);
-    const cleanFileName = sanitizeName(fileName.replace(/\.[^/.]+$/, ""));
-    const isWebP = mimeType.includes("webp") || fileName.endsWith(".webp");
-    const ext = isWebP ? "webp" : (fileName.includes(".") ? fileName.split(".").pop() : "webp");
-    const uniqueId = Math.random().toString(36).substring(2, 8);
-    const filePath = `tenants/${cleanTenant}/uploads/${Date.now()}_${uniqueId}_${cleanFileName}.${ext}`;
+    if (fileBuffer.length > MAX_UPLOAD_BYTES) {
+      return new Response(
+        JSON.stringify({ error: "Imagem excede o limite máximo de 5 MB." }),
+        { status: 413, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
-    // Upload direto para o Cloudflare R2
+    // 2. Whitelist estrita de imagens (bloqueia .html, .svg, .js, etc.)
+    const safeExt = ALLOWED_IMAGE_MIME_TO_EXT[mimeType];
+    if (!safeExt) {
+      return new Response(
+        JSON.stringify({ error: "Formato não permitido. Apenas imagens WEBP, PNG e JPG são aceitas." }),
+        { status: 415, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // 3. Isolamento cross-tenant no diretório de destino
+    const effectiveTenantId = adminProfile.role === "super_admin"
+      ? (requestedTenantId || "global")
+      : String(adminProfile.tenant_id || "");
+
+    if (adminProfile.role !== "super_admin" && requestedTenantId && requestedTenantId !== adminProfile.tenant_id) {
+      return new Response(
+        JSON.stringify({ error: "Acesso negado: upload para outra empresa não permitido." }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!R2_ACCOUNT_ID || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) {
+      return new Response(
+        JSON.stringify({ error: "Credenciais Cloudflare R2 não configuradas nos Secrets do servidor." }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const r2Client = new S3Client({
+      region: "auto",
+      endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+      credentials: {
+        accessKeyId: R2_ACCESS_KEY_ID,
+        secretAccessKey: R2_SECRET_ACCESS_KEY,
+      },
+    });
+
+    const cleanTenant = sanitizeName(effectiveTenantId || "global");
+    const cleanFileName = sanitizeName(fileName.replace(/\.[^/.]+$/, ""));
+    const uniqueId = crypto.randomUUID().slice(0, 8);
+    const filePath = `tenants/${cleanTenant}/uploads/${Date.now()}_${uniqueId}_${cleanFileName}.${safeExt}`;
+
     const putCommand = new PutObjectCommand({
       Bucket: R2_BUCKET_NAME,
       Key: filePath,
       Body: fileBuffer,
-      ContentType: isWebP ? "image/webp" : mimeType,
+      ContentType: mimeType,
       CacheControl: "public, max-age=31536000, immutable",
     });
 
     await r2Client.send(putCommand);
 
     const publicUrl = `${R2_PUBLIC_URL}/${filePath}`;
-
     return new Response(
       JSON.stringify({
         success: true,
@@ -121,9 +198,7 @@ serve(async (req: Request) => {
   } catch (error: any) {
     console.error("[Cloudflare R2 Upload Error]:", error);
     return new Response(
-      JSON.stringify({
-        error: error.message || "Erro interno ao enviar para o Cloudflare R2",
-      }),
+      JSON.stringify({ error: "Erro interno ao enviar imagem." }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

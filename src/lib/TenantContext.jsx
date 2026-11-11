@@ -77,8 +77,10 @@ export function TenantProvider({ children }) {
     setIsLoadingTenant(true);
     try {
       if (isSupabaseConfigured() && supabase) {
+        const { data: { session } } = await supabase.auth.getSession();
+        const sourceTable = session?.user ? "tenants" : "tenants_public";
         // Busca o restaurante pelo slug ou id (suporta alias vrumm / vruum-burguer)
-        let query = supabase.from("tenants").select("*");
+        let query = supabase.from(sourceTable).select("*");
         if (slugToSearch === "vrumm" || slugToSearch === "vruum-burguer") {
           query = query.or("slug.eq.vruum-burguer,slug.eq.vrumm,id.eq.a0000000-0000-0000-0000-000000000001");
         } else {

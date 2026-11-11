@@ -1,0 +1,112 @@
+{
+  "runTag": "PHASE2_LOAD_1794387243345",
+  "profile": "free-safe",
+  "abortedByCircuitBreaker": "Latência p95 crítica (12158ms) > 8750ms",
+  "durationSec": 608.12,
+  "throughputOrdersPerSec": 1.25,
+  "totals": {
+    "sent": 761,
+    "accepted": 695,
+    "idempotentReplaysVerified": 37,
+    "ruleRejectedExpected": 23,
+    "unexpectedErrors": 6,
+    "errorRatePct": 0.788,
+    "rateLimited429": 0,
+    "clientOrderNumberCollisions": 0,
+    "dbVerifiedOrderCount": 695,
+    "dbDupOrderNumbers": 0,
+    "cleanedOrders": 695
+  },
+  "latencyMs": {
+    "p50": 153,
+    "p95": 442,
+    "p99": 10705,
+    "max": 13104,
+    "spikesAboveThreshold": [
+      {
+        "atSent": 741,
+        "p95Ms": 4245,
+        "consecutive": 1
+      }
+    ]
+  },
+  "realtimeKds": {
+    "channelsOpened": 15,
+    "channelErrors": 15,
+    "messagesReceived": 695,
+    "monitoredOrdersExpected": 695,
+    "kdsMatchedEvents": 695,
+    "kdsDeliveryRatePct": 100,
+    "kdsLatencyMs": {
+      "p50": 451,
+      "p95": 752,
+      "p99": 5753
+    }
+  },
+  "workerResources": {
+    "rssMb": 44,
+    "heapUsedMb": 19
+  },
+  "stages": [
+    {
+      "stage": "stage-1-warmup",
+      "elapsedSec": 182.15,
+      "sent": 240,
+      "accepted": 233,
+      "ruleRejected": 7,
+      "unexpectedErrors": 0,
+      "p50Ms": 154,
+      "p95Ms": 188,
+      "p99Ms": 339
+    },
+    {
+      "stage": "stage-2-sustained",
+      "elapsedSec": 395.02,
+      "sent": 521,
+      "accepted": 499,
+      "ruleRejected": 16,
+      "unexpectedErrors": 6,
+      "p50Ms": 153,
+      "p95Ms": 1310,
+      "p99Ms": 11000
+    }
+  ],
+  "sampleUnexpectedErrors": [
+    {
+      "idx": 726,
+      "tenant": "test-empresa-11",
+      "error": "canceling statement due to statement timeout",
+      "status": null
+    },
+    {
+      "idx": 731,
+      "tenant": "test-empresa-17",
+      "error": "canceling statement due to statement timeout",
+      "status": null
+    },
+    {
+      "idx": 729,
+      "tenant": "test-empresa-14",
+      "error": "canceling statement due to statement timeout",
+      "status": null
+    },
+    {
+      "idx": 735,
+      "tenant": "test-empresa-04",
+      "error": "canceling statement due to statement timeout",
+      "status": null
+    },
+    {
+      "idx": 734,
+      "tenant": "test-empresa-20",
+      "error": "canceling statement due to statement timeout",
+      "status": null
+    },
+    {
+      "idx": 733,
+      "tenant": "test-empresa-19",
+      "error": "canceling statement due to statement timeout",
+      "status": null
+    }
+  ]
+}

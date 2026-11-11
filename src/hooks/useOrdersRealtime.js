@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { isSupabaseConfigured } from "@/lib/supabase";
+import { subscribeTableRealtime } from "@/lib/realtimeHub";
 import { Order } from "@/entities/Order";
 
 /**
@@ -52,74 +53,36 @@ export function useOrdersRealtime({
       });
     } catch (_e) {}
 
-    // 2. Conexão Nativa WebSocket Realtime do Supabase
-    if (!isSupabaseConfigured() || !supabase) {
+    // 2. Conexão Nativa WebSocket Realtime do Supabase (Multiplexada por tenant_id via realtimeHub)
+    if (!isSupabaseConfigured()) {
       return () => {
         if (unsubscribeLocal) unsubscribeLocal();
       };
     }
 
-    const channelName = `realtime:orders:${activeTenantId || "global"}_${Date.now()}`;
-    const filter = activeTenantId ? `tenant_id=eq.${activeTenantId}` : undefined;
-
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "orders",
-          ...(filter ? { filter } : {}),
-        },
-        (payload) => {
-          if (onInsertRef.current && payload.new) {
-            onInsertRef.current(payload.new);
-          }
+    const filter = activeTenantId ? `tenant_id=eq.${activeTenantId}` : null;
+    const unsubscribeHub = subscribeTableRealtime({
+      table: "orders",
+      filter,
+      onEvent: (payload) => {
+        if (payload.eventType === "INSERT" && onInsertRef.current && payload.new) {
+          onInsertRef.current(payload.new);
+        } else if (payload.eventType === "UPDATE" && onUpdateRef.current && payload.new) {
+          onUpdateRef.current(payload.new);
+        } else if (payload.eventType === "DELETE" && onDeleteRef.current && payload.old) {
+          onDeleteRef.current(payload.old);
         }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "orders",
-          ...(filter ? { filter } : {}),
-        },
-        (payload) => {
-          if (onUpdateRef.current && payload.new) {
-            onUpdateRef.current(payload.new);
-          }
+      },
+      onSubscribed: () => {
+        if (onReconnectedRef.current) {
+          onReconnectedRef.current();
         }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "DELETE",
-          schema: "public",
-          table: "orders",
-          ...(filter ? { filter } : {}),
-        },
-        (payload) => {
-          if (onDeleteRef.current && payload.old) {
-            onDeleteRef.current(payload.old);
-          }
-        }
-      )
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") {
-          // Conectado com sucesso ao WebSocket - dispara reconciliação para fechar brechas
-          if (onReconnectedRef.current) {
-            onReconnectedRef.current();
-          }
-        }
-      });
+      },
+    });
 
     return () => {
       if (unsubscribeLocal) unsubscribeLocal();
-      if (supabase && channel) {
-        supabase.removeChannel(channel);
-      }
+      if (unsubscribeHub) unsubscribeHub();
     };
   }, [propTenantId]);
 }

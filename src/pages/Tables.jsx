@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { getActiveTenantId, invalidateCache } from "@/entities/storage";
+import { isRealtimeChannelActive } from "@/lib/realtimeHub";
 import { RestaurantTable, TableSession } from "@/entities/RestaurantTable";
 import { Order } from "@/entities/Order";
 import { Settings as SettingsEntity } from "@/entities/Settings";
@@ -213,16 +214,27 @@ export default function TablesPage() {
     // Carrega tudo na montagem inicial da tela
     loadAllData(true);
 
-    // Sincronização em tempo real via subscriptions
-    const unsubTables = RestaurantTable.subscribe(() => loadAllData(false));
-    const unsubSessions = TableSession.subscribe(() => loadAllData(false));
-    const unsubOrders = Order.subscribe(() => loadAllData(false));
+    const activeTenantId = getActiveTenantId();
+    const tenantFilter = activeTenantId ? `tenant_id=eq.${activeTenantId}` : undefined;
+    const subOpts = tenantFilter ? { filter: tenantFilter } : {};
 
-    // Polling inteligente e leve a cada 15s (apenas se a aba estiver visível e apenas mesas/pedidos)
+    // Sincronização em tempo real multi-dispositivo (restaurant_tables, table_sessions e orders)
+    const unsubTables = RestaurantTable.subscribe(() => loadAllData(false), subOpts);
+    const unsubSessions = TableSession.subscribe(() => loadAllData(false), subOpts);
+    const unsubOrders = Order.subscribe(() => loadAllData(false), subOpts);
+
+    // Polling de segurança: 45s quando Realtime de mesas está ativo; 15s apenas se offline/desconectado
+    let tickCount = 0;
     const intervalId = setInterval(() => {
-      if (typeof document === "undefined" || document.visibilityState === "visible") {
-        loadAllData(false);
-      }
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      tickCount += 1;
+      const rtConnected = Boolean(
+        tenantFilter &&
+        isRealtimeChannelActive("table_sessions", tenantFilter) &&
+        isRealtimeChannelActive("restaurant_tables", tenantFilter)
+      );
+      if (rtConnected && tickCount % 3 !== 0) return;
+      loadAllData(false);
     }, 15000);
 
     // Atualiza instantaneamente quando o usuário volta à aba de Mesas
@@ -1001,55 +1013,56 @@ export default function TablesPage() {
 
       // 2. Persistência no Supabase / Banco
       if (isSupabaseConfigured() && supabase) {
+        const safeExec = (builder) => Promise.resolve(builder).catch(() => ({ data: null, error: null }));
         if (targetSessionId && !String(targetSessionId).startsWith("virtual_")) {
-          await supabase.rpc("close_table_session", {
+          await safeExec(supabase.rpc("close_table_session", {
             p_tenant_id: activeTenantId,
             p_session_id: targetSessionId,
             p_payment_method: "liberacao_rapida",
             p_payment_details: { quick_release: true },
             p_service_fee: 0,
             p_discount: 0,
-          }).catch(() => {});
+          }));
 
-          await supabase.from("table_sessions").update({
+          await safeExec(supabase.from("table_sessions").update({
             status: "closed",
             closed_at: new Date().toISOString(),
             payment_method: "liberacao_rapida"
-          }).eq("id", targetSessionId).catch(() => {});
+          }).eq("id", targetSessionId));
         }
 
         // Libera mesa física no banco
-        await supabase.from("restaurant_tables").update({
+        await safeExec(supabase.from("restaurant_tables").update({
           status: "available",
           updated_at: new Date().toISOString()
-        }).eq("tenant_id", activeTenantId).eq("table_number", String(tbl.table_number)).catch(() => {});
+        }).eq("tenant_id", activeTenantId).eq("table_number", String(tbl.table_number)));
 
         if (tbl.id) {
-          await supabase.from("restaurant_tables").update({
+          await safeExec(supabase.from("restaurant_tables").update({
             status: "available",
             updated_at: new Date().toISOString()
-          }).eq("id", tbl.id).catch(() => {});
+          }).eq("id", tbl.id));
         }
 
         // Marca todos os pedidos da mesa como pagos e entregues
-        await supabase.from("orders").update({
+        await safeExec(supabase.from("orders").update({
           payment_status: "paid",
           status: "entregue",
           payment_method: "liberacao_rapida"
-        }).match({ tenant_id: activeTenantId, table_number: String(tbl.table_number) }).catch(() => {});
+        }).match({ tenant_id: activeTenantId, table_number: String(tbl.table_number) }));
 
-        await supabase.from("orders").update({
+        await safeExec(supabase.from("orders").update({
           payment_status: "paid",
           status: "entregue",
           payment_method: "liberacao_rapida"
-        }).match({ tenant_id: activeTenantId, table_number: `Mesa ${tbl.table_number}` }).catch(() => {});
+        }).match({ tenant_id: activeTenantId, table_number: `Mesa ${tbl.table_number}` }));
 
         if (targetSessionId && !String(targetSessionId).startsWith("virtual_")) {
-          await supabase.from("orders").update({
+          await safeExec(supabase.from("orders").update({
             payment_status: "paid",
             status: "entregue",
             payment_method: "liberacao_rapida"
-          }).eq("table_session_id", targetSessionId).catch(() => {});
+          }).eq("table_session_id", targetSessionId));
         }
       }
 
@@ -1133,31 +1146,23 @@ export default function TablesPage() {
     let targetSession = tbl.activeSession;
     let targetSessionId = targetSession?.id;
 
-    // Se a sessão for virtual ou inexistente, cria uma sessão real agora no banco
+    // Se a sessão for virtual ou inexistente, garante sessão atômica via open_table_session (FOR UPDATE)
     if (!targetSessionId || String(targetSessionId).startsWith("virtual_")) {
       try {
         if (isSupabaseConfigured() && supabase) {
-          const { data: newSess, error: sessErr } = await supabase
-            .from("table_sessions")
-            .insert([{
-              tenant_id: activeTenantId,
-              table_id: tbl.id,
-              table_number: String(tbl.table_number),
-              customer_name: tbl.activeSession?.customer_name || `Mesa ${tbl.table_number}`,
-              customer_phone: tbl.activeSession?.customer_phone || null,
-              people_count: 1,
-              status: "open",
-              opened_at: new Date().toISOString(),
-              subtotal: subtotal,
-            }])
-            .select()
-            .single();
+          const { data: rpcSess, error: sessErr } = await supabase.rpc("open_table_session", {
+            p_tenant_id: activeTenantId,
+            p_table_id: tbl.id,
+            p_customer_name: tbl.activeSession?.customer_name || `Mesa ${tbl.table_number}`,
+            p_customer_phone: tbl.activeSession?.customer_phone || null,
+            p_people_count: 1,
+          });
 
-          if (newSess) {
-            targetSession = newSess;
-            targetSessionId = newSess.id;
+          if (rpcSess?.success && rpcSess?.session) {
+            targetSession = rpcSess.session;
+            targetSessionId = rpcSess.session.id;
           } else if (sessErr) {
-            console.warn("Erro ao criar sessão para pagamento parcial:", sessErr);
+            console.warn("Erro ao abrir sessão atômica para pagamento parcial:", sessErr);
           }
         }
       } catch (e) {
@@ -1208,71 +1213,71 @@ export default function TablesPage() {
         created_at: new Date().toISOString(),
       };
 
-      const updatedPayments = [...existingPayments, newPayment];
-      const updatedPaymentDetails = {
-        ...(typeof targetSession?.payment_details === "object" && !Array.isArray(targetSession.payment_details) ? targetSession.payment_details : {}),
-        payments: updatedPayments,
-        service_fee_included: includeServiceFee,
-        discount: discountVal,
-      };
+      let authoritativeSessionObj = null;
 
-      const updatedSessionObj = {
-        ...(targetSession || {}),
-        id: targetSessionId,
-        table_id: tbl.id,
-        table_number: String(tbl.table_number),
-        status: "open",
-        payment_details: updatedPaymentDetails,
-      };
+      // Persistência atômica no Supabase via FOR UPDATE (evita Lost Update entre dois operadores)
+      if (isSupabaseConfigured() && supabase && targetSessionId) {
+        const { data: rpcPayRes, error: rpcPayErr } = await supabase.rpc("add_table_session_partial_payment", {
+          p_session_id: targetSessionId,
+          p_payment: newPayment,
+          p_service_fee_included: includeServiceFee,
+          p_discount: discountVal,
+        });
 
-      // 1. Atualização Otimista Imediata no Estado React (Mesa segue aberta com novo saldo)
+        if (rpcPayErr || !rpcPayRes?.success) {
+          throw new Error(rpcPayErr?.message || rpcPayRes?.error || "Erro ao registrar pagamento parcial no servidor.");
+        }
+        authoritativeSessionObj = rpcPayRes.session;
+      } else {
+        const updatedPayments = [...existingPayments, newPayment];
+        const updatedPaymentDetails = {
+          ...(typeof targetSession?.payment_details === "object" && !Array.isArray(targetSession.payment_details) ? targetSession.payment_details : {}),
+          payments: updatedPayments,
+          service_fee_included: includeServiceFee,
+          discount: discountVal,
+        };
+        authoritativeSessionObj = {
+          ...(targetSession || {}),
+          id: targetSessionId,
+          table_id: tbl.id,
+          table_number: String(tbl.table_number),
+          status: "open",
+          payment_details: updatedPaymentDetails,
+        };
+        if (targetSessionId) {
+          await TableSession.update(targetSessionId, { payment_details: updatedPaymentDetails }).catch(() => {});
+        }
+      }
+
+      const authPayments = getSessionPaymentsList(authoritativeSessionObj);
+      const authPaidTotal = authPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+      const newRemaining = Math.max(0, totalAmount - authPaidTotal);
+
       setSessions(prev => {
         const found = prev.some(s => s.id === targetSessionId || (tbl.id && s.table_id === tbl.id) || cleanNum(s.table_number) === thisNum);
         if (found) {
           return prev.map(s => (s.id === targetSessionId || (tbl.id && s.table_id === tbl.id) || cleanNum(s.table_number) === thisNum) ? {
             ...s,
-            payment_details: updatedPaymentDetails,
+            ...authoritativeSessionObj,
           } : s);
         }
-        return [updatedSessionObj, ...prev];
+        return [authoritativeSessionObj, ...prev];
       });
 
-      setSelectedSession(updatedSessionObj);
-      setSelectedTable(prev => prev ? { ...prev, activeSession: updatedSessionObj } : null);
+      setSelectedSession(authoritativeSessionObj);
+      setSelectedTable(prev => prev ? { ...prev, activeSession: authoritativeSessionObj } : null);
 
-      const newRemaining = Math.max(0, remainingToPay - enteredAmount);
-
-      if (newRemaining === 0) {
+      if (newRemaining <= 0.01) {
         toast.success(`Pagamento de R$ ${enteredAmount.toFixed(2).replace(".", ",")} registrado! Comanda 100% quitada.`);
       } else {
         toast.success(`Pagamento de R$ ${enteredAmount.toFixed(2).replace(".", ",")} recebido! Resta a pagar: R$ ${newRemaining.toFixed(2).replace(".", ",")}.`);
       }
 
-      // Fecha imediatamente o modal de recebimento e retorna para a comanda/salão
       setIsSettlementModalOpen(false);
-
-      // Reset inputs para próxima abertura
       setPartialPaymentAmount(newRemaining > 0 ? newRemaining : 0);
       setPartialPayerName("");
       setPartialNotes("");
       setCashGiven(0);
-
-      // 2. Persistência no Banco / Supabase
-      if (isSupabaseConfigured() && supabase && targetSessionId) {
-        await supabase.from("table_sessions").update({
-          payment_details: updatedPaymentDetails,
-          updated_at: new Date().toISOString(),
-        }).eq("id", targetSessionId).catch(() => {});
-
-        await supabase.from("table_sessions").update({
-          payment_details: updatedPaymentDetails,
-          updated_at: new Date().toISOString(),
-        }).eq("tenant_id", activeTenantId).eq("table_number", String(tbl.table_number)).eq("status", "open").catch(() => {});
-      }
-
-      if (targetSessionId) {
-        await TableSession.update(targetSessionId, { payment_details: updatedPaymentDetails }).catch(() => {});
-      }
 
       invalidateCache("table_sessions");
       if (typeof window !== "undefined") {
@@ -1297,44 +1302,54 @@ export default function TablesPage() {
     const targetSessionId = targetSession?.id;
     if (!targetSessionId) return;
 
-    const existingPayments = getSessionPaymentsList(targetSession);
-    const updatedPayments = existingPayments.filter(p => p.id !== paymentId);
+    try {
+      let authoritativeSessionObj = null;
 
-    const updatedPaymentDetails = {
-      ...(typeof targetSession?.payment_details === "object" && !Array.isArray(targetSession.payment_details) ? targetSession.payment_details : {}),
-      payments: updatedPayments,
-      service_fee_included: includeServiceFee,
-      discount: Number(discountAmount) || 0,
-    };
+      if (isSupabaseConfigured() && supabase && !String(targetSessionId).startsWith("virtual_")) {
+        const { data: rpcRemRes, error: rpcRemErr } = await supabase.rpc("remove_table_session_partial_payment", {
+          p_session_id: targetSessionId,
+          p_payment_id: String(paymentId),
+          p_service_fee_included: includeServiceFee,
+          p_discount: Number(discountAmount) || 0,
+        });
 
-    const updatedSessionObj = {
-      ...targetSession,
-      payment_details: updatedPaymentDetails,
-    };
+        if (rpcRemErr || !rpcRemRes?.success) {
+          toast.error(rpcRemErr?.message || rpcRemRes?.error || "Erro ao estornar pagamento parcial.");
+          return;
+        }
+        authoritativeSessionObj = rpcRemRes.session;
+      } else {
+        const existingPayments = getSessionPaymentsList(targetSession);
+        const updatedPayments = existingPayments.filter(p => p.id !== paymentId);
+        const updatedPaymentDetails = {
+          ...(typeof targetSession?.payment_details === "object" && !Array.isArray(targetSession.payment_details) ? targetSession.payment_details : {}),
+          payments: updatedPayments,
+          service_fee_included: includeServiceFee,
+          discount: Number(discountAmount) || 0,
+        };
+        authoritativeSessionObj = {
+          ...targetSession,
+          payment_details: updatedPaymentDetails,
+        };
+        await TableSession.update(targetSessionId, { payment_details: updatedPaymentDetails }).catch(() => {});
+      }
 
-    // Atualização otimista
-    setSessions(prev => prev.map(s => (s.id === targetSessionId || (tbl.id && s.table_id === tbl.id) || cleanNum(s.table_number) === thisNum) ? {
-      ...s,
-      payment_details: updatedPaymentDetails,
-    } : s));
+      setSessions(prev => prev.map(s => (s.id === targetSessionId || (tbl.id && s.table_id === tbl.id) || cleanNum(s.table_number) === thisNum) ? {
+        ...s,
+        ...authoritativeSessionObj,
+      } : s));
 
-    setSelectedSession(updatedSessionObj);
-    setSelectedTable(prev => prev ? { ...prev, activeSession: updatedSessionObj } : null);
+      setSelectedSession(authoritativeSessionObj);
+      setSelectedTable(prev => prev ? { ...prev, activeSession: authoritativeSessionObj } : null);
 
-    toast.info("Pagamento parcial estornado.");
-
-    // Persistência
-    if (isSupabaseConfigured() && supabase) {
-      await supabase.from("table_sessions").update({
-        payment_details: updatedPaymentDetails,
-        updated_at: new Date().toISOString(),
-      }).eq("id", targetSessionId).catch(() => {});
-    }
-
-    await TableSession.update(targetSessionId, { payment_details: updatedPaymentDetails }).catch(() => {});
-    invalidateCache("table_sessions");
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("db_event_table_sessions", { detail: { type: "update" } }));
+      toast.info("Pagamento parcial estornado.");
+      invalidateCache("table_sessions");
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("db_event_table_sessions", { detail: { type: "update" } }));
+      }
+    } catch (err) {
+      console.error("Erro ao estornar pagamento parcial:", err);
+      toast.error("Erro ao estornar pagamento parcial.");
     }
   };
 
@@ -1429,11 +1444,13 @@ export default function TablesPage() {
             p_discount: discountVal,
           });
 
+          const safeExec = (builder) => Promise.resolve(builder).catch(() => ({ data: null, error: null }));
+
           if (error) {
             console.warn("RPC close_table_session falhou, aplicando fallback:", error);
           }
 
-          await supabase.from("table_sessions").update({
+          await safeExec(supabase.from("table_sessions").update({
             status: "closed",
             closed_at: new Date().toISOString(),
             subtotal: subtotal,
@@ -1442,44 +1459,46 @@ export default function TablesPage() {
             total_amount: totalAmount,
             payment_method: finalPaymentMethod,
             payment_details: finalPaymentDetails,
-          }).eq("id", targetSessionId).catch(() => {});
+          }).eq("id", targetSessionId));
         }
 
+        const safeExecTbl = (builder) => Promise.resolve(builder).catch(() => ({ data: null, error: null }));
+
         // Libera mesa física no banco
-        await supabase.from("restaurant_tables").update({
+        await safeExecTbl(supabase.from("restaurant_tables").update({
           status: "available",
           updated_at: new Date().toISOString()
-        }).eq("tenant_id", activeTenantId).eq("table_number", String(tbl.table_number)).catch(() => {});
+        }).eq("tenant_id", activeTenantId).eq("table_number", String(tbl.table_number)));
 
         if (tbl.id) {
-          await supabase.from("restaurant_tables").update({
+          await safeExecTbl(supabase.from("restaurant_tables").update({
             status: "available",
             updated_at: new Date().toISOString()
-          }).eq("id", tbl.id).catch(() => {});
+          }).eq("id", tbl.id));
         }
 
         // Marca todos os pedidos da mesa como pagos e entregues
-        await supabase.from("orders").update({
+        await safeExecTbl(supabase.from("orders").update({
           payment_status: "paid",
           status: "entregue",
           payment_method: finalPaymentMethod,
           payment_details: finalPaymentDetails,
-        }).match({ tenant_id: activeTenantId, table_number: String(tbl.table_number) }).catch(() => {});
+        }).match({ tenant_id: activeTenantId, table_number: String(tbl.table_number) }));
 
-        await supabase.from("orders").update({
+        await safeExecTbl(supabase.from("orders").update({
           payment_status: "paid",
           status: "entregue",
           payment_method: finalPaymentMethod,
           payment_details: finalPaymentDetails,
-        }).match({ tenant_id: activeTenantId, table_number: `Mesa ${tbl.table_number}` }).catch(() => {});
+        }).match({ tenant_id: activeTenantId, table_number: `Mesa ${tbl.table_number}` }));
 
         if (targetSessionId && isRealSession) {
-          await supabase.from("orders").update({
+          await safeExecTbl(supabase.from("orders").update({
             payment_status: "paid",
             status: "entregue",
             payment_method: finalPaymentMethod,
             payment_details: finalPaymentDetails,
-          }).eq("table_session_id", targetSessionId).catch(() => {});
+          }).eq("table_session_id", targetSessionId));
         }
       }
 

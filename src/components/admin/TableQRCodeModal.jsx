@@ -42,12 +42,18 @@ export default function TableQRCodeModal({ settings, trigger }) {
     const printContent = document.getElementById("table-qr-print-area");
     if (!printContent) return;
 
+    const safeTitleName = String(settings?.restaurant_name || "PedeMuleke")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+
     const printWindow = window.open("", "_blank", "width=850,height=900");
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Plaquinhas de Mesa com QR Code - ${settings?.restaurant_name || "PedeMuleke"}</title>
+          <title>Plaquinhas de Mesa com QR Code - ${safeTitleName}</title>
           <style>
             @page {
               size: A4;

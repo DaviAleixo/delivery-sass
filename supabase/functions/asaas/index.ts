@@ -7,14 +7,13 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS"
 };
 
-// Determina a URL base da API do Asaas (Sandbox ou Produção)
 function getAsaasBaseUrl(): string {
   const customUrl = Deno.env.get("ASAAS_API_URL");
   if (customUrl) return customUrl.replace(/\/+$/, "");
 
   const env = (Deno.env.get("ASAAS_ENV") || "sandbox").toLowerCase();
-  return env === "production" 
-    ? "https://api.asaas.com/v3" 
+  return env === "production"
+    ? "https://api.asaas.com/v3"
     : "https://api-sandbox.asaas.com/v3";
 }
 
@@ -23,7 +22,37 @@ function getAsaasApiKey(): string {
 }
 
 function getAsaasWebhookSecret(): string {
-  return Deno.env.get("ASAAS_WEBHOOK_SECRET") || Deno.env.get("ASAAS_WEBHOOK_TOKEN") || "whsec_czkgRzSl_Eyqu-Y8ivl57bwty_EnEKo5tO3pqW7uObs";
+  return Deno.env.get("ASAAS_WEBHOOK_SECRET") || Deno.env.get("ASAAS_WEBHOOK_TOKEN") || "";
+}
+
+async function requireSuperAdminOrTenantAdmin(req: Request, supabase: any, requireSuperAdminOnly = true) {
+  const authHeader = req.headers.get("authorization") || "";
+  const token = authHeader.replace(/^Bearer\s+/i, "").trim();
+  if (!token) {
+    throw new Error("Autenticação obrigatória.");
+  }
+
+  const { data: userData, error: userErr } = await supabase.auth.getUser(token);
+  if (userErr || !userData?.user) {
+    throw new Error("Token de sessão inválido.");
+  }
+
+  const { data: member } = await supabase
+    .from("tenant_admins")
+    .select("tenant_id, role, is_active")
+    .eq("user_id", userData.user.id)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (!member) {
+    throw new Error("Usuário sem vínculo administrativo ativo.");
+  }
+
+  if (requireSuperAdminOnly && member.role !== "super_admin") {
+    throw new Error("Acesso negado: restrito ao SuperAdmin.");
+  }
+
+  return member;
 }
 
 serve(async (req: Request) => {
@@ -32,7 +61,13 @@ serve(async (req: Request) => {
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_ANON_KEY") || "";
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  if (!supabaseServiceKey) {
+    return new Response(JSON.stringify({ error: "SUPABASE_SERVICE_ROLE_KEY não configurada." }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   const asaasBaseUrl = getAsaasBaseUrl();
@@ -49,19 +84,15 @@ serve(async (req: Request) => {
     const url = new URL(req.url);
     const action = body.action || url.searchParams.get("action");
 
-    // =========================================================================
-    // 1. ENDPOINT DE WEBHOOK DO ASAAS (Recebimento de eventos financeiros)
-    // =========================================================================
-    // O Asaas envia requisições POST com campo "event" no payload
+    // 1. ENDPOINT DE WEBHOOK DO ASAAS
     const isWebhookCall = Boolean(body.event || action === "webhook");
 
     if (isWebhookCall) {
       const incomingToken = req.headers.get("asaas-access-token") || "";
       const expectedSecret = getAsaasWebhookSecret();
 
-      // Validação do Token Secreto se configurado nas variáveis de ambiente
-      if (expectedSecret && incomingToken !== expectedSecret) {
-        console.warn("[Asaas Webhook] Tentativa de acesso com token inválido rejeitada.");
+      if (!expectedSecret || incomingToken !== expectedSecret) {
+        console.warn("[Asaas Webhook] Token de webhook ausente, não configurado ou inválido.");
         return new Response(JSON.stringify({ error: "Token de webhook não autorizado" }), {
           status: 401,
           headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -73,15 +104,12 @@ serve(async (req: Request) => {
       const subscriptionId = payment.subscription || body.subscription?.id;
       const customerId = payment.customer || body.customer?.id;
 
-      console.log(`[Asaas Webhook] Evento recebido: ${eventType} | Cliente: ${customerId} | Assinatura: ${subscriptionId} | Fatura: ${payment.id}`);
-
       if (!customerId && !subscriptionId) {
         return new Response(JSON.stringify({ received: true, note: "Sem identificador de cliente/assinatura" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       }
 
-      // Busca o restaurante (tenant) no Supabase vinculado ao Asaas
       let tenantQuery = supabase.from("tenants").select("id, name, is_active, asaas_customer_id, asaas_subscription_id");
       if (subscriptionId) {
         tenantQuery = tenantQuery.eq("asaas_subscription_id", subscriptionId);
@@ -90,9 +118,7 @@ serve(async (req: Request) => {
       }
 
       const { data: matchedTenants, error: findErr } = await tenantQuery;
-
       if (findErr || !matchedTenants || matchedTenants.length === 0) {
-        console.warn(`[Asaas Webhook] Nenhum restaurante encontrado para o cliente Asaas: ${customerId} / Assinatura: ${subscriptionId}`);
         return new Response(JSON.stringify({ received: true, warning: "Restaurante não localizado no banco" }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
@@ -100,10 +126,7 @@ serve(async (req: Request) => {
 
       const targetTenant = matchedTenants[0];
 
-      // A. Pagamento Confirmado / Recebido (Ativação Automática da Loja)
       if (eventType === "PAYMENT_RECEIVED" || eventType === "PAYMENT_CONFIRMED") {
-        console.log(`[Asaas Webhook] 💰 Pagamento recebido para a loja "${targetTenant.name}" (${targetTenant.id}). Reativando loja!`);
-        
         await supabase
           .from("tenants")
           .update({
@@ -117,19 +140,12 @@ serve(async (req: Request) => {
           })
           .eq("id", targetTenant.id);
 
-        return new Response(JSON.stringify({ 
-          success: true, 
-          action: "tenant_activated", 
-          tenantId: targetTenant.id 
-        }), {
+        return new Response(JSON.stringify({ success: true, action: "tenant_activated", tenantId: targetTenant.id }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       }
 
-      // B. Fatura Vencida e Não Paga (Pausa Automática por Inadimplência)
       if (eventType === "PAYMENT_OVERDUE") {
-        console.warn(`[Asaas Webhook] ⚠️ Fatura vencida para a loja "${targetTenant.name}" (${targetTenant.id}). Pausando loja!`);
-
         await supabase
           .from("tenants")
           .update({
@@ -139,18 +155,12 @@ serve(async (req: Request) => {
           })
           .eq("id", targetTenant.id);
 
-        return new Response(JSON.stringify({ 
-          success: true, 
-          action: "tenant_paused_overdue", 
-          tenantId: targetTenant.id 
-        }), {
+        return new Response(JSON.stringify({ success: true, action: "tenant_paused_overdue", tenantId: targetTenant.id }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       }
 
-      // C. Pagamento Restaurado / Estornado Regularizado
       if (eventType === "PAYMENT_RESTORED") {
-        console.log(`[Asaas Webhook] Pagamento restaurado para a loja "${targetTenant.name}".`);
         await supabase
           .from("tenants")
           .update({
@@ -165,9 +175,7 @@ serve(async (req: Request) => {
         });
       }
 
-      // D. Assinatura Deletada / Cancelada
       if (eventType === "SUBSCRIPTION_DELETED" || eventType === "SUBSCRIPTION_INACTIVATED") {
-        console.log(`[Asaas Webhook] Assinatura cancelada para a loja "${targetTenant.name}". Desativando loja.`);
         await supabase
           .from("tenants")
           .update({
@@ -187,10 +195,26 @@ serve(async (req: Request) => {
       });
     }
 
-    // =========================================================================
-    // 2. CRIAÇÃO DE CLIENTE E ASSINATURA EM 1 CLIQUE (SuperAdmin)
-    // =========================================================================
+    // 2. CRIAÇÃO DE CLIENTE E ASSINATURA (Exige SuperAdmin autenticado)
     if (action === "create_customer_and_subscription") {
+      await requireSuperAdminOrTenantAdmin(req, supabase, true);
+
+      const { name, email, phone, cpfCnpj, monthlyPrice, dueDays = 3 } = body;
+      const val = (monthlyPrice !== undefined && monthlyPrice !== null && monthlyPrice !== "")
+        ? Number(monthlyPrice)
+        : 99.00;
+
+      if (isNaN(val) || val <= 0) {
+        return new Response(JSON.stringify({
+          success: true,
+          skipped: true,
+          value: 0,
+          message: "Plano gratuito (R$ 0,00): assinatura Asaas dispensada."
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
       if (!asaasApiKey) {
         return new Response(JSON.stringify({ error: "Chave ASAAS_API_KEY não configurada no Supabase" }), {
           status: 500,
@@ -198,13 +222,10 @@ serve(async (req: Request) => {
         });
       }
 
-      const { name, email, phone, cpfCnpj, monthlyPrice, dueDays = 3 } = body;
-
       const cleanPhone = String(phone || "").replace(/\D/g, "");
       const cleanCpfCnpj = String(cpfCnpj || "").replace(/\D/g, "");
       const cleanEmail = String(email || "").trim().toLowerCase();
 
-      // 1. Cria ou Busca o Cliente no Asaas
       const customerPayload: any = {
         name: name || "Restaurante Parceiro",
         email: cleanEmail || "financeiro@restaurante.com",
@@ -218,8 +239,6 @@ serve(async (req: Request) => {
         customerPayload.cpfCnpj = cleanCpfCnpj;
       }
 
-      console.log(`[Asaas API] Criando cliente: ${customerPayload.name}`);
-
       const custRes = await fetch(`${asaasBaseUrl}/customers`, {
         method: "POST",
         headers: {
@@ -231,9 +250,8 @@ serve(async (req: Request) => {
 
       const custData = await custRes.json();
       if (!custRes.ok) {
-        console.error("[Asaas Error - Criar Cliente]", custData);
-        return new Response(JSON.stringify({ 
-          error: custData.errors?.[0]?.description || custData.message || "Erro ao criar cliente no Asaas" 
+        return new Response(JSON.stringify({
+          error: custData.errors?.[0]?.description || custData.message || "Erro ao criar cliente no Asaas"
         }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -241,25 +259,18 @@ serve(async (req: Request) => {
       }
 
       const customerId = custData.id;
-
-      // 2. Calcula data de primeiro vencimento (hoje + dueDays dias)
       const dueDate = new Date();
       dueDate.setDate(dueDate.getDate() + Number(dueDays || 3));
       const nextDueDate = dueDate.toISOString().split("T")[0];
 
-      const val = Number(monthlyPrice || 99.00);
-
-      // 3. Cria a Assinatura Mensal Recorrente
       const subPayload = {
         customer: customerId,
-        billingType: "UNDEFINED", // Permite PIX, Boleto e Cartão de Crédito
+        billingType: "UNDEFINED",
         value: val,
         nextDueDate,
         cycle: "MONTHLY",
         description: `Mensalidade Plataforma Delivery - ${name || "Restaurante"}`
       };
-
-      console.log(`[Asaas API] Criando assinatura mensal para ${customerId}: R$ ${val}`);
 
       const subRes = await fetch(`${asaasBaseUrl}/subscriptions`, {
         method: "POST",
@@ -272,9 +283,8 @@ serve(async (req: Request) => {
 
       const subData = await subRes.json();
       if (!subRes.ok) {
-        console.error("[Asaas Error - Criar Assinatura]", subData);
-        return new Response(JSON.stringify({ 
-          error: subData.errors?.[0]?.description || subData.message || "Erro ao criar assinatura no Asaas" 
+        return new Response(JSON.stringify({
+          error: subData.errors?.[0]?.description || subData.message || "Erro ao criar assinatura no Asaas"
         }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -282,8 +292,6 @@ serve(async (req: Request) => {
       }
 
       const subscriptionId = subData.id;
-
-      // 4. Busca a 1ª fatura gerada para obter o link de pagamento imediato
       let paymentLink = "";
       let paymentId = "";
 
@@ -297,9 +305,7 @@ serve(async (req: Request) => {
           paymentId = firstPay.id;
           paymentLink = firstPay.invoiceUrl || firstPay.bankSlipUrl || "";
         }
-      } catch (_e) {
-        console.warn("[Asaas] Não foi possível capturar link imediato da 1ª fatura");
-      }
+      } catch (_e) {}
 
       return new Response(JSON.stringify({
         success: true,
@@ -314,16 +320,29 @@ serve(async (req: Request) => {
       });
     }
 
-    // =========================================================================
-    // 3. ATUALIZAÇÃO DOS DADOS FISCAIS DO CLIENTE (Autoatendimento Lojista)
-    // =========================================================================
+    // 3. ATUALIZAÇÃO DOS DADOS FISCAIS DO CLIENTE (Admin da própria loja ou SuperAdmin)
     if (action === "update_customer") {
+      const member = await requireSuperAdminOrTenantAdmin(req, supabase, false);
       const { customerId, name, email, phone, cpfCnpj } = body;
       if (!customerId) {
         return new Response(JSON.stringify({ error: "customerId é obrigatório" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
+      }
+
+      if (member.role !== "super_admin") {
+        const { data: ownTenant } = await supabase
+          .from("tenants")
+          .select("asaas_customer_id")
+          .eq("id", member.tenant_id)
+          .maybeSingle();
+        if (!ownTenant || ownTenant.asaas_customer_id !== customerId) {
+          return new Response(JSON.stringify({ error: "Acesso negado ao customerId informado." }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
       }
 
       const cleanPhone = String(phone || "").replace(/\D/g, "");
@@ -360,10 +379,9 @@ serve(async (req: Request) => {
       });
     }
 
-    // =========================================================================
-    // 4. CONSULTA DE STATUS DA ASSINATURA (Raio-X no SuperAdmin)
-    // =========================================================================
+    // 4. CONSULTA DE STATUS DA ASSINATURA (Exige SuperAdmin ou Admin da loja dona da assinatura)
     if (action === "get_subscription") {
+      const member = await requireSuperAdminOrTenantAdmin(req, supabase, false);
       const { subscriptionId } = body;
       if (!subscriptionId) {
         return new Response(JSON.stringify({ error: "subscriptionId é obrigatório" }), {
@@ -372,17 +390,31 @@ serve(async (req: Request) => {
         });
       }
 
+      if (member.role !== "super_admin") {
+        const { data: ownTenant } = await supabase
+          .from("tenants")
+          .select("asaas_subscription_id")
+          .eq("id", member.tenant_id)
+          .maybeSingle();
+        if (!ownTenant || ownTenant.asaas_subscription_id !== subscriptionId) {
+          return new Response(JSON.stringify({ error: "Acesso negado à assinatura informada." }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+      }
+
       const subRes = await fetch(`${asaasBaseUrl}/subscriptions/${subscriptionId}`, {
         headers: { "access_token": asaasApiKey }
       });
-      const subData = await subRes.json();
+      const subData = await subRes.json().catch(() => ({}));
 
       let payments: any[] = [];
       try {
         const payRes = await fetch(`${asaasBaseUrl}/subscriptions/${subscriptionId}/payments`, {
           headers: { "access_token": asaasApiKey }
         });
-        const payData = await payRes.json();
+        const payData = await payRes.json().catch(() => ({}));
         payments = payData.data || [];
       } catch (_e) {}
 
@@ -400,9 +432,14 @@ serve(async (req: Request) => {
     });
 
   } catch (err: any) {
-    console.error("[Asaas Edge Function Error]", err);
-    return new Response(JSON.stringify({ error: err.message || "Erro interno do servidor" }), {
-      status: 500,
+    const msg = String(err.message || "Erro interno do servidor");
+    const status = msg.includes("Autenticação") || msg.includes("Token")
+      ? 401
+      : msg.includes("Acesso negado") || msg.includes("vínculo")
+      ? 403
+      : 500;
+    return new Response(JSON.stringify({ error: msg }), {
+      status,
       headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
   }

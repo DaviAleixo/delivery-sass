@@ -3,13 +3,28 @@
  * Utiliza as credenciais próprias de cada restaurante.
  */
 
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://zecuwijuiqsaoeafonsv.supabase.co";
 const MP_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/mercadopago`;
+
+async function getAdminAuthHeaders() {
+  const headers = { "Content-Type": "application/json" };
+  if (isSupabaseConfigured() && supabase) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        headers["Authorization"] = `Bearer ${session.access_token}`;
+      }
+    } catch {}
+  }
+  return headers;
+}
 
 /**
  * Valida o Access Token do restaurante junto ao Mercado Pago
  */
-export async function testMercadoPagoCredentials(accessToken) {
+export async function testMercadoPagoCredentials(accessToken, tenantId = null) {
   if (!accessToken || (!accessToken.startsWith("APP_USR-") && !accessToken.startsWith("TEST-"))) {
     return {
       success: false,
@@ -20,10 +35,11 @@ export async function testMercadoPagoCredentials(accessToken) {
   try {
     const res = await fetch(MP_FUNCTION_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: await getAdminAuthHeaders(),
       body: JSON.stringify({
         action: "test_credentials",
         accessToken: accessToken.trim(),
+        tenantId,
       }),
     });
 
@@ -42,7 +58,6 @@ export async function testMercadoPagoCredentials(accessToken) {
  * Gera uma cobrança PIX para um pedido usando o token da loja
  */
 export async function createPixPayment({
-  accessToken,
   orderId,
   orderNumber,
   amount,
@@ -51,8 +66,8 @@ export async function createPixPayment({
   payerName,
   payerPhone,
 }) {
-  if (!accessToken) {
-    return { success: false, error: "A loja não configurou o Mercado Pago" };
+  if (!orderId) {
+    return { success: false, error: "Identificador do pedido ausente" };
   }
 
   const cleanPhone = String(payerPhone || "").replace(/\D/g, "");
@@ -74,7 +89,6 @@ export async function createPixPayment({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "create_pix_payment",
-        accessToken: accessToken.trim(),
         orderId,
         orderNumber,
         amount,
@@ -106,8 +120,8 @@ export async function createPixPayment({
 /**
  * Consulta se o pagamento PIX foi aprovado (Polling a cada 3s no checkout)
  */
-export async function checkPaymentStatus({ accessToken, paymentId, orderId }) {
-  if (!accessToken || !paymentId) return { status: "pending", isApproved: false };
+export async function checkPaymentStatus({ paymentId, orderId }) {
+  if (!paymentId || !orderId) return { status: "pending", isApproved: false };
 
   try {
     const res = await fetch(MP_FUNCTION_URL, {
@@ -115,7 +129,6 @@ export async function checkPaymentStatus({ accessToken, paymentId, orderId }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "check_payment_status",
-        accessToken: accessToken.trim(),
         paymentId,
         orderId,
       }),
@@ -131,22 +144,24 @@ export async function checkPaymentStatus({ accessToken, paymentId, orderId }) {
 /**
  * Realiza o estorno de um pagamento PIX junto ao Mercado Pago
  */
-export async function refundPixPayment({ accessToken, paymentId, amount }) {
-  if (!accessToken || !paymentId) {
+export async function refundPixPayment({ paymentId, amount, orderId = null, tenantId = null, idempotencyKey = null }) {
+  if (!paymentId) {
     return {
       success: false,
-      error: "Access token e Payment ID do Mercado Pago são obrigatórios para o estorno",
+      error: "Payment ID do Mercado Pago é obrigatório para o estorno",
     };
   }
 
   try {
     const res = await fetch(MP_FUNCTION_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: await getAdminAuthHeaders(),
       body: JSON.stringify({
         action: "refund_payment",
-        accessToken: accessToken.trim(),
         paymentId,
+        orderId,
+        tenantId,
+        idempotencyKey: idempotencyKey || undefined,
         amount: amount ? Number(amount) : undefined,
       }),
     });

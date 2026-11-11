@@ -6,15 +6,13 @@ import { Order } from "@/entities/Order";
 import { Settings } from "@/entities/Settings";
 import { BannerImage } from "@/entities/BannerImage";
 import { Category } from "@/entities/Category";
-import { Coupon } from "@/entities/Coupon";
-import { CouponUsage } from "@/entities/CouponUsage";
 import { ComplementGroup } from "@/entities/ComplementGroup";
 import { ComplementItem } from "@/entities/ComplementItem";
 import { ProductComplementGroup } from "@/entities/ProductComplementGroup";
 import { RestaurantTable, TableSession } from "@/entities/RestaurantTable";
 import { ProductionSector } from "@/entities/ProductionSector";
 import { stampOrderItemsWithSectors } from "@/utils/sectorUtils";
-import { base44 } from "@/api/base44Client";
+import { getOrCreateCheckoutOrderId, clearCheckoutIdempotencyKey } from "@/utils/checkoutIdempotency";
 import { AnimatePresence, motion } from "framer-motion";
 import ProductCard from "../components/menu/ProductCard";
 import PopularProductsRow from "../components/menu/PopularProductsRow";
@@ -253,55 +251,25 @@ export default function MenuPage() {
 
   const loadRecentOrders = async () => {
     try {
-      let loggedUser = null;
-      try {
-        loggedUser = await base44.auth.me();
-      } catch {}
-
-      const allOrders = await Order.list("-created_date", 25);
-      if (!Array.isArray(allOrders) || allOrders.length === 0) {
-        setRecentOrders([]);
+      if (isSupabaseConfigured() && supabase) {
+        const tokenEntries = JSON.parse(localStorage.getItem("vrumburguer_recent_orders_tokens") || "[]");
+        if (!Array.isArray(tokenEntries) || tokenEntries.length === 0) {
+          setRecentOrders([]);
+          return;
+        }
+        const { data: tokOrders } = await supabase.rpc("get_public_orders_by_tokens", {
+          p_tokens: tokenEntries,
+        });
+        setRecentOrders(Array.isArray(tokOrders) ? tokOrders.slice(0, 10) : []);
         return;
       }
 
+      const allOrders = await Order.list("-created_date", 25);
       const recentIds = JSON.parse(localStorage.getItem("vrumburguer_recent_orders") || "[]");
-      const savedPhone = (localStorage.getItem("vrumburguer_customer_phone") || "").replace(/\D/g, "");
-
-      let filtered = [];
-
-      if (loggedUser?.email) {
-        filtered = allOrders.filter(o => o.user_email === loggedUser.email);
-      }
-
-      if (recentIds.length > 0) {
-        const localMatched = allOrders.filter(o => recentIds.includes(o.id));
-        filtered = [...filtered, ...localMatched];
-      }
-
-      if (savedPhone && savedPhone.length >= 8) {
-        const phoneOrders = allOrders.filter(o => {
-          const op = (o.customer_phone || "").replace(/\D/g, "");
-          return op === savedPhone || (op.length >= 8 && op.endsWith(savedPhone.slice(-8)));
-        });
-        filtered = [...filtered, ...phoneOrders];
-      }
-
-      // Se não houver pedidos específicos salvos no navegador, utiliza os últimos pedidos da loja (até 10)
-      if (filtered.length === 0) {
-        filtered = allOrders.slice(0, 10);
-      }
-
-      // Deduplica por ID
-      const uniqueOrders = [];
-      const seenIds = new Set();
-      for (const order of filtered) {
-        if (!seenIds.has(order.id)) {
-          seenIds.add(order.id);
-          uniqueOrders.push(order);
-        }
-      }
-
-      setRecentOrders(uniqueOrders.slice(0, 10));
+      const filtered = Array.isArray(allOrders)
+        ? allOrders.filter(o => recentIds.includes(o.id))
+        : [];
+      setRecentOrders(filtered.slice(0, 10));
     } catch (_err) {
       console.log("Erro ao carregar últimos pedidos:", _err);
     }
@@ -309,30 +277,23 @@ export default function MenuPage() {
 
   const checkActiveOrders = async () => {
     try {
-      // Auto-finalização por tempo de pedidos despachados há mais de 2 horas (Fallback Inteligente)
-      if (isSupabaseConfigured() && supabase) {
-        try {
-          const tenantId = tenant?.id || localStorage.getItem("current_tenant_id");
-          await supabase.rpc("auto_deliver_stale_orders", {
-            p_tenant_id: tenantId || null,
-            p_timeout_hours: 2
-          });
-        } catch {}
-      }
-
       // Pedidos na mesa / QR Code NÃO têm componente de rastreamento
       if (urlMesa) {
         setActiveGuestOrder(null);
         return;
       }
 
-      const user = await base44.auth.me();
-
-      if (user?.email) {
-        const allOrders = await Order.list("-created_date", 10);
-        const active = allOrders.find(o => 
-          o.user_email === user.email && 
-          o.order_type !== 'dine_in' && 
+      if (isSupabaseConfigured() && supabase) {
+        const tokenEntries = JSON.parse(localStorage.getItem("vrumburguer_recent_orders_tokens") || "[]");
+        if (!Array.isArray(tokenEntries) || tokenEntries.length === 0) {
+          setActiveGuestOrder(null);
+          return;
+        }
+        const { data: tokOrders } = await supabase.rpc("get_public_orders_by_tokens", {
+          p_tokens: tokenEntries,
+        });
+        const active = (Array.isArray(tokOrders) ? tokOrders : []).find(o =>
+          o.order_type !== 'dine_in' &&
           !o.table_number &&
           ['pendente', 'confirmado', 'preparando', 'enviado'].includes(o.status)
         );
@@ -660,16 +621,16 @@ export default function MenuPage() {
       const activeTenantId = tenantId || tenant?.id || localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001";
       const isPixOnline = orderData.payment_method === 'pix_online';
       
-      // Gera ID determinístico único por tentativa de checkout se não fornecido
-      const deterministicOrderId = orderData.id || (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" 
-        ? crypto.randomUUID() 
-        : undefined);
+      // Usa ID persistido por carrinho/sessão de checkout (ou gera fallback determinístico único)
+      const deterministicOrderId = orderData.id || getOrCreateCheckoutOrderId(activeTenantId, cart);
 
       const isTableOrder = orderData.order_type === 'dine_in' || Boolean(urlMesa) || Boolean(orderData.table_number);
       const effectiveTableNumber = orderData.table_number || urlMesa || null;
       let tableSessionId = orderData.table_session_id || null;
 
-      if (isTableOrder && effectiveTableNumber) {
+      // No modo Supabase, create_public_order já abre/vincula table_session_id atomicamente no servidor
+      // (evita chamadas anônimas 401/403 bloqueadas por RLS em table_sessions e restaurant_tables)
+      if (!isSupabaseConfigured() && isTableOrder && effectiveTableNumber) {
         try {
           const sessions = await TableSession.list("-opened_at", 50);
           const activeSession = sessions.find(s => 
@@ -708,22 +669,57 @@ export default function MenuPage() {
       });
 
       const resolvedOrderType = isTableOrder ? "dine_in" : (orderData.order_type || "delivery");
-      const shouldAutoConfirmDelivery = Boolean(settings?.auto_accept_delivery) && resolvedOrderType === "delivery";
+      let createdOrder = null;
 
-      const orderPayload = {
-        ...orderData,
-        items: stampedItems,
-        ...(deterministicOrderId ? { id: deterministicOrderId } : {}),
-        status: isPixOnline
-          ? "aguardando_pagamento"
-          : ((isTableOrder || shouldAutoConfirmDelivery) ? "confirmado" : "pendente"),
-        payment_status: isPixOnline ? "pending" : "pending_delivery",
-        tenant_id: activeTenantId,
-        order_type: resolvedOrderType,
-        table_number: effectiveTableNumber,
-        table_session_id: tableSessionId,
-      };
-      const createdOrder = await Order.create(orderPayload);
+      if (isSupabaseConfigured() && supabase) {
+        const { data: rpcOrder, error: rpcOrderErr } = await supabase.rpc("create_public_order", {
+          p_tenant_id: activeTenantId,
+          p_customer_name: orderData.customer_name || (isTableOrder ? `Mesa ${effectiveTableNumber}` : "Cliente"),
+          p_customer_phone: orderData.customer_phone || "",
+          p_delivery_type: resolvedOrderType,
+          p_delivery_address: orderData.customer_address || "",
+          p_payment_method: orderData.payment_method || "dinheiro",
+          p_items: stampedItems,
+          p_coupon_code: !isTableOrder ? (orderData.coupon_code || null) : null,
+          p_notes: orderData.notes || null,
+          p_table_number: effectiveTableNumber,
+          p_neighborhood: orderData.delivery_neighborhood || null,
+          p_use_cashback: Boolean(orderData.use_cashback || (orderData.cashback_discount > 0)),
+          p_cashback_amount: orderData.cashback_discount ? Number(orderData.cashback_discount) : null,
+          p_card_brand: orderData.card_brand || null,
+          p_change_for: orderData.change_for ? String(orderData.change_for) : null,
+          p_customer_email: orderData.customer_email || orderData.user_email || null,
+          p_order_id: deterministicOrderId || null,
+        });
+
+        if (rpcOrderErr || !rpcOrder?.success) {
+          throw new Error(rpcOrderErr?.message || rpcOrder?.message || "Erro ao processar pedido no servidor.");
+        }
+        createdOrder = {
+          ...orderData,
+          ...rpcOrder,
+          id: rpcOrder.order_id || rpcOrder.id,
+          tenant_id: activeTenantId,
+          order_type: resolvedOrderType,
+          table_number: effectiveTableNumber,
+        };
+      } else {
+        const shouldAutoConfirmDelivery = Boolean(settings?.auto_accept_delivery) && resolvedOrderType === "delivery";
+        const orderPayload = {
+          ...orderData,
+          items: stampedItems,
+          ...(deterministicOrderId ? { id: deterministicOrderId } : {}),
+          status: isPixOnline
+            ? "aguardando_pagamento"
+            : ((isTableOrder || shouldAutoConfirmDelivery) ? "confirmado" : "pendente"),
+          payment_status: isPixOnline ? "pending" : "pending_delivery",
+          tenant_id: activeTenantId,
+          order_type: resolvedOrderType,
+          table_number: effectiveTableNumber,
+          table_session_id: tableSessionId,
+        };
+        createdOrder = await Order.create(orderPayload);
+      }
 
       if (!isTableOrder) {
         try {
@@ -732,49 +728,29 @@ export default function MenuPage() {
             recentOrders.unshift(createdOrder.id);
             localStorage.setItem("vrumburguer_recent_orders", JSON.stringify(recentOrders.slice(0, 10)));
           }
+          if (createdOrder.tracking_token) {
+            const tokenEntries = JSON.parse(localStorage.getItem("vrumburguer_recent_orders_tokens") || "[]");
+            const filteredTokens = Array.isArray(tokenEntries)
+              ? tokenEntries.filter((t) => t && t.id !== createdOrder.id)
+              : [];
+            filteredTokens.unshift({ id: createdOrder.id, tracking_token: createdOrder.tracking_token });
+            localStorage.setItem("vrumburguer_recent_orders_tokens", JSON.stringify(filteredTokens.slice(0, 15)));
+          }
         } catch {}
       } else {
         setActiveGuestOrder(null);
       }
-
-      if (orderData.coupon_code) {
-        try {
-          const cleanPhone = (orderData.customer_phone || "").replace(/\D/g, "");
-          const coupons = await Coupon.filter({ code: orderData.coupon_code.toUpperCase(), active: true });
-          const targetCoupon = coupons[0];
-          
-          if (targetCoupon && (cleanPhone || orderData.customer_email)) {
-            const userIdentifier = orderData.customer_email 
-              ? `${orderData.customer_email} [phone:${cleanPhone}]` 
-              : `phone:${cleanPhone}`;
-
-            await CouponUsage.create({
-              coupon_id: targetCoupon.id,
-              user_email: userIdentifier,
-              order_id: createdOrder.id
-            });
-          }
-        } catch (error) {
-          console.log("Erro ao registrar uso do cupom:", error);
-        }
-      }
-
-      // Se o cliente utilizou saldo de cashback, debita imediatamente da carteira para reservar o desconto
-      if (orderData.cashback_discount > 0) {
-        try {
-          if (isSupabaseConfigured() && supabase) {
-            await supabase.rpc("process_order_cashback", {
-              p_order_id: String(createdOrder.id),
-              p_action: "debit_only"
-            });
-          }
-        } catch (cbErr) {
-          console.warn("Erro ao processar débito de cashback do pedido:", cbErr);
-        }
-      }
       
+      const hasOnlineMp = Boolean(
+        tenant?.payment_methods?.accept_online_mp &&
+        (tenant?.payment_methods?.has_online_mp || tenant?.payment_methods?.mp_access_token)
+      );
+
       if (!isPixOnline) {
         setCart([]);
+      }
+      if (!isPixOnline || !hasOnlineMp) {
+        clearCheckoutIdempotencyKey(activeTenantId);
       }
       setShowOrderModal(false);
       setIsCartVisible(false);
@@ -793,14 +769,14 @@ export default function MenuPage() {
         });
       }
 
-      // Se for PIX Online Mercado Pago e a loja tiver o Access Token configurado, abre o modal do QR Code!
-      const mpToken = tenant?.payment_methods?.mp_access_token;
-      if (isPixOnline && mpToken) {
+      // Se for PIX Online Mercado Pago e a loja tiver PIX Online configurado, abre o modal do QR Code!
+      if (isPixOnline && hasOnlineMp) {
         setPixOnlineOrder(createdOrder);
         return;
       }
       
-      navigate(`${createPageUrl("MyOrders")}?id=${createdOrder.id}`);
+      const tokenQuery = createdOrder.tracking_token ? `&token=${createdOrder.tracking_token}` : "";
+      navigate(`${createPageUrl("MyOrders")}?id=${createdOrder.id}${tokenQuery}`);
     } catch (_error) {
       console.error("[Menu submitOrder error]:", _error);
       alert("Erro ao enviar pedido. Tente novamente.");
@@ -874,7 +850,10 @@ export default function MenuPage() {
           </div>
 
           <span className="text-xs font-black uppercase tracking-wider text-emerald-800 bg-emerald-50 border border-emerald-200/90 px-3.5 py-1 rounded-full mb-2">
-            Mesa {tableOrderConfirmed?.table_number || urlMesa || "Salão"}
+            {(() => {
+              const rawTbl = String(tableOrderConfirmed?.table_number || urlMesa || "Salão").trim();
+              return /^mesa\b/i.test(rawTbl) ? rawTbl : `Mesa ${rawTbl}`;
+            })()}
           </span>
 
           <h3 className="text-xl sm:text-2xl font-black text-stone-900 tracking-tight">
@@ -905,7 +884,7 @@ export default function MenuPage() {
                         {item.quantity}x {item.product_name || item.name}
                       </span>
                       <span className="font-bold text-stone-700 shrink-0">
-                        R$ {Number((item.total_price || (item.price * item.quantity)) || 0).toFixed(2).replace('.', ',')}
+                        R$ {Number(item.total_price ?? item.subtotal ?? ((item.product_price ?? item.price ?? 0) * (item.quantity || 1))) .toFixed(2).replace('.', ',')}
                       </span>
                     </div>
                   ))}
@@ -1720,6 +1699,7 @@ export default function MenuPage() {
         minOrderValue={settings?.min_order_value || 0}
         deliveryTime={settings?.delivery_time || "40-50 min"}
         deliveryRules={settings}
+        tenantId={tenantId || tenant?.id || localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001"}
         initialTableNumber={urlMesa || ""}
         onSubmit={submitOrder}
         isSubmitting={isSubmitting}
@@ -1728,13 +1708,7 @@ export default function MenuPage() {
       {pixOnlineOrder && (
         <PixOnlineModal
           isOpen={Boolean(pixOnlineOrder)}
-          onClose={async () => {
-            // Se o usuário fechar ou clicar em "Escolher outra forma de pagamento" sem pagar:
-            try {
-              if (pixOnlineOrder?.id) {
-                await Order.delete(pixOnlineOrder.id);
-              }
-            } catch (_e) {}
+          onClose={() => {
             setPixOnlineOrder(null);
             setShowOrderModal(true);
           }}
@@ -1742,14 +1716,18 @@ export default function MenuPage() {
           accessToken={tenant?.payment_methods?.mp_access_token}
           tenant={tenant}
           onPaymentApproved={(paidOrder) => {
+            clearCheckoutIdempotencyKey(tenantId || tenant?.id || localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001");
             setPixOnlineOrder(null);
             setCart([]);
-            navigate(`${createPageUrl("MyOrders")}?id=${paidOrder.id}`);
+            const tq = paidOrder.tracking_token ? `&token=${paidOrder.tracking_token}` : "";
+            navigate(`${createPageUrl("MyOrders")}?id=${paidOrder.id}${tq}`);
           }}
           onPaymentConvertedToDelivery={(convertedOrder) => {
+            clearCheckoutIdempotencyKey(tenantId || tenant?.id || localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001");
             setPixOnlineOrder(null);
             setCart([]);
-            navigate(`${createPageUrl("MyOrders")}?id=${convertedOrder.id}`);
+            const tq = convertedOrder.tracking_token ? `&token=${convertedOrder.tracking_token}` : "";
+            navigate(`${createPageUrl("MyOrders")}?id=${convertedOrder.id}${tq}`);
           }}
         />
       )}

@@ -1230,6 +1230,22 @@
 
 ---
 
+### ⚡ 15. Otimização de Consumo Realtime em Escala (`Postgres Changes` vs `Broadcast`)
+* **Contexto (Observado na Fase 2)**: Na auditoria de carga sustentada, o gargalo de CPU do plano Nano/Free foi majoritariamente a leitura de WAL (`realtime.list_changes` via `SELECT wal->>...`) com 4 tabelas na publicação `supabase_realtime` (`orders`, `table_sessions`, `restaurant_tables`, `print_jobs`) em `REPLICA IDENTITY FULL`.
+* **Oportunidade de Otimização Futura (sem reescrever o sistema)**:
+  - Avaliar se `print_jobs` e notificações leves ao cliente final podem usar **Supabase Broadcast** (sem passar pelo WAL/CDC do Postgres) ou `DEFAULT` replica identity quando o filtro por `tenant_id` não exigir payload antigo completo.
+  - Manter `postgres_changes` restrito ao que exige consistência estrita no painel da loja via [[realtimeHub]], já multiplexado em 1 WebSocket por aba.
+
+### 🔌 16. Worker Satélite de Integrações (`iFood`, `aiqfome`, `WhatsApp` & Filas)
+* **Arquitetura Alinhada (Sem AWS Complexa)**:
+  - **Camada 1 (Core Atual)**: React + Vite (Cloudflare Pages) + Supabase Pro (Postgres, Auth, RLS, RPCs atômicas, Realtime).
+  - **Camada 2 (Worker Desacoplado Futuro)**: Um serviço leve (ex.: Node/TypeScript em VPS/PaaS) adicionado **somente quando a demanda exigir**, conectado ao mesmo Postgres para lidar com filas duráveis, reconexão contínua e rate limits externos.
+* **Padrão de Adaptador Canônico para Marketplaces (`iFood` / `aiqfome`)**:
+  - Todo pedido vindo de plataforma externa passa por um normalizador único que converte o JSON externo no formato interno do [[create_public_order]] / pedido do PedeMuleke, respeitando identificação de tenant, idempotência por ID externo e sincronização de status no KDS e `print_jobs`.
+  - *Pré-requisito de negócio*: validar previamente credenciamento de parceiro e regras de homologação oficial da API de cada marketplace antes da implementação.
+
+---
+
 ## 🔗 Links Relacionados
 * [[00 - 🏠 Inicio]] — Menu Principal
 * [[01 - 🗺️ Roadmap & Backlog]] — Tarefas aprovadas e em andamento

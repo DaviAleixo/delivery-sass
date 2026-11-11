@@ -58,10 +58,12 @@ export default function PDVPage() {
     }
 
     loadData();
+    const activeTenantId = getActiveTenantId();
+    const subOpts = activeTenantId ? { filter: `tenant_id=eq.${activeTenantId}` } : {};
     const unsubProduct = Product.subscribe(() => loadData());
     const unsubCategory = Category.subscribe(() => loadData());
-    const unsubTable = RestaurantTable.subscribe(() => loadData());
-    const unsubSession = TableSession.subscribe(() => loadData());
+    const unsubTable = RestaurantTable.subscribe(() => loadData(), subOpts);
+    const unsubSession = TableSession.subscribe(() => loadData(), subOpts);
 
     return () => {
       if (typeof unsubProduct === "function") unsubProduct();
@@ -225,49 +227,30 @@ export default function PDVPage() {
         }
       }
 
-      // Busca sessão ativa ou abre uma nova sessão real com UUID no Supabase
+      // Busca ou cria sessão de forma atômica via open_table_session (FOR UPDATE, sem sessão fantasma)
       let activeSessionId = null;
       let activeSessionCustomer = customerName.trim() || `Mesa ${cleanTargetNum}`;
       let activeSessionPhone = customerPhone.trim() || "";
 
-      if (isSupabaseConfigured() && supabase) {
-        const { data: existingSess } = await supabase
-          .from("table_sessions")
-          .select("id, status, customer_name, customer_phone")
-          .eq("tenant_id", activeTenantId)
-          .eq("table_number", cleanTargetNum)
-          .in("status", ["open", "bill_requested"])
-          .order("opened_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+      if (isSupabaseConfigured() && supabase && table?.id) {
+        const { data: rpcSess, error: rpcSessErr } = await supabase.rpc("open_table_session", {
+          p_tenant_id: activeTenantId,
+          p_table_id: table.id,
+          p_customer_name: activeSessionCustomer,
+          p_customer_phone: activeSessionPhone || null,
+          p_people_count: 2,
+        });
 
-        if (existingSess?.id) {
-          activeSessionId = existingSess.id;
-          if (existingSess.customer_name && !customerName.trim()) {
-            activeSessionCustomer = existingSess.customer_name;
-          }
-          if (existingSess.customer_phone && !customerPhone.trim()) {
-            activeSessionPhone = existingSess.customer_phone;
-          }
-        } else if (table?.id) {
-          const { data: newSess } = await supabase
-            .from("table_sessions")
-            .insert([{
-              tenant_id: activeTenantId,
-              table_id: table.id,
-              table_number: cleanTargetNum,
-              customer_name: activeSessionCustomer,
-              customer_phone: activeSessionPhone || null,
-              people_count: 2,
-              status: "open",
-              opened_at: new Date().toISOString()
-            }])
-            .select("id")
-            .single();
+        if (rpcSessErr || !rpcSess?.success || !rpcSess?.session?.id) {
+          throw new Error(rpcSessErr?.message || rpcSess?.error || "Não foi possível abrir/vincular a comanda desta mesa.");
+        }
 
-          if (newSess?.id) {
-            activeSessionId = newSess.id;
-          }
+        activeSessionId = rpcSess.session.id;
+        if (rpcSess.session.customer_name && !customerName.trim()) {
+          activeSessionCustomer = rpcSess.session.customer_name;
+        }
+        if (rpcSess.session.customer_phone && !customerPhone.trim()) {
+          activeSessionPhone = rpcSess.session.customer_phone;
         }
       }
 
@@ -347,30 +330,44 @@ export default function PDVPage() {
 
     if (isDineIn) {
       let table = tables.find(t => String(t.table_number).replace(/^Mesa\s*/i, "").trim() === cleanTargetNum);
-      if (table?.id) {
-        await RestaurantTable.update(table.id, { status: "occupied" }).catch(() => {});
-      }
-
-      let activeSession = sessions.find(s => 
-        String(s.table_number).replace(/^Mesa\s*/i, "").trim() === cleanTargetNum &&
-        (s.status === 'open' || s.status === 'bill_requested')
-      );
-      if (!activeSession && table?.id) {
-        try {
-          activeSession = await TableSession.create({
-            tenant_id: activeTenantId,
-            table_id: table.id,
-            table_number: cleanTargetNum,
-            customer_name: trimmedName,
-            customer_phone: customerPhone.trim(),
-            people_count: 2,
-            opened_at: new Date().toISOString(),
-            status: "open",
-          });
-        } catch {}
-      }
-      if (activeSession && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(activeSession.id)) {
-        activeSessionId = activeSession.id;
+      if (isSupabaseConfigured() && supabase && table?.id) {
+        const { data: rpcSess, error: rpcSessErr } = await supabase.rpc("open_table_session", {
+          p_tenant_id: activeTenantId,
+          p_table_id: table.id,
+          p_customer_name: trimmedName,
+          p_customer_phone: customerPhone.trim() || null,
+          p_people_count: 2,
+        });
+        if (rpcSessErr || !rpcSess?.success || !rpcSess?.session?.id) {
+          toast.error(rpcSessErr?.message || rpcSess?.error || "Não foi possível vincular sessão da mesa.");
+          return;
+        }
+        activeSessionId = rpcSess.session.id;
+      } else {
+        if (table?.id) {
+          await RestaurantTable.update(table.id, { status: "occupied" }).catch(() => {});
+        }
+        let activeSession = sessions.find(s => 
+          String(s.table_number).replace(/^Mesa\s*/i, "").trim() === cleanTargetNum &&
+          (s.status === 'open' || s.status === 'bill_requested')
+        );
+        if (!activeSession && table?.id) {
+          try {
+            activeSession = await TableSession.create({
+              tenant_id: activeTenantId,
+              table_id: table.id,
+              table_number: cleanTargetNum,
+              customer_name: trimmedName,
+              customer_phone: customerPhone.trim(),
+              people_count: 2,
+              opened_at: new Date().toISOString(),
+              status: "open",
+            });
+          } catch {}
+        }
+        if (activeSession && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(activeSession.id)) {
+          activeSessionId = activeSession.id;
+        }
       }
     }
 

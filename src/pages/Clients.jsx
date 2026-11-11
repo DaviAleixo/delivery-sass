@@ -35,7 +35,7 @@ export default function ClientsPage() {
         if (activeSlug === "vrumm" || activeSlug === "vruum-burguer") {
           activeTenantId = "a0000000-0000-0000-0000-000000000001";
         } else if (activeSlug) {
-          const { data: tData } = await supabase.from("tenants").select("id").eq("slug", activeSlug).maybeSingle();
+          const { data: tData } = await supabase.from("tenants_public").select("id").eq("slug", activeSlug).maybeSingle();
           if (tData) activeTenantId = tData.id;
         }
 

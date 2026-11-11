@@ -22,15 +22,17 @@ try {
 }
 
 const PORT = process.env.PORT || 9100;
-const CONFIG_FILE = path.join(appDir, "spooler-config.json");
+const CONFIG_FILE = process.env.SPOOLER_CONFIG_FILE || path.join(appDir, "spooler-config.json");
 
 function loadConfig() {
   try {
     if (fs.existsSync(CONFIG_FILE)) {
-      return JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8"));
+      const parsed = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8"));
+      if (!Array.isArray(parsed.pendingAcks)) parsed.pendingAcks = [];
+      return parsed;
     }
   } catch (_e) {}
-  return { selectedPrinter: "", paperWidth: "80mm" };
+  return { selectedPrinter: "", paperWidth: "80mm", pendingAcks: [] };
 }
 
 function saveConfig(config) {
@@ -45,6 +47,7 @@ let currentConfig = loadConfig();
 let isCloudPolling = false;
 let lastCloudPollAt = null;
 let lastCloudPrintAt = null;
+let lastPrintStage = null;
 
 async function callSupabaseRpc(rpcName, params, cfg = currentConfig) {
   const baseUrl = String(cfg.supabaseUrl || process.env.PEDEMULEKE_SUPABASE_URL || DEFAULT_SUPABASE_URL).replace(/\/+$/, "");
@@ -91,10 +94,49 @@ async function pairWithCode(pairingCode, overrideCloud = {}) {
   return rpcRes;
 }
 
+function enqueuePendingAck(entry) {
+  if (!Array.isArray(currentConfig.pendingAcks)) currentConfig.pendingAcks = [];
+  if (!currentConfig.pendingAcks.some((a) => a.jobId === entry.jobId)) {
+    currentConfig.pendingAcks.push(entry);
+    if (currentConfig.pendingAcks.length > 200) {
+      currentConfig.pendingAcks = currentConfig.pendingAcks.slice(-200);
+    }
+    saveConfig(currentConfig);
+  }
+}
+
+async function flushPendingAcks() {
+  if (!currentConfig.stationToken || !Array.isArray(currentConfig.pendingAcks) || currentConfig.pendingAcks.length === 0) {
+    return;
+  }
+  const remaining = [];
+  for (let i = 0; i < currentConfig.pendingAcks.length; i++) {
+    const ack = currentConfig.pendingAcks[i];
+    try {
+      await callSupabaseRpc("spooler_ack", {
+        p_station_token: currentConfig.stationToken,
+        p_job_id: ack.jobId,
+        p_status: ack.status,
+        p_error_message: ack.errorMessage || null,
+      });
+    } catch (_err) {
+      remaining.push(...currentConfig.pendingAcks.slice(i));
+      break;
+    }
+  }
+  currentConfig.pendingAcks = remaining;
+  saveConfig(currentConfig);
+}
+
 async function pollCloudJobsOnce() {
   if (!currentConfig.stationToken || isCloudPolling) return;
   isCloudPolling = true;
   try {
+    await flushPendingAcks();
+    if (Array.isArray(currentConfig.pendingAcks) && currentConfig.pendingAcks.length > 0) {
+      return;
+    }
+
     const res = await callSupabaseRpc("spooler_poll", {
       p_station_token: currentConfig.stationToken,
     });
@@ -125,24 +167,36 @@ async function pollCloudJobsOnce() {
       const orderNum = String(job.order?.order_number || job.order_id || "").slice(-6).toUpperCase();
       console.log(`[${new Date().toLocaleTimeString()}] ☁️ Imprimindo Nuvem #${orderNum} [${sectorLabel}] (${copies}x -> ${targetPrinter || "Padrao"})...`);
 
-      let printResult = { success: false, error: "Falha desconhecida" };
+      let printResult = { success: false, deliveryStage: "spooler_received", error: "Falha desconhecida" };
       for (let i = 0; i < copies; i++) {
         printResult = await sendTextToPrinter(textToPrint, targetPrinter);
         if (!printResult.success) break;
       }
 
+      lastPrintStage = printResult.deliveryStage || (printResult.success ? "windows_spool_accepted" : "windows_spool_rejected");
       if (printResult.success) {
         lastCloudPrintAt = new Date().toISOString();
       }
 
-      await callSupabaseRpc("spooler_ack", {
-        p_station_token: currentConfig.stationToken,
-        p_job_id: job.id,
-        p_status: printResult.success ? "printed" : "failed",
-        p_error_message: printResult.success ? null : (printResult.error || "Erro ao enviar para impressora"),
-      }).catch((ackErr) => {
-        console.error("Erro ao confirmar ACK na nuvem:", ackErr.message);
-      });
+      const ackStatus = printResult.success ? "printed" : "failed";
+      const ackErrMsg = printResult.success ? null : (printResult.error || "Erro ao enviar para impressora");
+      try {
+        await callSupabaseRpc("spooler_ack", {
+          p_station_token: currentConfig.stationToken,
+          p_job_id: job.id,
+          p_status: ackStatus,
+          p_error_message: ackErrMsg,
+        });
+      } catch (ackErr) {
+        console.error("Erro ao confirmar ACK na nuvem (salvo para retry):", ackErr.message);
+        enqueuePendingAck({
+          jobId: job.id,
+          status: ackStatus,
+          errorMessage: ackErrMsg,
+          deliveryStage: lastPrintStage,
+          queuedAt: new Date().toISOString(),
+        });
+      }
     }
   } catch (err) {
     // Silencioso em quedas temporarias de rede para tentar novamente no proximo ciclo
@@ -172,9 +226,7 @@ function isAllowedOrigin(origin) {
       hostname === "pedemuleke.com" ||
       hostname.endsWith(".pedemuleke.com") ||
       hostname === "pedemuleke.com.br" ||
-      hostname.endsWith(".pedemuleke.com.br") ||
-      hostname.endsWith(".pages.dev") ||
-      hostname.endsWith(".vercel.app")
+      hostname.endsWith(".pedemuleke.com.br")
     ) {
       return true;
     }
@@ -215,6 +267,12 @@ const server = http.createServer(async (req, res) => {
   const origin = req.headers.origin;
   const reply = (statusCode, data) => sendJson(res, statusCode, data, origin);
 
+  const rawHost = String(req.headers.host || "").split(":")[0].toLowerCase();
+  if (rawHost && rawHost !== "127.0.0.1" && rawHost !== "localhost") {
+    res.writeHead(403, { "Content-Type": "application/json; charset=utf-8" });
+    return res.end(JSON.stringify({ error: "Host nao autorizado pelo Spooler PedeMuleke" }));
+  }
+
   if (origin && !isAllowedOrigin(origin)) {
     res.writeHead(403, { "Content-Type": "application/json; charset=utf-8", Vary: "Origin" });
     return res.end(JSON.stringify({ error: "Origem nao autorizada pelo Spooler PedeMuleke" }));
@@ -234,6 +292,14 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // Bloqueia CSRF via <form> simples exigindo Content-Type application/json em métodos mutantes
+  if (["POST", "PUT", "DELETE"].includes(req.method)) {
+    const reqCt = String(req.headers["content-type"] || "").toLowerCase();
+    if (!reqCt.includes("application/json")) {
+      return reply(415, { error: "Content-Type application/json obrigatorio" });
+    }
+  }
+
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
   const pathname = url.pathname;
 
@@ -249,6 +315,9 @@ const server = http.createServer(async (req, res) => {
       tenantName: currentConfig.tenantName || null,
       lastCloudPollAt,
       lastCloudPrintAt,
+      lastPrintStage,
+      pendingAcksCount: Array.isArray(currentConfig.pendingAcks) ? currentConfig.pendingAcks.length : 0,
+      physicalConfirmationSupported: false,
       timestamp: new Date().toISOString(),
     });
   }
@@ -382,17 +451,23 @@ const server = http.createServer(async (req, res) => {
         }
 
         if (lastResult.success) {
+          lastPrintStage = lastResult.deliveryStage || "windows_spool_accepted";
           return reply(200, {
             success: true,
             orderId: order.id,
             sectorName: sectorName || null,
             copies,
             printer: lastResult.printer,
+            deliveryStage: lastPrintStage,
+            physicalConfirmationSupported: false,
             printedAt: new Date().toISOString(),
           });
         } else {
+          lastPrintStage = lastResult.deliveryStage || "windows_spool_rejected";
           return reply(500, {
             success: false,
+            deliveryStage: lastPrintStage,
+            physicalConfirmationSupported: false,
             error: lastResult.error,
           });
         }

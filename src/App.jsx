@@ -79,8 +79,8 @@ const AuthenticatedApp = () => {
   // Render the main app
   return (
     <Routes>
-      {/* 1. Rota raiz "/" sempre redireciona para a loja ativa (ex: /texas-grill/menu ou /vrumm/menu) */}
-      <Route path="/" element={<SlugRedirect targetPage="menu" />} />
+      {/* 1. Rota raiz "/" sempre redireciona para o login (/login) */}
+      <Route path="/" element={<LoginRedirect />} />
 
       {/* 2. Painel Master Super Admin e Login Master Geral (únicas páginas globais sem slug) */}
       {Pages["SuperAdmin"] && (

@@ -140,50 +140,24 @@ export default function AdminLoginPage() {
         return;
       }
 
-      const { data: isAuthorizedEmail, error: verifyError } = await supabase.rpc(
-        "verify_admin_reset_email",
-        {
-          p_tenant_slug: cleanStore,
-          p_email: cleanEmail,
-        }
-      );
-
-      if (verifyError) {
-        setError("Não foi possível validar o e-mail informado. Tente novamente.");
-        return;
-      }
-
-      if (!isAuthorizedEmail) {
-        setError(
-          "Este e-mail não está cadastrado como lojista desta empresa. Confira o Código da Loja e o e-mail informado."
-        );
-        return;
-      }
-
       const redirectUrl = `${window.location.origin}/login`;
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
-        redirectTo: redirectUrl,
+      const { data: fnData, error: fnErr } = await supabase.functions.invoke("admin-login", {
+        body: {
+          action: "request_reset",
+          storeIdentifier: cleanStore,
+          email: cleanEmail,
+          redirectTo: redirectUrl,
+        },
       });
 
-      if (resetError) {
-        const rawMsg = String(resetError.message || "").toLowerCase();
-        if (
-          resetError.status === 429 ||
-          rawMsg.includes("rate limit") ||
-          rawMsg.includes("security purposes") ||
-          rawMsg.includes("too many")
-        ) {
-          setError(
-            "Muitas solicitações seguidas. Aguarde alguns instantes (até 60 segundos) antes de solicitar um novo e-mail."
-          );
-        } else {
-          setError(resetError.message || "Não foi possível enviar o e-mail de recuperação.");
-        }
+      if (fnErr || fnData?.success === false) {
+        setError(fnData?.error || "Não foi possível processar a solicitação. Verifique o Código da Loja e o e-mail.");
         return;
       }
 
       setSuccessMessage(
-        `Enviamos um link de redefinição de senha para ${maskEmail(cleanEmail)}. Confira sua caixa de entrada e spam.`
+        fnData?.message ||
+          `Se ${maskEmail(cleanEmail)} estiver vinculado à loja informada, enviaremos o link de redefinição em instantes.`
       );
     } catch (_err) {
       setError("Erro ao solicitar recuperação de senha. Tente novamente.");
@@ -269,138 +243,76 @@ export default function AdminLoginPage() {
       }
 
       if (isSupabaseConfigured() && supabase) {
-        let emailToTry = cleanUser;
-
-        // Se o usuário digitou um email completo diretamente
-        if (cleanUser.includes("@")) {
-          emailToTry = cleanUser;
-        } else {
-          // Resolve o email via banco com isolamento por loja / superadmin
-          try {
-            const { data: resolvedEmail } = await supabase.rpc("resolve_admin_login_email", {
-              p_username: cleanUser,
-              p_tenant_slug: cleanStore,
-            });
-
-            if (resolvedEmail) {
-              emailToTry = resolvedEmail;
-            } else {
-              // Fallback determinístico
-              if (cleanStore === "superadmin") {
-                emailToTry = "davialeixo_nogueira@outlook.com";
-              } else {
-                emailToTry = `${cleanUser.toLowerCase()}@${cleanStore}.delivery.internal`;
-              }
-            }
-          } catch {
-            if (cleanStore === "superadmin") {
-              emailToTry = "davialeixo_nogueira@outlook.com";
-            } else {
-              emailToTry = `${cleanUser.toLowerCase()}@${cleanStore}.delivery.internal`;
-            }
-          }
-        }
-
         try {
-          const { data: authResult, error: authError } = await supabase.auth.signInWithPassword({
-            email: emailToTry,
-            password: cleanPassword,
+          const { data: fnData, error: fnError } = await supabase.functions.invoke("admin-login", {
+            body: {
+              action: "login",
+              storeIdentifier: cleanStore,
+              username: cleanUser,
+              password: cleanPassword,
+            },
           });
 
-          if (!authError && authResult?.user) {
-            // Busca perfil administrativo no banco
-            const { data: profile } = await supabase
-              .from("tenant_admins")
-              .select("id, user_id, tenant_id, role, username")
-              .eq("user_id", authResult.user.id)
-              .maybeSingle();
-
-            if (profile) {
-              // 1. Acesso SuperAdmin (identificador 'superadmin' ou role 'super_admin')
-              if (cleanStore === "superadmin" || profile.role === "super_admin") {
-                if (profile.role !== "super_admin") {
-                  await supabase.auth.signOut();
-                  setError("Acesso negado. Este usuário não possui privilégios de SuperAdmin.");
-                  setIsLoading(false);
-                  return;
-                }
-
-                const sessionUser = {
-                  id: profile.id,
-                  user_id: authResult.user.id,
-                  username: profile.username,
-                  role: "super_admin",
-                  tenant_id: null,
-                  permissions: ["*"],
-                };
-
-                localStorage.setItem("admin_auth", "authenticated");
-                localStorage.setItem("admin_user", JSON.stringify(sessionUser));
-                navigate(createPageUrl("SuperAdmin"), { replace: true });
-                return;
-              }
-
-              // 2. Acesso Restaurante (Lojista / Colaborador)
-              let tenantSlug = null;
-              let tenantName = "Restaurante";
-              let tenantPlan = "basic";
-              let tenantSalonMode = "full";
-
-              if (profile.tenant_id) {
-                const { data: tenantData } = await supabase
-                  .from("tenants")
-                  .select("slug, name, plan, salon_mode")
-                  .eq("id", profile.tenant_id)
-                  .maybeSingle();
-
-                if (tenantData) {
-                  tenantSlug = tenantData.slug;
-                  tenantName = tenantData.name;
-                  tenantPlan = tenantData.plan || "basic";
-                  tenantSalonMode = tenantData.salon_mode || "full";
-                }
-              }
-
-              const sessionUser = {
-                id: profile.id,
-                user_id: authResult.user.id,
-                username: profile.username,
-                role: profile.role || "admin",
-                tenant_id: profile.tenant_id,
-                tenant_slug: tenantSlug,
-                tenant_name: tenantName,
-                permissions: ["*"],
-              };
-
-              localStorage.setItem("admin_auth", "authenticated");
-              localStorage.setItem("admin_user", JSON.stringify(sessionUser));
-
-              if (profile.tenant_id) {
-                localStorage.setItem("current_tenant_id", profile.tenant_id);
-                if (tenantSlug) localStorage.setItem("current_tenant_slug", tenantSlug);
-                if (tenantName) localStorage.setItem("current_tenant_name", tenantName);
-              }
-
-              // Redireciona conforme o plano contratado (Visual ➔ Produtos | Autoatendimento/Completo ➔ Dashboard)
-              const isVisual = tenantPlan === "showcase" || tenantSalonMode === "showcase";
-              const targetPage = isVisual ? "Products" : "Dashboard";
-              const targetUrl = tenantSlug ? `/${tenantSlug}/${targetPage}` : createPageUrl(targetPage);
-              navigate(targetUrl, { replace: true });
-              return;
-            } else {
-              setError("Usuário autenticado, mas nenhum perfil administrativo foi encontrado para esta loja.");
-              setIsLoading(false);
-              return;
-            }
-          } else {
-            setError(
-              authError?.message === "Invalid login credentials"
-                ? "Identificador da loja, usuário ou senha incorretos."
-                : (authError?.message || "Erro ao autenticar. Verifique suas credenciais.")
-            );
+          if (fnError || !fnData?.success || !fnData?.session || !fnData?.profile) {
+            setError(fnData?.error || "Identificador da loja, usuário ou senha incorretos.");
             setIsLoading(false);
             return;
           }
+
+          const { error: sessionErr } = await supabase.auth.setSession({
+            access_token: fnData.session.access_token,
+            refresh_token: fnData.session.refresh_token,
+          });
+
+          if (sessionErr) {
+            setError("Erro ao inicializar sessão segura. Tente novamente.");
+            setIsLoading(false);
+            return;
+          }
+
+          const prof = fnData.profile;
+
+          if (cleanStore === "superadmin" || cleanStore === "master" || prof.role === "super_admin") {
+            const sessionUser = {
+              id: prof.id,
+              user_id: prof.user_id,
+              username: prof.username,
+              role: "super_admin",
+              tenant_id: null,
+              permissions: ["*"],
+            };
+
+            localStorage.setItem("admin_auth", "authenticated");
+            localStorage.setItem("admin_user", JSON.stringify(sessionUser));
+            navigate(createPageUrl("SuperAdmin"), { replace: true });
+            return;
+          }
+
+          const sessionUser = {
+            id: prof.id,
+            user_id: prof.user_id,
+            username: prof.username,
+            role: prof.role || "admin",
+            tenant_id: prof.tenant_id,
+            tenant_slug: prof.tenant_slug,
+            tenant_name: prof.tenant_name || "Restaurante",
+            permissions: Array.isArray(prof.permissions) ? prof.permissions : [],
+          };
+
+          localStorage.setItem("admin_auth", "authenticated");
+          localStorage.setItem("admin_user", JSON.stringify(sessionUser));
+
+          if (prof.tenant_id) {
+            localStorage.setItem("current_tenant_id", prof.tenant_id);
+            if (prof.tenant_slug) localStorage.setItem("current_tenant_slug", prof.tenant_slug);
+            if (prof.tenant_name) localStorage.setItem("current_tenant_name", prof.tenant_name);
+          }
+
+          const isVisual = prof.tenant_plan === "showcase" || prof.tenant_salon_mode === "showcase";
+          const targetPage = isVisual ? "Products" : "Dashboard";
+          const targetUrl = prof.tenant_slug ? `/${prof.tenant_slug}/${targetPage}` : createPageUrl(targetPage);
+          navigate(targetUrl, { replace: true });
+          return;
         } catch (_authEx) {
           setError("Erro de comunicação com o servidor de autenticação.");
           setIsLoading(false);

@@ -140,7 +140,11 @@ function useFifoPrintQueueInternal({
 
   const testSpoolerPrint = useCallback(async () => {
     try {
-      const res = await fetch(`${SPOOLER_URL}/test`, { method: "POST" });
+      const res = await fetch(`${SPOOLER_URL}/test`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
       const data = await res.json();
       if (data.success) {
         toast.success("🖨️ Cupom de teste impresso com sucesso!");
@@ -208,7 +212,11 @@ function useFifoPrintQueueInternal({
 
   const unpairSpoolerCloud = useCallback(async () => {
     try {
-      const res = await fetch(`${SPOOLER_URL}/cloud/unpair`, { method: "POST" });
+      const res = await fetch(`${SPOOLER_URL}/cloud/unpair`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
       if (res.ok) {
         await checkSpooler();
         toast.info("Pareamento autônomo desconectado desta máquina.");
@@ -690,8 +698,15 @@ function useFifoPrintQueueInternal({
       });
     };
 
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible" && navigator.onLine) {
+        syncPendingOrders();
+      }
+    };
+
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
+    document.addEventListener("visibilitychange", handleVisibility);
 
     // Na inicialização do painel, faz a checagem inicial
     if (navigator.onLine) {
@@ -701,6 +716,7 @@ function useFifoPrintQueueInternal({
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [isQueueActive, syncPendingOrders]);
 

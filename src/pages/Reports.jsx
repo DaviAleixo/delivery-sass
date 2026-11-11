@@ -100,11 +100,14 @@ export default function ReportsPage() {
       const activeTenantId =
         localStorage.getItem("current_tenant_id") ||
         "a0000000-0000-0000-0000-000000000001";
+      const { start, end } = getDateRange();
+
+      const useRemotePagedOrders = Boolean(isSupabaseConfigured() && supabase);
 
       const [sessionsList, ordersList, catsList, prodsList, settingsList, closingsList] =
         await Promise.all([
-          TableSession.list("-closed_at", 1000).catch(() => []),
-          Order.list("-created_date", 500).catch(() => []),
+          useRemotePagedOrders ? Promise.resolve([]) : TableSession.list("-closed_at", 1000).catch(() => []),
+          useRemotePagedOrders ? Promise.resolve([]) : Order.list("-created_date", 5000).catch(() => []),
           Category.list("order_index").catch(() => []),
           Product.list("-created_date").catch(() => []),
           Settings.list().catch(() => []),
@@ -114,8 +117,9 @@ export default function ReportsPage() {
       let driversList = [];
       let resolvedTenantSettings = settingsList?.[0] || null;
       let finalSessions = Array.isArray(sessionsList) ? sessionsList : [];
+      let finalOrders = Array.isArray(ordersList) ? ordersList : [];
 
-      if (isSupabaseConfigured() && supabase) {
+      if (useRemotePagedOrders) {
         try {
           const { data: tenantData } = await supabase
             .from("tenants")
@@ -128,24 +132,52 @@ export default function ReportsPage() {
             if (tenantData.delivery_drivers) driversList = tenantData.delivery_drivers;
           }
 
-          const { data: remoteSessions } = await supabase
-            .from("table_sessions")
-            .select("*")
-            .eq("tenant_id", activeTenantId)
-            .eq("status", "closed")
-            .order("closed_at", { ascending: false })
-            .limit(1000);
-
-          if (remoteSessions && remoteSessions.length > 0) {
-            finalSessions = remoteSessions;
+          // Paginação completa dos pedidos do período sem limite arbitrário de 500
+          const pagedOrders = [];
+          const PAGE_SIZE = 1000;
+          for (let page = 0; page < 50; page++) {
+            const from = page * PAGE_SIZE;
+            const to = from + PAGE_SIZE - 1;
+            const { data: chunk, error: ordErr } = await supabase
+              .from("orders")
+              .select("id, tenant_id, order_number, customer_name, customer_phone, total_amount, total, subtotal, delivery_fee, discount_amount, discount, cashback_discount, status, payment_method, order_type, table_session_id, items, created_date")
+              .eq("tenant_id", activeTenantId)
+              .gte("created_date", start.toISOString())
+              .lte("created_date", end.toISOString())
+              .order("created_date", { ascending: false })
+              .range(from, to);
+            if (ordErr || !Array.isArray(chunk)) break;
+            pagedOrders.push(...chunk);
+            if (chunk.length < PAGE_SIZE) break;
           }
+          finalOrders = pagedOrders;
+
+          // Paginação completa das sessões de mesa fechadas no período
+          const pagedSessions = [];
+          for (let page = 0; page < 20; page++) {
+            const from = page * PAGE_SIZE;
+            const to = from + PAGE_SIZE - 1;
+            const { data: sessChunk, error: sessErr } = await supabase
+              .from("table_sessions")
+              .select("*")
+              .eq("tenant_id", activeTenantId)
+              .eq("status", "closed")
+              .gte("closed_at", start.toISOString())
+              .lte("closed_at", end.toISOString())
+              .order("closed_at", { ascending: false })
+              .range(from, to);
+            if (sessErr || !Array.isArray(sessChunk)) break;
+            pagedSessions.push(...sessChunk);
+            if (sessChunk.length < PAGE_SIZE) break;
+          }
+          finalSessions = pagedSessions;
         } catch (err) {
           console.warn("[ReportsPage] Erro ao buscar complementos no Supabase:", err);
         }
       }
 
       setTableSessions(finalSessions);
-      setAllOrders(Array.isArray(ordersList) ? ordersList : []);
+      setAllOrders(finalOrders);
       setCategories(Array.isArray(catsList) ? catsList : []);
       setProducts(Array.isArray(prodsList) ? prodsList : []);
       setTenantSettings(resolvedTenantSettings);

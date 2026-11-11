@@ -9,11 +9,14 @@ import { format, isToday } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { getActiveTenantId } from "@/entities/storage";
 
 export default function DashboardPage() {
   const [orders, setOrders] = useState([]);
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [serverTodayStats, setServerTodayStats] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const audioRef = useRef(null);
 
@@ -25,13 +28,28 @@ export default function DashboardPage() {
     setIsLoading(true);
     try {
       const [ordersData, productsData, categoriesData] = await Promise.all([
-        Order.list("-created_date", 50),
+        Order.list("-created_date", 100),
         Product.list(),
         Category.list()
       ]);
       setOrders(Array.isArray(ordersData) ? ordersData : []);
       setProducts(Array.isArray(productsData) ? productsData : []);
       setCategories(Array.isArray(categoriesData) ? categoriesData : []);
+
+      // Métricas exatas agregadas no servidor para evitar truncamento em lojas de alto volume
+      const activeTenantId = getActiveTenantId();
+      if (activeTenantId && isSupabaseConfigured() && supabase) {
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        const { data: metrics } = await Promise.resolve(
+          supabase.rpc("get_sales_metrics", {
+            p_tenant_id: activeTenantId,
+            p_start_date: startOfToday.toISOString(),
+            p_end_date: new Date().toISOString(),
+          })
+        ).catch(() => ({ data: null }));
+        if (metrics) setServerTodayStats(metrics);
+      }
     } catch (err) {
       console.error("Erro ao carregar dados do dashboard:", err);
     } finally {
@@ -50,11 +68,14 @@ export default function DashboardPage() {
     return d ? isToday(d) : false;
   });
 
-  const todayRevenue = todayOrders.reduce((sum, order) => {
+  const localTodayRevenue = todayOrders.reduce((sum, order) => {
     if (order.status === "cancelado") return sum;
     const val = Number(order?.total_amount || order?.total || 0);
     return sum + (isNaN(val) ? 0 : val);
   }, 0);
+
+  const todayRevenue = serverTodayStats ? Number(serverTodayStats.total_revenue || 0) : localTodayRevenue;
+  const todayCountDisplay = serverTodayStats ? Number(serverTodayStats.total_orders || 0) : todayOrders.length;
 
   const pendingOrders = (orders || []).filter(order => order?.status === "pendente").length;
 
@@ -139,7 +160,7 @@ export default function DashboardPage() {
             {formatMoney(todayRevenue)}
           </p>
           <span className="text-[11px] text-stone-500 mt-0.5 block">
-            {todayOrders.length} {todayOrders.length === 1 ? "pedido hoje" : "pedidos hoje"}
+            {todayCountDisplay} {todayCountDisplay === 1 ? "pedido hoje" : "pedidos hoje"}
           </span>
         </Card>
 

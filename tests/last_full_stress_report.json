@@ -1,0 +1,218 @@
+{
+  "tenantsCount": 20,
+  "testTenantsCount": 17,
+  "functionalTests": [
+    {
+      "name": "sec_tenants_table_blocked_for_anon",
+      "passed": true,
+      "detail": "Tabela public.tenants bloqueada para anon (0 linhas ou erro)"
+    },
+    {
+      "name": "20_tenants_present",
+      "passed": true,
+      "detail": "Total de empresas ativas encontradas: 20 (originais: 3, teste: 17)"
+    },
+    {
+      "name": "pedemuleke_preserved",
+      "passed": true,
+      "detail": "PedeMuleke preservada: PedeMuleke (5489690b-a8dd-4f5e-bd75-de339521ac47)"
+    },
+    {
+      "name": "vruum_preserved",
+      "passed": true,
+      "detail": "Vruum Burguer preservada: Vruum Burguer"
+    },
+    {
+      "name": "sec_tenants_public_strips_mp_token",
+      "passed": true,
+      "detail": "tenants_public removeu mp_access_token e segredos de todas as 20 lojas"
+    },
+    {
+      "name": "sec_orders_anon_blocked",
+      "passed": true,
+      "detail": "Leitura direta de orders bloqueada para anon"
+    },
+    {
+      "name": "sec_cashback_wallets_anon_blocked",
+      "passed": true,
+      "detail": "customer_cashback_wallets bloqueada para anon"
+    },
+    {
+      "name": "sec_issues_closings_anon_blocked",
+      "passed": true,
+      "detail": "system_issues e shift_closings bloqueados para anon"
+    },
+    {
+      "name": "whatsapp_otp_verify_flow",
+      "passed": true,
+      "detail": "verify_whatsapp_otp validou código correto e rejeitou código falso (Nota: código em payload aguarda API WPP)"
+    },
+    {
+      "name": "sec_admin_user_rpcs_anon_blocked",
+      "passed": true,
+      "detail": "Anon bloqueado em create_store_admin_user: permission denied for function create_store_admin_user"
+    },
+    {
+      "name": "sec_payment_methods_rpc_anon_blocked",
+      "passed": true,
+      "detail": "Anon bloqueado em update_tenant_payment_methods: permission denied for function update_tenant_payment_methods"
+    },
+    {
+      "name": "sec_orders_direct_insert_anon_blocked",
+      "passed": true,
+      "detail": "INSERT direto em orders bloqueado para anon: new row violates row-level security policy for table \"orders\""
+    },
+    {
+      "name": "sec_asaas_edge_requires_jwt",
+      "passed": true,
+      "detail": "Edge Function 'asaas' rejeitou chamada sem JWT (HTTP 401)"
+    },
+    {
+      "name": "client_menu_read_multitenant",
+      "passed": true,
+      "detail": "Leitura de cardápio público validada em 4 lojas (incluindo PedeMuleke)"
+    },
+    {
+      "name": "client_cashback_balance",
+      "passed": true,
+      "detail": "Saldo de cashback do cliente seed na test-empresa-04: R$ 25"
+    },
+    {
+      "name": "client_lookup_phone",
+      "passed": true,
+      "detail": "lookup_customer_by_phone executou sem erro (registros: 0)"
+    },
+    {
+      "name": "client_create_public_order_and_additionals",
+      "passed": true,
+      "detail": "create_public_order #1: subtotal=71.8 (com adicional Bacon Extra!), desconto=7.18, total=72.12"
+    },
+    {
+      "name": "client_tracking_token_check",
+      "passed": true,
+      "detail": "Tracking token válido retornou pedido; token falso rejeitado; get_public_orders_by_tokens retornou 1 pedido"
+    },
+    {
+      "name": "client_reject_unavailable_product",
+      "passed": true,
+      "detail": "Pedido com produto indisponível bloqueado: O item Item Esgotado não está disponível."
+    },
+    {
+      "name": "client_reject_showcase_mode_order",
+      "passed": true,
+      "detail": "Loja showcase (test-empresa-09) rejeitou pedido: Este cardápio funciona apenas em modo vitrine e não recebe pedidos online."
+    },
+    {
+      "name": "multi_admin_supabase_auth",
+      "passed": true,
+      "detail": "17/17 admins de empresas distintas autenticados via resolve_admin_login_email + Supabase Auth"
+    },
+    {
+      "name": "test_tenants_zero_price",
+      "passed": true,
+      "detail": "17/17 empresas de teste confirmadas com monthly_price = R$ 0,00"
+    },
+    {
+      "name": "admin_cross_tenant_rpc_isolation",
+      "passed": true,
+      "detail": "Admin A bloqueado em get_clients_summary, get_sales_metrics da Loja B e get_master_tenants"
+    },
+    {
+      "name": "admin_cross_tenant_table_isolation",
+      "passed": true,
+      "detail": "Admin A não conseguiu alterar registro de tenants da Loja B (nome mantido: Empresa Teste 05)"
+    },
+    {
+      "name": "sec_orders_cross_tenant_admin_blocked",
+      "passed": true,
+      "detail": "Admin da Loja A NÃO consegue ler pedidos da Loja B (0 registros)"
+    },
+    {
+      "name": "admin_tables_open_order_close_flow",
+      "passed": true,
+      "detail": "Mesa 1 aberta, pedido lançado, fechada com total=65.78, mesa liberada=available"
+    },
+    {
+      "name": "admin_spooler_pair_poll_ack",
+      "passed": true,
+      "detail": "Spooler pareado (PM-Z54-G4H), poll retornou 2 job(s), ack OK=true"
+    },
+    {
+      "name": "admin_clients_and_reports_rpcs",
+      "passed": true,
+      "detail": "Clientes: 5 | Métricas: 2 pedidos, R$ 131.92"
+    },
+    {
+      "name": "admin_cashback_process_and_revert",
+      "passed": true,
+      "detail": "Anon bloqueado (permission denied for function process_order_cashback); admin process+revert manteve saldo=25"
+    },
+    {
+      "name": "race_cashback_2arg_locked",
+      "passed": true,
+      "detail": "8 chamadas simultâneas a process_order_cashback adicionaram exatamente R$ 10.00 (esperado: R$ 10.00)"
+    },
+    {
+      "name": "race_cashback_1arg_removed",
+      "passed": true,
+      "detail": "Overload legado sem trava removido; chamada default mantém idempotência em R$ 10.00"
+    },
+    {
+      "name": "race_coupon_usage_limit_enforced",
+      "passed": true,
+      "detail": "1/10 pedido simultâneo recebeu cupom UNICO5 (usage_limit=1); 9 bloqueados/sem desconto"
+    },
+    {
+      "name": "race_open_table_session_unique",
+      "passed": true,
+      "detail": "Anon bloqueado; 5 aberturas simultâneas na mesa 4 criaram 1 sessão única (IDs distintos=1)"
+    },
+    {
+      "name": "burst_zero_order_number_collisions",
+      "passed": true,
+      "detail": "279/279 pedidos ativos concluídos (61 bloqueados por showcase/table_only); 0 colisões de order_number"
+    },
+    {
+      "name": "spooler_concurrent_poll_skip_locked",
+      "passed": true,
+      "detail": "4 polls simultâneos no spooler retornaram 40 jobs únicos, 0 duplicados (FOR UPDATE SKIP LOCKED)"
+    }
+  ],
+  "concurrencyTests": {
+    "cashbackRace": {
+      "delta2Arg": 10,
+      "idempotentDefault": true
+    },
+    "couponRace": {
+      "attempts": 10,
+      "discountedCount": 1
+    },
+    "tableRace": {
+      "attempts": 5,
+      "openSessionsCreated": 1
+    },
+    "burst340": {
+      "totalSent": 340,
+      "expectedActiveSuccess": 279,
+      "succeeded": 279,
+      "rejectedShowcaseOrFail": 61,
+      "durationSec": 2.46,
+      "throughputOrdersPerSec": 113.28,
+      "avgLatencyMs": 2436,
+      "p95LatencyMs": 2451,
+      "maxLatencyMs": 2452,
+      "orderNumberCollisions": 0,
+      "tenantsWithCollisions": 0,
+      "readsSucceeded": "60/60",
+      "readAvgMs": 2343,
+      "samplePrintJobsCount": 43,
+      "sampleErrors": [
+        "Delivery não está disponível para este estabelecimento.",
+        "Delivery não está disponível para este estabelecimento.",
+        "Delivery não está disponível para este estabelecimento."
+      ]
+    }
+  },
+  "vulnerabilitiesFound": [],
+  "bugsAndGapsFound": []
+}

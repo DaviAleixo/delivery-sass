@@ -10,7 +10,8 @@
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc -p ./jsconfig.json",
     "preview": "vite preview",
-    "backup:export": "node scripts/export-data.js"
+    "backup:export": "node scripts/export-data.js",
+    "test:audit": "node tests/run_phase2_audit_suite.mjs"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^17.0.0",

@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { User } from "@/entities/User";
+import { User, getStoredCustomerToken } from "@/entities/User";
 import { UserAddress } from "@/entities/UserAddress";
 import { Coupon } from "@/entities/Coupon";
 import { CouponUsage } from "@/entities/CouponUsage";
@@ -357,31 +357,39 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
 
       setUser(userData);
       
-      const [allAddresses, allCoupons, usages] = await Promise.all([
-        UserAddress.list(),
-        Coupon.filter({ active: true }),
-        CouponUsage.list()
-      ]);
-
       const cleanPhone = (userData.phone || "").replace(/\D/g, "");
-      let userAddresses = (allAddresses || []).filter(a => {
-        const cleanAddrPhone = (a.user_phone || "").replace(/\D/g, "");
-        return (
-          (userData.email && a.user_email === userData.email) || 
-          (cleanPhone && cleanAddrPhone && cleanAddrPhone.slice(-8) === cleanPhone.slice(-8))
-        );
-      });
+      let userAddresses = [];
+      let allCoupons = [];
+      let usages = [];
 
-      if (userAddresses.length === 0 && cleanPhone && isSupabaseConfigured() && supabase) {
-        try {
-          const { data: dbAddrs } = await supabase
-            .from("user_addresses")
-            .select("*")
-            .ilike("user_phone", `%${cleanPhone.slice(-8)}%`);
-          if (dbAddrs && dbAddrs.length > 0) {
-            userAddresses = dbAddrs;
-          }
-        } catch {}
+      if (isSupabaseConfigured() && supabase) {
+        const currentTenantId = (typeof window !== "undefined" ? localStorage.getItem("current_tenant_id") : null) || "a0000000-0000-0000-0000-000000000001";
+        const customerToken = userData?.customer_token || getStoredCustomerToken();
+        const [rpcAddrsRes, couponsRes] = await Promise.all([
+          cleanPhone && customerToken
+            ? Promise.resolve(
+                supabase.rpc("get_customer_addresses", { p_tenant_id: currentTenantId, p_phone: cleanPhone, p_customer_token: customerToken })
+              ).catch(() => ({ data: [] }))
+            : Promise.resolve({ data: [] }),
+          Coupon.filter({ active: true }).catch(() => []),
+        ]);
+        userAddresses = Array.isArray(rpcAddrsRes?.data) ? rpcAddrsRes.data : [];
+        allCoupons = Array.isArray(couponsRes) ? couponsRes : [];
+      } else {
+        const [allAddresses, couponsRes, usagesRes] = await Promise.all([
+          UserAddress.list(),
+          Coupon.filter({ active: true }),
+          CouponUsage.list()
+        ]);
+        allCoupons = couponsRes;
+        usages = usagesRes;
+        userAddresses = (allAddresses || []).filter(a => {
+          const cleanAddrPhone = (a.user_phone || "").replace(/\D/g, "");
+          return (
+            (userData.email && a.user_email === userData.email) || 
+            (cleanPhone && cleanAddrPhone && cleanAddrPhone.slice(-8) === cleanPhone.slice(-8))
+          );
+        });
       }
       
       setAddresses(userAddresses);
@@ -427,7 +435,6 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
 
     const clean = formatted.replace(/\D/g, "");
     if (clean.length === 11) {
-      setIsLookingUpPhone(true);
       try {
         let foundName = "";
         try {
@@ -437,25 +444,10 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
           }
         } catch {}
 
-        if (!foundName && isSupabaseConfigured() && supabase) {
-          const { data: orders } = await supabase
-            .from("orders")
-            .select("customer_name")
-            .ilike("customer_phone", `%${clean.slice(-8)}%`)
-            .neq("customer_name", "Cliente")
-            .order("created_date", { ascending: false })
-            .limit(1);
-          if (orders && orders[0]?.customer_name) {
-            foundName = orders[0].customer_name;
-          }
-        }
-
         if (foundName) {
           setNameInput(foundName);
-          setFoundNameMessage(`Encontramos seu cadastro como "${foundName}"!`);
         }
       } catch {}
-      setIsLookingUpPhone(false);
     }
   };
 
@@ -583,8 +575,22 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
 
   const handleSaveAddress = async (addressData) => {
     const phoneToUse = user?.phone || localStorage.getItem("vrumburguer_customer_phone") || "";
+    const currentTenantId = (typeof window !== "undefined" ? localStorage.getItem("current_tenant_id") : null) || "a0000000-0000-0000-0000-000000000001";
+    const customerToken = user?.customer_token || getStoredCustomerToken();
     let saved = null;
-    if (isEditingAddress && isEditingAddress.id) {
+    if (isSupabaseConfigured() && supabase && phoneToUse && customerToken) {
+      const { data: rpcRes } = await supabase.rpc("save_customer_address", {
+        p_tenant_id: currentTenantId,
+        p_phone: phoneToUse,
+        p_data: {
+          ...addressData,
+          id: isEditingAddress?.id || null,
+          user_email: user?.email || null,
+        },
+        p_customer_token: customerToken,
+      });
+      saved = rpcRes?.address || null;
+    } else if (isEditingAddress && isEditingAddress.id) {
       saved = await UserAddress.update(isEditingAddress.id, { ...addressData, user_phone: phoneToUse });
     } else {
       saved = await UserAddress.create({ 
@@ -604,7 +610,19 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
 
   const handleDeleteAddress = async (addressId) => {
     if (confirm("Tem certeza que deseja excluir este endereço?")) {
-      await UserAddress.delete(addressId);
+      const phoneToUse = user?.phone || localStorage.getItem("vrumburguer_customer_phone") || "";
+      const currentTenantId = (typeof window !== "undefined" ? localStorage.getItem("current_tenant_id") : null) || "a0000000-0000-0000-0000-000000000001";
+      const customerToken = user?.customer_token || getStoredCustomerToken();
+      if (isSupabaseConfigured() && supabase && phoneToUse && customerToken) {
+        await supabase.rpc("delete_customer_address", {
+          p_tenant_id: currentTenantId,
+          p_phone: phoneToUse,
+          p_address_id: addressId,
+          p_customer_token: customerToken,
+        });
+      } else {
+        await UserAddress.delete(addressId);
+      }
       try {
         localStorage.removeItem("vrumburguer_last_address");
         window.dispatchEvent(new CustomEvent("customer_address_changed", { detail: null }));

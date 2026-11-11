@@ -37,6 +37,7 @@ import { useLocation, useNavigate, useParams, Link } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 import { createPageUrl } from "@/utils";
 import { useOrdersRealtime } from "@/hooks/useOrdersRealtime";
+import { isRealtimeChannelActive } from "@/lib/realtimeHub";
 import { useFifoPrintQueue } from "@/hooks/useFifoPrintQueue";
 import {
   findSectorByParam,
@@ -323,7 +324,17 @@ export default function KDSPage() {
 
   useEffect(() => {
     loadOrders();
-    const interval = setInterval(loadOrders, 30000);
+    const activeTenantId = typeof window !== "undefined" ? localStorage.getItem("current_tenant_id") : null;
+    const rtFilter = activeTenantId ? `tenant_id=eq.${activeTenantId}` : null;
+    let tickCount = 0;
+
+    // Quando Realtime está ativo, reduz fallback para 60s apenas em aba visível
+    const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      tickCount += 1;
+      if (rtFilter && isRealtimeChannelActive("orders", rtFilter) && tickCount % 2 !== 0) return;
+      loadOrders();
+    }, 30000);
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {

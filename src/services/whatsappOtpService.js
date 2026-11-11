@@ -170,10 +170,10 @@ export async function verifyWhatsAppOtp({ phone, code, fullName = "", tenantId =
     }
   }
 
-  // 3. Fallback de teste em memória
+  // 3. Fallback de teste em memória (sem código mestre hardcoded)
   const cached = devOtpCache.get(cleanPhone);
   if (cached && cached.expiresAt > Date.now()) {
-    if (cached.code === cleanCode || cleanCode === "123456") {
+    if (cached.code === cleanCode) {
       const mockCustomer = {
         id: `cust_${cleanPhone}`,
         tenant_id: activeTenantId,
@@ -186,20 +186,6 @@ export async function verifyWhatsAppOtp({ phone, code, fullName = "", tenantId =
       return { success: true, user: mockCustomer };
     }
     return { success: false, error: "Código incorreto. Verifique os números digitados." };
-  }
-
-  // Teste padrão de contingência
-  if (cleanCode === "123456") {
-    const mockCustomer = {
-      id: `cust_${cleanPhone}`,
-      tenant_id: activeTenantId,
-      phone: cleanPhone,
-      full_name: fullName.trim() || "Cliente",
-      email: "",
-      role: "user"
-    };
-    await User.login(mockCustomer);
-    return { success: true, user: mockCustomer };
   }
 
   return { success: false, error: "Código expirado ou inválido. Solicite um novo código." };

@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, MapPin, Truck, Store, Plus, ArrowLeft, Loader2, Pencil, CreditCard, Banknote, Home, Building2, AlertTriangle, CheckCircle2, Zap, UtensilsCrossed, PhoneCall, Gift } from "lucide-react";
 import { matchNeighborhood, isCityAllowed } from "@/utils/neighborhoodMatcher";
-import { User } from "@/entities/User";
+import { User, getStoredCustomerToken } from "@/entities/User";
 import { UserAddress } from "@/entities/UserAddress";
 import { Coupon } from "@/entities/Coupon";
 import { CouponUsage } from "@/entities/CouponUsage";
@@ -20,6 +20,7 @@ import { base44 } from "@/api/base44Client";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { validateSchema, orderSchema } from "@/schemas";
 import { getActiveTenantId } from "@/entities/storage";
+import { getOrCreateCheckoutOrderId } from "@/utils/checkoutIdempotency";
 import WhatsAppAuthModal from "./WhatsAppAuthModal";
 import { CARD_BRANDS, MEAL_VOUCHER_BRANDS } from "@/constants/paymentBrands";
 
@@ -112,38 +113,38 @@ export const fetchCustomerAddresses = async (phone, email) => {
     }
   };
 
-  // 1. Tentar UserAddress entity
-  try {
-    const allAddrs = await UserAddress.list();
-    (allAddrs || []).forEach(a => {
-      const cleanAddrPhone = (a.user_phone || "").replace(/\D/g, "");
-      if (
-        (cleanEmail && a.user_email && a.user_email.toLowerCase() === cleanEmail) ||
-        (cleanPhone && cleanAddrPhone && cleanAddrPhone.slice(-8) === cleanPhone.slice(-8))
-      ) {
-        addUnique(a);
+  // 1. Buscar endereços salvos do cliente via RPC segura (get_customer_addresses)
+  if (isSupabaseConfigured() && supabase && cleanPhone) {
+    try {
+      const tenantId = getActiveTenantId();
+      const customerToken = getStoredCustomerToken();
+      if (tenantId && customerToken) {
+        const { data: rpcAddrs } = await supabase.rpc("get_customer_addresses", {
+          p_tenant_id: tenantId,
+          p_phone: cleanPhone,
+          p_customer_token: customerToken,
+        });
+        if (Array.isArray(rpcAddrs) && rpcAddrs.length > 0) {
+          rpcAddrs.forEach(addUnique);
+        }
       }
-    });
-  } catch {}
+    } catch {}
+  }
 
-  // 2. Tentar Supabase direto na tabela user_addresses
-  if (isSupabaseConfigured() && supabase) {
-    if (cleanPhone || cleanEmail) {
-      try {
-        let query = supabase.from("user_addresses").select("*");
-        if (cleanPhone && cleanEmail) {
-          query = query.or(`user_phone.ilike.%${cleanPhone.slice(-8)}%,user_email.ilike.%${cleanEmail}%`);
-        } else if (cleanPhone) {
-          query = query.ilike("user_phone", `%${cleanPhone.slice(-8)}%`);
-        } else if (cleanEmail) {
-          query = query.ilike("user_email", `%${cleanEmail}%`);
+  // 2. Fallback local (para modo offline)
+  if (addressList.length === 0) {
+    try {
+      const allAddrs = await UserAddress.list();
+      (allAddrs || []).forEach(a => {
+        const cleanAddrPhone = (a.user_phone || "").replace(/\D/g, "");
+        if (
+          (cleanEmail && a.user_email && a.user_email.toLowerCase() === cleanEmail) ||
+          (cleanPhone && cleanAddrPhone && cleanAddrPhone.slice(-8) === cleanPhone.slice(-8))
+        ) {
+          addUnique(a);
         }
-        const { data: dbAddrs } = await query;
-        if (dbAddrs && dbAddrs.length > 0) {
-          dbAddrs.forEach(addUnique);
-        }
-      } catch {}
-    }
+      });
+    } catch {}
   }
 
   return addressList;
@@ -158,6 +159,7 @@ export default function OrderModal({
   minOrderValue = 0, 
   deliveryTime = "40-50 min",
   deliveryRules = {},
+  tenantId: propTenantId = null,
   initialTableNumber = "",
   onSubmit,
   isSubmitting = false,
@@ -310,7 +312,7 @@ export default function OrderModal({
       if (isSupabaseConfigured() && supabase) {
         try {
           const { data } = await supabase
-            .from("tenants")
+            .from("tenants_public")
             .select("payment_methods")
             .eq("id", activeTenantId)
             .maybeSingle();
@@ -532,16 +534,25 @@ export default function OrderModal({
 
     const cleanPhone = (activeUser.phone || customerData.customer_phone || "").replace(/\D/g, "");
     if (coupon.usage_limit && (cleanPhone || user?.email)) {
-      const allUsages = await CouponUsage.list();
-      const userUsages = (allUsages || []).filter(u => {
-        if (u.coupon_id !== coupon.id) return false;
-        const uEmail = String(u.user_email || "");
-        const matchesPhone = cleanPhone && cleanPhone.length >= 8 && uEmail.includes(cleanPhone.slice(-8));
-        const matchesEmail = user?.email && uEmail.toLowerCase().includes(user.email.toLowerCase());
-        return matchesPhone || matchesEmail;
-      });
-      if (userUsages.length >= coupon.usage_limit) {
-        setCouponError("Você já atingiu o limite de uso deste cupom para seu número de WhatsApp.");
+      let usageCount = 0;
+      if (isSupabaseConfigured() && supabase) {
+        try {
+          const tenantId = getActiveTenantId();
+          if (tenantId) {
+            const { data: cnt } = await supabase.rpc("get_coupon_usage_count", {
+              p_tenant_id: tenantId,
+              p_coupon_id: String(coupon.id),
+              p_phone: cleanPhone || null,
+            });
+            usageCount = Number(cnt || 0);
+          }
+        } catch {}
+      } else {
+        const allUsages = await CouponUsage.list();
+        usageCount = (allUsages || []).filter(u => u.coupon_id === coupon.id).length;
+      }
+      if (usageCount >= coupon.usage_limit) {
+        setCouponError("Este cupom atingiu o limite máximo de utilizações.");
         return;
       }
     }
@@ -643,22 +654,44 @@ export default function OrderModal({
         return;
       }
 
-      // Salvar endereço no perfil se o usuário estiver logado e marcou para salvar
+      // Salvar endereço no perfil via RPC segura se o usuário estiver logado e marcou para salvar
       if (user?.email && newAddressForm.save_address && newAddressForm.street) {
         try {
-          await UserAddress.create({
-            user_email: user.email,
-            user_phone: customerData.customer_phone,
-            name: newAddressForm.name || "Outro Endereço",
-            cep: newAddressForm.cep,
-            street: newAddressForm.street.trim(),
-            number: newAddressForm.number?.trim() || "S/N",
-            complement: newAddressForm.complement,
-            neighborhood: newAddressForm.neighborhood?.trim() || "",
-            city: newAddressForm.city?.trim() || "",
-            state: newAddressForm.state || "MG",
-            is_default: addresses.length === 0,
-          });
+          const tenantId = getActiveTenantId();
+          const customerToken = user?.customer_token || getStoredCustomerToken();
+          if (isSupabaseConfigured() && supabase && tenantId && customerData.customer_phone && customerToken) {
+            await supabase.rpc("save_customer_address", {
+              p_tenant_id: tenantId,
+              p_phone: customerData.customer_phone,
+              p_data: {
+                user_email: user.email,
+                name: newAddressForm.name || "Outro Endereço",
+                cep: newAddressForm.cep,
+                street: newAddressForm.street.trim(),
+                number: newAddressForm.number?.trim() || "S/N",
+                complement: newAddressForm.complement,
+                neighborhood: newAddressForm.neighborhood?.trim() || "",
+                city: newAddressForm.city?.trim() || "",
+                state: newAddressForm.state || "MG",
+                is_default: addresses.length === 0,
+              },
+              p_customer_token: customerToken,
+            });
+          } else {
+            await UserAddress.create({
+              user_email: user.email,
+              user_phone: customerData.customer_phone,
+              name: newAddressForm.name || "Outro Endereço",
+              cep: newAddressForm.cep,
+              street: newAddressForm.street.trim(),
+              number: newAddressForm.number?.trim() || "S/N",
+              complement: newAddressForm.complement,
+              neighborhood: newAddressForm.neighborhood?.trim() || "",
+              city: newAddressForm.city?.trim() || "",
+              state: newAddressForm.state || "MG",
+              is_default: addresses.length === 0,
+            });
+          }
         } catch (err) {
           console.error("Erro ao salvar endereço:", err);
         }
@@ -673,7 +706,12 @@ export default function OrderModal({
       ? (customerData.payment_method === 'dinheiro' && changeFor.trim() ? `${customerData.notes} | Troco para: ${changeFor.trim()}` : customerData.notes)
       : (customerData.payment_method === 'dinheiro' && changeFor.trim() ? `Troco para: ${changeFor.trim()}` : "");
 
+    const activeTenantId = propTenantId || deliveryRules?.id || deliveryRules?.tenant_id || getActiveTenantId() || "a0000000-0000-0000-0000-000000000001";
+    const persistentCheckoutOrderId = getOrCreateCheckoutOrderId(activeTenantId, cart);
+    const isCardOrMeal = !isDineIn && ["cartao_credito", "cartao_debito", "alimentacao", "cartao"].includes(resolvedPaymentMethod);
+
     const orderData = {
+      id: persistentCheckoutOrderId,
       ...customerData,
       customer_name: resolvedCustomerName,
       customer_phone: customerData.customer_phone || (isDineIn ? "" : ""),
@@ -701,6 +739,9 @@ export default function OrderModal({
       discount_amount: !isDineIn ? discountAmount : 0,
       order_type: isTakeaway ? 'pickup' : (isDineIn ? 'dine_in' : 'delivery'),
       table_number: isTakeaway ? 'Balcão' : (isDineIn ? formattedTable : null),
+      delivery_neighborhood: orderType === 'delivery' ? getCustomerNeighborhood() : null,
+      use_cashback: !isDineIn && useCashback,
+      cashback_discount: !isDineIn && useCashback ? Number(cashbackWallet?.balance || 0) : 0,
     };
 
     // Validação com Schema Zod
@@ -729,30 +770,52 @@ export default function OrderModal({
     await onSubmit(orderData);
 
     try {
-      // Salva endereço para futuras compras EXCLUSIVAMENTE se for um cliente com conta logada
+      // Salva endereço para futuras compras EXCLUSIVAMENTE via RPC segura se for cliente autenticado
       if (user && user.id && orderType === 'delivery' && newAddressForm.street && customerData.customer_phone) {
         const cleanPhone = customerData.customer_phone.replace(/\D/g, "");
-        const allAddrs = await UserAddress.list();
-        const existing = (allAddrs || []).find(a => 
-          a.user_phone && a.user_phone.replace(/\D/g, "") === cleanPhone &&
+        const tenantId = getActiveTenantId();
+        const existingAddrs = await fetchCustomerAddresses(cleanPhone, customerData.customer_email || user.email);
+        const existing = (existingAddrs || []).find(a =>
           a.street?.toLowerCase() === newAddressForm.street?.toLowerCase() &&
           a.number === newAddressForm.number
         );
         if (!existing) {
-          await UserAddress.create({
-            user_phone: customerData.customer_phone,
-            user_email: customerData.customer_email || user.email || "",
-            name: newAddressForm.name || "Endereço de Entrega",
-            street: newAddressForm.street,
-            number: newAddressForm.number,
-            neighborhood: newAddressForm.neighborhood,
-            city: newAddressForm.city || deliveryRules?.address_city || "",
-            state: newAddressForm.state || deliveryRules?.address_state || "MG",
-            complement: newAddressForm.complement || "",
-            reference: newAddressForm.reference || "",
-            cep: newAddressForm.cep || "",
-            is_default: addresses.length === 0,
-          });
+          const customerToken = user?.customer_token || getStoredCustomerToken();
+          if (isSupabaseConfigured() && supabase && tenantId && customerToken) {
+            await supabase.rpc("save_customer_address", {
+              p_tenant_id: tenantId,
+              p_phone: cleanPhone,
+              p_data: {
+                user_email: customerData.customer_email || user.email || "",
+                name: newAddressForm.name || "Endereço de Entrega",
+                street: newAddressForm.street,
+                number: newAddressForm.number,
+                neighborhood: newAddressForm.neighborhood,
+                city: newAddressForm.city || deliveryRules?.address_city || "",
+                state: newAddressForm.state || deliveryRules?.address_state || "MG",
+                complement: newAddressForm.complement || "",
+                reference: newAddressForm.reference || "",
+                cep: newAddressForm.cep || "",
+                is_default: addresses.length === 0,
+              },
+              p_customer_token: customerToken,
+            });
+          } else {
+            await UserAddress.create({
+              user_phone: customerData.customer_phone,
+              user_email: customerData.customer_email || user.email || "",
+              name: newAddressForm.name || "Endereço de Entrega",
+              street: newAddressForm.street,
+              number: newAddressForm.number,
+              neighborhood: newAddressForm.neighborhood,
+              city: newAddressForm.city || deliveryRules?.address_city || "",
+              state: newAddressForm.state || deliveryRules?.address_state || "MG",
+              complement: newAddressForm.complement || "",
+              reference: newAddressForm.reference || "",
+              cep: newAddressForm.cep || "",
+              is_default: addresses.length === 0,
+            });
+          }
         }
       }
     } catch (saveErr) {
@@ -786,33 +849,20 @@ export default function OrderModal({
             let foundName = "";
             let foundEmail = "";
 
-            if (isSupabaseConfigured() && supabase) {
+            const customerToken = getStoredCustomerToken();
+            if (isSupabaseConfigured() && supabase && customerToken) {
               try {
                 const activeTenantId = getActiveTenantId();
                 const { data } = await supabase.rpc("lookup_customer_by_phone", {
                   p_phone: finalValue,
-                  p_tenant_id: activeTenantId || undefined
+                  p_tenant_id: activeTenantId || undefined,
+                  p_customer_token: customerToken,
                 });
                 if (data && data.length > 0) {
                   foundName = data[0].customer_name || "";
                   foundEmail = data[0].customer_email || "";
                 }
               } catch {}
-
-              if (!foundName) {
-                try {
-                  const { data: orderData } = await supabase
-                    .from("orders")
-                    .select("customer_name, customer_email")
-                    .ilike("customer_phone", `%${cleanDigits.slice(-8)}%`)
-                    .order("created_date", { ascending: false })
-                    .limit(1);
-                  if (orderData && orderData.length > 0) {
-                    foundName = orderData[0].customer_name || "";
-                    foundEmail = orderData[0].customer_email || "";
-                  }
-                } catch {}
-              }
             }
 
             if (foundName) {
@@ -1501,7 +1551,7 @@ export default function OrderModal({
                   </Label>
                   {(() => {
                     const pm = activePaymentMethods || deliveryRules?.payment_methods || {};
-                    const showOnlineMp = Boolean(pm.accept_online_mp && pm.mp_access_token);
+                    const showOnlineMp = Boolean(pm.accept_online_mp && (pm.has_online_mp || pm.mp_access_token));
                     const showCredit = pm.accept_card_credit !== undefined ? Boolean(pm.accept_card_credit === true || pm.accept_card_credit === "true") : (pm.accept_card_delivery !== false);
                     const showDebit = pm.accept_card_debit !== undefined ? Boolean(pm.accept_card_debit === true || pm.accept_card_debit === "true") : (pm.accept_card_delivery !== false);
                     const showMeal = Boolean(pm.accept_card_meal === true || pm.accept_card_meal === "true");

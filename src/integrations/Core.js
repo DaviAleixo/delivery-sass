@@ -91,6 +91,11 @@ export async function UploadFile({ file, maxDimension = 800, tenantId = null }) 
     throw new Error("No file provided");
   }
 
+  const rawType = String(file.type || "").toLowerCase();
+  if (!rawType.startsWith("image/") || rawType === "image/svg+xml") {
+    throw new Error("Formato de imagem não permitido. Envie apenas JPG, PNG ou WEBP.");
+  }
+
   const { blob, dataUrl } = await compressImageToWebP(file, maxDimension);
   const activeTenant = tenantId || (typeof window !== "undefined" ? localStorage.getItem("current_tenant_id") : null) || "global";
   const cleanTenant = String(activeTenant).replace(/[^a-zA-Z0-9_-]/g, "");

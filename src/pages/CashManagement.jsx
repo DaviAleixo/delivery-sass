@@ -67,29 +67,63 @@ export default function CashManagement() {
   const [storeName, setStoreName] = useState("Restaurante");
   const [pastClosings, setPastClosings] = useState([]);
 
-  // Estado do Caixa do Turno Atual
-  const [isCashDrawerOpen, setIsCashDrawerOpen] = useState(true);
-  const [cashDrawerInfo, setCashDrawerInfo] = useState({
-    openedAt: new Date().toISOString(),
-    operator: "Operador Principal",
-    initialFloat: 100.0,
-    notes: "Fundo de troco inicial",
+  const activeTenantStorageKey = useMemo(() => {
+    const tid = (typeof window !== "undefined" ? localStorage.getItem("current_tenant_id") : null) || "default";
+    return `pedemuleke_cash_drawer_${tid}`;
+  }, []);
+
+  // Estado do Caixa do Turno Atual (persistido em localStorage por loja para não perder ao atualizar)
+  const [isCashDrawerOpen, setIsCashDrawerOpen] = useState(() => {
+    try {
+      const saved = localStorage.getItem(activeTenantStorageKey);
+      if (saved) return JSON.parse(saved).isCashDrawerOpen ?? true;
+    } catch {}
+    return true;
+  });
+  const [cashDrawerInfo, setCashDrawerInfo] = useState(() => {
+    try {
+      const saved = localStorage.getItem(activeTenantStorageKey);
+      if (saved && JSON.parse(saved).cashDrawerInfo) return JSON.parse(saved).cashDrawerInfo;
+    } catch {}
+    return {
+      openedAt: new Date().toISOString(),
+      operator: "Operador Principal",
+      initialFloat: 100.0,
+      notes: "Fundo de troco inicial",
+    };
   });
 
   // Lista de Movimentações Financeiras Manuais do Turno
-  const [manualMovements, setManualMovements] = useState([
-    {
-      id: "mov-init",
-      type: "open",
-      title: "Abertura de Caixa (Troco Inicial)",
-      category: "fundo_inicial",
-      amount: 100.0,
-      direction: "in",
-      operator: "Operador Principal",
-      timestamp: new Date().toISOString(),
-      notes: "Cédulas e moedas para troco inicial",
-    },
-  ]);
+  const [manualMovements, setManualMovements] = useState(() => {
+    try {
+      const saved = localStorage.getItem(activeTenantStorageKey);
+      if (saved && Array.isArray(JSON.parse(saved).manualMovements)) {
+        return JSON.parse(saved).manualMovements;
+      }
+    } catch {}
+    return [
+      {
+        id: "mov-init",
+        type: "open",
+        title: "Abertura de Caixa (Troco Inicial)",
+        category: "fundo_inicial",
+        amount: 100.0,
+        direction: "in",
+        operator: "Operador Principal",
+        timestamp: new Date().toISOString(),
+        notes: "Cédulas e moedas para troco inicial",
+      },
+    ];
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        activeTenantStorageKey,
+        JSON.stringify({ isCashDrawerOpen, cashDrawerInfo, manualMovements })
+      );
+    } catch {}
+  }, [activeTenantStorageKey, isCashDrawerOpen, cashDrawerInfo, manualMovements]);
 
   // Modais
   const [openModalVisible, setOpenModalVisible] = useState(false);

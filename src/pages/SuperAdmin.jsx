@@ -307,7 +307,8 @@ export default function SuperAdminPage() {
     setIsSubmitting(true);
     try {
       if (isSupabaseConfigured() && supabase) {
-        const monthlyPrice = parseFloat(newTenant.monthly_price) || (
+        const parsedPrice = parseFloat(String(newTenant.monthly_price ?? "").replace(",", "."));
+        const monthlyPrice = !isNaN(parsedPrice) ? parsedPrice : (
           newTenant.plan === "custom" ? 249.00 : 
           newTenant.plan === "table" ? 79.00 :
           newTenant.plan === "showcase" ? 49.00 : 89.00
@@ -340,23 +341,25 @@ export default function SuperAdminPage() {
         const newSlug = data.slug;
         const newName = newTenant.name.trim();
 
-        // 2. Criação Automática do Cliente e Assinatura no Asaas
+        // 2. Criação Automática do Cliente e Assinatura no Asaas (apenas se mensalidade > 0)
         let asaasSuccess = false;
         try {
-          const asaasRes = await createAsaasCustomerAndSubscription({
-            name: newName,
-            email: newTenant.email.trim() || undefined,
-            phone: newTenant.phone.trim() || undefined,
-            cpfCnpj: newTenant.cpf_cnpj.trim() || undefined,
-            plan: 
-              newTenant.plan === "custom" ? "custom_vip" : 
-              newTenant.plan === "table" ? "table_salon" :
-              newTenant.plan === "showcase" ? "showcase_digital" : "standard_delivery",
-            monthlyPrice: monthlyPrice,
-            dueDays: 3,
-          });
+          const asaasRes = monthlyPrice > 0
+            ? await createAsaasCustomerAndSubscription({
+                name: newName,
+                email: newTenant.email.trim() || undefined,
+                phone: newTenant.phone.trim() || undefined,
+                cpfCnpj: newTenant.cpf_cnpj.trim() || undefined,
+                plan:
+                  newTenant.plan === "custom" ? "custom_vip" :
+                  newTenant.plan === "table" ? "table_salon" :
+                  newTenant.plan === "showcase" ? "showcase_digital" : "standard_delivery",
+                monthlyPrice: monthlyPrice,
+                dueDays: 3,
+              })
+            : { success: false, skipped: true };
 
-          if (asaasRes.success) {
+          if (asaasRes.success && !asaasRes.skipped) {
             asaasSuccess = true;
             // 3. Atualiza os dados fiscais e o link oficial do Asaas no Supabase
             await supabase
@@ -522,7 +525,7 @@ export default function SuperAdminPage() {
       name: tenant.name || "",
       slug: tenant.slug || "",
       plan: tenant.plan || "basic",
-      monthly_price: tenant.monthly_price ? String(tenant.monthly_price) : "89.00",
+      monthly_price: tenant.monthly_price !== null && tenant.monthly_price !== undefined ? String(tenant.monthly_price) : "89.00",
       custom_template: tenant.custom_template || "default",
       accepts_delivery: tenant.accepts_delivery !== false,
       accepts_takeaway: tenant.accepts_takeaway !== false,
@@ -577,6 +580,7 @@ export default function SuperAdminPage() {
         const computedDelivery = editForm.plan !== "showcase" && editForm.plan !== "table" && editForm.accepts_delivery !== false;
         const computedTakeaway = editForm.plan !== "showcase" && editForm.accepts_takeaway !== false;
 
+        const parsedEditPrice = parseFloat(String(editForm.monthly_price ?? "").replace(",", "."));
         await supabase
           .from("tenants")
           .update({
@@ -584,7 +588,7 @@ export default function SuperAdminPage() {
             salon_mode: computedSalonMode,
             accepts_delivery: computedDelivery,
             accepts_takeaway: computedTakeaway,
-            monthly_price: parseFloat(editForm.monthly_price) || 89.00,
+            monthly_price: !isNaN(parsedEditPrice) ? parsedEditPrice : 89.00,
             email: editForm.email.trim() || null,
             phone: editForm.phone.trim() || null,
             whatsapp: editForm.phone.trim() || null,
@@ -1237,10 +1241,10 @@ export default function SuperAdminPage() {
                     </div>
                   </div>
 
-                  {selectedTenantDrawer.payment_link && (
+                  {selectedTenantDrawer.payment_link && /^https?:\/\//i.test(String(selectedTenantDrawer.payment_link).trim()) && (
                     <div className="pt-1 flex items-center gap-2">
                       <a
-                        href={selectedTenantDrawer.payment_link}
+                        href={String(selectedTenantDrawer.payment_link).trim()}
                         target="_blank"
                         rel="noreferrer"
                         className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-xs transition-all"

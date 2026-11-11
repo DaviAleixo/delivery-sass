@@ -65,7 +65,7 @@ export default function PixOnlineModal({
 
   // 1. Gera ou Regenera a cobrança PIX
   const generatePix = async () => {
-    if (!order || !accessToken) return;
+    if (!order) return;
 
     setIsLoading(true);
     setError(null);
@@ -99,19 +99,6 @@ export default function PixOnlineModal({
       if (res.success && res.qrCode) {
         setPaymentData(res);
         setIsLoading(false);
-
-        // Salva o ID do pagamento no pedido no Supabase
-        if (isSupabaseConfigured() && supabase && res.paymentId) {
-          supabase
-            .from("orders")
-            .update({
-              mp_payment_id: String(res.paymentId),
-              payment_status: "pending",
-              status: "aguardando_pagamento",
-            })
-            .eq("id", order.id)
-            .then(() => {});
-        }
       } else {
         setError(res.error || "Não foi possível gerar o QR Code do PIX.");
         setIsLoading(false);
@@ -123,14 +110,14 @@ export default function PixOnlineModal({
   };
 
   useEffect(() => {
-    if (!isOpen || !order || !accessToken) return;
+    if (!isOpen || !order) return;
     generatePix();
 
     return () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     };
-  }, [isOpen, order?.id, accessToken]);
+  }, [isOpen, order?.id]);
 
   // 2. Polling de status a cada 3 segundos com tratamento de Recusa e Expiração
   useEffect(() => {
@@ -144,28 +131,17 @@ export default function PixOnlineModal({
           orderId: order?.id,
         });
 
-        // Caso A: Pagamento Aprovado com Sucesso!
+        // Caso A: Pagamento Aprovado com Sucesso! (Backend Edge Function já atualizou o status no banco)
         if (checkRes.isApproved) {
           setIsApproved(true);
           if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
           if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
 
-          const resolvedStatusAfterPix =
+          const resolvedStatusAfterPix = checkRes.resolvedOrderStatus || (
             Boolean(_tenant?.auto_accept_delivery) && (order?.order_type || "delivery") === "delivery"
               ? "confirmado"
-              : "pendente";
-
-          // Atualiza status do pedido no Supabase para 'paid' e 'confirmado'/'pendente'
-          if (isSupabaseConfigured() && supabase) {
-            await supabase
-              .from("orders")
-              .update({
-                payment_status: "paid",
-                status: resolvedStatusAfterPix,
-                updated_date: new Date().toISOString(),
-              })
-              .eq("id", order.id);
-          }
+              : "pendente"
+          );
 
           toast.success("Pagamento PIX Aprovado com Sucesso! 🎉");
 
@@ -183,16 +159,6 @@ export default function PixOnlineModal({
           setRejectionReason(getFriendlyRejectionReason(checkRes.statusDetail || checkRes.status));
           if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
           if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-
-          if (isSupabaseConfigured() && supabase) {
-            await supabase
-              .from("orders")
-              .update({
-                payment_status: "failed",
-                updated_date: new Date().toISOString(),
-              })
-              .eq("id", order.id);
-          }
           return;
         }
       } catch (_e) {
@@ -203,7 +169,7 @@ export default function PixOnlineModal({
     return () => {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     };
-  }, [paymentData?.paymentId, isApproved, isRejected, isExpired, isOpen, order?.id, accessToken, onPaymentApproved]);
+  }, [paymentData?.paymentId, isApproved, isRejected, isExpired, isOpen, order?.id, onPaymentApproved]);
 
   // 3. Contador regressivo de 15 minutos com detecção de Expiração
   useEffect(() => {
@@ -215,18 +181,6 @@ export default function PixOnlineModal({
           clearInterval(timerIntervalRef.current);
           if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
           setIsExpired(true);
-
-          if (isSupabaseConfigured() && supabase && order?.id) {
-            supabase
-              .from("orders")
-              .update({
-                payment_status: "expired",
-                updated_date: new Date().toISOString(),
-              })
-              .eq("id", order.id)
-              .then(() => {});
-          }
-
           return 0;
         }
         return prev - 1;
@@ -238,7 +192,7 @@ export default function PixOnlineModal({
     };
   }, [isOpen, isApproved, isRejected, isExpired, order?.id]);
 
-  // Conversão de Emergência: Pagar na Entrega (Cartão ou Dinheiro)
+  // Conversão de Emergência: Pagar na Entrega (Cartão ou Dinheiro) via RPC autenticada por tracking_token
   const handleConvertToDelivery = async (method = "card_delivery") => {
     if (!order?.id || isSwitching) return;
     setIsSwitching(true);
@@ -247,19 +201,25 @@ export default function PixOnlineModal({
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
 
+      let resolvedStatus = "pendente";
+      if (isSupabaseConfigured() && supabase && order.tracking_token) {
+        const { data: convData, error: convErr } = await supabase.rpc("convert_pix_order_to_delivery", {
+          p_order_id: String(order.id),
+          p_tracking_token: order.tracking_token,
+          p_payment_method: method,
+        });
+        if (convErr || convData?.success === false) {
+          throw new Error(convErr?.message || convData?.error || "Não foi possível alterar a forma de pagamento.");
+        }
+        if (convData?.status) resolvedStatus = convData.status;
+      }
+
       const updatedFields = {
         payment_method: method,
         payment_status: "pending_delivery",
-        status: "pendente", // Ativa na cozinha com aviso de pagamento na entrega
+        status: resolvedStatus,
         updated_date: new Date().toISOString(),
       };
-
-      if (isSupabaseConfigured() && supabase) {
-        await supabase
-          .from("orders")
-          .update(updatedFields)
-          .eq("id", order.id);
-      }
 
       const methodLabel = method === "card_delivery" ? "Cartão na Entrega" : "Dinheiro na Entrega";
       toast.success(`Forma de pagamento alterada para ${methodLabel}! Pedido enviado para a cozinha.`);

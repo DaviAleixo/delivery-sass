@@ -94,6 +94,16 @@ if ([string]::IsNullOrWhiteSpace($PrinterName)) {
     exit 1
 }
 
+$printerObj = Get-CimInstance Win32_Printer | Where-Object { $_.Name -eq $PrinterName } | Select-Object -First 1
+if ($null -eq $printerObj) {
+    Write-Error "Impressora '$PrinterName' nao encontrada no Windows."
+    exit 3
+}
+if ($printerObj.WorkOffline -eq $true) {
+    Write-Error "Impressora '$PrinterName' esta offline no Windows (WorkOffline=true)."
+    exit 4
+}
+
 $ok = [RawPrinterHelper]::SendFileToPrinter($PrinterName, $FilePath)
 if ($ok) {
     Write-Output "SUCCESS"
@@ -208,14 +218,18 @@ export function sendTextToPrinter(text, targetPrinterName) {
 
         if (error || !stdout.includes("SUCCESS")) {
           console.error("Erro ao imprimir via WinSpool:", error?.message || stderr);
-          resolve({ 
-            success: false, 
-            error: stderr || error?.message || "Falha ao enviar para a impressora" 
+          resolve({
+            success: false,
+            deliveryStage: "windows_spool_rejected",
+            physicalConfirmationSupported: false,
+            error: stderr || error?.message || "Falha ao enviar para a impressora"
           });
         } else {
-          resolve({ 
-            success: true, 
-            printer: targetPrinterName || "Padrao do Windows" 
+          resolve({
+            success: true,
+            deliveryStage: "windows_spool_accepted",
+            physicalConfirmationSupported: false,
+            printer: targetPrinterName || "Padrao do Windows"
           });
         }
       });

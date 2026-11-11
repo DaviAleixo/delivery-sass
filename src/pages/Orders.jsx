@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { getBrasiliaParts } from "@/utils/dateTime";
 import { useOrdersRealtime } from "@/hooks/useOrdersRealtime";
+import { isRealtimeChannelActive } from "@/lib/realtimeHub";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { toast } from "sonner";
 import { refundPixPayment } from "@/services/mercadoPagoService";
@@ -200,8 +201,15 @@ export default function OrdersPage() {
 
   useEffect(() => {
     loadData();
-    // Fallback passivo a cada 30 segundos apenas por precaução de rede
+    const activeTenantId = typeof window !== "undefined" ? localStorage.getItem("current_tenant_id") : null;
+    const rtFilter = activeTenantId ? `tenant_id=eq.${activeTenantId}` : null;
+    let tickCount = 0;
+
+    // Fallback passivo em aba visível: 60s com WebSocket conectado, 30s apenas se desconectado
     const interval = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      tickCount += 1;
+      if (rtFilter && isRealtimeChannelActive("orders", rtFilter) && tickCount % 2 !== 0) return;
       loadOrdersOnly();
     }, 30000);
 
@@ -387,7 +395,8 @@ export default function OrdersPage() {
       loadOrdersOnly();
     } catch (err) {
       console.error("Erro ao atualizar status do pedido:", err);
-      toast.error("Erro ao atualizar status do pedido. Tente novamente.");
+      toast.error(err?.message || "Erro ao atualizar status do pedido. Tente novamente.");
+      loadOrdersOnly();
     }
   };
 
@@ -427,33 +436,32 @@ export default function OrdersPage() {
     let pixRefundId = targetOrder.pix_refund_id || null;
     let pixRefundAmountDone = 0;
 
-    // 1. Estorno do PIX Online Mercado Pago
+    // 1. Estorno do PIX Online Mercado Pago (o token é resolvido de forma segura no servidor)
     if (refundPix && targetOrder.mp_payment_id) {
-      const tokenToUse = mpAccessToken || tenant?.payment_methods?.mp_access_token || settings?.payment_methods?.mp_access_token || "";
-      if (tokenToUse) {
-        try {
-          const refundRes = await refundPixPayment({
-            accessToken: tokenToUse,
-            paymentId: targetOrder.mp_payment_id,
-            amount: refundPixAmount || targetOrder.total_amount || targetOrder.total
-          });
+      const targetRefundAmt = refundPixAmount || targetOrder.total_amount || targetOrder.total;
+      const refundIdempotencyKey = `refund_${targetOrder.id}_${targetOrder.mp_payment_id}_${Number(targetRefundAmt || 0).toFixed(2)}`;
+      try {
+        const refundRes = await refundPixPayment({
+          paymentId: targetOrder.mp_payment_id,
+          amount: targetRefundAmt,
+          orderId: targetOrder.id,
+          tenantId: targetOrder.tenant_id || tenant?.id,
+          idempotencyKey: refundIdempotencyKey,
+        });
 
-          if (refundRes.success) {
-            pixRefundStatus = "refunded";
-            pixRefundId = String(refundRes.refundId || "");
-            pixRefundAmountDone = Number(refundPixAmount || targetOrder.total_amount || targetOrder.total);
-            toast.success(`✓ Pix de R$ ${pixRefundAmountDone.toFixed(2).replace('.', ',')} estornado com sucesso ao cliente!`);
-          } else {
-            pixRefundStatus = "failed";
-            toast.error(`Aviso Mercado Pago: ${refundRes.error}. Faça o estorno manual pelo app.`);
-          }
-        } catch (err) {
-          console.error("Erro ao estornar PIX:", err);
+        if (refundRes.success) {
+          pixRefundStatus = "refunded";
+          pixRefundId = String(refundRes.refundId || "");
+          pixRefundAmountDone = Number(refundPixAmount || targetOrder.total_amount || targetOrder.total);
+          toast.success(`✓ Pix de R$ ${pixRefundAmountDone.toFixed(2).replace('.', ',')} estornado com sucesso ao cliente!`);
+        } else {
           pixRefundStatus = "failed";
-          toast.error("Erro ao conectar com Mercado Pago para estorno.");
+          toast.error(`Aviso Mercado Pago: ${refundRes.error}. Faça o estorno manual pelo app.`);
         }
-      } else {
-        toast.error("Token do Mercado Pago não configurado na loja.");
+      } catch (err) {
+        console.error("Erro ao estornar PIX:", err);
+        pixRefundStatus = "failed";
+        toast.error("Erro ao conectar com Mercado Pago para estorno.");
       }
     }
 
@@ -483,9 +491,14 @@ export default function OrdersPage() {
       status: "cancelado",
       cancel_reason: cancelReason,
       cancelled_at: nowIso,
-      pix_refund_status: pixRefundStatus,
-      pix_refund_id: pixRefundId,
-      pix_refund_amount: pixRefundAmountDone,
+      ...(refundPix && targetOrder.mp_payment_id
+        ? {
+            pix_refund_status: pixRefundStatus,
+            pix_refund_id: pixRefundId,
+            pix_refund_amount: pixRefundAmountDone,
+            ...(pixRefundStatus === "refunded" ? { payment_status: "refunded" } : {}),
+          }
+        : {}),
     };
 
     setOrders((prev) => {
