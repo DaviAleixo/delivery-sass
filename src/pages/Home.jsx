@@ -345,7 +345,6 @@ export default function HomePage() {
           
           <div className="border-t border-gray-800 pt-8 text-center text-gray-400">
             <p>&copy; 2026 {settings?.restaurant_name || "DeliciousEats"}. Todos os direitos reservados.</p>
-            <p className="text-sm mt-2">Desenvolvido por <span className="text-red-400">Davi Aleixo</span></p>
           </div>
         </div>
       </footer>

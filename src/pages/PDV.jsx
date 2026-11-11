@@ -3,6 +3,8 @@ import { Product } from "@/entities/Product";
 import { Category } from "@/entities/Category";
 import { Order } from "@/entities/Order";
 import { RestaurantTable, TableSession } from "@/entities/RestaurantTable";
+import { ProductionSector } from "@/entities/ProductionSector";
+import { stampOrderItemsWithSectors } from "@/utils/sectorUtils";
 import { getActiveTenantId } from "@/entities/storage";
 import PDVProductGrid from "../components/pdv/PDVProductGrid";
 import PDVCart from "../components/pdv/PDVCart";
@@ -32,6 +34,7 @@ const playBeep = () => {
 export default function PDVPage() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [productionSectors, setProductionSectors] = useState([]);
   const [tables, setTables] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [orderType, setOrderType] = useState("pickup");
@@ -70,14 +73,16 @@ export default function PDVPage() {
 
   const loadData = async () => {
     try {
-      const [prods, cats, tbls, sess] = await Promise.all([
+      const [prods, cats, tbls, sess, secs] = await Promise.all([
         Product.list("-created_date"),
         Category.list("order_index"),
         RestaurantTable.list().catch(() => []),
         TableSession.list("-opened_at", 100).catch(() => []),
+        ProductionSector.list("order_index").catch(() => []),
       ]);
       setProducts(prods || []);
       setCategories(cats || []);
+      setProductionSectors(Array.isArray(secs) ? secs : []);
       
       let finalTables = tbls || [];
       if (finalTables.length === 0) {
@@ -279,21 +284,25 @@ export default function PDVPage() {
         order_type: "dine_in",
         table_number: cleanTargetNum,
         table_session_id: activeSessionId,
-        items: cart.map((item) => {
-          const cat = categories.find((c) => c.id === item.category_id || c.id === item.category);
-          const catName = cat?.name || (typeof item.category === "string" && item.category ? item.category : "Geral");
-          return {
-            product_id: item.id,
-            product_name: item.name,
-            name: item.name,
-            product_price: Number(item.price) || 0,
-            price: Number(item.price) || 0,
-            category_name: item.category_name || catName,
-            quantity: item.qty,
-            subtotal: (Number(item.price) || 0) * item.qty,
-            additionals: [],
-          };
-        }),
+        items: stampOrderItemsWithSectors(
+          cart.map((item) => {
+            const cat = categories.find((c) => c.id === item.category_id || c.id === item.category);
+            const catName = cat?.name || (typeof item.category === "string" && item.category ? item.category : "Geral");
+            return {
+              product_id: item.id,
+              product_name: item.name,
+              name: item.name,
+              product_price: Number(item.price) || 0,
+              price: Number(item.price) || 0,
+              category_id: cat?.id || item.category_id || item.category || null,
+              category_name: item.category_name || catName,
+              quantity: item.qty,
+              subtotal: (Number(item.price) || 0) * item.qty,
+              additionals: [],
+            };
+          }),
+          { sectors: productionSectors, products, categories }
+        ),
       };
 
       const created = await Order.create(orderData);
@@ -380,21 +389,25 @@ export default function PDVPage() {
       table_number: cleanTargetNum,
       table_session_id: activeSessionId,
       payment_status: "paid",
-      items: cart.map((item) => {
-        const cat = categories.find((c) => c.id === item.category_id || c.id === item.category);
-        const catName = cat?.name || (typeof item.category === "string" && item.category ? item.category : "Geral");
-        return {
-          product_id: item.id,
-          product_name: item.name,
-          name: item.name,
-          product_price: Number(item.price) || 0,
-          price: Number(item.price) || 0,
-          category_name: item.category_name || catName,
-          quantity: item.qty,
-          subtotal: (Number(item.price) || 0) * item.qty,
-          additionals: [],
-        };
-      }),
+      items: stampOrderItemsWithSectors(
+        cart.map((item) => {
+          const cat = categories.find((c) => c.id === item.category_id || c.id === item.category);
+          const catName = cat?.name || (typeof item.category === "string" && item.category ? item.category : "Geral");
+          return {
+            product_id: item.id,
+            product_name: item.name,
+            name: item.name,
+            product_price: Number(item.price) || 0,
+            price: Number(item.price) || 0,
+            category_id: cat?.id || item.category_id || item.category || null,
+            category_name: item.category_name || catName,
+            quantity: item.qty,
+            subtotal: (Number(item.price) || 0) * item.qty,
+            additionals: [],
+          };
+        }),
+        { sectors: productionSectors, products, categories }
+      ),
     };
 
     const zodValidation = validateSchema(orderSchema, {

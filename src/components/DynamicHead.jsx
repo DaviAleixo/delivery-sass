@@ -19,6 +19,7 @@ const RESERVED_SLUGS = new Set([
   "settings",
   "superadmin",
   "adminlogin",
+  "login",
   "myorders",
   "printorder",
   "home",
@@ -45,7 +46,7 @@ export default function DynamicHead() {
     const urlSlug = firstSegment && !RESERVED_SLUGS.has(firstSegment) ? firstSegment : null;
 
     // Caso especial: Login Geral da plataforma (sem loja específica)
-    if (!urlSlug && pathname.includes("adminlogin")) {
+    if (!urlSlug && (pathname === "/login" || pathname.includes("adminlogin"))) {
       document.title = "PedeMuleke — Login Administrativo";
       clearFavicon();
       return;
@@ -96,7 +97,7 @@ export default function DynamicHead() {
       document.title = `${storeName} — Relatórios`;
     } else if (pathname.includes("pdv")) {
       document.title = `${storeName} — PDV Balcão`;
-    } else if (pathname.includes("adminlogin") || pathname.endsWith("/admin")) {
+    } else if (pathname === "/login" || pathname.includes("adminlogin") || pathname.endsWith("/admin")) {
       document.title = `${storeName} — Login Administrativo`;
     } else if (pathname.includes("myorders") || pathname.includes("meus-pedidos")) {
       document.title = `${storeName} — Meus Pedidos`;

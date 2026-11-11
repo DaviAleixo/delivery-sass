@@ -4,9 +4,11 @@ import { Product } from "@/entities/Product";
 import { Category } from "@/entities/Category";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { DollarSign, ShoppingBag, Package, TrendingUp } from "lucide-react";
+import { DollarSign, ShoppingBag, Package, TrendingUp, UtensilsCrossed, ArrowUpRight } from "lucide-react";
 import { format, isToday } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { Link } from "react-router-dom";
+import { createPageUrl } from "@/utils";
 
 export default function DashboardPage() {
   const [orders, setOrders] = useState([]);
@@ -18,15 +20,6 @@ export default function DashboardPage() {
   useEffect(() => {
     loadData();
   }, []);
-
-  const playNotificationSound = () => {
-    try {
-      if (audioRef.current) {
-        audioRef.current.volume = 1.0;
-        audioRef.current.play().catch(_err => {});
-      }
-    } catch (_e) {}
-  };
 
   const loadData = async () => {
     setIsLoading(true);
@@ -58,192 +51,239 @@ export default function DashboardPage() {
   });
 
   const todayRevenue = todayOrders.reduce((sum, order) => {
+    if (order.status === "cancelado") return sum;
     const val = Number(order?.total_amount || order?.total || 0);
     return sum + (isNaN(val) ? 0 : val);
   }, 0);
 
   const pendingOrders = (orders || []).filter(order => order?.status === "pendente").length;
 
-  const getStatusColor = (status) => {
-    const colors = {
-      pendente: "bg-yellow-100 text-yellow-800",
-      confirmado: "bg-blue-100 text-blue-800",
-      preparando: "bg-purple-100 text-purple-800",
-      enviado: "bg-indigo-100 text-indigo-800",
-      entregue: "bg-green-100 text-green-800",
-      cancelado: "bg-red-100 text-red-800"
+  const getStatusBadge = (status) => {
+    const map = {
+      pendente: { label: "Pendente", className: "bg-amber-50 text-amber-800 border-amber-300" },
+      confirmado: { label: "Confirmado", className: "bg-blue-50 text-blue-800 border-blue-300" },
+      preparando: { label: "Preparando", className: "bg-purple-50 text-purple-800 border-purple-300" },
+      enviado: { label: "Enviado", className: "bg-indigo-50 text-indigo-800 border-indigo-300" },
+      entregue: { label: "Entregue", className: "bg-emerald-50 text-emerald-800 border-emerald-300" },
+      cancelado: { label: "Cancelado", className: "bg-rose-50 text-rose-800 border-rose-300" }
     };
-    return colors[status] || "bg-gray-100 text-gray-800";
-  };
-
-  const getStatusText = (status) => {
-    const texts = {
-      pendente: "Pendente",
-      confirmado: "Confirmado",
-      preparando: "Preparando",
-      enviado: "Enviado",
-      entregue: "Entregue",
-      cancelado: "Cancelado"
-    };
-    return texts[status] || status;
+    const s = map[status] || { label: status, className: "bg-stone-100 text-stone-700 border-stone-200" };
+    return (
+      <Badge variant="outline" className={`text-[10px] font-semibold rounded px-1.5 py-0.5 ${s.className}`}>
+        {s.label}
+      </Badge>
+    );
   };
   
   const getCategoryNameById = (categoryId) => {
     return categories.find(c => c.id === categoryId)?.name || 'Sem Categoria';
   };
 
+  const formatMoney = (val) =>
+    `R$ ${Number(val || 0).toFixed(2).replace(".", ",")}`;
+
   if (isLoading) {
     return (
-      <div className="p-8 bg-[#F7F9F8] min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#047857] mx-auto mb-4"></div>
-          <p className="text-stone-600">Carregando painel...</p>
+      <div className="flex h-screen items-center justify-center bg-[#F7F9F8]">
+        <div className="text-center space-y-3">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#047857] mx-auto"></div>
+          <p className="text-stone-600 font-semibold text-sm">Carregando painel...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-8 bg-[#F7F9F8] min-h-screen">
-      {/* Audio de notificação - oculto */}
+    <div className="p-4 sm:p-6 lg:p-8 bg-[#F7F9F8] min-h-screen space-y-6 max-w-7xl mx-auto">
+      {/* Audio de notificação */}
       <audio ref={audioRef} preload="auto">
         <source src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" type="audio/mpeg" />
       </audio>
       
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600 mt-2">
-            Acompanhe suas vendas e pedidos em tempo real
+      {/* Cabeçalho Executivo */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-stone-200">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-stone-900 tracking-tight">
+            Visão Geral (Dashboard)
+          </h1>
+          <p className="text-xs text-stone-500 mt-0.5">
+            Métricas de vendas, fila de pedidos e produtos com maior saída
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <Card className="border-0 shadow-md">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">
-                Vendas Hoje
-              </CardTitle>
-              <DollarSign className="h-4 w-4 text-green-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-gray-900">
-                R$ {todayRevenue.toFixed(2).replace('.', ',')}
-              </div>
-              <p className="text-xs text-gray-600 mt-1">
-                {todayOrders.length} pedidos hoje
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-md">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">
-                Pedidos Pendentes
-              </CardTitle>
-              <ShoppingBag className="h-4 w-4 text-yellow-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-gray-900">
-                {pendingOrders}
-              </div>
-              <p className="text-xs text-gray-600 mt-1">
-                Aguardando confirmação
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-md">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">
-                Total de Produtos
-              </CardTitle>
-              <Package className="h-4 w-4 text-blue-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-gray-900">
-                {products.length}
-              </div>
-              <p className="text-xs text-gray-600 mt-1">
-                {products.filter(p => p.available).length} disponíveis
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-0 shadow-md">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">
-                Total de Pedidos
-              </CardTitle>
-              <TrendingUp className="h-4 w-4 text-purple-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-gray-900">
-                {orders.length}
-              </div>
-              <p className="text-xs text-gray-600 mt-1">
-                Todos os pedidos
-              </p>
-            </CardContent>
-          </Card>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="bg-white text-stone-600 border-stone-300 text-xs font-medium px-3 py-1 rounded-md">
+            Hoje • {format(new Date(), "dd 'de' MMMM", { locale: ptBR })}
+          </Badge>
+          <Link
+            to={createPageUrl("Orders")}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-stone-900 hover:bg-black text-white transition-colors shadow-2xs"
+          >
+            <span>Ver Pedidos</span>
+            <ArrowUpRight className="w-3.5 h-3.5" />
+          </Link>
         </div>
+      </div>
 
-        <div className="grid lg:grid-cols-2 gap-8">
-          <Card className="border-0 shadow-md">
-            <CardHeader>
-              <CardTitle>Pedidos Recentes</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {orders.slice(0, 10).map((order) => {
+      {/* Grid Superior: 4 Cards de Métricas Principais */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        {/* Card 1: Faturamento do Dia */}
+        <Card className="p-4 bg-white border border-stone-200 rounded-xl shadow-2xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wide">
+              Vendas de Hoje
+            </span>
+            <DollarSign className="w-4 h-4 text-emerald-700" />
+          </div>
+          <p className="text-2xl font-bold font-mono text-stone-900 mt-1">
+            {formatMoney(todayRevenue)}
+          </p>
+          <span className="text-[11px] text-stone-500 mt-0.5 block">
+            {todayOrders.length} {todayOrders.length === 1 ? "pedido hoje" : "pedidos hoje"}
+          </span>
+        </Card>
+
+        {/* Card 2: Pedidos Pendentes */}
+        <Card className="p-4 bg-white border border-stone-200 rounded-xl shadow-2xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wide">
+              Pendentes
+            </span>
+            <ShoppingBag className="w-4 h-4 text-amber-600" />
+          </div>
+          <p className="text-2xl font-bold font-mono text-stone-900 mt-1">
+            {pendingOrders}
+          </p>
+          <span className="text-[11px] text-stone-500 mt-0.5 block">
+            {pendingOrders === 0 ? "Fila em dia" : "Aguardando confirmação"}
+          </span>
+        </Card>
+
+        {/* Card 3: Total de Pedidos */}
+        <Card className="p-4 bg-white border border-stone-200 rounded-xl shadow-2xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wide">
+              Total de Pedidos
+            </span>
+            <TrendingUp className="w-4 h-4 text-blue-600" />
+          </div>
+          <p className="text-2xl font-bold font-mono text-stone-900 mt-1">
+            {orders.length}
+          </p>
+          <span className="text-[11px] text-stone-500 mt-0.5 block">
+            Histórico registrado
+          </span>
+        </Card>
+
+        {/* Card 4: Produtos Ativos */}
+        <Card className="p-4 bg-white border border-stone-200 rounded-xl shadow-2xs">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wide">
+              Cardápio Ativo
+            </span>
+            <Package className="w-4 h-4 text-stone-500" />
+          </div>
+          <p className="text-2xl font-bold font-mono text-stone-900 mt-1">
+            {products.filter(p => p.available !== false).length}
+          </p>
+          <span className="text-[11px] text-stone-500 mt-0.5 block">
+            de {products.length} itens cadastrados
+          </span>
+        </Card>
+      </div>
+
+      {/* Grid Principal: Pedidos Recentes (Esquerda) vs Produtos Mais Vendidos (Direita) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+        {/* Card: Pedidos Recentes */}
+        <Card className="bg-white border border-stone-200 rounded-xl shadow-xs overflow-hidden">
+          <CardHeader className="p-4 pb-3 border-b border-stone-100 flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-sm font-bold text-stone-900">
+                Pedidos Recentes
+              </CardTitle>
+              <p className="text-xs text-stone-500 mt-0.5">
+                Últimos pedidos recebidos na operação
+              </p>
+            </div>
+            <Link
+              to={createPageUrl("Orders")}
+              className="text-xs font-semibold text-stone-600 hover:text-stone-900 hover:underline"
+            >
+              Ver todos →
+            </Link>
+          </CardHeader>
+
+          <CardContent className="p-0">
+            {orders.length === 0 ? (
+              <div className="text-center py-12 text-stone-400 text-xs">
+                Nenhum pedido registrado no sistema
+              </div>
+            ) : (
+              <div className="divide-y divide-stone-100">
+                {orders.slice(0, 8).map((order) => {
                   const d = safeDate(order?.created_date);
                   const amount = Number(order?.total_amount || order?.total || 0);
+
                   return (
-                    <div key={order.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                      <div>
-                        <p className="font-medium text-gray-900">
-                          {order.customer_name || "Cliente"}
-                        </p>
-                        <p className="text-sm text-gray-600">
-                          {d ? format(d, "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : "-"}
+                    <div
+                      key={order.id}
+                      className="p-3.5 sm:px-4 flex items-center justify-between hover:bg-stone-50/60 transition-colors"
+                    >
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold text-stone-900">
+                            #{order.id?.slice(-4) || order.id} • {order.customer_name || "Cliente Balcão"}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-stone-400 font-mono">
+                          {d ? format(d, "dd/MM 'às' HH:mm", { locale: ptBR }) : "-"}
                         </p>
                       </div>
-                      <div className="text-right">
-                        <p className="font-bold text-gray-900">
-                          R$ {amount.toFixed(2).replace('.', ',')}
-                        </p>
-                        <Badge className={getStatusColor(order.status)}>
-                          {getStatusText(order.status)}
-                        </Badge>
+
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-bold font-mono text-stone-900">
+                          {formatMoney(amount)}
+                        </span>
+                        {getStatusBadge(order.status)}
                       </div>
                     </div>
                   );
                 })}
-                {orders.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    Nenhum pedido encontrado
-                  </div>
-                )}
               </div>
-            </CardContent>
-          </Card>
+            )}
+          </CardContent>
+        </Card>
 
-          <Card className="border-0 shadow-md">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle>Produtos Mais Vendidos</CardTitle>
-              <Badge variant="outline" className="text-xs bg-[#D1E9DF]/40 text-[#047857] border-[#D1E9DF] font-bold">
-                Top Vendas
-              </Badge>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
+        {/* Card: Produtos Mais Vendidos */}
+        <Card className="bg-white border border-stone-200 rounded-xl shadow-xs overflow-hidden">
+          <CardHeader className="p-4 pb-3 border-b border-stone-100 flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-sm font-bold text-stone-900">
+                Produtos Mais Vendidos
+              </CardTitle>
+              <p className="text-xs text-stone-500 mt-0.5">
+                Curva de saída calculada a partir dos pedidos concluídos
+              </p>
+            </div>
+            <Badge variant="outline" className="text-[10px] font-semibold text-stone-600 bg-stone-50 border-stone-200">
+              Ranking
+            </Badge>
+          </CardHeader>
+
+          <CardContent className="p-0">
+            {products.length === 0 ? (
+              <div className="text-center py-12 text-stone-400 text-xs">
+                Nenhum produto cadastrado
+              </div>
+            ) : (
+              <div className="divide-y divide-stone-100">
                 {(() => {
                   const ranked = [...products]
-                    .map(product => {
+                    .map((product) => {
                       let salesCount = 0;
-                      (orders || []).forEach(order => {
-                        if (order.status !== 'cancelado' && Array.isArray(order.items)) {
-                          order.items.forEach(item => {
+                      (orders || []).forEach((order) => {
+                        if (order.status !== "cancelado" && Array.isArray(order.items)) {
+                          order.items.forEach((item) => {
                             if (
                               item.product_id === product.id ||
                               item.id === product.id ||
@@ -261,45 +301,50 @@ export default function DashboardPage() {
 
                   return ranked.map((product, idx) => {
                     const price = Number(product.price || 0);
+
                     return (
-                      <div key={product.id} className="flex items-center justify-between p-2.5 rounded-xl hover:bg-stone-50 transition-colors">
-                        <div className="flex items-center gap-3">
-                          <div className="relative w-11 h-11 bg-gray-100 rounded-xl flex items-center justify-center overflow-hidden border border-gray-200 flex-shrink-0">
+                      <div
+                        key={product.id}
+                        className="p-3 sm:px-4 flex items-center justify-between hover:bg-stone-50/60 transition-colors"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="relative w-10 h-10 bg-stone-100 rounded-lg flex items-center justify-center overflow-hidden border border-stone-200 shrink-0">
                             {product.image_url ? (
                               <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
                             ) : (
-                              <span>🍽️</span>
+                              <UtensilsCrossed className="w-4 h-4 text-stone-400" />
                             )}
-                            <span className="absolute top-0.5 left-0.5 bg-black/75 text-[10px] text-white font-black px-1 rounded">
+                            <span className="absolute top-0.5 left-0.5 bg-black/75 text-[9px] text-white font-bold px-1 rounded">
                               #{idx + 1}
                             </span>
                           </div>
-                          <div>
-                            <p className="font-semibold text-gray-900 text-sm">{product.name}</p>
-                            <p className="text-xs text-gray-500 capitalize">
+
+                          <div className="truncate">
+                            <p className="font-semibold text-stone-900 text-xs truncate">
+                              {product.name}
+                            </p>
+                            <p className="text-[11px] text-stone-500 capitalize truncate">
                               {getCategoryNameById(product.category || product.category_id)}
                               {product.salesCount > 0 && (
-                                <span className="ml-2 font-bold text-[#047857]">• {product.salesCount} vendidos</span>
+                                <span className="ml-1.5 font-semibold text-emerald-700">
+                                  • {product.salesCount} {product.salesCount === 1 ? "vendido" : "vendidos"}
+                                </span>
                               )}
                             </p>
                           </div>
                         </div>
-                        <p className="font-extrabold text-gray-900 text-sm">
-                          R$ {price.toFixed(2).replace('.', ',')}
-                        </p>
+
+                        <span className="font-mono font-bold text-xs text-stone-900 shrink-0 pl-3">
+                          {formatMoney(price)}
+                        </span>
                       </div>
                     );
                   });
                 })()}
-                {products.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    Nenhum produto cadastrado
-                  </div>
-                )}
               </div>
-            </CardContent>
-          </Card>
-        </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

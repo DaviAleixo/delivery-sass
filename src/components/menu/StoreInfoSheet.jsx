@@ -1,19 +1,14 @@
+import { isStoreOpen } from '@/utils/storeStatus';
 import React from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Info, Clock, MapPin, Phone, Instagram, User, ChevronRight } from "lucide-react";
+import { Info, MapPin, Phone, Instagram, User, ChevronRight } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import UserProfileSheet from "./UserProfileSheet";
 
 export default function StoreInfoSheet({ settings, dark = false, trigger }) {
   if (!settings) return null;
-
-  const getOpeningHoursText = () => {
-    if (settings.opening_time && settings.closing_time) {
-      return `Das ${settings.opening_time} às ${settings.closing_time}`;
-    }
-    return "Horário não informado";
-  };
+  const isOpen = isStoreOpen(settings);
 
   return (
     <Sheet>
@@ -33,7 +28,7 @@ export default function StoreInfoSheet({ settings, dark = false, trigger }) {
           </Button>
         )}
       </SheetTrigger>
-      <SheetContent className={`p-6 scrollbar-hide ${
+      <SheetContent className={`overflow-y-auto p-4 sm:p-6 scrollbar-hide w-full max-w-full sm:max-w-md ${
         dark 
           ? "bg-[#14100e] text-stone-100 border-l border-stone-800" 
           : "bg-white text-[#171717] border-l border-[#E5EAE7]"
@@ -73,13 +68,17 @@ export default function StoreInfoSheet({ settings, dark = false, trigger }) {
               dark ? "bg-stone-900/80 border-stone-800" : "bg-[#F7F9F8] border-[#E5EAE7]"
             }`}>
               <div className={`w-9 h-9 border rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5 ${
-                dark ? "bg-stone-950 border-stone-800 text-red-400" : "bg-white border-[#E5EAE7] text-[#047857]"
+                isOpen 
+                  ? (dark ? "bg-stone-950 border-emerald-900 text-emerald-400" : "bg-white border-emerald-200 text-emerald-600")
+                  : (dark ? "bg-stone-950 border-rose-900 text-rose-400" : "bg-white border-rose-200 text-rose-600")
               }`}>
-                <Clock className="w-4 h-4" />
+                <span className={`w-2.5 h-2.5 rounded-full ${isOpen ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`} />
               </div>
               <div>
-                <p className={`text-xs font-black uppercase tracking-wider ${dark ? "text-stone-400" : "text-stone-500"}`}>Funcionamento</p>
-                <p className={`text-sm font-bold mt-0.5 ${dark ? "text-white" : "text-[#171717]"}`}>{getOpeningHoursText()}</p>
+                <p className={`text-xs font-black uppercase tracking-wider ${dark ? "text-stone-400" : "text-stone-500"}`}>Status da Loja</p>
+                <p className={`text-sm font-bold mt-0.5 ${isOpen ? "text-emerald-700" : "text-rose-600"}`}>
+                  {isOpen ? "Aberto no momento" : "Fechado no momento"}
+                </p>
               </div>
             </div>
 

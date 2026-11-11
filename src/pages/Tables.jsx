@@ -8,13 +8,14 @@ import { Order } from "@/entities/Order";
 import { Settings as SettingsEntity } from "@/entities/Settings";
 import { Product } from "@/entities/Product";
 import { Category } from "@/entities/Category";
+import { ProductionSector } from "@/entities/ProductionSector";
+import { stampOrderItemsWithSectors } from "@/utils/sectorUtils";
 import { 
   UtensilsCrossed, 
   Plus, 
   Search, 
   QrCode, 
   Receipt, 
-  Users, 
   User,
   CheckCircle2, 
   Printer, 
@@ -23,7 +24,6 @@ import {
   Layers, 
   CreditCard, 
   Banknote, 
-  Split, 
   X, 
   ShoppingBag,
   Flame,
@@ -35,10 +35,49 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import { QRCodeCanvas } from "qrcode.react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+
+export const PAYMENT_METHODS = [
+  { id: "dinheiro", label: "Dinheiro", icon: Banknote },
+  { id: "pix", label: "Pix", icon: QrCode },
+  { id: "cartao_debito", label: "Cartão Débito", icon: CreditCard },
+  { id: "cartao_credito", label: "Cartão Crédito", icon: CreditCard },
+  { id: "vale_refeicao", label: "Vale Refeição", icon: Receipt },
+];
+
+export const getPaymentMethodLabel = (methodKey) => {
+  const m = String(methodKey || "").toLowerCase();
+  if (m === "dinheiro" || m === "cash") return "Dinheiro";
+  if (m === "pix") return "Pix";
+  if (m === "cartao_debito" || m === "debito" || m === "debit") return "Cartão Débito";
+  if (m === "cartao_credito" || m === "credito" || m === "credit") return "Cartão Crédito";
+  if (m === "vale_refeicao" || m === "vale" || m === "refeicao" || m === "voucher") return "Vale Refeição";
+  if (m.startsWith("multiplo")) return "Múltiplos Meios";
+  return methodKey || "Outro";
+};
+
+export const getSessionPaymentsList = (session) => {
+  if (!session) return [];
+  const details = session.payment_details;
+  if (!details) return [];
+  if (Array.isArray(details)) return details;
+  if (Array.isArray(details.payments)) return details.payments;
+  if (typeof details === "string") {
+    try {
+      const parsed = JSON.parse(details);
+      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed?.payments)) return parsed.payments;
+    } catch {
+      return [];
+    }
+  }
+  return [];
+};
 
 export default function TablesPage() {
   const navigate = useNavigate();
@@ -47,6 +86,7 @@ export default function TablesPage() {
   const [orders, setOrders] = useState([]);
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [productionSectors, setProductionSectors] = useState([]);
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -66,7 +106,6 @@ export default function TablesPage() {
 
   // Open Table Form State
   const [openCustomerName, setOpenCustomerName] = useState("");
-  const [openCustomerPhone, setOpenCustomerPhone] = useState("");
   const [isOpeningTable, setIsOpeningTable] = useState(false);
 
   // Add Table Form State
@@ -88,13 +127,18 @@ export default function TablesPage() {
   // Settlement / Payment Form State
   const [includeServiceFee, setIncludeServiceFee] = useState(false);
   const [discountAmount, setDiscountAmount] = useState(0);
+  const [showDiscountField, setShowDiscountField] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("dinheiro");
   const [cashGiven, setCashGiven] = useState("");
   const [isClosingSession, setIsClosingSession] = useState(false);
+  const [partialPaymentAmount, setPartialPaymentAmount] = useState("");
+  const [partialPayerName, setPartialPayerName] = useState("");
+  const [partialNotes, setPartialNotes] = useState("");
+  const [isRegisteringPartial, setIsRegisteringPartial] = useState(false);
 
   const [comandaViewMode, setComandaViewMode] = useState("by_person"); // 'by_person' | 'summary' | 'rounds'
   const [quickOrderPersonName, setQuickOrderPersonName] = useState("");
-  const [preBillViewMode, setPreBillViewMode] = useState("by_person"); // 'by_person' | 'items'
+  const [_preBillViewMode, _setPreBillViewMode] = useState("by_person"); // 'by_person' | 'items'
   const [isCopiedSummary, setIsCopiedSummary] = useState(false);
   const [isPrintingPreBill, setIsPrintingPreBill] = useState(false);
 
@@ -122,10 +166,11 @@ export default function TablesPage() {
       const staticPromises = includeStatic ? [
         Product.list().catch(() => []),
         Category.list().catch(() => []),
-        SettingsEntity.list().catch(() => [])
+        SettingsEntity.list().catch(() => []),
+        ProductionSector.list("order_index").catch(() => []),
       ] : [];
 
-      const [loadedTables, loadedSessions, loadedOrders, loadedProducts, loadedCategories, settingsList] = await Promise.all([
+      const [loadedTables, loadedSessions, loadedOrders, loadedProducts, loadedCategories, settingsList, loadedSectors] = await Promise.all([
         ...dynamicPromises,
         ...staticPromises
       ]);
@@ -151,6 +196,7 @@ export default function TablesPage() {
       if (includeStatic) {
         if (loadedProducts) setProducts(loadedProducts);
         if (loadedCategories) setCategories(loadedCategories);
+        if (Array.isArray(loadedSectors)) setProductionSectors(loadedSectors);
         if (settingsList && settingsList.length > 0) {
           setSettings(settingsList[0]);
           setIncludeServiceFee(settingsList[0]?.table_service_fee_enabled === true);
@@ -385,25 +431,25 @@ export default function TablesPage() {
             if (lastOrderMinutes < 25) {
               lastOrderStatus = "recent";
               lastOrderBadge = {
-                text: `🍽️ Pedido há ${lastOrderText}`,
+                text: `Pedido há ${lastOrderText}`,
                 label: `Último pedido há ${lastOrderText}`,
-                style: "bg-emerald-50 text-emerald-800 border-emerald-200/90",
+                style: "bg-emerald-50 text-emerald-800 border-emerald-200",
                 dot: "bg-emerald-500",
               };
             } else if (lastOrderMinutes <= 45) {
               lastOrderStatus = "idle";
               lastOrderBadge = {
-                text: `⏳ Sem pedir há ${lastOrderText}`,
+                text: `Sem pedir há ${lastOrderText}`,
                 label: `Sem novos pedidos há ${lastOrderText}`,
-                style: "bg-amber-50 text-amber-800 border-amber-200/90",
+                style: "bg-amber-50 text-amber-800 border-amber-200",
                 dot: "bg-amber-500",
               };
             } else {
               lastOrderStatus = "warning";
               lastOrderBadge = {
-                text: `⚠️ Parada há ${lastOrderText}`,
+                text: `Mesa ociosa há ${lastOrderText}`,
                 label: `Mesa parada há ${lastOrderText}`,
-                style: "bg-rose-50 text-rose-800 border-rose-200/90",
+                style: "bg-rose-50 text-rose-800 border-rose-200",
                 dot: "bg-rose-500",
               };
             }
@@ -411,13 +457,23 @@ export default function TablesPage() {
         } else {
           lastOrderStatus = "waiting_first";
           lastOrderBadge = {
-            text: `⚡ Aguardando 1º pedido${tableDurationText ? ` (${tableDurationText})` : ""}`,
+            text: `Aguardando 1º pedido${tableDurationText ? ` (${tableDurationText})` : ""}`,
             label: `Aguardando primeiro pedido`,
-            style: "bg-amber-50 text-amber-900 border-amber-300 animate-pulse",
+            style: "bg-amber-50 text-amber-900 border-amber-300",
             dot: "bg-amber-500",
           };
         }
       }
+
+      const sessionPayments = getSessionPaymentsList(resolvedSession);
+      const paidAmount = sessionPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+      const sFeeMultiplier = Number(settings?.table_service_fee_rate ?? 10) / 100;
+      const feeEnabled = settings?.table_service_fee_enabled === true;
+      const serviceFeeVal = feeEnabled ? (totalConsumed * sFeeMultiplier) : 0;
+      const totalWithService = totalConsumed + serviceFeeVal;
+      const remainingBalance = Math.max(0, totalWithService - paidAmount);
+      const hasPartialPayments = paidAmount > 0;
+      const isFullyPaid = hasPartialPayments && remainingBalance === 0;
 
       return {
         ...table,
@@ -433,6 +489,12 @@ export default function TablesPage() {
         lastOrderText,
         lastOrderStatus,
         lastOrderBadge,
+        sessionPayments,
+        paidAmount,
+        totalWithService,
+        remainingBalance,
+        hasPartialPayments,
+        isFullyPaid,
       };
     }).sort((a, b) => {
       const numA = parseInt(a.table_number, 10);
@@ -440,7 +502,7 @@ export default function TablesPage() {
       if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
       return String(a.table_number).localeCompare(String(b.table_number));
     });
-  }, [tables, sessions, orders, nowTick]);
+  }, [tables, sessions, orders, nowTick, settings]);
 
   // Statistics
   const metrics = useMemo(() => {
@@ -492,7 +554,6 @@ export default function TablesPage() {
       setIsComandaDrawerOpen(true);
     } else {
       setOpenCustomerName("");
-      setOpenCustomerPhone("");
       setIsOpenTableModalOpen(true);
     }
   };
@@ -513,7 +574,7 @@ export default function TablesPage() {
           p_tenant_id: activeTenantId,
           p_table_id: selectedTable.id,
           p_customer_name: openCustomerName.trim() || `Mesa ${selectedTable.table_number}`,
-          p_customer_phone: openCustomerPhone.trim() || null,
+          p_customer_phone: null,
           p_people_count: 1,
         });
 
@@ -525,7 +586,7 @@ export default function TablesPage() {
             table_id: selectedTable.id,
             table_number: selectedTable.table_number,
             customer_name: openCustomerName.trim() || `Mesa ${selectedTable.table_number}`,
-            customer_phone: openCustomerPhone.trim() || "",
+            customer_phone: "",
             people_count: 1,
             opened_at: new Date().toISOString(),
             status: "open",
@@ -540,7 +601,7 @@ export default function TablesPage() {
           table_id: selectedTable.id,
           table_number: selectedTable.table_number,
           customer_name: openCustomerName.trim() || `Mesa ${selectedTable.table_number}`,
-          customer_phone: openCustomerPhone.trim() || "",
+          customer_phone: "",
           people_count: 1,
           opened_at: new Date().toISOString(),
           status: "open",
@@ -742,6 +803,27 @@ export default function TablesPage() {
       lines.push("-".repeat(width));
       lines.push(pad("TOTAL GERAL:", `R$ ${subtotal.toFixed(2).replace(".", ",")}`));
     }
+
+    // PAGAMENTOS RECEBIDOS (SE HOUVER)
+    const sessionPayments = getSessionPaymentsList(session);
+    if (sessionPayments.length > 0) {
+      const totalPaid = sessionPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+      const remaining = Math.max(0, totalWithService - totalPaid);
+
+      lines.push("-".repeat(width));
+      lines.push(center("PAGAMENTOS RECEBIDOS"));
+      sessionPayments.forEach(p => {
+        const timeStr = p.created_at ? new Date(p.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
+        const methodStr = p.method_label || getPaymentMethodLabel(p.method);
+        const whoStr = p.customer_name ? ` (${p.customer_name})` : "";
+        const desc = `${timeStr} ${methodStr}${whoStr}`.slice(0, 24);
+        const amtStr = `R$ ${Number(p.amount || 0).toFixed(2).replace(".", ",")}`;
+        lines.push(pad(`  ${desc}`, amtStr));
+      });
+      lines.push("-".repeat(width));
+      lines.push(pad("TOTAL JA PAGO:", `R$ ${totalPaid.toFixed(2).replace(".", ",")}`));
+      lines.push(pad(remaining === 0 ? "STATUS:" : "SALDO A PAGAR:", remaining === 0 ? "100% QUITADO" : `R$ ${remaining.toFixed(2).replace(".", ",")}`));
+    }
     lines.push("-".repeat(width));
 
     // QUANTO CADA UM PAGA
@@ -850,6 +932,22 @@ export default function TablesPage() {
       text += `💳 *TOTAL GERAL:* R$ ${subtotal.toFixed(2).replace(".", ",")}\n`;
     }
 
+    const sessionPayments = getSessionPaymentsList(tbl.activeSession);
+    if (sessionPayments.length > 0) {
+      const totalPaid = sessionPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+      const remaining = Math.max(0, totalWithService - totalPaid);
+      text += `\n💳 *PAGAMENTOS RECEBIDOS:*\n`;
+      sessionPayments.forEach(p => {
+        const timeStr = p.created_at ? new Date(p.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
+        const whoStr = p.customer_name ? ` (${p.customer_name})` : "";
+        text += `  • ${timeStr} ${p.method_label || getPaymentMethodLabel(p.method)}${whoStr}: R$ ${Number(p.amount || 0).toFixed(2).replace(".", ",")}\n`;
+      });
+      text += `💰 *Total Já Pago:* R$ ${totalPaid.toFixed(2).replace(".", ",")}\n`;
+      text += remaining === 0 
+        ? `✅ *Status da Comanda:* 100% Quitado!\n`
+        : `⚠️ *Saldo Restante a Pagar:* R$ ${remaining.toFixed(2).replace(".", ",")}\n`;
+    }
+
     if (ordersByCustomer.length > 1) {
       text += isFeeEnabled 
         ? `\n📊 *QUANTO CADA UM PAGA (c/ ${feeRate}%):*\n`
@@ -868,10 +966,16 @@ export default function TablesPage() {
     }
   };
 
-  // Quick Release Table (1-click with confirmation)
+  // Quick Release Table (1-click with safety validation)
   const handleQuickReleaseTable = async (tableToRelease) => {
     const tbl = tableToRelease || currentTable || selectedTable;
     if (!tbl) return;
+
+    if (tbl.remainingBalance > 0) {
+      toast.warning(`A Mesa ${tbl.table_number} possui um saldo devedor de R$ ${tbl.remainingBalance.toFixed(2).replace(".", ",")}. Registre os pagamentos até quitar a conta antes de liberar a mesa.`);
+      openSettlementModal(tbl);
+      return;
+    }
 
     if (!window.confirm(`Deseja realmente liberar a Mesa ${tbl.table_number}? A conta será encerrada e a mesa voltará a ficar Livre.`)) {
       return;
@@ -980,7 +1084,261 @@ export default function TablesPage() {
     }
   };
 
-  // Close Session & Liquidate Bill
+  // Abrir Modal de Recebimento com inicialização correta de saldo
+  const openSettlementModal = (table) => {
+    const current = table || currentTable || selectedTable;
+    if (!current) return;
+    setSelectedTable(current);
+    setSelectedSession(current.activeSession || null);
+    setIncludeServiceFee(isServiceFeeEnabled);
+    setDiscountAmount(0);
+    setShowDiscountField(false);
+
+    const subtotal = current.totalConsumed || 0;
+    const feeMultiplier = serviceFeeRate / 100;
+    const feeVal = isServiceFeeEnabled ? (subtotal * feeMultiplier) : 0;
+    const tot = subtotal + feeVal;
+    const sessionPayments = getSessionPaymentsList(current.activeSession);
+    const paid = sessionPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    const rem = Math.max(0, tot - paid);
+
+    setPartialPaymentAmount(rem > 0 ? rem : 0);
+    setPartialPayerName("");
+    setPartialNotes("");
+    setCashGiven("");
+    setPaymentMethod("dinheiro");
+    setIsSettlementModalOpen(true);
+  };
+
+  // Registrar Pagamento Parcial / Amortização da Mesa (Mantém mesa aberta)
+  const handleRegisterPartialPayment = async () => {
+    const tbl = currentTable || selectedTable;
+    if (!tbl) return;
+
+    const enteredAmount = Number(partialPaymentAmount);
+    if (!enteredAmount || isNaN(enteredAmount) || enteredAmount <= 0) {
+      toast.error("Informe um valor válido maior que zero.");
+      return;
+    }
+
+    const subtotal = tbl.totalConsumed || 0;
+    const feeMultiplier = serviceFeeRate / 100;
+    const serviceFeeValue = (includeServiceFee && isServiceFeeEnabled) ? (subtotal * feeMultiplier) : 0;
+    const discountVal = Number(discountAmount) || 0;
+    const totalAmount = Math.max(0, subtotal + serviceFeeValue - discountVal);
+
+    const activeTenantId = getActiveTenantId() || "a0000000-0000-0000-0000-000000000001";
+    const cleanNum = (val) => String(val || "").replace(/^Mesa\s*/i, "").trim().toLowerCase();
+    const thisNum = cleanNum(tbl.table_number);
+    let targetSession = tbl.activeSession;
+    let targetSessionId = targetSession?.id;
+
+    // Se a sessão for virtual ou inexistente, cria uma sessão real agora no banco
+    if (!targetSessionId || String(targetSessionId).startsWith("virtual_")) {
+      try {
+        if (isSupabaseConfigured() && supabase) {
+          const { data: newSess, error: sessErr } = await supabase
+            .from("table_sessions")
+            .insert([{
+              tenant_id: activeTenantId,
+              table_id: tbl.id,
+              table_number: String(tbl.table_number),
+              customer_name: tbl.activeSession?.customer_name || `Mesa ${tbl.table_number}`,
+              customer_phone: tbl.activeSession?.customer_phone || null,
+              people_count: 1,
+              status: "open",
+              opened_at: new Date().toISOString(),
+              subtotal: subtotal,
+            }])
+            .select()
+            .single();
+
+          if (newSess) {
+            targetSession = newSess;
+            targetSessionId = newSess.id;
+          } else if (sessErr) {
+            console.warn("Erro ao criar sessão para pagamento parcial:", sessErr);
+          }
+        }
+      } catch (e) {
+        console.warn("Fallback ao criar sessão:", e);
+      }
+
+      if (!targetSessionId || String(targetSessionId).startsWith("virtual_")) {
+        const localSess = await TableSession.create({
+          tenant_id: activeTenantId,
+          table_id: tbl.id,
+          table_number: String(tbl.table_number),
+          customer_name: tbl.activeSession?.customer_name || `Mesa ${tbl.table_number}`,
+          customer_phone: tbl.activeSession?.customer_phone || "",
+          people_count: 1,
+          status: "open",
+          opened_at: new Date().toISOString(),
+          subtotal: subtotal,
+        });
+        targetSession = localSess;
+        targetSessionId = localSess.id;
+      }
+    }
+
+    const existingPayments = getSessionPaymentsList(targetSession);
+    const priorPaidTotal = existingPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+    const remainingToPay = Math.max(0, totalAmount - priorPaidTotal);
+
+    if (enteredAmount > (remainingToPay + 0.01)) {
+      toast.error(`O valor digitado (R$ ${enteredAmount.toFixed(2).replace(".", ",")}) excede o saldo restante de R$ ${remainingToPay.toFixed(2).replace(".", ",")}.`);
+      return;
+    }
+
+    try {
+      setIsRegisteringPartial(true);
+
+      const cashGivenNum = paymentMethod === "dinheiro" && cashGiven ? Number(cashGiven) : null;
+      const changeVal = (cashGivenNum && cashGivenNum > enteredAmount) ? (cashGivenNum - enteredAmount) : 0;
+
+      const newPayment = {
+        id: `pay_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        amount: enteredAmount,
+        method: paymentMethod,
+        method_label: getPaymentMethodLabel(paymentMethod),
+        customer_name: partialPayerName.trim() || null,
+        notes: partialNotes.trim() || null,
+        cash_given: cashGivenNum,
+        change_amount: changeVal,
+        created_at: new Date().toISOString(),
+      };
+
+      const updatedPayments = [...existingPayments, newPayment];
+      const updatedPaymentDetails = {
+        ...(typeof targetSession?.payment_details === "object" && !Array.isArray(targetSession.payment_details) ? targetSession.payment_details : {}),
+        payments: updatedPayments,
+        service_fee_included: includeServiceFee,
+        discount: discountVal,
+      };
+
+      const updatedSessionObj = {
+        ...(targetSession || {}),
+        id: targetSessionId,
+        table_id: tbl.id,
+        table_number: String(tbl.table_number),
+        status: "open",
+        payment_details: updatedPaymentDetails,
+      };
+
+      // 1. Atualização Otimista Imediata no Estado React (Mesa segue aberta com novo saldo)
+      setSessions(prev => {
+        const found = prev.some(s => s.id === targetSessionId || (tbl.id && s.table_id === tbl.id) || cleanNum(s.table_number) === thisNum);
+        if (found) {
+          return prev.map(s => (s.id === targetSessionId || (tbl.id && s.table_id === tbl.id) || cleanNum(s.table_number) === thisNum) ? {
+            ...s,
+            payment_details: updatedPaymentDetails,
+          } : s);
+        }
+        return [updatedSessionObj, ...prev];
+      });
+
+      setSelectedSession(updatedSessionObj);
+      setSelectedTable(prev => prev ? { ...prev, activeSession: updatedSessionObj } : null);
+
+      const newRemaining = Math.max(0, remainingToPay - enteredAmount);
+
+      if (newRemaining === 0) {
+        toast.success(`Pagamento de R$ ${enteredAmount.toFixed(2).replace(".", ",")} registrado! Comanda 100% quitada.`);
+      } else {
+        toast.success(`Pagamento de R$ ${enteredAmount.toFixed(2).replace(".", ",")} recebido! Resta a pagar: R$ ${newRemaining.toFixed(2).replace(".", ",")}.`);
+      }
+
+      // Fecha imediatamente o modal de recebimento e retorna para a comanda/salão
+      setIsSettlementModalOpen(false);
+
+      // Reset inputs para próxima abertura
+      setPartialPaymentAmount(newRemaining > 0 ? newRemaining : 0);
+      setPartialPayerName("");
+      setPartialNotes("");
+      setCashGiven(0);
+
+      // 2. Persistência no Banco / Supabase
+      if (isSupabaseConfigured() && supabase && targetSessionId) {
+        await supabase.from("table_sessions").update({
+          payment_details: updatedPaymentDetails,
+          updated_at: new Date().toISOString(),
+        }).eq("id", targetSessionId).catch(() => {});
+
+        await supabase.from("table_sessions").update({
+          payment_details: updatedPaymentDetails,
+          updated_at: new Date().toISOString(),
+        }).eq("tenant_id", activeTenantId).eq("table_number", String(tbl.table_number)).eq("status", "open").catch(() => {});
+      }
+
+      if (targetSessionId) {
+        await TableSession.update(targetSessionId, { payment_details: updatedPaymentDetails }).catch(() => {});
+      }
+
+      invalidateCache("table_sessions");
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("db_event_table_sessions", { detail: { type: "update" } }));
+      }
+    } catch (err) {
+      console.error("Erro ao registrar pagamento parcial:", err);
+      toast.error("Erro ao registrar pagamento parcial.");
+    } finally {
+      setIsRegisteringPartial(false);
+    }
+  };
+
+  // Estornar / Remover Pagamento Parcial
+  const handleRemovePartialPayment = async (paymentId) => {
+    const tbl = currentTable || selectedTable;
+    if (!tbl) return;
+
+    const cleanNum = (val) => String(val || "").replace(/^Mesa\s*/i, "").trim().toLowerCase();
+    const thisNum = cleanNum(tbl.table_number);
+    const targetSession = tbl.activeSession;
+    const targetSessionId = targetSession?.id;
+    if (!targetSessionId) return;
+
+    const existingPayments = getSessionPaymentsList(targetSession);
+    const updatedPayments = existingPayments.filter(p => p.id !== paymentId);
+
+    const updatedPaymentDetails = {
+      ...(typeof targetSession?.payment_details === "object" && !Array.isArray(targetSession.payment_details) ? targetSession.payment_details : {}),
+      payments: updatedPayments,
+      service_fee_included: includeServiceFee,
+      discount: Number(discountAmount) || 0,
+    };
+
+    const updatedSessionObj = {
+      ...targetSession,
+      payment_details: updatedPaymentDetails,
+    };
+
+    // Atualização otimista
+    setSessions(prev => prev.map(s => (s.id === targetSessionId || (tbl.id && s.table_id === tbl.id) || cleanNum(s.table_number) === thisNum) ? {
+      ...s,
+      payment_details: updatedPaymentDetails,
+    } : s));
+
+    setSelectedSession(updatedSessionObj);
+    setSelectedTable(prev => prev ? { ...prev, activeSession: updatedSessionObj } : null);
+
+    toast.info("Pagamento parcial estornado.");
+
+    // Persistência
+    if (isSupabaseConfigured() && supabase) {
+      await supabase.from("table_sessions").update({
+        payment_details: updatedPaymentDetails,
+        updated_at: new Date().toISOString(),
+      }).eq("id", targetSessionId).catch(() => {});
+    }
+
+    await TableSession.update(targetSessionId, { payment_details: updatedPaymentDetails }).catch(() => {});
+    invalidateCache("table_sessions");
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("db_event_table_sessions", { detail: { type: "update" } }));
+    }
+  };
+
+  // Close Session & Liquidate Bill (com suporte a múltiplos pagamentos combinados)
   const handleFinalizeSettlement = async () => {
     const tbl = currentTable || selectedTable;
     if (!tbl) return;
@@ -990,7 +1348,8 @@ export default function TablesPage() {
       const activeTenantId = getActiveTenantId() || "a0000000-0000-0000-0000-000000000001";
       const cleanNum = (val) => String(val || "").replace(/^Mesa\s*/i, "").trim().toLowerCase();
       const thisNum = cleanNum(tbl.table_number);
-      const targetSessionId = selectedSession?.id || tbl.activeSession?.id;
+      let targetSession = selectedSession || tbl.activeSession;
+      let targetSessionId = targetSession?.id;
       const isRealSession = targetSessionId && !String(targetSessionId).startsWith("virtual_");
 
       const subtotal = tbl.totalConsumed || 0;
@@ -998,6 +1357,47 @@ export default function TablesPage() {
       const serviceFeeValue = (includeServiceFee && isServiceFeeEnabled) ? (subtotal * feeMultiplier) : 0;
       const discountVal = Number(discountAmount) || 0;
       const totalAmount = Math.max(0, subtotal + serviceFeeValue - discountVal);
+
+      // Pagamentos parciais já registrados
+      const priorPayments = getSessionPaymentsList(targetSession);
+      const priorPaidTotal = priorPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+      const remainingToSettle = Math.max(0, totalAmount - priorPaidTotal);
+
+      // Se ainda resta saldo e o operador está finalizando a mesa, registra a última parcela
+      const allFinalPayments = [...priorPayments];
+      if (remainingToSettle > 0) {
+        const cashGivenNum = paymentMethod === "dinheiro" && cashGiven ? Number(cashGiven) : null;
+        const changeVal = (cashGivenNum && cashGivenNum > remainingToSettle) ? (cashGivenNum - remainingToSettle) : 0;
+
+        const finalPaymentRecord = {
+          id: `pay_${Date.now()}_final`,
+          amount: remainingToSettle,
+          method: paymentMethod,
+          method_label: getPaymentMethodLabel(paymentMethod),
+          customer_name: partialPayerName.trim() || null,
+          notes: partialNotes.trim() || null,
+          cash_given: cashGivenNum,
+          change_amount: changeVal,
+          created_at: new Date().toISOString(),
+        };
+        allFinalPayments.push(finalPaymentRecord);
+      }
+
+      // Determina método de pagamento final (único ou múltiplo)
+      const uniqueMethods = [...new Set(allFinalPayments.map(p => p.method))];
+      let finalPaymentMethod = paymentMethod;
+      if (uniqueMethods.length > 1) {
+        finalPaymentMethod = "multiplo";
+      } else if (uniqueMethods.length === 1) {
+        finalPaymentMethod = uniqueMethods[0];
+      }
+
+      const finalPaymentDetails = {
+        cash_given: paymentMethod === "dinheiro" && cashGiven ? Number(cashGiven) : null,
+        service_fee_included: includeServiceFee,
+        discount: discountVal,
+        payments: allFinalPayments,
+      };
 
       // 1. Atualização Otimista Imediata na UI (0ms) - Desocupa a mesa instantaneamente
       setIsSettlementModalOpen(false);
@@ -1007,7 +1407,13 @@ export default function TablesPage() {
 
       setTables(prev => prev.map(t => (t.id === tbl.id || cleanNum(t.table_number) === thisNum) ? { ...t, status: "available" } : t));
       setSessions(prev => prev.filter(s => !(s.table_id === tbl.id || (cleanNum(s.table_number) === thisNum && (s.status === 'open' || s.status === 'bill_requested')))));
-      setOrders(prev => prev.map(o => (cleanNum(o.table_number) === thisNum || (targetSessionId && o.table_session_id === targetSessionId)) ? { ...o, payment_status: "paid", status: "entregue" } : o));
+      setOrders(prev => prev.map(o => (cleanNum(o.table_number) === thisNum || (targetSessionId && o.table_session_id === targetSessionId)) ? { 
+        ...o, 
+        payment_status: "paid", 
+        status: "entregue",
+        payment_method: finalPaymentMethod,
+        payment_details: finalPaymentDetails,
+      } : o));
 
       toast.success(`Mesa ${tbl.table_number} liquidada e liberada com sucesso! 🟢`);
 
@@ -1017,12 +1423,8 @@ export default function TablesPage() {
           const { error } = await supabase.rpc("close_table_session", {
             p_tenant_id: activeTenantId,
             p_session_id: targetSessionId,
-            p_payment_method: paymentMethod,
-            p_payment_details: {
-              cash_given: cashGiven ? Number(cashGiven) : null,
-              service_fee_included: includeServiceFee,
-              discount: discountVal,
-            },
+            p_payment_method: finalPaymentMethod,
+            p_payment_details: finalPaymentDetails,
             p_service_fee: serviceFeeValue,
             p_discount: discountVal,
           });
@@ -1038,7 +1440,8 @@ export default function TablesPage() {
             service_fee: serviceFeeValue,
             discount: discountVal,
             total_amount: totalAmount,
-            payment_method: paymentMethod,
+            payment_method: finalPaymentMethod,
+            payment_details: finalPaymentDetails,
           }).eq("id", targetSessionId).catch(() => {});
         }
 
@@ -1059,20 +1462,23 @@ export default function TablesPage() {
         await supabase.from("orders").update({
           payment_status: "paid",
           status: "entregue",
-          payment_method: paymentMethod
+          payment_method: finalPaymentMethod,
+          payment_details: finalPaymentDetails,
         }).match({ tenant_id: activeTenantId, table_number: String(tbl.table_number) }).catch(() => {});
 
         await supabase.from("orders").update({
           payment_status: "paid",
           status: "entregue",
-          payment_method: paymentMethod
+          payment_method: finalPaymentMethod,
+          payment_details: finalPaymentDetails,
         }).match({ tenant_id: activeTenantId, table_number: `Mesa ${tbl.table_number}` }).catch(() => {});
 
-        if (targetSessionId && !String(targetSessionId).startsWith("virtual_")) {
+        if (targetSessionId && isRealSession) {
           await supabase.from("orders").update({
             payment_status: "paid",
             status: "entregue",
-            payment_method: paymentMethod
+            payment_method: finalPaymentMethod,
+            payment_details: finalPaymentDetails,
           }).eq("table_session_id", targetSessionId).catch(() => {});
         }
       }
@@ -1089,7 +1495,8 @@ export default function TablesPage() {
           service_fee: serviceFeeValue,
           discount: discountVal,
           total_amount: totalAmount,
-          payment_method: paymentMethod,
+          payment_method: finalPaymentMethod,
+          payment_details: finalPaymentDetails,
         }).catch(() => {});
       }
       if (tbl.tableOrders && tbl.tableOrders.length > 0) {
@@ -1097,7 +1504,8 @@ export default function TablesPage() {
           await Order.update(ord.id, { 
             status: "entregue",
             payment_status: "paid",
-            payment_method: paymentMethod
+            payment_method: finalPaymentMethod,
+            payment_details: finalPaymentDetails,
           }).catch(() => {});
         }
       }
@@ -1170,20 +1578,24 @@ export default function TablesPage() {
         order_type: "dine_in",
         table_number: String(effectiveTable.table_number),
         table_session_id: effectiveTable.activeSession?.id && !String(effectiveTable.activeSession.id).startsWith("virtual_") ? effectiveTable.activeSession.id : null,
-        items: quickCart.map(item => {
-          const cat = categories.find(c => c.id === item.category_id || c.id === item.category);
-          return {
-            product_id: item.id,
-            product_name: item.name,
-            name: item.name,
-            product_price: Number(item.price) || 0,
-            price: Number(item.price) || 0,
-            category_name: cat?.name || "Geral",
-            quantity: item.qty,
-            subtotal: (Number(item.price) || 0) * item.qty,
-            additionals: [],
-          };
-        }),
+        items: stampOrderItemsWithSectors(
+          quickCart.map(item => {
+            const cat = categories.find(c => c.id === item.category_id || c.id === item.category);
+            return {
+              product_id: item.id,
+              product_name: item.name,
+              name: item.name,
+              product_price: Number(item.price) || 0,
+              price: Number(item.price) || 0,
+              category_id: cat?.id || item.category_id || item.category || null,
+              category_name: cat?.name || "Geral",
+              quantity: item.qty,
+              subtotal: (Number(item.price) || 0) * item.qty,
+              additionals: [],
+            };
+          }),
+          { sectors: productionSectors, products, categories }
+        ),
       };
 
       await Order.create(orderData);
@@ -1207,26 +1619,24 @@ export default function TablesPage() {
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
       {/* Header com Título e Ações Globais */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200/80 pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 pb-4">
         <div>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-[#047857] shadow-xs">
-              <UtensilsCrossed className="w-5 h-5 text-[#047857]" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-black text-gray-950 tracking-tight">Salão & Mesas</h1>
-              <p className="text-xs text-gray-500 font-medium">Gestão em tempo real de comandas, pré-contas e consumo local</p>
-            </div>
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-xl sm:text-2xl font-bold text-stone-900 tracking-tight">Salão & Mesas</h1>
+            <Badge variant="outline" className="text-xs font-semibold text-stone-600 bg-stone-50 border-stone-300">
+              Controle Local
+            </Badge>
           </div>
+          <p className="text-xs text-stone-500 mt-0.5">Gestão em tempo real de comandas, pré-contas e consumo de mesas</p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
           <Button
             onClick={() => setIsQrModalOpen(true)}
             variant="outline"
-            className="h-10 rounded-xl border-gray-200 font-bold text-gray-700 hover:text-emerald-700 hover:border-emerald-300 gap-2 cursor-pointer shadow-2xs"
+            className="h-9 rounded-lg border-stone-300 font-semibold text-xs text-stone-700 hover:text-stone-900 hover:bg-stone-50 gap-2 cursor-pointer shadow-2xs"
           >
-            <QrCode className="w-4 h-4 text-[#047857]" />
+            <QrCode className="w-3.5 h-3.5 text-stone-600" />
             <span className="hidden sm:inline">QR Codes das Mesas</span>
             <span className="sm:hidden">QR Codes</span>
           </Button>
@@ -1234,9 +1644,9 @@ export default function TablesPage() {
           <Button
             onClick={() => setIsBatchModalOpen(true)}
             variant="outline"
-            className="h-10 rounded-xl border-gray-200 font-bold text-gray-700 hover:text-gray-900 gap-1.5 cursor-pointer shadow-2xs"
+            className="h-9 rounded-lg border-stone-300 font-semibold text-xs text-stone-700 hover:text-stone-900 hover:bg-stone-50 gap-1.5 cursor-pointer shadow-2xs"
           >
-            <Layers className="w-4 h-4 text-gray-500" />
+            <Layers className="w-3.5 h-3.5 text-stone-500" />
             <span className="hidden md:inline">Gerar Lote</span>
           </Button>
 
@@ -1245,9 +1655,9 @@ export default function TablesPage() {
               setNewTableNumber(String(tables.length + 1));
               setIsAddTableModalOpen(true);
             }}
-            className="h-10 rounded-xl bg-[#047857] hover:bg-[#036348] text-white font-bold gap-1.5 cursor-pointer shadow-sm shadow-emerald-900/10 active:scale-[0.98] transition-all"
+            className="h-9 rounded-lg bg-stone-900 hover:bg-black text-white font-semibold text-xs gap-1.5 cursor-pointer shadow-xs transition-all"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-3.5 h-3.5" />
             <span>Nova Mesa</span>
           </Button>
         </div>
@@ -1256,74 +1666,81 @@ export default function TablesPage() {
       {/* Cards de Métricas em Tempo Real */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
         {/* Total */}
-        <div className="bg-white rounded-2xl p-4 border border-gray-200/80 shadow-2xs flex items-center justify-between">
+        <div className="bg-white rounded-xl p-4 border border-stone-200 shadow-2xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Total de Mesas</p>
-            <p className="text-2xl font-black text-gray-900 mt-0.5">{metrics.total}</p>
+            <p className="text-[11px] font-semibold text-stone-500 uppercase tracking-wide">Total de Mesas</p>
+            <p className="text-2xl font-bold font-mono text-stone-900 mt-0.5">{metrics.total}</p>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center text-gray-600">
-            <UtensilsCrossed className="w-5 h-5" />
+          <div className="w-9 h-9 rounded-lg bg-stone-100 flex items-center justify-center text-stone-600">
+            <UtensilsCrossed className="w-4 h-4" />
           </div>
         </div>
 
-        {/* Livres 🟢 */}
-        <div className="bg-emerald-50/60 rounded-2xl p-4 border border-emerald-200/80 shadow-2xs flex items-center justify-between">
+        {/* Livres */}
+        <div className="bg-white rounded-xl p-4 border border-stone-200 shadow-2xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-emerald-800 uppercase tracking-wider">Livres</p>
-            <p className="text-2xl font-black text-emerald-700 mt-0.5">{metrics.available}</p>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              <p className="text-[11px] font-semibold text-stone-500 uppercase tracking-wide">Livres</p>
+            </div>
+            <p className="text-2xl font-bold font-mono text-emerald-700 mt-0.5">{metrics.available}</p>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-emerald-100/80 flex items-center justify-center text-emerald-700 font-black text-sm">
-            🟢
-          </div>
+          <span className="text-xs font-semibold text-stone-400">
+            {metrics.total > 0 ? `${Math.round((metrics.available / metrics.total) * 100)}%` : "0%"}
+          </span>
         </div>
 
-        {/* Ocupadas 🟡 */}
-        <div className="bg-amber-50/60 rounded-2xl p-4 border border-amber-200/80 shadow-2xs flex items-center justify-between">
+        {/* Ocupadas */}
+        <div className="bg-white rounded-xl p-4 border border-stone-200 shadow-2xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-amber-800 uppercase tracking-wider">Ocupadas</p>
-            <p className="text-2xl font-black text-amber-700 mt-0.5">{metrics.occupied}</p>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              <p className="text-[11px] font-semibold text-stone-500 uppercase tracking-wide">Ocupadas</p>
+            </div>
+            <p className="text-2xl font-bold font-mono text-amber-800 mt-0.5">{metrics.occupied}</p>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-amber-100/80 flex items-center justify-center text-amber-700 font-black text-sm">
-            🟡
-          </div>
+          <span className="text-xs font-semibold text-stone-400">
+            {metrics.total > 0 ? `${Math.round((metrics.occupied / metrics.total) * 100)}%` : "0%"}
+          </span>
         </div>
 
-        {/* Pré-Conta 🔵 */}
-        <div className="bg-blue-50/60 rounded-2xl p-4 border border-blue-200/80 shadow-2xs flex items-center justify-between">
+        {/* Pré-Conta */}
+        <div className="bg-white rounded-xl p-4 border border-stone-200 shadow-2xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-blue-800 uppercase tracking-wider">Pré-Conta</p>
-            <p className="text-2xl font-black text-blue-700 mt-0.5">{metrics.billRequested}</p>
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-blue-500" />
+              <p className="text-[11px] font-semibold text-stone-500 uppercase tracking-wide">Pré-Conta</p>
+            </div>
+            <p className="text-2xl font-bold font-mono text-blue-800 mt-0.5">{metrics.billRequested}</p>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-blue-100/80 flex items-center justify-center text-blue-700 font-black text-sm">
-            🔵
-          </div>
+          <span className="text-xs font-semibold text-stone-400">Aguardando</span>
         </div>
 
         {/* Consumo Aberto R$ */}
-        <div className="col-span-2 lg:col-span-1 bg-gradient-to-br from-emerald-900 to-slate-900 text-white rounded-2xl p-4 border border-emerald-800/40 shadow-sm flex items-center justify-between">
+        <div className="col-span-2 lg:col-span-1 bg-white rounded-xl p-4 border border-stone-200 shadow-2xs flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold text-emerald-300 uppercase tracking-wider">Consumo Aberto</p>
-            <p className="text-xl font-black text-white mt-0.5">
+            <p className="text-[11px] font-semibold text-stone-500 uppercase tracking-wide">Consumo em Aberto</p>
+            <p className="text-xl font-bold font-mono text-stone-900 mt-0.5">
               R$ {metrics.totalRevenueOpen.toFixed(2).replace(".", ",")}
             </p>
           </div>
-          <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-emerald-400">
-            <Receipt className="w-5 h-5" />
+          <div className="w-9 h-9 rounded-lg bg-stone-100 flex items-center justify-center text-stone-600">
+            <Receipt className="w-4 h-4" />
           </div>
         </div>
       </div>
 
       {/* Barra de Filtros e Busca */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-gray-200/80 shadow-2xs">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 rounded-xl border border-stone-200 shadow-2xs">
         {/* Tabs de Status */}
         <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
           <button
             onClick={() => setFilterStatus("all")}
             className={cn(
-              "px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer",
+              "px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap cursor-pointer",
               filterStatus === "all"
-                ? "bg-gray-900 text-white shadow-2xs"
-                : "text-gray-600 hover:bg-gray-100"
+                ? "bg-stone-900 text-white font-semibold shadow-2xs"
+                : "text-stone-600 hover:bg-stone-100"
             )}
           >
             Todas ({metrics.total})
@@ -1332,10 +1749,10 @@ export default function TablesPage() {
           <button
             onClick={() => setFilterStatus("available")}
             className={cn(
-              "px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5",
+              "px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5",
               filterStatus === "available"
-                ? "bg-emerald-600 text-white shadow-2xs"
-                : "text-emerald-800 hover:bg-emerald-50"
+                ? "bg-emerald-700 text-white font-semibold shadow-2xs"
+                : "text-stone-600 hover:bg-stone-100"
             )}
           >
             <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
@@ -1345,10 +1762,10 @@ export default function TablesPage() {
           <button
             onClick={() => setFilterStatus("occupied")}
             className={cn(
-              "px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5",
+              "px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5",
               filterStatus === "occupied"
-                ? "bg-amber-600 text-white shadow-2xs"
-                : "text-amber-800 hover:bg-amber-50"
+                ? "bg-amber-600 text-white font-semibold shadow-2xs"
+                : "text-stone-600 hover:bg-stone-100"
             )}
           >
             <span className="w-2 h-2 rounded-full bg-amber-500 inline-block"></span>
@@ -1358,10 +1775,10 @@ export default function TablesPage() {
           <button
             onClick={() => setFilterStatus("bill_requested")}
             className={cn(
-              "px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5",
+              "px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5",
               filterStatus === "bill_requested"
-                ? "bg-blue-600 text-white shadow-2xs"
-                : "text-blue-800 hover:bg-blue-50"
+                ? "bg-blue-600 text-white font-semibold shadow-2xs"
+                : "text-stone-600 hover:bg-stone-100"
             )}
           >
             <span className="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>
@@ -1371,12 +1788,12 @@ export default function TablesPage() {
 
         {/* Input de Busca */}
         <div className="relative w-full sm:w-64">
-          <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Buscar por mesa ou cliente..."
-            className="pl-9 h-9 rounded-xl border-gray-200 text-xs bg-gray-50/50 focus:bg-white"
+            className="pl-9 h-9 rounded-lg border-stone-200 text-xs bg-stone-50/50 focus:bg-white"
           />
           {searchQuery && (
             <button
@@ -1391,17 +1808,17 @@ export default function TablesPage() {
 
       {/* Grid de Mesas */}
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-24">
-          <div className="w-10 h-10 border-3 border-emerald-600 border-t-transparent rounded-full animate-spin mb-3"></div>
-          <p className="text-sm font-semibold text-gray-600">Carregando mesas do salão...</p>
+        <div className="flex flex-col items-center justify-center py-24 space-y-3">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#047857]"></div>
+          <p className="text-xs font-semibold text-stone-500">Carregando mesas do salão...</p>
         </div>
       ) : filteredTables.length === 0 ? (
-        <div className="bg-white rounded-3xl border border-dashed border-gray-300 p-12 text-center max-w-lg mx-auto">
-          <div className="w-16 h-16 rounded-3xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-[#047857] mx-auto mb-4">
-            <UtensilsCrossed className="w-8 h-8" />
+        <div className="bg-white rounded-xl border border-dashed border-stone-300 p-12 text-center max-w-lg mx-auto shadow-2xs">
+          <div className="w-12 h-12 rounded-xl bg-stone-100 flex items-center justify-center text-stone-600 mx-auto mb-3">
+            <UtensilsCrossed className="w-6 h-6" />
           </div>
-          <h3 className="text-lg font-black text-gray-900">Nenhuma mesa encontrada</h3>
-          <p className="text-xs text-gray-500 mt-1 mb-6">
+          <h3 className="text-base font-bold text-stone-900">Nenhuma mesa encontrada</h3>
+          <p className="text-xs text-stone-500 mt-1 mb-5">
             {searchQuery 
               ? "Tente buscar por outro número ou limpe o filtro."
               : "Você ainda não possui mesas cadastradas para este estabelecimento."}
@@ -1409,15 +1826,15 @@ export default function TablesPage() {
           <div className="flex items-center justify-center gap-2">
             <Button
               onClick={() => setIsBatchModalOpen(true)}
-              className="bg-[#047857] hover:bg-[#036348] text-white font-bold h-10 px-5 rounded-xl gap-2 cursor-pointer"
+              className="bg-stone-900 hover:bg-black text-white font-semibold text-xs h-9 px-4 rounded-lg gap-2 cursor-pointer shadow-xs"
             >
               <Layers className="w-4 h-4" />
-              <span>Gerar 10 Mesas em 1 Clique</span>
+              <span>Gerar 10 Mesas</span>
             </Button>
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3.5 sm:gap-4">
           {filteredTables.map((table) => {
             const isAvailable = table.effectiveStatus === 'available';
             const isOccupied = table.effectiveStatus === 'occupied';
@@ -1428,22 +1845,22 @@ export default function TablesPage() {
                 key={table.id}
                 onClick={() => handleTableClick(table)}
                 className={cn(
-                  "group relative rounded-3xl p-5 border transition-all duration-200 cursor-pointer flex flex-col justify-between select-none shadow-2xs hover:shadow-md hover:-translate-y-0.5",
-                  isAvailable && "bg-white border-emerald-200/80 hover:border-emerald-400",
-                  isOccupied && "bg-amber-50/50 border-amber-300/80 hover:border-amber-400 ring-1 ring-amber-300/30",
-                  isBillRequested && "bg-blue-50/50 border-blue-300/80 hover:border-blue-400 ring-1 ring-blue-300/30 animate-pulse-subtle"
+                  "group relative rounded-xl p-4 border transition-all duration-150 cursor-pointer flex flex-col justify-between select-none shadow-2xs hover:shadow-xs",
+                  isAvailable && "bg-white border-stone-200 hover:border-emerald-500",
+                  isOccupied && "bg-amber-50/40 border-amber-300 hover:border-amber-500",
+                  isBillRequested && "bg-blue-50/40 border-blue-300 hover:border-blue-500"
                 )}
               >
                 {/* Top: Número da mesa e Badge de Status */}
                 <div>
-                  <div className="flex items-start justify-between gap-2 mb-3">
+                  <div className="flex items-start justify-between gap-2 mb-2.5">
                     <div className="flex items-baseline gap-1.5">
-                      <span className="text-xs font-black uppercase tracking-wider text-gray-400">MESA</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400">MESA</span>
                       <span className={cn(
-                        "text-3xl font-black tracking-tight",
-                        isAvailable && "text-gray-900 group-hover:text-emerald-700",
-                        isOccupied && "text-amber-900",
-                        isBillRequested && "text-blue-900"
+                        "text-2xl font-bold font-mono tracking-tight",
+                        isAvailable && "text-stone-900 group-hover:text-emerald-700",
+                        isOccupied && "text-amber-950",
+                        isBillRequested && "text-blue-950"
                       )}>
                         {table.table_number}
                       </span>
@@ -1451,16 +1868,16 @@ export default function TablesPage() {
 
                     {/* Status Pill */}
                     <span className={cn(
-                      "text-[11px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border flex items-center gap-1",
-                      isAvailable && "bg-emerald-50 text-emerald-700 border-emerald-200",
-                      isOccupied && "bg-amber-100 text-amber-800 border-amber-300",
-                      isBillRequested && "bg-blue-100 text-blue-800 border-blue-300"
+                      "text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md border flex items-center gap-1",
+                      isAvailable && "bg-emerald-50 text-emerald-800 border-emerald-300",
+                      isOccupied && "bg-amber-100 text-amber-900 border-amber-300",
+                      isBillRequested && "bg-blue-100 text-blue-900 border-blue-300"
                     )}>
                       <span className={cn(
                         "w-1.5 h-1.5 rounded-full",
-                        isAvailable && "bg-emerald-500",
-                        isOccupied && "bg-amber-500 animate-ping-slow",
-                        isBillRequested && "bg-blue-500 animate-ping-slow"
+                        isAvailable && "bg-emerald-600",
+                        isOccupied && "bg-amber-600",
+                        isBillRequested && "bg-blue-600"
                       )}></span>
                       {isAvailable && "Livre"}
                       {isOccupied && "Ocupada"}
@@ -1538,17 +1955,17 @@ export default function TablesPage() {
                 </div>
 
                 {/* Bottom: Valor Consumido ou Ação de Abrir */}
-                <div className="mt-4 pt-3 border-t border-gray-200/60 flex items-center justify-between">
+                <div className="mt-3.5 pt-2.5 border-t border-stone-200/60 flex items-center justify-between">
                   {isAvailable ? (
                     <>
-                      <span className="text-[11px] text-emerald-700 font-bold group-hover:underline flex items-center gap-1">
-                        <Plus className="w-3.5 h-3.5" />
+                      <span className="text-[11px] text-emerald-700 font-semibold group-hover:underline flex items-center gap-1">
+                        <Plus className="w-3 h-3" />
                         Abrir Mesa
                       </span>
                       <button
                         onClick={(e) => handleDeleteTable(table.id, table.table_number, e)}
                         title="Excluir mesa"
-                        className="text-gray-300 hover:text-red-600 transition-colors p-1 cursor-pointer"
+                        className="text-stone-300 hover:text-rose-600 transition-colors p-1 cursor-pointer"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -1556,10 +1973,29 @@ export default function TablesPage() {
                   ) : (
                     <>
                       <div>
-                        <p className="text-[10px] uppercase font-bold text-gray-400">Total Aberto</p>
-                        <p className="text-base font-black text-gray-950">
-                          R$ {table.totalConsumed.toFixed(2).replace(".", ",")}
-                        </p>
+                        {table.hasPartialPayments ? (
+                          <>
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <span className="text-[9px] uppercase font-semibold text-stone-400">Resta a Pagar</span>
+                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                Pago: R$ {table.paidAmount.toFixed(2).replace(".", ",")}
+                              </span>
+                            </div>
+                            <p className={cn(
+                              "text-sm font-bold font-mono",
+                              table.remainingBalance === 0 ? "text-emerald-700" : "text-stone-900"
+                            )}>
+                              {table.remainingBalance === 0 ? "100% Quitado" : `R$ ${table.remainingBalance.toFixed(2).replace(".", ",")}`}
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-[9px] uppercase font-semibold text-stone-400">Consumo Aberto</p>
+                            <p className="text-sm font-bold font-mono text-stone-900">
+                              R$ {table.totalConsumed.toFixed(2).replace(".", ",")}
+                            </p>
+                          </>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-1">
@@ -1624,10 +2060,24 @@ export default function TablesPage() {
                 </div>
 
                 <div className="text-right shrink-0">
-                  <p className="text-[10px] uppercase font-bold tracking-wider text-gray-400">Total da Comanda</p>
-                  <p className="text-2xl sm:text-3xl font-black text-emerald-700 tracking-tight">
-                    R$ {currentTable.totalConsumed.toFixed(2).replace(".", ",")}
-                  </p>
+                  {currentTable.hasPartialPayments ? (
+                    <>
+                      <p className="text-[10px] uppercase font-black tracking-wider text-amber-600">Resta a Pagar</p>
+                      <p className="text-2xl sm:text-3xl font-black text-amber-700 tracking-tight font-mono">
+                        R$ {currentTable.remainingBalance.toFixed(2).replace(".", ",")}
+                      </p>
+                      <p className="text-[11px] font-semibold text-gray-500 mt-0.5">
+                        Total: R$ {currentTable.totalConsumed.toFixed(2).replace(".", ",")} • Pago: R$ {currentTable.paidAmount.toFixed(2).replace(".", ",")}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-[10px] uppercase font-bold tracking-wider text-gray-400">Total da Comanda</p>
+                      <p className="text-2xl sm:text-3xl font-black text-emerald-700 tracking-tight font-mono">
+                        R$ {currentTable.totalConsumed.toFixed(2).replace(".", ",")}
+                      </p>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -1906,7 +2356,7 @@ export default function TablesPage() {
                 <div className="mt-4 p-4 rounded-2xl bg-gray-50 border border-gray-200/80 space-y-2">
                   <div className="flex items-center justify-between text-xs font-medium text-gray-600">
                     <span>Subtotal de Consumo:</span>
-                    <span className="font-bold text-gray-900">
+                    <span className="font-bold text-gray-900 font-mono">
                       R$ {currentTable.totalConsumed.toFixed(2).replace(".", ",")}
                     </span>
                   </div>
@@ -1914,7 +2364,7 @@ export default function TablesPage() {
                   {isServiceFeeEnabled && (
                     <div className="flex items-center justify-between text-xs font-medium text-gray-600">
                       <span>Taxa de Serviço Opcional ({serviceFeeRate}%):</span>
-                      <span className="font-bold text-gray-900">
+                      <span className="font-bold text-gray-900 font-mono">
                         R$ {(currentTable.totalConsumed * serviceFeeMultiplier).toFixed(2).replace(".", ",")}
                       </span>
                     </div>
@@ -1922,10 +2372,59 @@ export default function TablesPage() {
 
                   <div className="pt-2 border-t border-gray-200 flex items-center justify-between text-sm font-black text-gray-950">
                     <span>Total {isServiceFeeEnabled ? `com ${serviceFeeRate}%:` : "Final:"}</span>
-                    <span className="text-base text-emerald-700">
+                    <span className="text-base text-emerald-700 font-mono">
                       R$ {(currentTable.totalConsumed * (isServiceFeeEnabled ? (1 + serviceFeeMultiplier) : 1)).toFixed(2).replace(".", ",")}
                     </span>
                   </div>
+
+                  {/* Amortizações e Saldo Restante se houver pagamentos parciais */}
+                  {currentTable.hasPartialPayments && (
+                    <div className="pt-2.5 mt-2 border-t border-dashed border-gray-300 space-y-2">
+                      <div className="flex items-center justify-between text-xs font-semibold text-emerald-800">
+                        <span className="flex items-center gap-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          Total Já Pago ({currentTable.sessionPayments?.length || 0} {currentTable.sessionPayments?.length === 1 ? "parcela" : "parcelas"}):
+                        </span>
+                        <span className="font-mono font-bold">
+                          - R$ {currentTable.paidAmount.toFixed(2).replace(".", ",")}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between text-sm font-bold pt-1 border-t border-gray-200">
+                        <span className="text-gray-900">Saldo Restante Devedor:</span>
+                        <span className={cn(
+                          "font-mono font-bold",
+                          currentTable.remainingBalance === 0 ? "text-emerald-700" : "text-amber-900"
+                        )}>
+                          {currentTable.remainingBalance === 0 ? "100% Quitado 🟢" : `R$ ${currentTable.remainingBalance.toFixed(2).replace(".", ",")}`}
+                        </span>
+                      </div>
+
+                      {/* Extrato compacto de pagamentos */}
+                      {currentTable.sessionPayments && currentTable.sessionPayments.length > 0 && (
+                        <div className="pt-1.5 space-y-1">
+                          {currentTable.sessionPayments.map((p, pIdx) => (
+                            <div key={p.id || pIdx} className="flex items-center justify-between text-[11px] text-gray-600">
+                              <span className="flex items-center gap-1.5">
+                                <span className="font-mono text-gray-400">
+                                  {p.created_at ? new Date(p.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : ""}
+                                </span>
+                                <span className="font-medium text-gray-800">
+                                  {p.method_label || getPaymentMethodLabel(p.method)}
+                                </span>
+                                {p.customer_name && (
+                                  <span className="text-gray-500 italic">({p.customer_name})</span>
+                                )}
+                              </span>
+                              <span className="font-mono font-bold text-gray-900">
+                                R$ {Number(p.amount || 0).toFixed(2).replace(".", ",")}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1962,14 +2461,17 @@ export default function TablesPage() {
                   </Button>
 
                   <Button
-                    onClick={() => {
-                      setIncludeServiceFee(isServiceFeeEnabled);
-                      setIsSettlementModalOpen(true);
-                    }}
+                    onClick={() => openSettlementModal(currentTable)}
                     className="flex-1 sm:flex-none h-11 px-6 rounded-2xl bg-[#047857] hover:bg-[#036348] text-white font-black gap-2 cursor-pointer shadow-sm active:scale-[0.98] transition-all"
                   >
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>Fechar / Receber Mesa</span>
+                    <span>
+                      {currentTable.remainingBalance === 0 && currentTable.hasPartialPayments
+                        ? "Finalizar e Liberar Mesa 🟢"
+                        : (currentTable.hasPartialPayments
+                            ? `Receber Mesa (Resta R$ ${currentTable.remainingBalance.toFixed(2).replace(".", ",")})`
+                            : "Receber / Abater Mesa")}
+                    </span>
                   </Button>
                 </div>
               </div>
@@ -1980,58 +2482,53 @@ export default function TablesPage() {
 
       {/* MODAL: ABRIR MESA */}
       <Dialog open={isOpenTableModalOpen} onOpenChange={setIsOpenTableModalOpen}>
-        <DialogContent className="max-w-md rounded-3xl p-6 bg-white border border-gray-200 shadow-2xl">
+        <DialogContent className="max-w-md rounded-2xl p-6 bg-white border border-stone-200 shadow-xl">
           <DialogHeader>
-            <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-[#047857] mb-2">
-              <Plus className="w-6 h-6" />
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-10 h-10 rounded-xl bg-stone-100 border border-stone-200 flex items-center justify-center text-stone-700 shrink-0">
+                <UtensilsCrossed className="w-5 h-5 text-stone-700" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-bold text-stone-900">
+                  Abrir Mesa {selectedTable?.table_number}
+                </DialogTitle>
+                <DialogDescription className="text-xs text-stone-500">
+                  Identifique a mesa para iniciar a comanda e lançar pedidos.
+                </DialogDescription>
+              </div>
             </div>
-            <DialogTitle className="text-xl font-black text-gray-950">
-              Abrir Mesa {selectedTable?.table_number}
-            </DialogTitle>
-            <DialogDescription className="text-xs text-gray-500">
-              Inicie a comanda da mesa para começar a lançar pedidos.
-            </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleOpenTable} className="space-y-4 mt-2">
             <div>
-              <label className="text-xs font-bold text-gray-700 block mb-1">
-                Nome do Cliente (ou identificação)
+              <label className="text-xs font-semibold text-stone-700 block mb-1.5">
+                Nome do Cliente / Identificação (Opcional)
               </label>
               <Input
                 value={openCustomerName}
                 onChange={(e) => setOpenCustomerName(e.target.value)}
-                placeholder="Ex: João Silva ou Aniversário"
-                className="h-10 rounded-xl text-sm"
+                placeholder={`Ex: João Silva ou Mesa ${selectedTable?.table_number || ""}`}
+                className="h-10 rounded-xl text-sm border-stone-300"
                 autoFocus
               />
+              <p className="text-[11px] text-stone-400 mt-1">
+                Se deixar em branco, será identificado automaticamente como "Mesa {selectedTable?.table_number}".
+              </p>
             </div>
 
-            <div>
-              <label className="text-xs font-bold text-gray-700 block mb-1">
-                WhatsApp / Telefone (Opcional)
-              </label>
-              <Input
-                value={openCustomerPhone}
-                onChange={(e) => setOpenCustomerPhone(e.target.value)}
-                placeholder="(00) 00000-0000"
-                className="h-10 rounded-xl text-sm"
-              />
-            </div>
-
-            <div className="pt-3 flex items-center justify-end gap-2">
+            <div className="pt-2 border-t border-stone-200 flex items-center justify-end gap-2">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setIsOpenTableModalOpen(false)}
-                className="h-10 rounded-xl font-bold cursor-pointer"
+                className="h-10 rounded-xl font-medium text-xs text-stone-600 border-stone-300 cursor-pointer"
               >
                 Cancelar
               </Button>
               <Button
                 type="submit"
                 disabled={isOpeningTable}
-                className="h-10 px-5 rounded-xl bg-[#047857] hover:bg-[#036348] text-white font-bold cursor-pointer shadow-sm"
+                className="h-10 px-5 rounded-xl bg-[#047857] hover:bg-[#036348] text-white font-bold text-xs cursor-pointer shadow-xs"
               >
                 {isOpeningTable ? "Abrindo..." : "Confirmar Abertura"}
               </Button>
@@ -2241,141 +2738,358 @@ export default function TablesPage() {
 
       {/* MODAL: FECHAMENTO / RECEBIMENTO DE CONTA */}
       <Dialog open={isSettlementModalOpen} onOpenChange={setIsSettlementModalOpen}>
-        <DialogContent className="max-w-md rounded-3xl p-6 bg-white border border-gray-200 shadow-2xl">
+        <DialogContent className="max-w-lg max-h-[92vh] overflow-y-auto rounded-2xl p-6 bg-white border border-stone-200 shadow-xl">
           <DialogHeader>
-            <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-[#047857] mb-2">
-              <Receipt className="w-6 h-6" />
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-stone-100 border border-stone-200 flex items-center justify-center text-stone-700 shrink-0">
+                <Receipt className="w-5 h-5 text-stone-700" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-bold text-stone-900">
+                  Receber Mesa {selectedTable?.table_number}
+                </DialogTitle>
+                <DialogDescription className="text-xs text-stone-500">
+                  Amortização parcial, múltiplos meios de pagamento e encerramento de comanda.
+                </DialogDescription>
+              </div>
             </div>
-            <DialogTitle className="text-xl font-black text-gray-950">
-              Receber Mesa {selectedTable?.table_number}
-            </DialogTitle>
-            <DialogDescription className="text-xs text-gray-500">
-              Selecione o método de pagamento e liquide a comanda.
-            </DialogDescription>
           </DialogHeader>
 
-          {selectedTable && (
-            <div className="space-y-4 mt-2">
-              {/* Valores */}
-              <div className="p-4 bg-gray-50 rounded-2xl border border-gray-200 space-y-2 text-xs">
-                <div className="flex items-center justify-between font-medium text-gray-600">
-                  <span>Subtotal:</span>
-                  <span className="font-bold text-gray-900">
-                    R$ {selectedTable.totalConsumed.toFixed(2).replace(".", ",")}
-                  </span>
+          {(() => {
+            const modalTable = currentTable || selectedTable;
+            if (!modalTable) return null;
+
+            const subtotal = modalTable.totalConsumed || 0;
+            const feeMultiplier = serviceFeeRate / 100;
+            const serviceFeeValue = (includeServiceFee && isServiceFeeEnabled) ? (subtotal * feeMultiplier) : 0;
+            const discountVal = Number(discountAmount) || 0;
+            const totalAccount = Math.max(0, subtotal + serviceFeeValue - discountVal);
+
+            const sessionPayments = getSessionPaymentsList(modalTable.activeSession);
+            const totalPaidSoFar = sessionPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+            const remainingToPay = Math.max(0, totalAccount - totalPaidSoFar);
+            const isAccountFullyPaid = totalPaidSoFar >= totalAccount && totalAccount > 0;
+
+            const enteredAmount = Number(partialPaymentAmount) || 0;
+            const isPartialLowerThanRemaining = enteredAmount > 0 && enteredAmount < (remainingToPay - 0.01);
+
+            return (
+              <div className="space-y-4 mt-1">
+                {/* 1. Resumo Financeiro da Comanda */}
+                <div className="p-3.5 bg-stone-50 rounded-xl border border-stone-200 space-y-2 text-xs">
+                  <div className="flex items-center justify-between text-stone-600">
+                    <span>Subtotal de Consumo:</span>
+                    <span className="font-mono font-semibold text-stone-900">
+                      R$ {subtotal.toFixed(2).replace(".", ",")}
+                    </span>
+                  </div>
+
+                  {isServiceFeeEnabled && (
+                    <div className="flex items-center justify-between pt-1 border-t border-stone-200">
+                      <label className="flex items-center gap-2 cursor-pointer text-stone-700 select-none">
+                        <input
+                          type="checkbox"
+                          checked={includeServiceFee}
+                          onChange={(e) => setIncludeServiceFee(e.target.checked)}
+                          className="rounded border-stone-300 text-[#047857] focus:ring-[#047857]"
+                        />
+                        <span className="font-medium">Taxa de serviço opcional ({serviceFeeRate}%)</span>
+                      </label>
+                      <span className="font-mono font-semibold text-stone-900">
+                        R$ {serviceFeeValue.toFixed(2).replace(".", ",")}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between pt-1 border-t border-stone-200">
+                    {showDiscountField || discountAmount > 0 ? (
+                      <>
+                        <span className="text-stone-600 font-medium">Desconto / Cortesia da Loja:</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-stone-400 font-mono text-xs">R$</span>
+                          <CurrencyInput
+                            value={discountAmount}
+                            onValueChange={(num) => setDiscountAmount(num)}
+                            withPrefix={false}
+                            placeholder="0,00"
+                            className="w-24 h-7 text-xs text-right font-mono rounded-lg bg-white border-stone-300"
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            onClick={() => { setDiscountAmount(0); setShowDiscountField(false); }}
+                            className="text-stone-400 hover:text-stone-600 px-1 py-0.5 text-xs font-bold"
+                            title="Remover desconto"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setShowDiscountField(true)}
+                        className="text-xs font-bold text-blue-600 hover:text-blue-800 underline hover:no-underline cursor-pointer inline-flex items-center gap-1.5 py-0.5 transition-colors"
+                      >
+                        <span>+ Conceder desconto / cortesia do restaurante</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="pt-2 border-t border-stone-300 flex items-center justify-between font-bold text-stone-900">
+                    <span>Total da Comanda:</span>
+                    <span className="font-mono text-sm">
+                      R$ {totalAccount.toFixed(2).replace(".", ",")}
+                    </span>
+                  </div>
+
+                  {totalPaidSoFar > 0 && (
+                    <>
+                      <div className="flex items-center justify-between pt-1 text-emerald-800 font-medium">
+                        <span className="flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          Total Já Amortizado ({sessionPayments.length} {sessionPayments.length === 1 ? "parcela" : "parcelas"}):
+                        </span>
+                        <span className="font-mono font-bold">
+                          - R$ {totalPaidSoFar.toFixed(2).replace(".", ",")}
+                        </span>
+                      </div>
+
+                      <div className="pt-2 border-t border-stone-300 flex items-center justify-between">
+                        <span className="font-bold text-stone-900">Saldo Restante a Pagar:</span>
+                        <span className={cn(
+                          "font-mono text-base font-bold",
+                          remainingToPay === 0 ? "text-emerald-700" : "text-amber-900"
+                        )}>
+                          {remainingToPay === 0 ? "100% Quitado 🟢" : `R$ ${remainingToPay.toFixed(2).replace(".", ",")}`}
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </div>
 
-                {/* Switch de Serviço se ativado */}
-                {isServiceFeeEnabled && (
-                  <div className="flex items-center justify-between pt-1 border-t border-gray-200/80">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={includeServiceFee}
-                        onChange={(e) => setIncludeServiceFee(e.target.checked)}
-                        className="rounded text-emerald-600 focus:ring-emerald-500"
-                      />
-                      <span className="font-bold text-gray-800">Incluir {serviceFeeRate}% de Serviço</span>
-                    </label>
-                    <span className="font-bold text-emerald-700">
-                      R$ {(selectedTable.totalConsumed * serviceFeeMultiplier).toFixed(2).replace(".", ",")}
-                    </span>
+                {/* 2. Histórico Auditável de Recebimentos da Mesa */}
+                {sessionPayments.length > 0 && (
+                  <div className="bg-white rounded-xl border border-stone-200 p-3.5 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-bold text-stone-700 uppercase tracking-wide flex items-center gap-1.5">
+                        <Receipt className="w-3.5 h-3.5 text-stone-500" />
+                        Histórico de Recebimentos ({sessionPayments.length})
+                      </p>
+                      <span className="text-[11px] font-mono font-semibold text-emerald-700">
+                        Pago: R$ {totalPaidSoFar.toFixed(2).replace(".", ",")}
+                      </span>
+                    </div>
+
+                    <div className="divide-y divide-stone-100 max-h-36 overflow-y-auto pr-1">
+                      {sessionPayments.map((p, idx) => (
+                        <div key={p.id || idx} className="py-1.5 flex items-center justify-between text-xs group">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-[10px] text-stone-400">
+                              {p.created_at ? new Date(p.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "—"}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-md bg-stone-100 text-stone-800 text-[11px] font-medium border border-stone-200">
+                              {p.method_label || getPaymentMethodLabel(p.method)}
+                            </span>
+                            {p.customer_name && (
+                              <span className="text-stone-600 font-medium truncate max-w-[120px]">
+                                {p.customer_name}
+                              </span>
+                            )}
+                            {p.change_amount > 0 && (
+                              <span className="text-[10px] text-stone-400">
+                                (troco R$ {Number(p.change_amount).toFixed(2).replace(".", ",")})
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-stone-900">
+                              R$ {Number(p.amount || 0).toFixed(2).replace(".", ",")}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemovePartialPayment(p.id)}
+                              title="Estornar recebimento"
+                              className="text-stone-300 hover:text-rose-600 p-1 rounded transition-colors cursor-pointer opacity-70 group-hover:opacity-100"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 
-                {/* Desconto */}
-                <div className="flex items-center justify-between pt-1">
-                  <span className="text-gray-600">Desconto (R$):</span>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.50"
-                    value={discountAmount}
-                    onChange={(e) => setDiscountAmount(Math.max(0, Number(e.target.value) || 0))}
-                    className="w-24 h-7 text-xs text-right rounded-lg bg-white"
-                  />
-                </div>
+                {/* 3. Formulário de Novo Recebimento (se ainda houver saldo a pagar) */}
+                {remainingToPay > 0 ? (
+                  <div className="space-y-3 pt-1">
+                    {/* Atalhos Rápidos de Valor */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-xs font-bold text-stone-700">
+                          Valor a Receber Agora
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setPartialPaymentAmount(remainingToPay)}
+                          className="text-[11px] font-semibold text-[#047857] hover:underline cursor-pointer"
+                        >
+                          Quitar Saldo Restante (R$ {remainingToPay.toFixed(2).replace(".", ",")})
+                        </button>
+                      </div>
 
-                {/* Total Final */}
-                <div className="pt-2 border-t border-gray-300 flex items-center justify-between text-sm font-black text-gray-950">
-                  <span>Total a Pagar:</span>
-                  <span className="text-xl text-[#047857]">
-                    R$ {Math.max(0, selectedTable.totalConsumed + ((includeServiceFee && isServiceFeeEnabled) ? selectedTable.totalConsumed * serviceFeeMultiplier : 0) - (Number(discountAmount) || 0)).toFixed(2).replace(".", ",")}
-                  </span>
-                </div>
-              </div>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 font-mono text-sm z-10 pointer-events-none">
+                          R$
+                        </span>
+                        <CurrencyInput
+                          value={partialPaymentAmount}
+                          onValueChange={(num) => setPartialPaymentAmount(num)}
+                          withPrefix={false}
+                          placeholder={remainingToPay.toFixed(2).replace(".", ",")}
+                          className="pl-9 h-10 rounded-xl font-mono text-sm font-bold text-stone-900 border-stone-300 bg-white"
+                        />
+                      </div>
 
-              {/* Formas de Pagamento */}
-              <div>
-                <label className="text-xs font-bold text-gray-700 block mb-1.5">
-                  Forma de Pagamento
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { id: "dinheiro", label: "Dinheiro", icon: Banknote },
-                    { id: "pix", label: "Pix", icon: Sparkles },
-                    { id: "cartao_debito", label: "Cartão Débito", icon: CreditCard },
-                    { id: "cartao_credito", label: "Cartão Crédito", icon: CreditCard },
-                  ].map(m => (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => setPaymentMethod(m.id)}
-                      className={cn(
-                        "h-11 rounded-xl font-bold text-xs flex items-center justify-center gap-2 border transition-all cursor-pointer",
-                        paymentMethod === m.id
-                          ? "bg-emerald-50 border-[#047857] text-[#047857] shadow-xs"
-                          : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
+                      {/* Pílulas de consumo por pessoa para atalho instantâneo */}
+                      {modalTable.ordersByCustomer && modalTable.ordersByCustomer.length > 1 && (
+                        <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                          <span className="text-[10px] text-stone-400 uppercase font-semibold">Atalhos por pessoa:</span>
+                          {modalTable.ordersByCustomer.map((p, idx) => {
+                            const pSub = Number(p.totalAmount || 0);
+                            const pTot = (includeServiceFee && isServiceFeeEnabled) ? pSub * (1 + feeMultiplier) : pSub;
+                            return (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => {
+                                  setPartialPaymentAmount(Math.min(remainingToPay, pTot));
+                                  setPartialPayerName(p.name);
+                                }}
+                                className="text-[11px] font-medium px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 border border-stone-200 text-stone-800 transition-colors cursor-pointer"
+                              >
+                                👤 {p.name} (R$ {pTot.toFixed(2).replace(".", ",")})
+                              </button>
+                            );
+                          })}
+                        </div>
                       )}
-                    >
-                      <m.icon className="w-4 h-4" />
-                      <span>{m.label}</span>
-                    </button>
-                  ))}
+                    </div>
+
+                    {/* Forma de Pagamento */}
+                    <div>
+                      <label className="text-xs font-bold text-stone-700 block mb-1.5">
+                        Forma de Pagamento
+                      </label>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        {PAYMENT_METHODS.map(m => (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => setPaymentMethod(m.id)}
+                            className={cn(
+                              "h-10 rounded-xl font-medium text-xs flex items-center justify-center gap-2 border transition-all cursor-pointer",
+                              paymentMethod === m.id
+                                ? "bg-stone-900 border-stone-900 text-white font-bold shadow-xs"
+                                : "bg-white border-stone-200 text-stone-700 hover:bg-stone-50"
+                            )}
+                          >
+                            <m.icon className="w-3.5 h-3.5" />
+                            <span>{m.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Troco se Dinheiro */}
+                    {paymentMethod === "dinheiro" && (
+                      <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 space-y-2">
+                        <label className="text-xs font-semibold text-stone-700 block">
+                          Valor em Dinheiro Entregue pelo Cliente
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 font-mono text-xs z-10 pointer-events-none">
+                            R$
+                          </span>
+                          <CurrencyInput
+                            value={cashGiven}
+                            onValueChange={(num) => setCashGiven(num)}
+                            withPrefix={false}
+                            placeholder="0,00"
+                            className="pl-8 h-9 rounded-lg font-mono text-xs border-stone-300 bg-white"
+                          />
+                        </div>
+                        {cashGiven && Number(cashGiven) > enteredAmount && (
+                          <p className="text-xs font-bold text-emerald-800">
+                            Troco a devolver: R$ {(Number(cashGiven) - enteredAmount).toFixed(2).replace(".", ",")}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* Banner quando tudo já está pago */
+                  <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200 flex items-start gap-3">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-xs font-bold text-emerald-950">
+                        Comanda 100% quitada!
+                      </p>
+                      <p className="text-[11px] text-emerald-800 mt-0.5">
+                        Todos os pagamentos foram registrados com sucesso. Clique abaixo para finalizar o turno da mesa e liberá-la no salão.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Rodapé de Botões de Ação */}
+                <div className="pt-3 border-t border-stone-200 flex flex-col sm:flex-row items-center justify-between gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsSettlementModalOpen(false)}
+                    className="w-full sm:w-auto h-10 rounded-xl font-medium text-xs text-stone-600 border-stone-300 cursor-pointer"
+                  >
+                    Voltar
+                  </Button>
+
+                  <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                    {/* Regra Estrita de Segurança Financeira: só libera a mesa se o valor restante for quitado */}
+                    {remainingToPay === 0 || isAccountFullyPaid ? (
+                      <Button
+                        onClick={handleFinalizeSettlement}
+                        disabled={isClosingSession}
+                        className="flex-1 sm:flex-none h-10 px-5 rounded-xl bg-[#047857] hover:bg-[#036348] text-white font-bold text-xs cursor-pointer shadow-xs"
+                      >
+                        {isClosingSession ? "Finalizando..." : "Finalizar e Liberar Mesa 🟢"}
+                      </Button>
+                    ) : enteredAmount > 0 && enteredAmount < (remainingToPay - 0.01) ? (
+                      /* Pagamento Parcial: a mesa NÃO PODE ser liberada com saldo pendente */
+                      <Button
+                        type="button"
+                        onClick={handleRegisterPartialPayment}
+                        disabled={isRegisteringPartial || isClosingSession}
+                        className="flex-1 sm:flex-none h-10 px-5 rounded-xl bg-[#047857] hover:bg-[#036348] text-white font-bold text-xs cursor-pointer shadow-xs"
+                      >
+                        {isRegisteringPartial ? "Abatendo..." : `Abater R$ ${enteredAmount.toFixed(2).replace(".", ",")} (Mesa continua aberta)`}
+                      </Button>
+                    ) : (
+                      /* Pagamento Total do Restante: quita 100% e libera a mesa */
+                      <Button
+                        onClick={handleFinalizeSettlement}
+                        disabled={isClosingSession || isRegisteringPartial}
+                        className="flex-1 sm:flex-none h-10 px-5 rounded-xl bg-[#047857] hover:bg-[#036348] text-white font-bold text-xs cursor-pointer shadow-xs"
+                      >
+                        {isClosingSession ? "Recebendo..." : `Receber R$ ${remainingToPay.toFixed(2).replace(".", ",")} e Liberar Mesa 🟢`}
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
-
-              {/* Troco se Dinheiro */}
-              {paymentMethod === "dinheiro" && (
-                <div>
-                  <label className="text-xs font-bold text-gray-700 block mb-1">
-                    Valor Recebido em Dinheiro (para troco)
-                  </label>
-                  <Input
-                    type="number"
-                    step="0.50"
-                    placeholder="Ex: 100.00"
-                    value={cashGiven}
-                    onChange={(e) => setCashGiven(e.target.value)}
-                    className="h-10 rounded-xl text-sm"
-                  />
-                  {cashGiven && Number(cashGiven) > (selectedTable.totalConsumed + ((includeServiceFee && isServiceFeeEnabled) ? selectedTable.totalConsumed * serviceFeeMultiplier : 0)) && (
-                    <p className="text-xs font-bold text-emerald-700 mt-1">
-                      Troco: R$ {(Number(cashGiven) - (selectedTable.totalConsumed + ((includeServiceFee && isServiceFeeEnabled) ? selectedTable.totalConsumed * serviceFeeMultiplier : 0) - Number(discountAmount))).toFixed(2).replace(".", ",")}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              <div className="pt-3 flex items-center justify-end gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsSettlementModalOpen(false)}
-                  className="h-10 rounded-xl font-bold cursor-pointer"
-                >
-                  Voltar
-                </Button>
-                <Button
-                  onClick={handleFinalizeSettlement}
-                  disabled={isClosingSession}
-                  className="h-10 px-5 rounded-xl bg-[#047857] hover:bg-[#036348] text-white font-black cursor-pointer shadow-sm"
-                >
-                  {isClosingSession ? "Finalizando..." : "Liquidar e Liberar Mesa"}
-                </Button>
-              </div>
-            </div>
-          )}
+            );
+          })()}
         </DialogContent>
       </Dialog>
 
@@ -2422,7 +3136,7 @@ export default function TablesPage() {
 
                     {ordersByCustomer.map((person, pIdx) => {
                       const pSubtotal = Number(person.totalAmount || 0);
-                      const pTotal10 = pSubtotal * 1.10;
+                      const _pTotal10 = pSubtotal * 1.10;
 
                       return (
                         <div key={pIdx} className="space-y-1">
@@ -2483,6 +3197,34 @@ export default function TablesPage() {
                     <span>TOTAL GERAL:</span>
                     <span>R$ {totalWithService.toFixed(2).replace(".", ",")}</span>
                   </div>
+
+                  {/* Pagamentos parciais recebidos */}
+                  {(() => {
+                    const sessionPayments = getSessionPaymentsList(session);
+                    if (sessionPayments.length === 0) return null;
+                    const totalPaid = sessionPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+                    const remaining = Math.max(0, totalWithService - totalPaid);
+
+                    return (
+                      <div className="pt-2 border-t border-dashed border-gray-400 space-y-1">
+                        <p className="text-[10px] font-black uppercase text-gray-600">PAGAMENTOS RECEBIDOS:</p>
+                        {sessionPayments.map((p, idx) => (
+                          <div key={idx} className="flex justify-between text-[11px] text-gray-700">
+                            <span>• {p.method_label || getPaymentMethodLabel(p.method)}{p.customer_name ? ` (${p.customer_name})` : ""}:</span>
+                            <span>R$ {Number(p.amount || 0).toFixed(2).replace(".", ",")}</span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between font-bold text-xs pt-1 border-t border-dotted border-gray-300">
+                          <span>TOTAL JÁ PAGO:</span>
+                          <span>R$ {totalPaid.toFixed(2).replace(".", ",")}</span>
+                        </div>
+                        <div className="flex justify-between font-black text-xs text-amber-900">
+                          <span>SALDO RESTANTE:</span>
+                          <span>{remaining === 0 ? "100% QUITADO 🟢" : `R$ ${remaining.toFixed(2).replace(".", ",")}`}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* QUANTO CADA UM PAGA */}
                   {ordersByCustomer.length > 1 && (

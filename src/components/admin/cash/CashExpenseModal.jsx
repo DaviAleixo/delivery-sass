@@ -20,7 +20,7 @@ import {
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import { parseBRLToNumber } from "@/utils/moneyMask";
 import { formatInBrasilia } from "@/utils/dateTime";
-import { Receipt, DollarSign, Tag, AlertCircle, ShoppingCart } from "lucide-react";
+import { Receipt, Tag, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
 export default function CashExpenseModal({
@@ -87,18 +87,18 @@ export default function CashExpenseModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md p-6 rounded-3xl bg-white shadow-2xl border-0 overflow-hidden">
+      <DialogContent className="max-w-md p-5 sm:p-6 rounded-xl bg-white shadow-xl border border-stone-200 overflow-hidden">
         <DialogHeader className="pb-3 border-b border-stone-100">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-rose-50 text-rose-700 flex items-center justify-center shadow-xs">
+            <div className="w-10 h-10 rounded-lg bg-rose-50 text-rose-700 flex items-center justify-center border border-rose-200/60">
               <Receipt className="w-5 h-5 stroke-[2.2]" />
             </div>
             <div>
-              <DialogTitle className="text-lg font-black text-stone-900 leading-tight">
-                Registrar Saída (Despesa)
+              <DialogTitle className="text-base font-bold text-stone-900 leading-tight">
+                Pagar Despesa Local (Saída do Caixa)
               </DialogTitle>
-              <p className="text-xs text-stone-500 font-medium">
-                Dinheiro físico retirado da gaveta para despesas operacionais
+              <p className="text-xs text-stone-500">
+                Pagamento de suprimentos rápidos com dinheiro da gaveta
               </p>
             </div>
           </div>
@@ -106,20 +106,20 @@ export default function CashExpenseModal({
 
         <div className="space-y-4 py-2">
           {/* Informações Automáticas */}
-          <div className="grid grid-cols-2 gap-2 text-xs bg-stone-50 p-2.5 rounded-2xl border border-stone-100 text-stone-600">
+          <div className="grid grid-cols-2 gap-2 text-xs bg-stone-50 p-2.5 rounded-lg border border-stone-200 text-stone-600">
             <div>
-              <span className="text-[10px] text-stone-400 block font-bold uppercase">Operador</span>
-              <span className="font-bold text-stone-900 truncate block">{currentOperator}</span>
+              <span className="text-[10px] text-stone-400 block font-semibold uppercase">Operador</span>
+              <span className="font-semibold text-stone-900 truncate block">{currentOperator}</span>
             </div>
             <div>
-              <span className="text-[10px] text-stone-400 block font-bold uppercase">Data & Hora</span>
-              <span className="font-bold text-stone-900 block">{nowFormatted}</span>
+              <span className="text-[10px] text-stone-400 block font-semibold uppercase">Data & Hora</span>
+              <span className="font-mono text-stone-800 block">{nowFormatted}</span>
             </div>
           </div>
 
           {/* Valor da Saída */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-bold text-stone-700">
+            <Label className="text-xs font-semibold text-stone-700">
               Valor da Despesa (R$):
             </Label>
             <CurrencyInput
@@ -127,18 +127,18 @@ export default function CashExpenseModal({
               onChange={(e) => setAmountStr(e.target.value)}
               placeholder="R$ 0,00"
               autoFocus
-              className="text-2xl h-14 font-black text-center rounded-2xl border-2 border-stone-200 focus-visible:border-rose-500 text-stone-900"
+              className="text-2xl h-12 font-bold font-mono text-center rounded-lg border-2 border-stone-300 focus-visible:border-rose-600 text-stone-900"
             />
           </div>
 
           {/* Categoria da Despesa */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-bold text-stone-700 flex items-center gap-1.5">
+            <Label className="text-xs font-semibold text-stone-700 flex items-center gap-1.5">
               <Tag className="w-3.5 h-3.5 text-stone-400" />
               Categoria da Despesa:
             </Label>
             <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger className="h-10 rounded-xl text-xs font-bold border-stone-200">
+              <SelectTrigger className="h-9.5 rounded-lg text-xs font-medium border-stone-200">
                 <SelectValue placeholder="Selecione a categoria" />
               </SelectTrigger>
               <SelectContent>
@@ -153,36 +153,36 @@ export default function CashExpenseModal({
 
           {/* Descrição Obrigatória */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-bold text-stone-700">
-              Descrição da Despesa:
+            <Label className="text-xs font-semibold text-stone-700">
+              Descrição do Item Pago:
             </Label>
             <Input
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder={categories.find((c) => c.key === category)?.example || "Ex: 2 sacos de gelo"}
-              className="h-10 rounded-xl text-xs font-semibold border-stone-200 focus-visible:ring-rose-500"
+              className="h-9.5 rounded-lg text-xs font-medium border-stone-300 focus-visible:ring-rose-500"
             />
           </div>
 
           {/* Observação Opcional */}
           <div className="space-y-1.5">
-            <Label className="text-xs font-bold text-stone-700">
+            <Label className="text-xs font-semibold text-stone-700">
               Observação / Comprovante (Opcional):
             </Label>
             <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Ex: Cupom fiscal deixado na gaveta para contabilidade..."
+              placeholder="Ex: Nota fiscal deixada na gaveta para contabilidade..."
               rows={2}
-              className="resize-none rounded-xl text-xs border-stone-200 focus-visible:ring-rose-500"
+              className="resize-none rounded-lg text-xs border-stone-300 focus-visible:ring-rose-500"
             />
           </div>
 
           {/* Alerta de Contabilidade */}
-          <div className="bg-rose-50/70 border border-rose-200/80 rounded-2xl p-2.5 flex items-start gap-2 text-[11px] text-rose-800">
-            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+          <div className="bg-stone-50 border border-stone-200 rounded-lg p-2.5 flex items-start gap-2 text-[11px] text-stone-600">
+            <AlertCircle className="w-4 h-4 text-stone-500 shrink-0 mt-0.5" />
             <p className="leading-tight">
-              <b>Atenção:</b> Esta saída <b>reduz o dinheiro esperado na gaveta</b>, mas <b>não reduz o faturamento de vendas</b> do turno. O lançamento é único e rastreável.
+              <b>Atenção:</b> Esta saída <b>reduz o dinheiro esperado na gaveta</b>, mas não anula as vendas já computadas.
             </p>
           </div>
         </div>
@@ -193,7 +193,7 @@ export default function CashExpenseModal({
             variant="outline"
             onClick={onClose}
             disabled={isSubmitting}
-            className="rounded-xl text-xs font-bold border-stone-200 text-stone-600 hover:bg-stone-50 cursor-pointer"
+            className="rounded-lg text-xs font-medium border-stone-200 text-stone-600 hover:bg-stone-50 cursor-pointer h-9"
           >
             Cancelar
           </Button>
@@ -202,10 +202,10 @@ export default function CashExpenseModal({
             type="button"
             onClick={handleConfirm}
             disabled={isSubmitting || !amountValue || !description.trim()}
-            className="bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black px-5 shadow-sm cursor-pointer gap-1.5"
+            className="bg-rose-700 hover:bg-rose-800 text-white rounded-lg text-xs font-semibold px-4 h-9 shadow-xs cursor-pointer gap-1.5"
           >
             <Receipt className="w-3.5 h-3.5" />
-            <span>Confirmar Saída</span>
+            <span>Confirmar Despesa</span>
           </Button>
         </DialogFooter>
       </DialogContent>

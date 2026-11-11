@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Order } from "@/entities/Order";
+import { ProductionSector } from "@/entities/ProductionSector";
+import { Product } from "@/entities/Product";
+import { Category } from "@/entities/Category";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -14,14 +17,36 @@ import {
   AlertTriangle,
   RotateCcw,
   Wifi,
-  WifiOff
+  WifiOff,
+  UtensilsCrossed,
+  Bike,
+  Store,
+  Undo2,
+  Check,
+  Send,
+  Tv,
+  ArrowLeft,
+  LogOut,
+  Copy,
+  ExternalLink,
+  Layers,
+  Link2,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useLocation, useNavigate, useParams, Link } from "react-router-dom";
+import { useAuth } from "@/lib/AuthContext";
+import { createPageUrl } from "@/utils";
 import { useOrdersRealtime } from "@/hooks/useOrdersRealtime";
 import { useFifoPrintQueue } from "@/hooks/useFifoPrintQueue";
+import {
+  findSectorByParam,
+  filterOrderItemsForSector,
+  buildSectorKdsLinks,
+} from "@/utils/sectorUtils";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
-// Som de sino de cozinha sintético via Web Audio API
+// Som de sino de cozinha sintético via Web Audio API (sem arquivos externos)
 const playKitchenChime = () => {
   try {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -52,8 +77,8 @@ const playKitchenChime = () => {
   } catch (_e) {}
 };
 
-// Componente do Cronômetro de Cozinha
-function KDSTimer({ createdAt }) {
+// Componente do Cronômetro de Cozinha (Priorização Visual por Urgência em Fundo Claro)
+function KDSTimer({ createdAt, isReady = false }) {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
@@ -74,30 +99,162 @@ function KDSTimer({ createdAt }) {
   const seconds = elapsed % 60;
   const formatted = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 
-  // Cores de urgência na cozinha
-  let colorClass = "text-emerald-400 bg-emerald-950/60 border-emerald-800";
-  if (minutes >= 20) {
-    colorClass = "text-rose-400 bg-rose-950/80 border-rose-700 animate-pulse";
-  } else if (minutes >= 12) {
-    colorClass = "text-amber-400 bg-amber-950/70 border-amber-800";
+  if (isReady) {
+    return (
+      <div className="px-2.5 py-1 rounded-lg border font-mono font-bold text-xs flex items-center gap-1.5 bg-emerald-50 text-emerald-800 border-emerald-300 shadow-2xs">
+        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+        <span>Pronto há {minutes}m</span>
+      </div>
+    );
+  }
+
+  // 3 Níveis Claros de Urgência Operacional:
+  // Normal (<15 min) | Atenção (15 a 25 min) | Crítico (>25 min)
+  let badgeStyle = "bg-stone-100 text-stone-700 border-stone-200";
+  if (minutes >= 25) {
+    badgeStyle = "bg-rose-50 text-rose-900 border-rose-300 animate-pulse";
+  } else if (minutes >= 15) {
+    badgeStyle = "bg-amber-50 text-amber-900 border-amber-300";
   }
 
   return (
-    <div className={`px-2.5 py-1 rounded-lg border font-mono font-bold text-xs flex items-center gap-1.5 ${colorClass}`}>
-      <Clock className="w-3.5 h-3.5" />
+    <div className={`px-2.5 py-1 rounded-lg border font-mono font-bold text-xs flex items-center gap-1.5 shadow-2xs ${badgeStyle}`}>
+      <Clock className="w-3.5 h-3.5 shrink-0" />
       <span>{formatted}</span>
-      {minutes >= 20 && <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />}
+      {minutes >= 25 && <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />}
     </div>
   );
 }
 
 export default function KDSPage() {
+  const { slug } = useParams();
   const [orders, setOrders] = useState([]);
+  const [productionSectors, setProductionSectors] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [copiedSectorId, setCopiedSectorId] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [channelFilter, setChannelFilter] = useState("all"); // "all" | "mesa" | "delivery" | "balcao"
   const [isFullscreen, setIsFullscreen] = useState(false);
   const knownIdsRef = useRef(new Set());
+
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { logout } = useAuth();
+  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const isKioskParam = searchParams.get("kiosk") === "true" || searchParams.get("mode") === "kiosk";
+  const sectorParam = searchParams.get("sector") || "";
+
+  const kdsSectors = useMemo(() => {
+    return (Array.isArray(productionSectors) ? productionSectors : [])
+      .filter((s) => s.is_active !== false && s.operation_mode !== "print_only")
+      .sort((a, b) => (Number(a.order_index) || 0) - (Number(b.order_index) || 0));
+  }, [productionSectors]);
+
+  const selectedSector = useMemo(() => {
+    return findSectorByParam(productionSectors, sectorParam);
+  }, [productionSectors, sectorParam]);
+
+  const sectorLookup = useMemo(
+    () => ({ sectors: productionSectors, products, categories }),
+    [productionSectors, products, categories]
+  );
+  const selectedSectorRef = useRef(null);
+  const sectorLookupRef = useRef(sectorLookup);
+  useEffect(() => {
+    selectedSectorRef.current = selectedSector;
+    sectorLookupRef.current = sectorLookup;
+  }, [selectedSector, sectorLookup]);
+
+  const selectSectorFilter = (sector) => {
+    const next = new URLSearchParams(location.search);
+    if (sector) {
+      next.set("sector", sector.slug || sector.id);
+    } else {
+      next.delete("sector");
+    }
+    const qs = next.toString();
+    navigate(`${location.pathname}${qs ? `?${qs}` : ""}`, { replace: true });
+  };
+
+  const handleCopySectorLink = async (sector) => {
+    const { absoluteUrl } = buildSectorKdsLinks(slug, sector, { kiosk: true });
+    try {
+      await navigator.clipboard.writeText(absoluteUrl);
+      setCopiedSectorId(sector ? sector.id : "__all__");
+      toast.success(
+        sector
+          ? `Link KDS do setor "${sector.name}" copiado!`
+          : "Link KDS Geral copiado!"
+      );
+      setTimeout(() => setCopiedSectorId(null), 2000);
+    } catch {
+      toast.info(absoluteUrl);
+    }
+  };
+
+  const storedUser = useMemo(() => {
+    try {
+      const raw = localStorage.getItem("admin_user");
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const isKitchenOnly = Boolean(
+    storedUser &&
+    Array.isArray(storedUser.permissions) &&
+    storedUser.permissions.length === 1 &&
+    storedUser.permissions[0] === "KDS"
+  );
+
+  const isKiosk = isKioskParam || isKitchenOnly;
+
+  // Relógio digital em tempo real para a cozinha
+  const [currentTime, setCurrentTime] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const formattedTime = useMemo(() => {
+    return currentTime.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  }, [currentTime]);
+
+  const formattedDate = useMemo(() => {
+    return currentTime.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "short" });
+  }, [currentTime]);
+
+  const handleOpenTVMode = () => {
+    const params = new URLSearchParams(location.search);
+    params.set("kiosk", "true");
+    const url = `${window.location.pathname}?${params.toString()}`;
+    window.open(url, "_blank");
+  };
+
+  const handleExitTVMode = () => {
+    if (window.opener) {
+      window.close();
+    } else {
+      navigate(window.location.pathname, { replace: true });
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      if (logout) await logout();
+      localStorage.removeItem("admin_auth");
+      localStorage.removeItem("admin_user");
+      navigate(createPageUrl("AdminLogin"));
+    } catch (_e) {
+      window.location.href = "/login";
+    }
+  };
 
   // Fila Sequencial de Impressão FIFO tolerante a quedas de internet
   const {
@@ -117,29 +274,49 @@ export default function KDSPage() {
         return [newOrder, ...prev];
       });
 
-      // Enfileira automaticamente na fila FIFO de impressão
       enqueueOrders([newOrder]);
+
+      const activeSector = selectedSectorRef.current;
+      const relevantItems =
+        activeSector && activeSector.content_mode !== "full_ticket"
+          ? filterOrderItemsForSector(newOrder, activeSector, sectorLookupRef.current)
+          : newOrder.items || [];
+
+      if (activeSector && activeSector.content_mode !== "full_ticket" && relevantItems.length === 0) {
+        return;
+      }
 
       if (soundEnabled) {
         playKitchenChime();
       }
 
       const num = String(newOrder.id).slice(-4).toUpperCase();
-      toast.success(`🍳 Novo Pedido #${num} na cozinha!`, {
-        description: `${newOrder.items?.length || 0} item(ns) a preparar`,
-        duration: 5000,
-      });
+      toast.success(
+        activeSector
+          ? `🍳 Novo Pedido #${num} — ${activeSector.name}`
+          : `🍳 Novo Pedido #${num} na cozinha!`,
+        {
+          description: `${relevantItems.length} item(ns) a preparar`,
+          duration: 5000,
+        }
+      );
     },
     onUpdate: (updatedOrder) => {
       setOrders((prev) =>
         prev.map((o) => (o.id === updatedOrder.id ? { ...o, ...updatedOrder } : o))
       );
+      if (
+        updatedOrder &&
+        updatedOrder.print_status !== "printed" &&
+        ["confirmado", "preparando"].includes(updatedOrder.status)
+      ) {
+        enqueueOrders([updatedOrder]);
+      }
     },
     onDelete: (deletedOrder) => {
       setOrders((prev) => prev.filter((o) => o.id !== deletedOrder.id));
     },
     onReconnected: () => {
-      // Reconciliação imediata quando o WebSocket restabelece conexão
       loadOrders();
     },
   });
@@ -148,7 +325,6 @@ export default function KDSPage() {
     loadOrders();
     const interval = setInterval(loadOrders, 30000);
 
-    // Reconciliação ativa: ao voltar para a aba ou restabelecer a rede
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         loadOrders();
@@ -172,9 +348,17 @@ export default function KDSPage() {
 
   const loadOrders = async () => {
     try {
-      const data = await Order.list("-created_date", 60);
+      const [data, secs, prods, cats] = await Promise.all([
+        Order.list("-created_date", 80),
+        ProductionSector.list("order_index").catch(() => []),
+        Product.list().catch(() => []),
+        Category.list("order_index").catch(() => []),
+      ]);
       const safe = Array.isArray(data) ? data : [];
       setOrders(safe);
+      setProductionSectors(Array.isArray(secs) ? secs : []);
+      setProducts(Array.isArray(prods) ? prods : []);
+      setCategories(Array.isArray(cats) ? cats : []);
       knownIdsRef.current = new Set(safe.map((o) => o.id));
     } catch (_err) {
       console.error("Erro ao carregar pedidos no KDS:", _err);
@@ -184,14 +368,13 @@ export default function KDSPage() {
   };
 
   const handleUpdateStatus = async (orderId, newStatus) => {
-    // Atualização otimista local
     setOrders((prev) =>
       prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
     );
 
     try {
       await Order.update(orderId, { status: newStatus });
-      toast.success(`Pedido atualizado para "${newStatus}"`);
+      toast.success(`Pedido #${String(orderId).slice(-4).toUpperCase()} atualizado para "${newStatus}"`);
     } catch (_err) {
       toast.error("Erro ao atualizar status");
       loadOrders();
@@ -206,12 +389,16 @@ export default function KDSPage() {
     }
   };
 
-  // Filtragem de pedidos ativos na cozinha
+  // Filtragem de pedidos ativos na cozinha (por status, setor e canal)
   const activeOrders = useMemo(() => {
     return orders.filter((o) => {
-      // Cozinha foca em pendentes, confirmados e preparando (e prontos recentes)
       const isKitchenRelevant = ["pendente", "confirmado", "preparando", "pronto"].includes(o.status);
       if (!isKitchenRelevant) return false;
+
+      if (selectedSector && selectedSector.content_mode !== "full_ticket") {
+        const sectorItems = filterOrderItemsForSector(o, selectedSector, sectorLookup);
+        if (sectorItems.length === 0) return false;
+      }
 
       if (channelFilter === "mesa") {
         return o.order_type === "dine_in" || o.order_type === "mesa" || (o.table_number && o.table_number.toLowerCase().includes("mesa"));
@@ -220,109 +407,164 @@ export default function KDSPage() {
         return o.order_type === "delivery";
       }
       if (channelFilter === "balcao") {
-        return o.order_type === "pickup" || o.order_type === "balcao";
+        return o.order_type === "pickup" || o.order_type === "balcao" || o.order_type === "takeaway";
       }
       return true;
     });
-  }, [orders, channelFilter]);
+  }, [orders, channelFilter, selectedSector, sectorLookup]);
 
-  // Colunas do KDS ordenadas cronologicamente (FIFO: O mais antigo primeiro a ser preparado!)
+  // Coluna 1: A Preparar (Novos / Confirmados) - Ordenado por FIFO (mais antigo primeiro)
   const todoOrders = useMemo(() => {
     return activeOrders
       .filter((o) => o.status === "pendente" || o.status === "confirmado")
       .sort((a, b) => new Date(a.created_date || 0).getTime() - new Date(b.created_date || 0).getTime());
   }, [activeOrders]);
 
-  const preparingOrders = useMemo(() => {
+  // Coluna 2: Em Preparo & Prontos na Cozinha
+  // Regra solicitada: os pedidos "prontos" continuam aparecendo junto para a cozinha acompanhar, com indicação clara!
+  const preparingAndReadyOrders = useMemo(() => {
     return activeOrders
-      .filter((o) => o.status === "preparando")
-      .sort((a, b) => new Date(a.created_date || 0).getTime() - new Date(b.created_date || 0).getTime());
+      .filter((o) => o.status === "preparando" || o.status === "pronto")
+      .sort((a, b) => {
+        // Preparando primeiro, prontos logo em seguida
+        if (a.status === "preparando" && b.status === "pronto") return -1;
+        if (a.status === "pronto" && b.status === "preparando") return 1;
+        return new Date(a.created_date || 0).getTime() - new Date(b.created_date || 0).getTime();
+      });
   }, [activeOrders]);
 
-  const readyOrders = useMemo(() => {
+  // Coluna 3: Expedição & Retirada (Pedidos Prontos aguardando saída ou despachados recentemente)
+  const expeditionOrders = useMemo(() => {
     return activeOrders
       .filter((o) => o.status === "pronto")
       .sort((a, b) => new Date(b.created_date || 0).getTime() - new Date(a.created_date || 0).getTime());
   }, [activeOrders]);
 
-  const renderOrderCard = (order) => {
-    const isMesa = order.order_type === "dine_in" || order.order_type === "mesa" || (order.table_number && order.table_number.toLowerCase().includes("mesa"));
+  // Renderizador do Card de Pedido no KDS (Design Claro Executivo)
+  const renderOrderCard = (order, isColumnPreparing = false) => {
+    const isMesa = order.order_type === "dine_in" || order.order_type === "mesa" || (order.table_number && String(order.table_number).toLowerCase().includes("mesa"));
     const isDelivery = order.order_type === "delivery";
+    const isReady = order.status === "pronto";
     const num = String(order.id).slice(-4).toUpperCase();
 
     const orderCreatedAt = order.created_date ? new Date(order.created_date).getTime() : Date.now();
     const minutesDelayed = Math.floor((Date.now() - orderCreatedAt) / 60000);
-    const isDelayedOffline = minutesDelayed >= 10 && (order.status === "pendente" || order.status === "confirmado");
+    const isUrgent = minutesDelayed >= 25 && !isReady;
+    const isWarning = minutesDelayed >= 15 && !isUrgent && !isReady;
+    const visibleItems =
+      selectedSector && selectedSector.content_mode !== "full_ticket"
+        ? filterOrderItemsForSector(order, selectedSector, sectorLookup)
+        : (order.items || []);
 
     return (
       <motion.div
         key={order.id}
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.9 }}
-        className={`bg-stone-900 border rounded-2xl p-4 shadow-xl flex flex-col justify-between space-y-4 text-stone-100 ${
-          isDelayedOffline ? "border-rose-600/80 shadow-rose-950/40 ring-1 ring-rose-500/50" : "border-stone-800"
-        }`}
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className={cn(
+          "bg-white rounded-xl border transition-all duration-150 p-4 shadow-2xs hover:shadow-xs flex flex-col justify-between space-y-3.5 select-none relative overflow-hidden",
+          isReady
+            ? "border-emerald-300 bg-emerald-50/20 ring-1 ring-emerald-400/40"
+            : isUrgent
+            ? "border-rose-300 bg-rose-50/15 ring-1 ring-rose-400/50"
+            : isWarning
+            ? "border-amber-300 bg-amber-50/15"
+            : "border-stone-200"
+        )}
       >
-        {/* Topo do Card: Número, Mesa/Canal e Timer */}
+        {/* Banner Superior Específico se o Pedido já estiver PRONTO na Cozinha */}
+        {isReady && isColumnPreparing && (
+          <div className="bg-[#047857] text-white px-3 py-1.5 -mx-4 -mt-4 mb-2 flex items-center justify-between text-xs font-black uppercase tracking-wider">
+            <span className="flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+              Pronto na Cozinha
+            </span>
+            <span className="text-[10px] font-semibold text-emerald-100 bg-[#036348] px-2 py-0.5 rounded">
+              Aguardando Retirada
+            </span>
+          </div>
+        )}
+
+        {/* Topo do Card: Número do Pedido, Canal/Mesa e Cronômetro */}
         <div>
-          <div className="flex items-center justify-between pb-3 border-b border-stone-800 gap-2">
+          <div className="flex items-start justify-between pb-3 border-b border-stone-150 gap-2">
             <div>
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-lg font-black text-amber-400 font-mono tracking-wider">
+                <span className="text-xl font-black font-mono tracking-tight text-stone-900">
                   #{num}
                 </span>
-                {isDelayedOffline && (
-                  <Badge className="bg-rose-950 text-rose-300 border border-rose-700 animate-pulse text-[10px] font-black tracking-wide">
-                    ⚠️ RETIDO ({minutesDelayed}m)
+
+                {isUrgent && (
+                  <Badge className="bg-rose-100 text-rose-800 border-rose-300 text-[10px] font-black uppercase tracking-wide">
+                    ⚠️ Urgente ({minutesDelayed}m)
                   </Badge>
                 )}
+
                 {isMesa ? (
-                  <Badge className="bg-emerald-950 text-emerald-300 border-emerald-800 text-xs font-bold">
-                    🍽️ {order.table_number || "Mesa"}
+                  <Badge className="bg-emerald-50 text-emerald-800 border-emerald-200 text-xs font-bold gap-1">
+                    <UtensilsCrossed className="w-3 h-3 text-emerald-600" />
+                    <span>{order.table_number || "Mesa"}</span>
                   </Badge>
                 ) : isDelivery ? (
-                  <Badge className="bg-rose-950 text-rose-300 border-rose-800 text-xs font-bold">
-                    🛵 Delivery
+                  <Badge className="bg-blue-50 text-blue-800 border-blue-200 text-xs font-bold gap-1">
+                    <Bike className="w-3 h-3 text-blue-600" />
+                    <span>Delivery</span>
                   </Badge>
                 ) : (
-                  <Badge className="bg-blue-950 text-blue-300 border-blue-800 text-xs font-bold">
-                    🏪 Balcão
+                  <Badge className="bg-stone-100 text-stone-800 border-stone-200 text-xs font-bold gap-1">
+                    <Store className="w-3 h-3 text-stone-600" />
+                    <span>Balcão</span>
                   </Badge>
                 )}
               </div>
-              <p className="text-xs text-stone-400 font-medium mt-0.5 truncate max-w-[180px]">
-                {order.customer_name || "Cliente"}
+
+              <p className="text-xs font-bold text-stone-700 mt-1 truncate max-w-[190px]">
+                {order.customer_name || "Cliente Balcão"}
+                {order.customer_phone && <span className="font-normal text-stone-400 text-[11px] ml-1">• {order.customer_phone}</span>}
               </p>
             </div>
 
-            <KDSTimer createdAt={order.created_date} />
+            <KDSTimer createdAt={order.created_date} isReady={isReady} />
           </div>
 
           {/* Lista de Itens do Pedido */}
-          <div className="py-3 space-y-2.5 max-h-60 overflow-y-auto pr-1">
-            {order.items?.map((item, idx) => (
-              <div key={idx} className="border-b border-stone-800/60 pb-2 last:border-0 last:pb-0">
+          <div className="py-3 space-y-2.5 max-h-64 overflow-y-auto pr-1 scrollbar-thin">
+            {visibleItems.map((item, idx) => (
+              <div key={idx} className="border-b border-stone-100 pb-2 last:border-0 last:pb-0">
                 <div className="flex items-start justify-between gap-2">
-                  <span className="font-bold text-sm text-white">
-                    <span className="text-amber-400 font-extrabold mr-1.5">{item.quantity}x</span>
-                    {item.product_name || item.name}
-                  </span>
+                  <div className="flex items-start gap-2">
+                    <span className="font-mono font-black text-sm bg-stone-100 text-stone-900 px-1.5 py-0.2 rounded border border-stone-200 shrink-0 mt-0.5">
+                      {item.quantity}x
+                    </span>
+                    <span className="font-bold text-sm text-stone-900 leading-snug">
+                      {item.product_name || item.name}
+                    </span>
+                  </div>
+                  {!selectedSector && item.sector_name && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-50 text-sky-800 border border-sky-200 shrink-0">
+                      {item.sector_name}
+                    </span>
+                  )}
                 </div>
 
-                {/* Adicionais */}
+                {/* Adicionais / Complementos */}
                 {item.additionals && item.additionals.length > 0 && (
-                  <div className="pl-5 text-xs text-stone-400 space-y-0.5 mt-0.5">
+                  <div className="pl-8 text-xs text-stone-600 space-y-0.5 mt-1 font-medium">
                     {item.additionals.map((ad, i) => (
-                      <div key={i}>+ {ad.name}</div>
+                      <div key={i} className="flex items-center gap-1">
+                        <span className="text-emerald-700 font-bold">+</span>
+                        <span>{ad.name || ad.title}</span>
+                      </div>
                     ))}
                   </div>
                 )}
 
-                {/* Observação por Item */}
+                {/* Observação por Item (Chamativo em Caixa Âmbar) */}
                 {item.notes && (
-                  <div className="pl-5 text-xs text-amber-300 font-semibold bg-amber-950/40 p-1 rounded mt-1">
-                    ⚠️ {item.notes}
+                  <div className="ml-8 mt-1.5 p-1.5 bg-amber-50 border border-amber-200 rounded-md text-xs text-amber-950 font-semibold flex items-start gap-1">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-700 shrink-0 mt-0.5" />
+                    <span>Obs: {item.notes}</span>
                   </div>
                 )}
               </div>
@@ -331,51 +573,67 @@ export default function KDSPage() {
 
           {/* Observação Geral do Pedido */}
           {order.notes && (
-            <div className="p-2.5 bg-rose-950/50 border border-rose-900 rounded-xl text-xs text-rose-200 font-bold">
-              Obs: {order.notes}
+            <div className="mt-2 p-2 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-950 font-bold flex items-start gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 text-rose-700 shrink-0 mt-0.5" />
+              <span>Obs Geral: {order.notes}</span>
             </div>
           )}
         </div>
 
-        {/* Rodapé com Botões de Ação Rápida */}
-        <div className="pt-3 border-t border-stone-800 flex items-center gap-2">
+        {/* Rodapé do Card com Ações Operacionais */}
+        <div className="pt-2.5 border-t border-stone-150 flex items-center gap-2">
           <Button
             type="button"
             variant="outline"
             size="icon"
-            onClick={() => manualPrintOrder(order)}
-            className="h-10 w-10 border-stone-700 bg-stone-800/80 text-stone-300 hover:text-white hover:bg-stone-700 shrink-0 cursor-pointer"
-            title="Imprimir comanda na fila FIFO"
+            onClick={() => manualPrintOrder(order, selectedSector ? { sectorId: selectedSector.id } : undefined)}
+            className="h-10 w-10 border-stone-200 bg-white hover:bg-stone-50 text-stone-700 rounded-xl shrink-0 cursor-pointer shadow-2xs"
+            title={selectedSector ? `Reimprimir comanda (${selectedSector.name})` : "Reimprimir comanda"}
           >
-            <Printer className="w-4 h-4" />
+            <Printer className="w-4 h-4 text-stone-600" />
           </Button>
 
+          {/* Botão de Transição de Status */}
           {order.status === "pendente" || order.status === "confirmado" ? (
             <Button
               type="button"
               onClick={() => handleUpdateStatus(order.id, "preparando")}
-              className="flex-1 bg-amber-500 hover:bg-amber-600 text-stone-950 font-black text-xs h-10 rounded-xl shadow-md flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider"
+              className="flex-1 bg-stone-900 hover:bg-black text-white font-bold text-xs h-10 rounded-xl shadow-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider"
             >
-              <Flame className="w-4 h-4" />
+              <Flame className="w-4 h-4 text-amber-400" />
               <span>Iniciar Preparo</span>
             </Button>
           ) : order.status === "preparando" ? (
             <Button
               type="button"
               onClick={() => handleUpdateStatus(order.id, "pronto")}
-              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs h-10 rounded-xl shadow-md flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider"
+              className="flex-1 bg-[#047857] hover:bg-[#036348] text-white font-bold text-xs h-10 rounded-xl shadow-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider"
             >
-              <CheckCircle2 className="w-4 h-4" />
+              <Check className="w-4 h-4 text-white" />
               <span>Marcar Pronto</span>
             </Button>
           ) : (
-            <Button
-              type="button"
-              onClick={() => handleUpdateStatus(order.id, "enviado")}
-              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs h-10 rounded-xl shadow-md flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider"
-            >
-              <span>Despachar / Entregar</span>
-            </Button>
+            <div className="flex-1 flex items-center gap-1.5">
+              {/* Botão para retornar ao preparo se necessário */}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => handleUpdateStatus(order.id, "preparando")}
+                className="h-10 px-2.5 rounded-xl border-stone-200 text-stone-600 hover:text-stone-900 text-xs font-semibold cursor-pointer"
+                title="Voltar pedido para a etapa de preparo"
+              >
+                <Undo2 className="w-3.5 h-3.5" />
+              </Button>
+
+              <Button
+                type="button"
+                onClick={() => handleUpdateStatus(order.id, isDelivery ? "enviado" : "entregue")}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs h-10 rounded-xl shadow-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>{isDelivery ? "Despachar" : "Concluir"}</span>
+              </Button>
+            </div>
           )}
         </div>
       </motion.div>
@@ -384,213 +642,407 @@ export default function KDSPage() {
 
   if (isLoading && orders.length === 0) {
     return (
-      <div className="min-h-screen bg-stone-950 text-stone-100 flex items-center justify-center p-8">
+      <div className="min-h-screen bg-[#F7F9F8] text-stone-900 flex items-center justify-center p-8">
         <div className="text-center space-y-3">
-          <div className="w-12 h-12 rounded-full border-2 border-amber-500 border-t-transparent animate-spin mx-auto" />
-          <p className="text-stone-400 font-bold text-sm">Carregando monitor da cozinha...</p>
+          <div className="w-10 h-10 rounded-full border-2 border-[#047857] border-t-transparent animate-spin mx-auto" />
+          <p className="text-stone-600 font-bold text-sm">Carregando monitor KDS da cozinha...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-stone-950 text-stone-100 p-4 sm:p-6 flex flex-col space-y-6">
-      {/* Barra Superior do KDS */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-stone-800">
+    <div className={cn(
+      "min-h-screen bg-[#F7F9F8] text-stone-900 flex flex-col space-y-4",
+      isKiosk ? "p-3 sm:p-5" : "p-4 sm:p-6"
+    )}>
+      {/* Barra Superior do KDS (Fundo Claro Executivo / Modo TV) */}
+      <div className="bg-white rounded-xl p-3.5 sm:p-4 border border-stone-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center">
-            <Flame className="w-6 h-6" />
+          <div className="w-10 h-10 rounded-xl bg-stone-900 text-amber-400 border border-stone-800 flex items-center justify-center shrink-0 shadow-2xs">
+            <Flame className="w-5 h-5 text-amber-400" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white uppercase">
-                Monitor KDS Cozinha
+              <h1 className="text-base sm:text-lg font-black tracking-tight text-stone-900 flex items-center gap-2 flex-wrap">
+                {selectedSector ? `KDS — ${selectedSector.name}` : "Monitor de Cozinha (KDS)"}
+                {selectedSector && (
+                  <span className="text-[10px] bg-sky-100 text-sky-900 border border-sky-300 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                    Seção Filtrada
+                  </span>
+                )}
+                {isKiosk && (
+                  <span className="text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                    Modo TV
+                  </span>
+                )}
               </h1>
               {isOnline ? (
                 <span
-                  className="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1.5"
-                  title="Internet Conectada (Realtime Ativo)"
+                  className="text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-md font-semibold flex items-center gap-1"
+                  title="WebSocket Conectado (Tempo Real Ativo)"
                 >
-                  <Wifi className="w-3 h-3 text-emerald-400" />
+                  <Wifi className="w-3 h-3 text-emerald-600" />
                   Online
                 </span>
               ) : (
                 <span
-                  className="text-[10px] bg-rose-500/30 text-rose-300 border border-rose-500/50 px-2.5 py-0.5 rounded-full font-black flex items-center gap-1.5 animate-pulse"
-                  title="Sem conexão com a internet! Pedidos sincronizarão ao reconectar."
+                  className="text-[10px] bg-rose-50 text-rose-800 border border-rose-200 px-2 py-0.5 rounded-md font-bold flex items-center gap-1 animate-pulse"
+                  title="Sem conexão de rede"
                 >
-                  <WifiOff className="w-3 h-3 text-rose-400" />
+                  <WifiOff className="w-3 h-3 text-rose-600" />
                   Offline
                 </span>
               )}
             </div>
-            <p className="text-xs text-stone-400">
-              {activeOrders.length} pedido(s) ativos na cozinha
+            <p className="text-xs text-stone-500 font-medium">
+              {activeOrders.length} pedido(s) em fluxo na cozinha • Fila ordenada por tempo de espera (FIFO)
             </p>
           </div>
         </div>
 
-        {/* Controles: Auto-Imprimir, Filtro de Canal, Som, Fullscreen e Atualizar */}
+        {/* Relógio Digital Central (Visível no Modo TV / Kiosk) */}
+        {isKiosk && (
+          <div className="hidden md:flex items-center gap-2 px-3.5 py-1.5 bg-stone-50 rounded-xl border border-stone-200 shadow-2xs">
+            <Clock className="w-4 h-4 text-stone-500" />
+            <span className="font-mono font-black text-base text-stone-900 tracking-wider">
+              {formattedTime}
+            </span>
+            <span className="text-xs text-stone-400 font-medium capitalize">
+              • {formattedDate}
+            </span>
+          </div>
+        )}
+
+        {/* Controles de Cozinha */}
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Botão de Abrir Modo TV (quando está no painel com barra lateral) */}
+          {!isKiosk && (
+            <Button
+              type="button"
+              onClick={handleOpenTVMode}
+              className="h-9 px-3 bg-stone-900 hover:bg-black text-white font-bold text-xs rounded-lg shadow-xs flex items-center gap-1.5 cursor-pointer"
+              title="Abrir KDS em Modo TV sem barra lateral (Ideal para TV ou Tablet na Cozinha)"
+            >
+              <Tv className="w-4 h-4 text-amber-400" />
+              <span>Modo TV Cozinha</span>
+            </Button>
+          )}
+      
           {/* Botão de Auto-Impressão com Badge de Fila FIFO */}
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={() => setAutoPrintEnabled(!autoPrintEnabled)}
-            className={`text-xs h-9 px-3 rounded-xl border flex items-center gap-1.5 transition-all cursor-pointer font-bold ${
+            className={cn(
+              "text-xs h-9 px-3 rounded-lg border flex items-center gap-1.5 transition-all cursor-pointer font-semibold shadow-2xs",
               autoPrintEnabled
-                ? "border-emerald-600 bg-emerald-950/70 text-emerald-300 hover:bg-emerald-900"
-                : "border-stone-800 bg-stone-900 text-stone-400 hover:text-white"
-            }`}
-            title={autoPrintEnabled ? "Auto-impressão ATIVADA: novos pedidos imprimem na fila FIFO" : "Auto-impressão DESATIVADA"}
+                ? "border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+                : "border-stone-200 bg-white text-stone-600 hover:bg-stone-50"
+            )}
+            title={autoPrintEnabled ? "Auto-impressão ATIVADA: novos pedidos imprimem automaticamente" : "Auto-impressão DESATIVADA"}
           >
-            <Printer className={`w-3.5 h-3.5 ${autoPrintEnabled ? "text-emerald-400" : ""}`} />
-            <span className="hidden md:inline">Auto-Imprimir</span>
+            <Printer className={cn("w-3.5 h-3.5", autoPrintEnabled ? "text-emerald-700" : "text-stone-500")} />
+            <span className="hidden sm:inline">Auto-Imprimir</span>
             {printQueue.length > 0 && (
-              <span className="bg-amber-500 text-stone-950 text-[10px] font-black px-1.5 py-0.2 rounded-full">
+              <span className="bg-[#047857] text-white text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-full">
                 {printQueue.length}
               </span>
             )}
           </Button>
 
-          {/* Seletor de Canal */}
-          <div className="flex items-center bg-stone-900 border border-stone-800 rounded-xl p-1 text-xs">
+          {/* Seletor de Canal (Filtro Rápido) */}
+          <div className="flex items-center bg-stone-100 border border-stone-200 rounded-lg p-1 text-xs">
             <button
               onClick={() => setChannelFilter("all")}
-              className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
-                channelFilter === "all" ? "bg-amber-500 text-stone-950" : "text-stone-400 hover:text-white"
-              }`}
+              className={cn(
+                "px-2.5 py-1 rounded-md font-semibold transition-all cursor-pointer",
+                channelFilter === "all" ? "bg-white text-stone-900 shadow-2xs" : "text-stone-600 hover:text-stone-900"
+              )}
             >
               Todos
             </button>
             <button
               onClick={() => setChannelFilter("mesa")}
-              className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
-                channelFilter === "mesa" ? "bg-amber-500 text-stone-950" : "text-stone-400 hover:text-white"
-              }`}
+              className={cn(
+                "px-2.5 py-1 rounded-md font-semibold transition-all cursor-pointer",
+                channelFilter === "mesa" ? "bg-white text-stone-900 shadow-2xs" : "text-stone-600 hover:text-stone-900"
+              )}
             >
-              🍽️ Salão
+              Salão
             </button>
             <button
               onClick={() => setChannelFilter("delivery")}
-              className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
-                channelFilter === "delivery" ? "bg-amber-500 text-stone-950" : "text-stone-400 hover:text-white"
-              }`}
+              className={cn(
+                "px-2.5 py-1 rounded-md font-semibold transition-all cursor-pointer",
+                channelFilter === "delivery" ? "bg-white text-stone-900 shadow-2xs" : "text-stone-600 hover:text-stone-900"
+              )}
             >
-              🛵 Delivery
+              Delivery
+            </button>
+            <button
+              onClick={() => setChannelFilter("balcao")}
+              className={cn(
+                "px-2.5 py-1 rounded-md font-semibold transition-all cursor-pointer",
+                channelFilter === "balcao" ? "bg-white text-stone-900 shadow-2xs" : "text-stone-600 hover:text-stone-900"
+              )}
+            >
+              Balcão
             </button>
           </div>
 
+          {/* Alarme Sonoro */}
           <Button
             variant="outline"
             size="sm"
             onClick={() => setSoundEnabled(!soundEnabled)}
-            className="border-stone-800 bg-stone-900 text-stone-300 hover:text-white text-xs h-9 px-3 rounded-xl"
-            title={soundEnabled ? "Silenciar sons" : "Ativar alarme sonoro"}
+            className="border-stone-200 bg-white text-stone-700 hover:bg-stone-50 text-xs h-9 px-2.5 rounded-lg shadow-2xs cursor-pointer"
+            title={soundEnabled ? "Som ativado (clique para silenciar)" : "Som desativado (clique para ativar)"}
           >
-            {soundEnabled ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4 text-stone-500" />}
+            {soundEnabled ? <Volume2 className="w-4 h-4 text-emerald-700" /> : <VolumeX className="w-4 h-4 text-stone-400" />}
           </Button>
 
+          {/* Tela Cheia */}
           <Button
             variant="outline"
             size="sm"
             onClick={toggleFullscreen}
-            className="border-stone-800 bg-stone-900 text-stone-300 hover:text-white text-xs h-9 px-3 rounded-xl"
-            title="Alternar tela cheia"
+            className="border-stone-200 bg-white text-stone-700 hover:bg-stone-50 text-xs h-9 px-2.5 rounded-lg shadow-2xs cursor-pointer"
+            title="Alternar modo tela cheia"
           >
             {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
           </Button>
 
+          {/* Atualizar Manual */}
           <Button
             variant="outline"
             size="sm"
             onClick={loadOrders}
-            className="border-stone-800 bg-stone-900 text-stone-300 hover:text-white text-xs h-9 px-3 rounded-xl"
+            className="border-stone-200 bg-white text-stone-700 hover:bg-stone-50 text-xs h-9 px-2.5 rounded-lg shadow-2xs cursor-pointer"
+            title="Atualizar pedidos"
           >
             <RotateCcw className="w-4 h-4" />
           </Button>
+
+          {/* Sair do Modo TV (se aberto via ?kiosk=true por admin) */}
+          {isKioskParam && !isKitchenOnly && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleExitTVMode}
+              className="border-stone-200 bg-white hover:bg-stone-50 text-stone-700 text-xs h-9 px-2.5 rounded-lg shadow-2xs cursor-pointer"
+              title="Voltar ao Painel com Barra Lateral"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 mr-1 text-stone-500" />
+              <span className="hidden sm:inline">Sair do Modo TV</span>
+            </Button>
+          )}
+
+          {/* Logout para usuário exclusivo de cozinha */}
+          {isKitchenOnly && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleLogout}
+              className="border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 text-xs h-9 px-2.5 rounded-lg shadow-2xs cursor-pointer"
+              title="Sair da Conta de Cozinha"
+            >
+              <LogOut className="w-3.5 h-3.5 mr-1" />
+              <span>Sair</span>
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Grid de 3 Colunas Kanban do KDS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 flex-1 min-h-0">
-        {/* Coluna 1: A Fazer (Novos / Confirmados) */}
-        <div className="bg-stone-900/40 border border-stone-800/80 rounded-3xl p-4 flex flex-col space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-stone-800">
+      {/* Barra Dinâmica de Seções / Setores & Links Diretos do KDS */}
+      {(kdsSectors.length > 0 || !isKiosk) && (
+        <div className="bg-white rounded-xl px-3.5 py-2.5 border border-stone-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-stone-400 mr-1 flex items-center gap-1">
+              <Layers className="w-3.5 h-3.5 text-stone-400" />
+              Seções:
+            </span>
+
+            <button
+              type="button"
+              onClick={() => selectSectorFilter(null)}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border",
+                !selectedSector
+                  ? "bg-stone-900 text-white border-stone-900 shadow-2xs"
+                  : "bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100"
+              )}
+            >
+              Todos
+            </button>
+
+            {kdsSectors.map((sec) => {
+              const isSelected = selectedSector && String(selectedSector.id) === String(sec.id);
+              const secLink = buildSectorKdsLinks(slug, sec, { kiosk: true });
+              return (
+                <div
+                  key={sec.id}
+                  className={cn(
+                    "inline-flex items-center rounded-lg border transition-all overflow-hidden",
+                    isSelected
+                      ? "bg-[#047857] text-white border-[#047857] shadow-2xs"
+                      : "bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100"
+                  )}
+                >
+                  <button
+                    type="button"
+                    onClick={() => selectSectorFilter(sec)}
+                    className="px-3 py-1.5 text-xs font-bold cursor-pointer"
+                  >
+                    {sec.name}
+                  </button>
+                  {!isKitchenOnly && (
+                    <div
+                      className={cn(
+                        "flex items-center border-l pr-1",
+                        isSelected ? "border-white/25" : "border-stone-200"
+                      )}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => handleCopySectorLink(sec)}
+                        className={cn(
+                          "p-1.5 cursor-pointer transition-colors",
+                          isSelected ? "text-white/90 hover:text-white" : "text-stone-500 hover:text-stone-900"
+                        )}
+                        title={`Copiar link da seção "${sec.name}" para TV/Tablet`}
+                      >
+                        {copiedSectorId === sec.id ? (
+                          <Check className="w-3.5 h-3.5 text-amber-300" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => window.open(secLink.relativePath, "_blank", "noopener,noreferrer")}
+                        className={cn(
+                          "p-1.5 cursor-pointer transition-colors",
+                          isSelected ? "text-white/90 hover:text-white" : "text-stone-500 hover:text-stone-900"
+                        )}
+                        title={`Abrir tela KDS de "${sec.name}" em nova aba`}
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {!isKiosk && (
+            <div className="flex items-center gap-2 shrink-0">
+              {selectedSector && (
+                <button
+                  type="button"
+                  onClick={() => handleCopySectorLink(selectedSector)}
+                  className="text-xs font-bold text-sky-700 hover:text-sky-900 bg-sky-50 border border-sky-200 px-2.5 py-1 rounded-lg flex items-center gap-1 cursor-pointer"
+                >
+                  <Link2 className="w-3.5 h-3.5" />
+                  Copiar Link de {selectedSector.name}
+                </button>
+              )}
+              <Link
+                to={`${createPageUrl("Settings", slug)}?tab=setores`}
+                className="text-xs font-semibold text-stone-600 hover:text-[#047857] underline px-1"
+              >
+                Configurar Setores
+              </Link>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Grid de 3 Colunas Kanban do KDS (Fundo Claro ERP) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 flex-1 min-h-0">
+        {/* Coluna 1: A Preparar (Fila de Entrada) */}
+        <div className="bg-stone-100/60 border border-stone-200/90 rounded-2xl p-4 flex flex-col space-y-3.5 shadow-2xs">
+          <div className="flex items-center justify-between pb-3 border-b border-stone-200">
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-amber-400" />
-              <h2 className="font-black text-sm uppercase tracking-wider text-stone-200">
-                A Preparar
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+              <h2 className="font-bold text-xs uppercase tracking-wider text-stone-800">
+                A Preparar (Entrada)
               </h2>
             </div>
-            <span className="text-xs font-black bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-500/30">
+            <span className="text-xs font-mono font-bold bg-white text-stone-800 px-2 py-0.5 rounded-md border border-stone-200 shadow-2xs">
               {todoOrders.length}
             </span>
           </div>
 
-          <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+          <div className="flex-1 overflow-y-auto space-y-3.5 pr-1 scrollbar-thin">
             <AnimatePresence>
               {todoOrders.length === 0 ? (
-                <div className="py-20 text-center text-xs text-stone-600 font-medium">
-                  Nenhum pedido aguardando preparo.
+                <div className="py-24 text-center text-xs text-stone-400 font-medium">
+                  Nenhum pedido aguardando preparo
                 </div>
               ) : (
-                todoOrders.map(renderOrderCard)
+                todoOrders.map((o) => renderOrderCard(o, false))
               )}
             </AnimatePresence>
           </div>
         </div>
 
-        {/* Coluna 2: Em Preparo (Chapa / Cozinha) */}
-        <div className="bg-stone-900/40 border border-stone-800/80 rounded-3xl p-4 flex flex-col space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-stone-800">
+        {/* Coluna 2: Na Cozinha (Em Preparo & Prontos) */}
+        <div className="bg-stone-100/60 border border-stone-200/90 rounded-2xl p-4 flex flex-col space-y-3.5 shadow-2xs">
+          <div className="flex items-center justify-between pb-3 border-b border-stone-200">
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-orange-500 animate-pulse" />
-              <h2 className="font-black text-sm uppercase tracking-wider text-stone-200">
-                Na Chapa / Preparando
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
+              <h2 className="font-bold text-xs uppercase tracking-wider text-stone-800">
+                Na Cozinha (Preparando & Prontos)
               </h2>
             </div>
-            <span className="text-xs font-black bg-orange-500/20 text-orange-300 px-2.5 py-0.5 rounded-full border border-orange-500/30">
-              {preparingOrders.length}
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-mono font-bold bg-white text-stone-800 px-2 py-0.5 rounded-md border border-stone-200 shadow-2xs">
+                {preparingAndReadyOrders.length}
+              </span>
+            </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+          <div className="flex-1 overflow-y-auto space-y-3.5 pr-1 scrollbar-thin">
             <AnimatePresence>
-              {preparingOrders.length === 0 ? (
-                <div className="py-20 text-center text-xs text-stone-600 font-medium">
-                  Nenhum pedido em preparo no momento.
+              {preparingAndReadyOrders.length === 0 ? (
+                <div className="py-24 text-center text-xs text-stone-400 font-medium">
+                  Nenhum pedido em preparo no momento
                 </div>
               ) : (
-                preparingOrders.map(renderOrderCard)
+                preparingAndReadyOrders.map((o) => renderOrderCard(o, true))
               )}
             </AnimatePresence>
           </div>
         </div>
 
-        {/* Coluna 3: Pronto (Expedição / Entrega) */}
-        <div className="bg-stone-900/40 border border-stone-800/80 rounded-3xl p-4 flex flex-col space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-stone-800">
+        {/* Coluna 3: Expedição & Retirada */}
+        <div className="bg-stone-100/60 border border-stone-200/90 rounded-2xl p-4 flex flex-col space-y-3.5 shadow-2xs">
+          <div className="flex items-center justify-between pb-3 border-b border-stone-200">
             <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded-full bg-emerald-500" />
-              <h2 className="font-black text-sm uppercase tracking-wider text-stone-200">
-                Pronto (Expedição)
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-600" />
+              <h2 className="font-bold text-xs uppercase tracking-wider text-stone-800">
+                Expedição & Retirada (Prontos)
               </h2>
             </div>
-            <span className="text-xs font-black bg-emerald-500/20 text-emerald-300 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
-              {readyOrders.length}
+            <span className="text-xs font-mono font-bold bg-white text-stone-800 px-2 py-0.5 rounded-md border border-stone-200 shadow-2xs">
+              {expeditionOrders.length}
             </span>
           </div>
 
-          <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+          <div className="flex-1 overflow-y-auto space-y-3.5 pr-1 scrollbar-thin">
             <AnimatePresence>
-              {readyOrders.length === 0 ? (
-                <div className="py-20 text-center text-xs text-stone-600 font-medium">
-                  Nenhum pedido pronto aguardando entrega.
+              {expeditionOrders.length === 0 ? (
+                <div className="py-24 text-center text-xs text-stone-400 font-medium">
+                  Nenhum pedido pronto aguardando retirada
                 </div>
               ) : (
-                readyOrders.map(renderOrderCard)
+                expeditionOrders.map((o) => renderOrderCard(o, false))
               )}
             </AnimatePresence>
           </div>

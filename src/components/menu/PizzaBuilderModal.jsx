@@ -16,8 +16,6 @@ export default function PizzaBuilderModal({
   onAddToCart,
   isVisualOnly = false,
 }) {
-  if (!isOpen || !category) return null;
-
   // Unifica referências de complementos (suporte a prop antiga e nova)
   const rawGroups = useMemo(() => {
     if (allComplementGroups && allComplementGroups.length > 0) return allComplementGroups;
@@ -29,7 +27,7 @@ export default function PizzaBuilderModal({
 
   // Tamanhos disponíveis da categoria
   const sizes = useMemo(() => {
-    if (Array.isArray(category.pizza_sizes) && category.pizza_sizes.length > 0) {
+    if (Array.isArray(category?.pizza_sizes) && category.pizza_sizes.length > 0) {
       return category.pizza_sizes;
     }
     return [
@@ -463,6 +461,8 @@ export default function PizzaBuilderModal({
       f.description?.toLowerCase().includes(q)
     );
   }, [availableFlavors, flavorSearch]);
+
+  if (!isOpen || !category) return null;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>

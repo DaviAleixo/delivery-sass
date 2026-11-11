@@ -136,7 +136,7 @@ export default function OrdersPage() {
   };
 
   // Fila de Impressão
-  const { manualPrintOrder } = useFifoPrintQueue();
+  const { manualPrintOrder, enqueueOrders } = useFifoPrintQueue();
 
   const knownPendingIds = useRef(new Set());
   const isFirstLoad = useRef(true);
@@ -154,6 +154,8 @@ export default function OrdersPage() {
       if (newOrder.status === "aguardando_pagamento") {
         return;
       }
+
+      enqueueOrders([newOrder]);
 
       if (newOrder.status === "pendente") {
         soundAlert.playOrderChime();
@@ -183,6 +185,13 @@ export default function OrdersPage() {
         }
         return prev.map((o) => (o.id === updatedOrder.id ? { ...o, ...updatedOrder } : o));
       });
+      if (
+        updatedOrder &&
+        updatedOrder.print_status !== "printed" &&
+        ["pendente", "confirmado", "preparando"].includes(updatedOrder.status)
+      ) {
+        enqueueOrders([updatedOrder]);
+      }
     },
     onDelete: (deletedOrder) => {
       setOrders((prev) => prev.filter((o) => o.id !== deletedOrder.id));
@@ -225,6 +234,17 @@ export default function OrdersPage() {
 
   const loadData = async () => {
     try {
+      // Auto-finalização por tempo de pedidos despachados há mais de 2 horas (Fallback Inteligente)
+      if (isSupabaseConfigured() && supabase) {
+        try {
+          const activeTenantId = localStorage.getItem("current_tenant_id");
+          await supabase.rpc("auto_deliver_stale_orders", {
+            p_tenant_id: activeTenantId || null,
+            p_timeout_hours: 2
+          });
+        } catch (_errAuto) {}
+      }
+
       const [ordersData, settingsData] = await Promise.all([
         Order.list("-created_date", orderLimit),
         Settings.list()
@@ -326,13 +346,20 @@ export default function OrdersPage() {
 
   const updateOrderStatus = async (orderId, newStatus) => {
     try {
+      const updatePayload = { status: newStatus };
+      if (newStatus === "enviado") {
+        updatePayload.dispatched_at = new Date().toISOString();
+      } else if (newStatus === "entregue") {
+        updatePayload.delivered_at = new Date().toISOString();
+      }
+
       setOrders(prev => {
-        const next = prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o);
+        const next = prev.map(o => o.id === orderId ? { ...o, ...updatePayload } : o);
         const remainingPending = next.filter(o => o.status === 'pendente');
         soundAlert.setPendingCount(remainingPending.length);
         return next;
       });
-      await Order.update(orderId, { status: newStatus });
+      await Order.update(orderId, updatePayload);
       const statusLabel =
         newStatus === "confirmado" ? "confirmado" :
         newStatus === "cancelado" ? "cancelado" :
@@ -340,6 +367,23 @@ export default function OrdersPage() {
         newStatus === "enviado" ? "enviado" :
         newStatus === "entregue" ? "entregue" : newStatus;
       toast.success(`Pedido #${String(orderId).slice(-4).toUpperCase()} marcado como ${statusLabel}!`);
+
+      // O cashback ganho pelo cliente SOMENTE é liberado na carteira quando o pedido for concluído ("entregue")
+      if (newStatus === "entregue") {
+        try {
+          if (isSupabaseConfigured() && supabase) {
+            const { data: cbResult } = await supabase.rpc("process_order_cashback", {
+              p_order_id: String(orderId),
+              p_action: "credit_only"
+            });
+            if (cbResult && Number(cbResult.credited_now || 0) > 0) {
+              toast.info(`🎁 R$ ${Number(cbResult.credited_now).toFixed(2).replace('.', ',')} de cashback liberado para o cliente!`);
+            }
+          }
+        } catch (cbErr) {
+          console.warn("Erro ao processar cashback do pedido entregue:", cbErr);
+        }
+      }
       loadOrdersOnly();
     } catch (err) {
       console.error("Erro ao atualizar status do pedido:", err);
@@ -461,10 +505,21 @@ export default function OrdersPage() {
     }
   };
 
-  const handleConfirmDispatch = async ({ driver, orderIds, tripId }) => {
+  const handleConfirmDispatch = async ({ driver, orderIds, tripId, printDriverSlip }) => {
     const nowIso = new Date().toISOString();
     const driverName = driver?.name || null;
     const driverId = driver?.id || null;
+
+    const dispatchedOrders = orders
+      .filter((o) => orderIds.includes(o.id))
+      .map((o) => ({
+        ...o,
+        status: "enviado",
+        driver_id: driverId,
+        driver_name: driverName,
+        trip_id: tripId,
+        dispatched_at: nowIso,
+      }));
 
     setOrders((prev) =>
       prev.map((o) => {
@@ -500,6 +555,11 @@ export default function OrdersPage() {
           driverName ? `com ${driverName}` : ""
         }!`
       );
+      if (printDriverSlip && dispatchedOrders.length > 0) {
+        dispatchedOrders.forEach((dispOrder) => {
+          manualPrintOrder(dispOrder, { deliverySlipOnly: true });
+        });
+      }
       loadOrdersOnly();
     } catch (err) {
       console.error("Erro ao despachar pedidos:", err);
@@ -1033,7 +1093,7 @@ export default function OrdersPage() {
             if (!isOpen) setCancellingOrder(null);
           }}
           order={cancellingOrder}
-          tenant={tenant}
+          tenant={tenant || settings}
           settings={settings}
           onConfirmCancel={handleConfirmCancelOrder}
         />

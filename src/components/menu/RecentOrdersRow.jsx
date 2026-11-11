@@ -15,7 +15,21 @@ function RecentOrderCard({
 
   const firstItem = resolvedItems[0] || {};
   const displayImage = firstItem.image_url || null;
-  const totalAmount = Number(order.total_amount || order.total || 0);
+
+  // Calcula o subtotal real dos itens atuais (sem frete)
+  const itemsSubtotal = resolvedItems.reduce((acc, item) => {
+    const itemBasePrice = Number(item.product_price ?? item.price ?? 0);
+    const additionalsTotal = (item.additionals || []).reduce(
+      (addAcc, add) => addAcc + Number(add.price ?? add.unit_price ?? 0),
+      0
+    );
+    const qty = Number(item.quantity) || 1;
+    return acc + (itemBasePrice + additionalsTotal) * qty;
+  }, 0);
+
+  const displayPrice = itemsSubtotal > 0
+    ? itemsSubtotal
+    : Number(order.subtotal || order.total_amount || order.total || 0);
 
   return (
     <motion.div
@@ -58,7 +72,7 @@ function RecentOrderCard({
         
         <div className="mt-2 flex items-center justify-between">
           <span className="font-black text-xs sm:text-sm text-gray-950">
-            R$ {totalAmount.toFixed(2).replace(".", ",")}
+            R$ {displayPrice.toFixed(2).replace(".", ",")}
           </span>
 
           <button
@@ -303,10 +317,16 @@ export default function RecentOrdersRow({
               {/* Total e Ação */}
               <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
                 <div>
-                  <span className="text-xs text-gray-400 block">Total do Pedido</span>
+                  <span className="text-[11px] text-gray-400 block font-medium">Subtotal dos Itens</span>
                   <span className="text-lg font-black text-gray-950">
-                    R$ {Number(modalState.order.total_amount || modalState.order.total || 0).toFixed(2).replace(".", ",")}
+                    R$ {modalState.items.reduce((acc, item) => {
+                      const itemBasePrice = Number(item.product_price ?? item.price ?? 0);
+                      const additionalsTotal = (item.additionals || []).reduce((addAcc, add) => addAcc + Number(add.price ?? add.unit_price ?? 0), 0);
+                      const qty = Number(item.quantity) || 1;
+                      return acc + (itemBasePrice + additionalsTotal) * qty;
+                    }, 0).toFixed(2).replace(".", ",")}
                   </span>
+                  <span className="text-[10px] text-stone-400 block">+ frete no checkout</span>
                 </div>
 
                 <button

@@ -344,7 +344,20 @@ export default function MyOrdersPage() {
                     const currentStep = getStepIndex(order.status);
                     const orderItems = safeGetItems(order.items);
                     const isHighlighted = highlightOrderId === order.id;
-                    const isPixPaid = order.payment_status === "paid" || order.status === "confirmado";
+                    const isPixMethod = order.payment_method === "pix" || order.payment_method === "pix_online";
+                    const isPixPaid = isPixMethod && (order.payment_status === "paid" || order.status === "confirmado");
+                    const isOrderConfirmed = order.status === "confirmado";
+
+                    const getPaymentMethodBadgeLabel = (method) => {
+                      if (!method) return "Confirmado";
+                      const m = method.toLowerCase();
+                      if (m.includes("pix")) return "Pago via PIX";
+                      if (m.includes("debito")) return "Cartão de Débito";
+                      if (m.includes("credito")) return "Cartão de Crédito";
+                      if (m.includes("alimentacao") || m.includes("refeicao")) return "Vale Refeição";
+                      if (m.includes("dinheiro")) return "Dinheiro";
+                      return "Confirmado";
+                    };
 
                     return (
                       <motion.div
@@ -353,16 +366,18 @@ export default function MyOrdersPage() {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -15 }}
                       >
-                        {/* Banner de Celebração de Pagamento Aprovado */}
-                        {isHighlighted && isPixPaid && (
-                          <div className="mb-3 p-4 bg-emerald-500 text-white rounded-2xl shadow-md flex items-center justify-between gap-3 animate-fade-in">
+                        {/* Banner de Celebração de Pedido Confirmado */}
+                        {isHighlighted && (isPixPaid || isOrderConfirmed) && (
+                          <div className="mb-3 p-4 bg-emerald-600 text-white rounded-2xl shadow-md flex items-center justify-between gap-3 animate-fade-in">
                             <div className="flex items-center gap-3">
                               <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center shrink-0">
                                 <ShieldCheck className="w-6 h-6 text-white" />
                               </div>
                               <div>
                                 <h4 className="font-extrabold text-sm sm:text-base leading-tight">
-                                  🎉 Pagamento PIX Confirmado com Sucesso!
+                                  {isPixPaid
+                                    ? "🎉 Pagamento PIX Confirmado com Sucesso!"
+                                    : "🎉 Pedido Confirmado pela Cozinha!"}
                                 </h4>
                                 <p className="text-xs text-emerald-100 mt-0.5">
                                   Seu pedido já foi enviado para a cozinha e está sendo preparado.
@@ -370,7 +385,7 @@ export default function MyOrdersPage() {
                               </div>
                             </div>
                             <Badge className="bg-white text-emerald-800 font-bold border-none shrink-0 shadow-sm">
-                              Pago via PIX
+                              {getPaymentMethodBadgeLabel(order.payment_method)}
                             </Badge>
                           </div>
                         )}

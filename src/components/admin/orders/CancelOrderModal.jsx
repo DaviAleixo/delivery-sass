@@ -2,17 +2,13 @@ import React, { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import { 
   AlertTriangle, 
-  RotateCcw, 
   Coins, 
   Ticket, 
   CheckCircle2, 
@@ -41,19 +37,12 @@ export default function CancelOrderModal({
 }) {
   const [selectedReason, setSelectedReason] = useState(CANCEL_REASONS[0]);
   const [customReasonDetails, setCustomReasonDetails] = useState("");
-  const [shouldRefundPix, setShouldRefundPix] = useState(true);
-  const [pixRefundAmount, setPixRefundAmount] = useState(0);
-  const [shouldRevertCashback, setShouldRevertCashback] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (order) {
       setSelectedReason(CANCEL_REASONS[0]);
       setCustomReasonDetails("");
-      const orderTotal = Number(order.total_amount || order.total || 0);
-      setPixRefundAmount(orderTotal);
-      setShouldRefundPix(true);
-      setShouldRevertCashback(true);
     }
   }, [order, open]);
 
@@ -85,9 +74,9 @@ export default function CancelOrderModal({
       await onConfirmCancel({
         orderId: order.id,
         cancelReason: fullReason,
-        refundPix: hasPixOnline && shouldRefundPix,
-        refundPixAmount: Number(pixRefundAmount || orderTotal),
-        revertCashback: shouldRevertCashback,
+        refundPix: hasPixOnline,
+        refundPixAmount: orderTotal,
+        revertCashback: true,
         mpAccessToken,
       });
       onOpenChange(false);
@@ -98,9 +87,9 @@ export default function CancelOrderModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg p-0 overflow-hidden rounded-3xl border border-stone-200 bg-white shadow-2xl">
-        {/* Topo Vermelho de Alerta */}
-        <div className="bg-red-50/80 border-b border-red-100 p-5 flex items-start gap-3.5">
+      <DialogContent className="max-w-lg p-0 overflow-hidden rounded-3xl border border-stone-200 bg-white shadow-2xl flex flex-col max-h-[90vh]">
+        {/* Topo Vermelho de Alerta - Fixo */}
+        <div className="bg-red-50/90 border-b border-red-100 p-5 flex items-start gap-3.5 shrink-0">
           <div className="w-10 h-10 rounded-2xl bg-red-100 border border-red-200 flex items-center justify-center shrink-0 text-red-600">
             <AlertTriangle className="w-5 h-5" />
           </div>
@@ -114,7 +103,8 @@ export default function CancelOrderModal({
           </div>
         </div>
 
-        <div className="p-5 space-y-5 max-h-[75vh] overflow-y-auto scrollbar-hide">
+        {/* Corpo com Scroll Suave e Barra Visível */}
+        <div className="p-5 space-y-5 flex-1 overflow-y-auto [scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent]">
           {/* 1. Motivo do Cancelamento */}
           <div>
             <Label className="text-xs font-bold text-stone-700 uppercase tracking-wider block mb-2">
@@ -153,7 +143,7 @@ export default function CancelOrderModal({
             </div>
           </div>
 
-          {/* 2. Bloco de Estorno Pix Mercado Pago */}
+          {/* 2. Bloco de Estorno Pix Mercado Pago - OBRIGATÓRIO E AUTOMÁTICO */}
           {hasPixOnline && (
             <div className="bg-sky-50/80 border border-sky-200 rounded-2xl p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">
@@ -171,41 +161,34 @@ export default function CancelOrderModal({
                   </div>
                 </div>
 
-                <Switch
-                  checked={shouldRefundPix}
-                  onCheckedChange={setShouldRefundPix}
-                  className="data-[state=checked]:bg-sky-600"
-                />
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  Estorno Obrigatório
+                </span>
               </div>
 
-              {shouldRefundPix ? (
-                <div className="bg-white/90 border border-sky-100 rounded-xl p-3 space-y-2 text-xs">
-                  <div className="flex items-center justify-between font-bold text-sky-950">
-                    <span>Valor a Devolver:</span>
-                    <span className="text-sm font-black text-emerald-700">
-                      R$ {orderTotal.toFixed(2).replace(".", ",")}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-stone-600 leading-snug">
-                    O valor sairá automaticamente do saldo da sua conta Mercado Pago e cairá <strong>de volta na conta bancária do cliente</strong> em segundos via Banco Central.
-                  </p>
-                  {!mpAccessToken && (
-                    <p className="text-[11px] text-amber-700 font-bold bg-amber-50 p-2 rounded-lg border border-amber-200">
-                      ⚠️ Atenção: Token do Mercado Pago não encontrado nas configurações da loja. O estorno pode exigir confirmação manual no app do Mercado Pago.
-                    </p>
-                  )}
+              <div className="bg-white/95 border border-sky-100 rounded-xl p-3 space-y-2 text-xs">
+                <div className="flex items-center justify-between font-bold text-sky-950">
+                  <span>Valor a Devolver Instantaneamente:</span>
+                  <span className="text-sm font-black text-emerald-700">
+                    R$ {orderTotal.toFixed(2).replace(".", ",")}
+                  </span>
                 </div>
-              ) : (
-                <p className="text-[11px] text-stone-500 italic">
-                  Estorno automático desativado. O cliente não receberá reembolso automático via Pix.
+                <p className="text-[11px] text-stone-600 leading-snug">
+                  Como o pedido foi pago via Pix Online, <strong>o estorno de 100% do valor é obrigatório e automático</strong>. O dinheiro retornará para a conta bancária do cliente no mesmo instante via Banco Central.
                 </p>
-              )}
+                {!mpAccessToken && (
+                  <p className="text-[11px] text-amber-700 font-bold bg-amber-50 p-2 rounded-lg border border-amber-200">
+                    ⚠️ Atenção: Token do Mercado Pago não encontrado nas configurações da loja. O estorno pode exigir confirmação manual no app do Mercado Pago.
+                  </p>
+                )}
+              </div>
             </div>
           )}
 
-          {/* 3. Bloco de Reversão de Cashback */}
+          {/* 3. Bloco de Ajuste Automático de Cashback */}
           {(hasCashbackUsed || hasCashbackEarned) && (
-            <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-4 space-y-2.5">
+            <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-4 space-y-2.5">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-xl bg-amber-100 border border-amber-300/60 flex items-center justify-center text-amber-800">
@@ -221,29 +204,26 @@ export default function CancelOrderModal({
                   </div>
                 </div>
 
-                <Switch
-                  checked={shouldRevertCashback}
-                  onCheckedChange={setShouldRevertCashback}
-                  className="data-[state=checked]:bg-amber-600"
-                />
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-black bg-amber-100 text-amber-900 border border-amber-300">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-amber-700" />
+                  Automático
+                </span>
               </div>
 
-              {shouldRevertCashback && (
-                <div className="bg-white/90 border border-amber-100 rounded-xl p-3 space-y-1.5 text-xs text-stone-700">
-                  {hasCashbackUsed && (
-                    <div className="flex items-center justify-between font-bold text-emerald-800">
-                      <span>✓ Devolver saldo utilizado:</span>
-                      <span>+ R$ {Number(order.cashback_discount).toFixed(2).replace(".", ",")}</span>
-                    </div>
-                  )}
-                  {hasCashbackEarned && (
-                    <div className="flex items-center justify-between font-medium text-stone-600">
-                      <span>✓ Cancelar bônus gerado na compra:</span>
-                      <span className="text-red-700">- R$ {Number(order.cashback_earned).toFixed(2).replace(".", ",")}</span>
-                    </div>
-                  )}
-                </div>
-              )}
+              <div className="bg-white/95 border border-amber-100 rounded-xl p-3 space-y-1.5 text-xs text-stone-700">
+                {hasCashbackUsed && (
+                  <div className="flex items-center justify-between font-bold text-emerald-800">
+                    <span>✓ Devolver saldo utilizado pelo cliente:</span>
+                    <span>+ R$ {Number(order.cashback_discount).toFixed(2).replace(".", ",")}</span>
+                  </div>
+                )}
+                {hasCashbackEarned && (
+                  <div className="flex items-center justify-between font-medium text-stone-600">
+                    <span>✓ Anular previsão de bônus gerado:</span>
+                    <span className="text-red-700">- R$ {Number(order.cashback_earned).toFixed(2).replace(".", ",")}</span>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -258,8 +238,8 @@ export default function CancelOrderModal({
           )}
         </div>
 
-        {/* Rodapé com Botões */}
-        <div className="p-4 bg-stone-50 border-t border-stone-200 flex items-center justify-end gap-2.5">
+        {/* Rodapé Fixo com Botões */}
+        <div className="p-4 bg-stone-50 border-t border-stone-200 flex items-center justify-end gap-2.5 shrink-0">
           <Button
             type="button"
             variant="outline"

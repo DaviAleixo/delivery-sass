@@ -6,6 +6,156 @@
 
 ## 🚀 Em Andamento / Foco Atual
 
+- [x] 🔐 **Redesign da Tela de Login, E-mail Unificado do Lojista & Recuperação de Senha (`AdminLogin.jsx`, `SuperAdmin.jsx`)**:
+  - [x] **Login Responsivo Claro (Mobile & Desktop)**: Novo visual com `/imgs/backgroundloginmobile.png`, `/imgs/backgroundlogin.png` e `/imgs/logo-painel.png`, card branco arredondado, coluna institucional no desktop e remoção da menção a `superadmin` do placeholder.
+  - [x] **E-mail Unificado na Edição (`update_tenant_info` & `get_master_tenants`)**: Migration `20261110_unified_admin_email_and_recovery.sql` sincronizando `auth.users.email`, `auth.identities` e `tenants.email` ao editar um restaurante no [[SuperAdmin]].
+  - [x] **Fluxo "Esqueci minha senha?" (`AdminLogin.jsx`)**: Envio de link de recuperação via Supabase Auth (`resetPasswordForEmail` usando código da loja + usuário ou e-mail) e tela de redefinição de senha no retorno (`PASSWORD_RECOVERY`).
+
+- [x] 🎨 **Padronização Light & Ações de Edição no [[SuperAdmin]] (`SuperAdmin.jsx`)**:
+  - [x] Corrigidos contrastes mistos de tema escuro/claro no cabeçalho, abas, tabela, drawer lateral 360° e modais de criação/edição/exclusão.
+  - [x] Adicionado botão direto **Editar** na coluna de ações da tabela e campos de contato/cobrança (`email`, `phone`, `cpf_cnpj`, `subscription_status`) no modal de edição.
+
+- [x] 🖨️ **Hardening da Fila de Impressão & Correção de Imports (`useFifoPrintQueue.js`, `VrummMenu.jsx`)**:
+  - [x] Polling do Spooler (`127.0.0.1:9100`) e `syncPendingOrders` restritos ao painel administrativo autenticado (eliminando requisições no cardápio público), com janela de 12h para evitar reimpressão de pedidos de dias anteriores.
+  - [x] Corrigidos imports ausentes (`useState`, `useEffect`, `Order`) em `VrummMenu.jsx`.
+
+- [x] 🧹 **Remoção de Créditos de Desenvolvedor e Telefone nos Rodapés (`Menu.jsx`, `Footer.jsx`, `Home.jsx`, `VrummMenu.jsx`)**:
+  - [x] Removida a linha `"Desenvolvido por Davi Aleixo | 31982607426"` de todos os rodapés do sistema (cardápio público, componente footer padrão, home institucional e cardápio temático).
+  - [x] Rodapé centralizado de forma limpa, mantendo apenas o copyright oficial da loja (`© [Ano] [Nome do Restaurante]. Todos os direitos reservados.`).
+
+- [x] 🖼️ **Centralização & Espaçamento Equidistante da Logo PedeMuleke na Sidebar (`Layout.jsx`)**:
+  - [x] **Espaçamento Exato em Todos os Lados (`p-4` = 16px)**: O container da logo (`SidebarHeader`) agora possui padding uniforme e idêntico em cima, embaixo e nas laterais (`p-4`), garantindo a mesma quantidade de pixels em todas as bordas.
+  - [x] **Alinhamento Centralizado (`mx-auto object-center justify-center`)**: A imagem da logo foi centralizada horizontal e verticalmente, eliminando o alinhamento preso à esquerda (`object-left`) e os vazios assimétricos.
+
+- [x] 📱 **Responsividade & Redesign Elegante do Modal "Meu Perfil" no Mobile (`UserProfileSheet.jsx` & `sheet.jsx`)**:
+  - [x] **Largura 100% no Mobile (`w-full sm:max-w-md`)**: Corrigido o `sheetVariants` global e o componente do modal para ocupar a largura total no celular (`w-full`), eliminando o aperto claustrofóbico de 75% (`w-3/4`) que deixava o conteúdo comprimido. Em telas maiores, mantém o formato de gaveta lateral elegante (`sm:max-w-md`).
+  - [x] **Card do Cliente Limpo & Simplificado**:
+    - Avatar circular perfeito de 48px (`w-12 h-12`) com letra centralizada e sombra suave, sem corte/bug de tamanho.
+    - Removido o lápis sobreposto no avatar e o badge de "Conectado".
+    - Mantido apenas o botão discreto de edição de nome ao lado do nome do cliente (`davi ✏️`).
+    - Telefone com badge suave e sem quebras de linha (`font-mono whitespace-nowrap`).
+  - [x] **Card de Cashback da Loja**:
+    - Proporção equilibrada entre a taxa ("X% de volta") e a caixa de saldo acumulado ("Saldo acumulado: R$ X,XX").
+    - Marca d'água de porcentagem sutil no fundo, tipografia fluida e rodapé com ícone de moedas sem corte de texto.
+  - [x] **Lista de Endereços**:
+    - Espaçamento confortável para nome do local e endereço completo com linha única (`line-clamp-1`).
+    - Botões de ação (editar e excluir) com área de toque confortável (`w-8 h-8 rounded-lg`) e remoção de chevron redundante.
+  - [x] **Store Info Sheet**: Ajustado também o modal de Informações da Loja (`StoreInfoSheet.jsx`) para responsividade full-width no celular.
+
+- [x] 🎨 **Redesign do Cardápio Público Mobile Inspirado na Referência Visual (100% Concluído & Integrado)**:
+  - [x] **Cards de Destaque 100% Dinâmicos & Auto-Responsivos**:
+    - **Visibilidade Condicional Inteligente**: O card de Entrega só é exibido se o restaurante aceitar delivery e tiver taxa/bairros configurados; o card de Cashback só é exibido se o cashback estiver ativado com taxa > 0%.
+    - **Grid Flexível (2 vs 1 vs 0 Cards)**:
+      - Se ambos estiverem ativos: exibidos lado a lado em 2 colunas (`grid-cols-2`).
+      - Se apenas um estiver ativo: o card ativo expande automaticamente ocupando a largura total dos dois (`grid-cols-1 w-full`), mantendo o design preenchido sem buracos.
+      - Se nenhum estiver configurado/ativo: o container desaparece completamente sem deixar espaço vazio.
+    - **Valores e Percentuais Reais**: A taxa de entrega exibe o frete mínimo real da loja (ou calculado para o endereço do cliente) e o cashback exibe a alíquota exata configurada no painel.
+  - [x] **Pílulas de Categorias & Barra de Busca `rounded-full`**:
+    - Abas em formato pill suave (`rounded-full`) com categoria ativa em verde escuro (`#046c4e`) e inativas em tom sóbrio `stone-100`.
+    - Campo de busca `rounded-full` com ícone de lupa e fundo limpo.
+  - [x] **Barra Superior**: Formatação executiva `[ 🛵 Entrega em até 60 - 80 min | 🟢 01:00 - 00:00 ]` com indicador luminoso e horários de funcionamento da loja.
+  - [x] **Seção 'Mais Pedidos' (Top 7)**: Adicionado link direto `Ver todos >` no cabeçalho e preservado o carrossel horizontal de cards com foto 4:3 e botão verde circular `+`.
+  - [x] **Cards de Produtos por Categoria (`ProductCard.jsx`)**:
+    - Reestruturado fielmente à referência: Imagem quadrada com cantos arredondados (`rounded-2xl`) no lado **esquerdo**, nome, descrição e preço no **centro**, e botão circular verde `+` no lado **direito**.
+    - Link `Ver todos >` incorporado ao título de cada categoria.
+  - [x] **Modal de Detalhes do Produto (`ProductDetailModal.jsx`)**: Removido o botão residual de 3 pontinhos (`MoreVertical`) que ficava sobreposto debaixo do botão circular de fechar `✕`.
+
+- [x] 🎯 **Validação Estrita de Bairro/CEP no Checkout & Gestão Clara de Atendimento (100% Concluído & Integrado)**:
+  - [x] **Checkbox de Atendimento Direto no Painel (`DeliveryFeesTab.jsx`)**: O checkbox ao lado de cada bairro agora controla exclusivamente o atendimento (`active: true` vs `active: false`), eliminando a confusão de seleção em lote:
+    - ☑️ **Marcado (Verde):** `✓ Entregamos Aqui` — Entrega liberada no checkout com a taxa definida.
+    - ⬜ **Desmarcado (Cinza/Rosa):** `✕ Não Entregamos (Bloqueado)` — Entrega bloqueada no checkout com sugestão de Retirada no Balcão.
+  - [x] **Persistência Imediata (Salvamento Automático)**: Ao marcar ou desmarcar qualquer bairro, a alteração é gravada imediatamente no banco de dados Supabase via `handleToggleNeighborhood`, exibindo notificação toast de confirmação sem exigir que o lojista procure o botão inferior de salvar.
+  - [x] **Ações Rápidas em Lote**: Botões rápidos `[ ✓ Ativar Todos ]` e `[ ✕ Pausar Todos ]` com auto-save imediato, e gaveta retrátil `[ ⚡ Reajustar Valores em Lote ]` para atualizar o preço de todos os bairros filtrados de uma só vez.
+  - [x] **Trava Educada & Conversão em Balcão no Checkout (`OrderModal.jsx`)**:
+    - Se o cliente digitar um bairro desmarcado/não atendido, o sistema bloqueia o botão de finalizar entrega.
+    - Alerta educado tanto logo abaixo do campo de Bairro quanto no resumo total do pedido: *"Bairro fora da rota do motoboy. Que tal retirar no balcão?"*.
+    - Botão de 1 toque: `[ 🛍️ Mudar para Retirada no Balcão ]` que converte o pedido na hora, zera a taxa de entrega e libera a finalização sem atrito.
+
+- [x] 📱 **Responsividade do Banner do Cardápio no Mobile (Exibição 100% Completa - Concluído)**:
+  - [x] **Enquadramento & Altura Fixada em 170px**: O banner mobile agora mantém sua altura original elegante de `170px` (`h-[170px] sm:h-[195px] md:h-[230px]`) ocupando toda a largura, com enquadramento centralizado (`object-cover object-center`), preservando os cantos superiores arredondados e sem cobrir informações vitais da arte.
+  - [x] **Layout Preservado**: Nenhuma outra parte do cardápio foi modificada.
+
+- [x] 🍽️ **Salão & Mesas: Pagamento Parcial & Fechamento de Comanda Fracionado (100% Concluído & Integrado)**:
+  - [x] **Pagamento Parcial & Amortização**: Permite registrar recebimentos fracionados na mesa (ex: conta de R$ 80,00 $\rightarrow$ recebe R$ 50,00 no Pix, o modal fecha automaticamente e a mesa **permanece aberta** com saldo devedor de R$ 30,00 até a quitação total).
+  - [x] **Fechamento Automático de Modal com Retorno Imediato**: Ao clicar em "Abater R$ X,XX", o modal de recebimento fecha instantaneamente, retornando à comanda e ao salão com o saldo devedor atualizado em tempo real.
+  - [x] **Atualização em Tempo Real na Comanda & Salão**:
+    - O cabeçalho da comanda substitui o total estático por `Resta a Pagar: R$ X,XX` com subtítulo informativo de consumo total e valores já pagos.
+    - O rodapé da comanda discrimina o subtotal de consumo, parcelas pagas e o saldo devedor restante em aberto.
+    - No mapa de mesas do salão, o card exibe badge soberbo com `Pago: R$ X,XX • Resta a Pagar: R$ Y,YY`.
+  - [x] **Link Visível para Concessão de Desconto**: O botão `+ Conceder desconto / cortesia do restaurante` estilizado em azul clássico (`text-blue-600 underline cursor-pointer`), com destaque visual claro de elemento clicável.
+  - [x] **Trava Rigorosa de Liberação de Mesa**: A mesa só pode ser finalizada/desocupada se a conta estiver 100% quitada. O botão rápido de liberação bloqueia o fechamento acidental caso haja saldo devedor pendente, redirecionando o operador para o recebimento.
+  - [x] **Múltiplos Meios de Pagamento Combinados**: Suporte nativo a pagamentos mistos na mesma conta (Dinheiro, Pix, Cartão Débito, Cartão Crédito e Vale Refeição) com atalhos de 1 toque para consumo individual por pessoa (`ordersByCustomer`) e cálculo dinâmico de troco.
+  - [x] **Histórico Auditável da Sessão**: Tabela auditável em [[Tables]] com registro de cada parcela (horário, método de pagamento, pagador opcional, valor amortizado e botão de estorno/cancelamento de recebimento).
+  - [x] **Pré-Conta & WhatsApp Auditados**: A impressão térmica não fiscal (80mm/58mm) e o resumo copiado para WhatsApp discriminam todos os pagamentos parciais recebidos, total amortizado e o saldo restante pendente.
+  - [x] **Abertura Ultra Rápida da Mesa (Apenas Nome)**: Removido o campo de telefone/WhatsApp do modal de abertura no salão, deixando exclusivamente o Nome/Identificador opcional (com preenchimento automático de `Mesa X` caso em branco) para abertura instantânea em 1 clique sem atrito.
+  - [x] **Máscara Monetária BRL (`CurrencyInput`)**: Aplicada máscara de moeda brasileira em tempo real nos campos do modal (Valor a Receber Agora, Valor em Dinheiro para Troco e Desconto Cortesia), formatando centavos e separadores de milhar automaticamente com foco ágil.
+  - [x] **Reconciliação Contábil & Fechamento de Caixa**: Motor `shiftClosingCalculator.js` atualizado para desmembrar pagamentos combinados (`payment_details.payments`), atribuindo receita com exatidão a cada método no fechamento de turno e relatórios financeiros.
+
+- [x] 📊 **Relatórios: Painel Consolidado de Métodos de Pagamento (100% Concluído & Integrado)**:
+  - [x] **Painel Financeiro por Meio de Pagamento**: Adicionado em [[Reports]] o componente `PaymentMethodsReport.jsx` integrando gráficos e tabelas analíticas com a distribuição total de faturamento por método (Pix, Cartão de Crédito, Cartão de Débito, Dinheiro, Vale Refeição/Vouchers) por período (Hoje, 7 dias, 30 dias, Mês, Ano e Personalizado).
+  - [x] **Indicadores Comparativos**: Cálculo em tempo real da quantidade de transações, ticket médio por método, % de representatividade no faturamento e % do volume de pedidos com totalizador consolidado no rodapé.
+  - [x] **Cards de Destaque Executivo**: Indicadores de Canal Líder em Faturamento, Canal Líder em Frequência (volume) e Ticket Médio Geral.
+  - [x] **Visualização Dupla (Donut + Barras de Participação)**: Gráfico de rosca Recharts interativo com tooltip executivo e barras horizontais de representatividade relativa.
+  - [x] **Desmembramento Fracionado Automático**: Suporte nativo tanto para pedidos de balcão/delivery em método único quanto para comandas/mesas com pagamentos parciais fracionados (`payment_details.payments`).
+
+- [x] 📄 **Central de Emissão de Relatórios Oficiais (PDF A4 & Planilha Excel CSV - 100% Concluído & Integrado)**:
+  - [x] **Aba Dedicada em [[Reports]]**: Adicionada a 3ª aba principal "Central de Relatórios (PDF / Excel)", separando completamente o dashboard gráfico da emissão de relatórios formais para contabilidade e auditoria.
+  - [x] **3 Modelos Especializados**:
+    - _Balanço Financeiro & Contábil_: Faturamento líquido, canais de recebimento, taxas, cancelamentos e conciliação bancária vs dinheiro físico.
+    - _Extrato Operacional de Pedidos_: Relação pedido a pedido com código, data/hora, cliente, canal (Mesa/Delivery/Balcão), forma de pagamento e total líquido.
+    - _Curva ABC & Ranking de Produtos_: Relação de mix de vendas com ranking de itens mais pedidos, preço médio e representatividade por categoria.
+  - [x] **Seleção de Período & Filtros de Precisão**: Atalhos para Hoje, Ontem, Últimos 7 dias, Últimos 30 dias, Este Mês, Mês Anterior, Este Ano e Intervalo Customizado, com checkboxes para incluir/excluir métodos, canais e perdas.
+  - [x] **Modal de Prévia em Folha A4 Realista**: Prévia da folha timbrada oficial (proporção 210mm x 297mm) com cabeçalho (CNPJ, endereço, data de emissão), dados tabulados, tipografia monetária `font-mono`, rodapé de autenticidade e espaço para assinatura do responsável.
+  - [x] **Motor de Impressão Vetorial A4 (`triggerA4Print`)**: Impressão nativa sem bibliotecas pesadas de rasterização, gerando PDF cristalino com texto selecionável e quebra de página automática.
+  - [x] **Exportação para Microsoft Excel (`exportReportToCSV`)**: Geração instantânea de planilha `.csv` em padrão brasileiro (ponto e vírgula e BOM UTF-8 `\uFEFF`) para contadores e conciliação em planilhas.
+
+- [x] 🍳 **KDS (Kitchen Display System): Revamp Visual & Fila Operacional (100% Concluído & Integrado)**:
+  - [x] **Background Claro Executivo (`#F7F9F8`)**: Eliminado o dark mode escuro e gradientes pesados, padronizando a tela de cozinha no mesmo padrão visual corporativo e sóbrio do ERP PedeMuleke com cards brancos de alta legibilidade.
+  - [x] **Priorização Visual por Urgência (Cronômetro FIFO)**: Fila ordenada cronologicamente (o mais antigo primeiro). Cronômetro inteligente em 3 faixas de tempo com alertas visuais: Normal (< 15 min), Atenção (15 a 25 min) e Urgente (> 25 min com badge pulsante).
+  - [x] **Pedidos Prontos Mantidos na Cozinha**: Atendendo à regra operacional, ao marcar um pedido como "Pronto", ele **permanece visível** na coluna de preparo da cozinha com uma faixa verde destacada `✅ PRONTO NA COZINHA • Aguardando Retirada`, além de constar na coluna de expedição, evitando que a cozinha perca a visibilidade dos pratos no balcão de saída.
+  - [x] **Leitura Instantânea de Itens & Observações**: Quantidades com tipografia `font-mono` em caixas de alto contraste, adicionais destacados com marcadores verdes e observações do cliente (gerais ou por item) em caixas de atenção âmbar/vermelhas com ícone de alerta para eliminar erros de montagem na chapa.
+  - [x] **Ações Rápidas de 1 Toque**: Botões de transição rápida (Iniciar Preparo, Marcar Pronto, Despachar/Concluir e Voltar ao Preparo) e re-impressão manual na fila FIFO.
+  - [x] **Modo Kiosk / TV Dedicada para Cozinha (`?kiosk=true`)**: Rota e layout sem barra lateral ou cabeçalho do ERP, preenchendo 100% da tela para Smart TVs e tablets de parede. Inclui relógio digital em tempo real no topo, atalho "📺 Modo TV Cozinha" no painel, botão de tela cheia (F11) e detecção automática para usuários com papel exclusivo de cozinha.
+
+- [x] 🖼️ **Gerenciador de Banners: Ordenação Dinâmica & Gestão Visual (100% Concluído & Integrado)**:
+  - [x] **Controle de Posição sem Digitação Manual**: Eliminado o antigo campo confuso de 'ordem: 0'. Cada card agora conta com botões intuitivos de 1 toque `[◀️ Antes]` e `[Depois ▶️]` com troca de posições fluida e persistência imediata no Supabase.
+  - [x] **Identificação Clara de Capa Principal**: O 1º banner do carrossel recebe a badge destacada `⭐ 1º Capa Principal` com borda âmbar, além do atalho `[⭐ Virar Capa]` para promover qualquer promoção à primeira posição em 1 clique.
+  - [x] **Toggle Rápido de Campanha (No Ar vs. Pausado)**: Switch nos cards com feedback visual em tempo real (badge `🟢 No Ar` vs `⏸️ Pausado` com efeito grayscale/opacidade) e mensagens toast informativas.
+
+- [x] 💳 **Gateway de Cobrança Asaas: Mensalidade Customizável & Trava Ativa de Vencimento (100% Concluído & Integrado)**:
+  - [x] **Valor de Mensalidade 100% Livre no SuperAdmin**: Campo numérico aberto `Valor da Mensalidade (R$)` nos modais de criação e edição de empresa, permitindo definir qualquer valor negociado por cliente (independente do plano técnico).
+  - [x] **Emissão Automatizada no Asaas**: O valor customizado digitado pelo SuperAdmin é enviado diretamente à API do Asaas para gerar a assinatura recorrente e faturas no Pix/Boleto.
+  - [x] **Trava Ativa por Data de Vencimento (`next_due_date`)**: Sistema agora verifica ativamente se a fatura está vencida (com 2 dias de tolerância de cortesia). Se a data expirar sem pagamento confirmado, o painel e o cardápio são bloqueados automaticamente com tela de pagamento do Asaas, sem depender exclusivamente da chegada de webhooks.
+
+- [x] 🧹 **Higienização de Código & Resolução de Problemas no Terminal (Zero Erros no Linter & Typecheck - Concluído)**:
+  - [x] **Regra de Hooks do React corrigida**: Eliminado retorno antecipado condicional que violava a ordem de execução de hooks em [`PizzaBuilderModal.jsx`](file:///c:/Users/Davi/Projetos/delivery/src/components/menu/PizzaBuilderModal.jsx).
+  - [x] **Limpeza de Imports e Variáveis Não Utilizadas**: Executado `eslint --fix` e higienizadas todas as variáveis obsoletas em componentes e páginas do sistema.
+  - [x] **Auditoria Completa do Projeto**: `npm run lint`, `npm run typecheck` e `npm run build` rodando com 0 erros e código 100% limpo na aba Problems do terminal.
+
+- [x] 🎨 **Padronização Visual Executiva & Design Sério (ERP Padrão PedeMuleke - 100% Concluído)**:
+  - [x] **SuperAdmin em Fundo Claro Executivo (`#F7F9F8`)**: O Painel Master e seus modais de criação/edição foram padronizados para o mesmo design corporativo limpo do restante do ERP (cards brancos, bordas sutis `stone-200`, tipografia escura e acentos verdes).
+- [x] **Logo Oficial do Painel (`logo-painel.png`)**: Substituído o ícone e texto "PedeMuleke" da barra superior da sidebar pelo logotipo oficial em alta resolução (`/imgs/logo-painel.png`), com margens enquadradas e alinhamento visual proporcional.
+  - [x] **Gestão de Caixa & PDV (`CashManagement.jsx`)**: Nomenclatura contábil padronizada (Suprimento, Sangria, Despesa), gaveta física sem espaços vazios, 4 KPIs sóbrios em tipografia `font-mono`, faturamento detalhado por método e modais limpos em `rounded-xl`.
+  - [x] **Dashboard (`Dashboard.jsx`)**: Cards de KPIs executivos com tipografia monetária limpa `font-mono`, ranking de produtos mais vendidos sem emojis, badges sóbrias de status e eliminação de sombras e gradientes artificiais.
+  - [x] **Salão & Mesas (`Tables.jsx`)**: Mapa de mesas corporativo, eliminação total de emojis, status com pontos sólidos de alta legibilidade, comanda limpa e carregador padronizado em `#047857`.
+  - [x] **Clientes (`Clients.jsx`)**: Tabela corporativa com histórico de compras, métricas de LTV, ticket médio do cliente, saldo de cashback e busca rápida em `#F7F9F8`.
+  - [x] **Relatórios (`Reports.jsx`)**: Painel financeiro analítico de faturamento, vendas dia a dia, evolução de faturamento, horários de pico, histórico de fechamento de turnos e detalhamento de categorias em `font-mono` sem emojis.
+  - [x] **Configurações (`Settings.jsx`)**: Abas corporativas limpas em estilo segmented pills, formulários consistentes com `rounded-xl`, cards `border border-stone-200 shadow-2xs bg-white`, substituição de emojis por ícones Lucide vetoriais e feedback executivo.
+  - [x] **Feedback de Carregamento Unificado**: Spinner circular padrão em `#047857` com fundo `#F7F9F8` padronizado em todas as telas centrais do sistema.
+
+- [x] 💼 **Revamp da Gestão de Caixa (Design Sério Padrão ERP & Operação Descomplicada - Concluído)**:
+  - [x] **Desmistificação & Didática**: Interface pensada para operadores sem experiência contábil prévia, com terminologia amigável (Troco Inicial, Adicionar Troco, Retirar Dinheiro, Pagar Despesa).
+  - [x] **Remoção de Elementos 'Cara de IA'**:
+    - Eliminados emojis infantis e excesso de cartões com cores saturadas.
+    - Removidos gradientes escuros artificiais e efeitos de blur/glow.
+    - Padronizados raios de borda (`rounded-xl` e `rounded-lg` discretos em vez de `rounded-3xl`) e tipografia corporativa de alta legibilidade.
+  - [x] **Visão Executiva dos Meios de Pagamento**:
+    - Tabela/grid consolidado e profissional com faturamento detalhado por canal: Pix, Cartão de Crédito, Cartão de Débito, Dinheiro e Vales, com quantidade de pedidos e % de representatividade das vendas.
+  - [x] **Gaveta Física em Destaque**:
+    - Separação clara entre dinheiro físico na gaveta da loja vs. dinheiro bancário/adquirente (Pix/Cartões).
+    - Botão direto de 1 clique para exportação e envio do fechamento auditado para o WhatsApp do proprietário.
+  - [x] **Histórico & Auditoria**: Consulta rápida de fechamentos passados sem poluição visual.
+
 - [x] 🎁 **Módulo de Cashback & Fidelidade Multi-Tenant da Loja (100% Concluído & Integrado)**:
   - [x] **Store Credit Mercantil**: 100% bancado pela margem do restaurante, zero custo financeiro para o dono do SaaS.
   - [x] **Isolamento Multi-Tenant**: Saldo amarrado a `(tenant_id, phone)`. O saldo acumulado na Hamburgueria A só pode ser resgatado na Hamburgueria A.
@@ -15,9 +165,29 @@
   - [x] **Travas de Segurança Anti-Prejuízo**: Validade configurável em dias com expiração automática (`cashback_validity_days`), teto máximo de desconto por pedido (`cashback_max_discount_percentage`), e incidência restrita a produtos (nunca sobre taxa de entrega).
   - [x] **Painel de Configurações do Lojista**: Aba Geral em `Settings.jsx` com switch liga/desliga, % de retorno (1% a 30%), dias de validade e % máx de abatimento.
   - [x] **Checkout & Resumo Financeiro**: Abatimento com switch 1-clique em `OrderModal.jsx`, recálculo dinâmico do total e registro automático de transações.
+  - [x] **Liberação de Saldo no Status "Entregue" & Regra Segura de Abatimento**:
+    - O novo cashback acumulado em um pedido é creditado no saldo disponível da carteira no instante em que o pedido é marcado como **"Entregue"** (concluído).
+    - Durante a preparação/entrega, o bônus novo é uma previsão e não pode ser gasto prematuramente.
+    - O cliente pode abater livremente o saldo pré-existente legítimo (ex: os R$ 4,00 conquistados em compras anteriores já entregues) mesmo enquanto aguarda um novo pedido.
+    - Se a loja cancelar o pedido antes da entrega, o bônus pendente é anulado e o saldo utilizado no pagamento é devolvido via `revert_order_cashback`.
+    - **Estorno Obrigatório e Automático de PIX no Cancelamento**: Em pedidos pagos via Pix online, o estorno de 100% é mandatório (sem chave opcional), executado em tempo real com comprovante e modal com barra de rolagem visível e responsiva.
   - [x] **Painel de Pedidos & Impressão Térmica**: `OrderCard.jsx` e `PrintOrder.jsx` detalham desconto de cashback e cashback gerado na comanda da cozinha e entregador.
   - [x] **Banner de Topo no Cardápio (UX Persuasiva & Isca de Cadastro)**: Banner verde exatamente no modelo solicitado exibido entre o topo da loja e os banners carrossel. Mostra 'Cashback de X% ativado' para clientes cadastrados e 'Cashback de X% disponível: Crie sua conta para ganhar...' para visitantes, abrindo com 1 toque o modal de perfil e autenticação.
   - [x] **Saldo de Cashback no Modal 'Meu Perfil' & Botão na Navbar**: Card de saldo de cashback adicionado em `UserProfileSheet.jsx` (mostrando o valor mesmo zerado em R$ 0,00, a taxa % e a validade), acompanhado de botão de acesso rápido a perfil na Navbar do cliente.
+  - [x] **Abertura e Fechamento 100% Manual (Sem Relógio Automático)**:
+    - Removido qualquer mecanismo de abertura ou fechamento automático por relógio/horários pré-programados (`isStoreOpen`).
+    - Excluída a aba obsoleta de "Horários de Funcionamento" em `Settings.jsx`, eliminando configurações desnecessárias de dias da semana e relógios que geravam confusão.
+    - Atualizados todos os pontos visuais do cardápio do cliente ([`StoreInfoSheet.jsx`](file:///c:/Users/Davi/Projetos/delivery/src/components/menu/StoreInfoSheet.jsx) e [`Menu.jsx`](file:///c:/Users/Davi/Projetos/delivery/src/pages/Menu.jsx)): o card "Funcionamento Das 01:00 às 00:00" foi substituído pelo indicador ao vivo **Status da Loja: Aberto no momento / Fechado no momento**.
+    - O controle de abertura e fechamento fica 100% nas mãos do lojista via botão mestre no painel administrativo (`manual_store_open`).
+    - A loja só abre quando o lojista clica em "Abrir Loja", e só fecha quando ele clica em "Fechar Loja", eliminando pedidos surpresa em dias que a loja não abrir e evitando fechamento indesejado no meio de turnos estendidos.
+    - O cardápio respeita o estado manual em tempo real exibindo "Aberto agora" ou "Fechado no momento".
+  - [x] **Auto-Finalização por Tempo (Fallback Inteligente de 2 Horas)**:
+    - Se um pedido for despachado (`status = 'enviado'`) e passar mais de 2 horas sem que o atendente clique em 'Entregue', o sistema o marca automaticamente como `entregue` via RPC `auto_deliver_stale_orders`.
+    - O cashback do cliente é liberado de forma 100% segura e automática, garantindo que o cliente nunca perca o benefício caso o restaurante esqueça de atualizar o status.
+    - Sincronização executada tanto no painel administrativo (`Orders.jsx`) quanto no cardápio do cliente (`Menu.jsx`).
+  - [x] **Consistência de Preços nos "Últimos Pedidos" (RecentOrdersRow)**:
+    - O carrossel de repetição rápida de pedidos agora exibe sempre o subtotal real e atualizado dos produtos (itens + complementos), desvinculado de taxas de entrega passadas.
+    - O frete é sempre calculado e cobrado em tempo real no checkout com base nas regras ativas da loja (bairro, taxa fixa ou frete grátis), eliminando discrepâncias de preço no cardápio.
   - [x] **Banco de Dados**: Migração SQL executada e validada em Homologação (`staging`) e Produção (`jqwtnzdsaivbjudvjhld`). ([[02 - 💡 Ideias & Brainstorm]])
 
 - [x] 🛡️ **Governança Estrita de Planos & Isolamento de Funcionalidades no Painel (Concluído)**:
@@ -72,6 +242,11 @@
 
 ### 🛎️ Experiência de Pedidos & KDS
 
+- [x] **Import de getPaymentBrandInfo em OrderCard**: Adicionada a importação de `getPaymentBrandInfo` de `@/constants/paymentBrands` em [[src/components/admin/orders/OrderCard.jsx]], sanando o erro `ReferenceError: getPaymentBrandInfo is not defined` ao exibir pedidos com bandeira de cartão salva.
+- [x] **Correção no Checkout do Cliente (isCardOrMeal ReferenceError & isDineIn Temporal Dead Zone)**: Adicionada a declaração prévia de `isDineIn` no topo dos cálculos financeiros e a definição das bandeiras de cartão/vale em [[src/components/menu/OrderModal.jsx]], eliminando completamente os erros de `ReferenceError: Cannot access 'isDineIn' before initialization` e `isCardOrMeal is not defined`.
+- [x] **Sincronização em Tempo Real do Badge Lateral de Pedidos**: O badge numérico da barra lateral em [[src/Layout.jsx]] agora reflete fielmente a quantidade de pedidos pendentes mesmo quando o atendente está visualizando a tela de Pedidos, ouvindo o evento global emitido pelo [[src/utils/soundAlert.js]].
+- [x] **Diferenciação Visual de Pagamento no Rastreamento (`MyOrders`)**: Corrigido o banner comemorativo em [[src/pages/MyOrders.jsx]] para só exibir "Pagamento PIX" quando o método for de fato PIX; para cartões (crédito/débito) e dinheiro, exibe "🎉 Pedido Confirmado pela Cozinha!" com o badge correspondente da forma de pagamento.
+- [x] **Recarga Ativa do Saldo de Cashback no Perfil (`UserProfileSheet`)**: A aba "Meu Perfil" agora reconsulta o saldo no banco a cada abertura do sheet (`[open]`), garantindo exibição em tempo real do cashback creditado.
 - [x] **Ciclo de Vida de Pedidos & KDS**: Botões de "Confirmar", "Avançar Status" e "Cancelar" com persistência no Supabase, RLS ajustado e toasts instantâneos.
 - [x] **Sanitização Inteligente em Updates Parciais**: Atualizações de status não zeram campos nem mutam dados de itens/cliente.
 - [x] **Alerta Sonoro Inteligente & Repetição Contínua (KDS & Pedidos)**: Campainha ativa por padrão. Detecção instantânea de qualquer pedido pendente existente ao carregar ou ao religar o som (mesmo pedidos antigos), liberação de áudio para inspeção de lojas em Modo SuperAdmin, e centralização exclusiva do controle no topo da tela de Pedidos (removido botão duplicado da barra lateral).
@@ -79,7 +254,7 @@
 - [x] **Canais de Atendimento Flexíveis (Delivery vs Retirada)**: Configuração na aba Geral e no SuperAdmin com persistência no Supabase (`accepts_delivery` e `accepts_takeaway`), permitindo ao lojista desativar entrega ou retirada. No checkout, se for apenas retirada, abre direto sem abas, com taxa zero e ocultando campos de endereço.
 - [x] **Redesign Completo da Tela de Pedidos (Identidade Visual Fiel à Referência)**: Barra horizontal de status segmentada e conectada (Pendentes com borda e badge verdes, Confirmados, Preparando, Enviados, Entregues e Cancelados), cabeçalho com cards rápidos de Entrega Média (editável inline), Fechamento de Caixa e QR Code das Mesas, barra de filtros com dropdowns interativos para período (Turno Aberto, Hoje, Ontem, Semana, Histórico), indicador de Turno Ao Vivo, seletor de Canais e busca instantânea, além de Empty State premium com ilustração vetorial 3D isométrica da caixa de papelão aberta e cartões de pedido flutuantes.
 - [x] Filtro por tipo de pedido no painel de pedidos (Delivery vs Retirada no Balcão vs Mesa/Salão via seletor de canais).
-- [ ] Impressão rápida do comprovante do pedido (layout otimizado para cupom não fiscal de 80mm/58mm).
+- [x] **Impressão rápida do comprovante do pedido (layout otimizado para cupom não fiscal de 80mm/58mm)**: Integrada via `PrintOrder.jsx` e Desktop Spooler silencioso.
 - [x] **Fila Inteligente de Impressão & Tolerância a Quedas de Internet (FIFO)**: Migration aplicada no Supabase (`print_status`, `printed_at`, `print_count`), hook `useFifoPrintQueue` com sincronização automática na reconexão (`catch-up sync`), fila sequencial ordenada por `created_at ASC`, controle anti-duplicação, botão Auto-Imprimir no KDS e tarja de comanda para pedidos represados ("⚠️ PEDIDO RETIDO PELA REDE").
 - [x] **Idempotência & Reconciliação no KDS e Checkout**: Trava síncrona contra duplicação de pedidos no checkout (`useRef` + UUID determinístico por tentativa), chave de idempotência determinística na Edge Function do Mercado Pago (`ord_pix_${orderId}`) prevenindo duplicidade de QR Codes Pix, e reconciliação automática de pedidos no KDS ao reconectar WebSocket, restaurar conexão de rede (`online`) ou voltar o foco à aba (`visibilitychange`).
 - [x] Atualização em tempo real do status do pedido na tela do cliente (`Meus Pedidos`).
@@ -92,6 +267,7 @@
   - Mapa de Horários de Pico com volume de clientes por hora do dia (00h às 23h BRT) e identificação do pico de movimento.
   - Histórico persistido de Fechamentos de Caixa por Dia/Turno (salvar, consultar dias anteriores, reimprimir e reenviar no WhatsApp).
 - [x] **Abertura/Fechamento Manual da Loja Blindada (Dropdown na Navbar)**: Corrigido erro PGRST205 (tabela `public.settings` inexistente no Supabase) mapeando transparentemente para a tabela `public.tenants` e atualizando a RPC `update_tenant_settings` para suportar `manual_store_open`, `manual_override_date` e `delivery_time`. Pílula na Top Navbar com Dropdown interativo: permite ao lojista abrir ou fechar a loja manualmente em 1-clique a partir de qualquer tela, restaurar para o horário automático e sincronizar instantaneamente o status com o cardápio dos clientes. ([[02 - 💡 Ideias & Brainstorm]]).
+- [x] **Impressão & KDS Dinâmico por Setor de Produção (Cozinha, Bar, Pizzaria, Caixa)**: Tabelas `production_sectors` (`allowed_channels`, `print_on_delivery`) e `print_jobs` no Supabase (`categories.sector_id` + override opcional em `products.sector_id`), triggers `fn_orders_auto_accept_delivery` e `fn_orders_sync_print_jobs`, aba **Setores & Impressão** em `Settings.jsx` (`ProductionSectorsTab.jsx`), chavinha **Aceitar Delivery Sozinho** em `GeneralSettingsTab.jsx`, abas dinâmicas e **links diretos copiáveis por seção** no KDS (`?sector=<slug>&kiosk=true`), impressão fracionada por setor/canal e modo **Senha Curta** (`short_receipt`) via `useFifoPrintQueue.js` + `PrintOrder.jsx`, **Etiqueta / Via do Motoboy** no despacho (`DispatchOrderModal.jsx`), **Etapa 2 do Spooler Autônomo (navegador fechado)** com RPCs `spooler_pair`/`spooler_poll`/`spooler_ack` e pareamento em nuvem em `SpoolerManagerModal.jsx`, autoatendimento/mesa entrando direto em `confirmado`, atalho de despacho direto em `OrderCard.jsx`, e hardening CORS + `pedemuleke-spooler.exe` & `pedemuleke-spooler.zip` recompilados ([[02 - 💡 Ideias & Brainstorm]]).
 
 ### 🛍️ Cardápio & Vendas
 
@@ -171,7 +347,7 @@
 
 - [ ] **Robô com IA para WhatsApp, Instagram e Facebook**: Atendimento inteligente integrado com IA (transcrição de áudios via Whisper e LLM para tirar pedidos em linguagem natural e esclarecer dúvidas do cardápio 24/7).
 - [ ] **Recuperador de Vendas (Carrinho Abandonado no WhatsApp)**: Detecção de desistência no checkout e envio automático de mensagem amigável no WhatsApp após 15 a 30 minutos com cupom de incentivo exclusivo para finalizar a compra.
-- [ ] **Programa de Cashback do Cliente**: Retenção de % do valor gasto em carteira virtual do cliente para abater nos próximos pedidos.
+- [x] **Programa de Cashback do Cliente**: Retenção de % do valor gasto em carteira virtual do cliente para abater nos próximos pedidos (100% concluído e integrado no Checkout, Perfil, Cardápio, KDS e Impressão Térmica).
 - [ ] **Agendamento de Pedidos (Entrega & Retirada Programadas)**: Seleção de data e horário futuro no checkout com fila e lembrete automático na cozinha quando chegar o horário de preparo.
 - [ ] **Integração com Plataformas de Anúncios (Meta Pixel, Google Tag & TikTok Pixel)**: Campo em Configurações para rastreamento de conversões com eventos nativos (`PageView`, `ViewContent`, `AddToCart`, `InitiateCheckout`, `Purchase` com valor).
 

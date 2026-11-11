@@ -8,12 +8,8 @@ import {
   ExternalLink,
   Trash2,
   Search,
-  Filter,
   Check,
-  Copy,
   Bug,
-  Flame,
-  ArrowRight,
   ShieldAlert,
   Zap,
   Printer,
@@ -21,7 +17,6 @@ import {
   Webhook,
   FileCode,
   Store,
-  ChevronDown,
   Info,
   X
 } from "lucide-react";

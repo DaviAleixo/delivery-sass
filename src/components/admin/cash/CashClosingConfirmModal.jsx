@@ -15,9 +15,6 @@ import {
   Lock,
   CheckCircle2,
   AlertCircle,
-  HelpCircle,
-  Receipt,
-  Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -28,7 +25,7 @@ export default function CashClosingConfirmModal({
   countedCash = 0,
   difference = 0,
   justification = "",
-  operator = "Operador",
+  operator: _operator = "Operador",
   onConfirmCloseShift,
 }) {
   const [localJustification, setLocalJustification] = useState(justification);
@@ -71,24 +68,24 @@ export default function CashClosingConfirmModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md p-6 rounded-3xl bg-white shadow-2xl border-0 overflow-hidden">
+      <DialogContent className="max-w-md p-5 sm:p-6 rounded-xl bg-white shadow-xl border border-stone-200 overflow-hidden">
         <DialogHeader className="pb-3 border-b border-stone-100">
           <div className="flex items-center gap-3">
-            <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shadow-xs ${
+            <div className={`w-10 h-10 rounded-lg flex items-center justify-center border ${
               isExact
-                ? "bg-emerald-50 text-[#047857]"
+                ? "bg-emerald-50 text-emerald-700 border-emerald-200/60"
                 : isSurplus
-                ? "bg-blue-50 text-blue-700"
-                : "bg-rose-50 text-rose-700"
+                ? "bg-blue-50 text-blue-700 border-blue-200/60"
+                : "bg-rose-50 text-rose-700 border-rose-200/60"
             }`}>
               <Lock className="w-5 h-5 stroke-[2.2]" />
             </div>
             <div>
-              <DialogTitle className="text-lg font-black text-stone-900 leading-tight">
+              <DialogTitle className="text-base font-bold text-stone-900 leading-tight">
                 Encerrar Expediente & Fechar Caixa
               </DialogTitle>
-              <p className="text-xs text-stone-500 font-medium">
-                Ação irreversível de consolidação financeira do turno
+              <p className="text-xs text-stone-500">
+                Consolidação financeira definitiva do turno
               </p>
             </div>
           </div>
@@ -96,35 +93,35 @@ export default function CashClosingConfirmModal({
 
         <div className="space-y-4 py-2">
           {/* Card Resumo da Conferência */}
-          <div className="bg-stone-50 border border-stone-200/80 rounded-2xl p-4 space-y-2.5">
+          <div className="bg-stone-50 border border-stone-200 rounded-lg p-3.5 space-y-2">
             <div className="flex items-center justify-between text-xs">
-              <span className="text-stone-500 font-bold">Dinheiro Esperado na Gaveta:</span>
-              <span className="font-black text-stone-900">{formatMoney(expectedCash)}</span>
+              <span className="text-stone-500 font-medium">Dinheiro Esperado na Gaveta:</span>
+              <span className="font-mono font-bold text-stone-900">{formatMoney(expectedCash)}</span>
             </div>
 
             <div className="flex items-center justify-between text-xs">
-              <span className="text-stone-500 font-bold">Dinheiro Contado pelo Operador:</span>
-              <span className="font-black text-stone-900">{formatMoney(countedCash)}</span>
+              <span className="text-stone-500 font-medium">Dinheiro Contado pelo Operador:</span>
+              <span className="font-mono font-bold text-stone-900">{formatMoney(countedCash)}</span>
             </div>
 
             <div className="pt-2 border-t border-stone-200 flex items-center justify-between">
-              <span className="text-xs font-black text-stone-800">Resultado da Apuração:</span>
+              <span className="text-xs font-semibold text-stone-800">Resultado da Auditoria:</span>
               {isExact && (
-                <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 font-bold text-xs gap-1">
+                <Badge className="bg-emerald-50 text-emerald-800 border-emerald-300 font-semibold text-xs gap-1 rounded">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                   Caixa Correto (Exato)
                 </Badge>
               )}
               {isSurplus && (
-                <Badge className="bg-blue-100 text-blue-800 border-blue-300 font-bold text-xs gap-1">
+                <Badge className="bg-blue-50 text-blue-800 border-blue-300 font-semibold text-xs gap-1 rounded">
                   <AlertCircle className="w-3.5 h-3.5 text-blue-600" />
                   Sobra de +{formatMoney(difference)}
                 </Badge>
               )}
               {isShortage && (
-                <Badge className="bg-rose-100 text-rose-800 border-rose-300 font-bold text-xs gap-1">
+                <Badge className="bg-rose-50 text-rose-800 border-rose-300 font-semibold text-xs gap-1 rounded">
                   <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
-                  Falta de {formatMoney(Math.abs(difference))} (Quebra)
+                  Falta de {formatMoney(Math.abs(difference))}
                 </Badge>
               )}
             </div>
@@ -133,27 +130,27 @@ export default function CashClosingConfirmModal({
           {/* Campo de Justificativa se houver diferença */}
           {!isExact && (
             <div className="space-y-1.5 animate-in fade-in">
-              <Label className="text-xs font-bold text-stone-700 flex items-center justify-between">
-                <span>Justificativa da Diferença:</span>
-                <span className="text-[10px] text-rose-600 font-bold uppercase">* Obrigatório</span>
+              <Label className="text-xs font-semibold text-stone-700 flex items-center justify-between">
+                <span>Justificativa da Divergência:</span>
+                <span className="text-[10px] text-rose-600 font-semibold uppercase">* Obrigatório</span>
               </Label>
               <Textarea
                 value={localJustification}
                 onChange={(e) => setLocalJustification(e.target.value)}
-                placeholder="Ex: Diferença de centavos decorrente de arredondamento de troco / moeda..."
+                placeholder="Ex: Arredondamento de troco / diferença de centavos..."
                 rows={2}
-                className="resize-none rounded-xl text-xs border-stone-200 focus-visible:ring-rose-500 font-medium"
+                className="resize-none rounded-lg text-xs border-stone-300 focus-visible:ring-rose-500"
               />
             </div>
           )}
 
           {/* Trava e Alerta de Ação Irreversível */}
-          <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-3 flex items-start gap-2.5 text-xs text-amber-900">
+          <div className="bg-stone-50 border border-stone-200 rounded-lg p-3 flex items-start gap-2.5 text-xs text-stone-700">
             <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-            <div className="space-y-1 leading-snug">
-              <p className="font-bold">Aviso de Fechamento Definitivo:</p>
-              <p className="text-[11px] text-amber-800">
-                Após a confirmação, este turno será travado para novas movimentações. O extrato será arquivado no <b>Histórico e Auditoria</b> e estará disponível para reimpressão e consulta a qualquer momento.
+            <div className="space-y-0.5 leading-snug">
+              <p className="font-semibold text-stone-900">Fechamento do Turno:</p>
+              <p className="text-[11px] text-stone-500">
+                Ao confirmar, este expediente será concluído e arquivado no Histórico de Turnos para consulta e reimpressão térmica.
               </p>
             </div>
           </div>
@@ -165,7 +162,7 @@ export default function CashClosingConfirmModal({
             variant="outline"
             onClick={onClose}
             disabled={isSubmitting}
-            className="rounded-xl text-xs font-bold border-stone-200 text-stone-600 hover:bg-stone-50 cursor-pointer"
+            className="rounded-lg text-xs font-medium border-stone-200 text-stone-600 hover:bg-stone-50 cursor-pointer h-9"
           >
             Voltar e Conferir
           </Button>
@@ -174,9 +171,9 @@ export default function CashClosingConfirmModal({
             type="button"
             onClick={handleConfirm}
             disabled={isSubmitting || requiresJustification}
-            className="bg-stone-900 hover:bg-black text-white rounded-xl text-xs font-black px-5 shadow-sm cursor-pointer gap-1.5"
+            className="bg-stone-900 hover:bg-black text-white rounded-lg text-xs font-semibold px-4 h-9 shadow-xs cursor-pointer gap-1.5"
           >
-            <Lock className="w-3.5 h-3.5 text-amber-400" />
+            <Lock className="w-3.5 h-3.5 text-stone-300" />
             <span>Confirmar Encerramento</span>
           </Button>
         </DialogFooter>

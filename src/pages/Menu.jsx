@@ -12,6 +12,8 @@ import { ComplementGroup } from "@/entities/ComplementGroup";
 import { ComplementItem } from "@/entities/ComplementItem";
 import { ProductComplementGroup } from "@/entities/ProductComplementGroup";
 import { RestaurantTable, TableSession } from "@/entities/RestaurantTable";
+import { ProductionSector } from "@/entities/ProductionSector";
+import { stampOrderItemsWithSectors } from "@/utils/sectorUtils";
 import { base44 } from "@/api/base44Client";
 import { AnimatePresence, motion } from "framer-motion";
 import ProductCard from "../components/menu/ProductCard";
@@ -23,7 +25,6 @@ import PixOnlineModal from "../components/menu/PixOnlineModal";
 import BannerCarousel from "../components/menu/BannerCarousel";
 import UserProfileSheet from "../components/menu/UserProfileSheet";
 import { User } from "@/entities/User";
-import { UserAddress } from "@/entities/UserAddress";
 import { matchNeighborhood } from "@/utils/neighborhoodMatcher";
 import StoreInfoSheet from "../components/menu/StoreInfoSheet";
 import ProductDetailModal from "../components/menu/ProductDetailModal";
@@ -36,10 +37,8 @@ import {
   MapPin, 
   Phone, 
   ArrowRight, 
-  Instagram, 
-  Store,
+  Instagram,
   CheckCircle2,
-  Menu as MenuIcon,
   Info
 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -62,7 +61,7 @@ export default function MenuPage() {
   const hasTopNotice = Boolean(urlMesa || (isTableOnly && !urlMesa));
 
   const segments = typeof window !== "undefined" ? window.location.pathname.split("/").filter(Boolean) : [];
-  const RESERVED_SEGMENTS = ["menu", "dashboard", "orders", "pdv", "adminlogin", "superadmin"];
+  const RESERVED_SEGMENTS = ["menu", "dashboard", "orders", "pdv", "adminlogin", "login", "superadmin"];
   const routeSlug = segments.length > 0 && !RESERVED_SEGMENTS.includes(segments[0].toLowerCase()) ? segments[0].toLowerCase() : null;
   const isVruumRoute = !routeSlug || routeSlug === "vrumm" || routeSlug === "vruum-burguer";
 
@@ -89,6 +88,7 @@ export default function MenuPage() {
   }));
   const [banners, setBanners] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [productionSectors, setProductionSectors] = useState([]);
   const [activeCategory, setActiveCategory] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [cart, setCart] = useState([]);
@@ -309,6 +309,17 @@ export default function MenuPage() {
 
   const checkActiveOrders = async () => {
     try {
+      // Auto-finalização por tempo de pedidos despachados há mais de 2 horas (Fallback Inteligente)
+      if (isSupabaseConfigured() && supabase) {
+        try {
+          const tenantId = tenant?.id || localStorage.getItem("current_tenant_id");
+          await supabase.rpc("auto_deliver_stale_orders", {
+            p_tenant_id: tenantId || null,
+            p_timeout_hours: 2
+          });
+        } catch {}
+      }
+
       // Pedidos na mesa / QR Code NÃO têm componente de rastreamento
       if (urlMesa) {
         setActiveGuestOrder(null);
@@ -361,7 +372,7 @@ export default function MenuPage() {
         return;
       }
 
-      const [productsData, additionalsData, settingsData, bannerData, categoryData, groupsData, itemsData, pcgData] = await Promise.all([
+      const [productsData, additionalsData, settingsData, bannerData, categoryData, groupsData, itemsData, pcgData, sectorsData] = await Promise.all([
         Product.filter({ tenant_id: activeTenantId, available: true }, "-created_date"),
         ProductAdditional.filter({ tenant_id: activeTenantId }),
         Settings.list(),
@@ -370,6 +381,7 @@ export default function MenuPage() {
         ComplementGroup.filter({ tenant_id: activeTenantId }, "order_index"),
         ComplementItem.filter({ tenant_id: activeTenantId }, "order_index"),
         ProductComplementGroup.filter({ tenant_id: activeTenantId }, "-created_date"),
+        ProductionSector.filter({ tenant_id: activeTenantId }, "order_index").catch(() => []),
       ]);
 
       setProducts(productsData || []);
@@ -377,9 +389,10 @@ export default function MenuPage() {
       setComplementGroups(groupsData || []);
       setComplementItems(itemsData || []);
       setProductComplementGroups(pcgData || []);
+      setProductionSectors(Array.isArray(sectorsData) ? sectorsData : []);
 
       const segments = window.location.pathname.split("/").filter(Boolean);
-      const RESERVED = ["menu", "dashboard", "orders", "pdv", "adminlogin", "superadmin"];
+      const RESERVED = ["menu", "dashboard", "orders", "pdv", "adminlogin", "login", "superadmin"];
       const pathSlug = segments.length > 0 && !RESERVED.includes(segments[0].toLowerCase()) ? segments[0].toLowerCase() : null;
 
       let currentTenant = tenant;
@@ -441,6 +454,7 @@ export default function MenuPage() {
         salon_mode: currentTenant?.salon_mode || "full",
         accepts_delivery: currentTenant?.accepts_delivery !== false,
         accepts_takeaway: currentTenant?.accepts_takeaway !== false,
+        auto_accept_delivery: Boolean(currentTenant?.auto_accept_delivery),
         cashback_enabled: currentTenant?.cashback_enabled ?? tenant?.cashback_enabled ?? false,
         cashback_rate: Number(currentTenant?.cashback_rate ?? tenant?.cashback_rate ?? 5),
         cashback_validity_days: currentTenant?.cashback_validity_days ?? tenant?.cashback_validity_days ?? 15,
@@ -687,13 +701,25 @@ export default function MenuPage() {
         }
       }
 
+      const stampedItems = stampOrderItemsWithSectors(orderData.items, {
+        sectors: productionSectors,
+        products,
+        categories,
+      });
+
+      const resolvedOrderType = isTableOrder ? "dine_in" : (orderData.order_type || "delivery");
+      const shouldAutoConfirmDelivery = Boolean(settings?.auto_accept_delivery) && resolvedOrderType === "delivery";
+
       const orderPayload = {
         ...orderData,
+        items: stampedItems,
         ...(deterministicOrderId ? { id: deterministicOrderId } : {}),
-        status: isPixOnline ? "aguardando_pagamento" : "pendente",
+        status: isPixOnline
+          ? "aguardando_pagamento"
+          : ((isTableOrder || shouldAutoConfirmDelivery) ? "confirmado" : "pendente"),
         payment_status: isPixOnline ? "pending" : "pending_delivery",
         tenant_id: activeTenantId,
-        order_type: isTableOrder ? "dine_in" : (orderData.order_type || "delivery"),
+        order_type: resolvedOrderType,
         table_number: effectiveTableNumber,
         table_session_id: tableSessionId,
       };
@@ -733,16 +759,17 @@ export default function MenuPage() {
         }
       }
 
-      // Processamento atômico de Cashback da Loja
-      if (orderData.cashback_discount > 0 || orderData.cashback_earned > 0) {
+      // Se o cliente utilizou saldo de cashback, debita imediatamente da carteira para reservar o desconto
+      if (orderData.cashback_discount > 0) {
         try {
           if (isSupabaseConfigured() && supabase) {
             await supabase.rpc("process_order_cashback", {
-              p_order_id: String(createdOrder.id)
+              p_order_id: String(createdOrder.id),
+              p_action: "debit_only"
             });
           }
         } catch (cbErr) {
-          console.warn("Erro ao processar cashback do pedido:", cbErr);
+          console.warn("Erro ao processar débito de cashback do pedido:", cbErr);
         }
       }
       
@@ -783,8 +810,24 @@ export default function MenuPage() {
     }
   };
 
-  // Se a loja foi pausada pelo SuperAdmin ou por inadimplência, o cardápio sai do ar!
-  if (tenant && tenant.is_active === false) {
+  // Se a loja foi pausada pelo SuperAdmin ou por inadimplência/vencimento de fatura, o cardápio sai do ar!
+  let isMenuSuspended = false;
+  if (tenant) {
+    if (tenant.is_active === false) {
+      isMenuSuspended = true;
+    } else if (tenant.next_due_date && tenant.subscription_status !== "ACTIVE" && tenant.subscription_status !== "active") {
+      try {
+        const dueDate = new Date(tenant.next_due_date + "T23:59:59");
+        const now = new Date();
+        const toleranceMs = 2 * 24 * 60 * 60 * 1000;
+        if (now.getTime() > dueDate.getTime() + toleranceMs) {
+          isMenuSuspended = true;
+        }
+      } catch (_e) {}
+    }
+  }
+
+  if (isMenuSuspended) {
     return (
       <div className="min-h-screen bg-[#0d0a09] text-stone-100 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-[#171210] border border-stone-800 rounded-3xl p-8 text-center shadow-2xl space-y-5">
@@ -962,6 +1005,58 @@ export default function MenuPage() {
 
   const deliveryFeeDisplay = getDeliveryFeeDisplay();
 
+  const getMinDeliveryFeeFormatted = () => {
+    const feeType = settings?.delivery_fee_type || tenant?.delivery_fee_type || 'fixed';
+    const registeredNeighborhoods = (Array.isArray(settings?.delivery_neighborhoods) && settings.delivery_neighborhoods.length > 0)
+      ? settings.delivery_neighborhoods
+      : (Array.isArray(tenant?.delivery_neighborhoods) ? tenant.delivery_neighborhoods : []);
+    const activeNeighborhoods = registeredNeighborhoods.filter(n => n && n.active !== false && n.fee !== undefined && n.fee !== null);
+
+    if (customerSavedAddress && customerSavedAddress.neighborhood) {
+      if (feeType === 'neighborhood' && activeNeighborhoods.length > 0) {
+        const match = matchNeighborhood(customerSavedAddress.neighborhood, registeredNeighborhoods);
+        if (match && match.matched) {
+          const fee = Number(match.fee || 0);
+          return fee === 0 ? "Grátis" : `R$ ${fee.toFixed(2).replace('.', ',')}`;
+        }
+      }
+    }
+
+    if (feeType === 'neighborhood' && activeNeighborhoods.length > 0) {
+      const fees = activeNeighborhoods.map(n => Number(n.fee || 0));
+      const minFee = Math.min(...fees);
+      return minFee === 0 ? "Grátis" : `R$ ${minFee.toFixed(2).replace('.', ',')}`;
+    }
+
+    const fixedFee = Number(settings?.delivery_fee ?? tenant?.delivery_fee ?? 5);
+    return fixedFee === 0 ? "Grátis" : `R$ ${fixedFee.toFixed(2).replace('.', ',')}`;
+  };
+
+  const minDeliveryFeeFormatted = getMinDeliveryFeeFormatted();
+
+  // Condições Dinâmicas de Exibição dos Cards de Destaque
+  const acceptsDelivery = (settings?.accepts_delivery !== false) && (tenant?.accepts_delivery !== false);
+  const isSalonOnly = salonMode === 'table_only';
+  const feeType = settings?.delivery_fee_type || tenant?.delivery_fee_type || 'fixed';
+  const registeredNeighborhoods = (Array.isArray(settings?.delivery_neighborhoods) && settings.delivery_neighborhoods.length > 0)
+    ? settings.delivery_neighborhoods
+    : (Array.isArray(tenant?.delivery_neighborhoods) ? tenant.delivery_neighborhoods : []);
+  const activeNeighborhoods = registeredNeighborhoods.filter(n => n && n.active !== false && n.fee !== undefined && n.fee !== null);
+
+  const hasDeliveryConfig = feeType === 'neighborhood' 
+    ? activeNeighborhoods.length > 0 
+    : (settings?.delivery_fee !== undefined && settings?.delivery_fee !== null && settings?.delivery_fee !== "") ||
+      (tenant?.delivery_fee !== undefined && tenant?.delivery_fee !== null && tenant?.delivery_fee !== "");
+
+  const showDeliveryCard = !isVisualOnly && !urlMesa && !searchQuery.trim() && acceptsDelivery && !isSalonOnly && hasDeliveryConfig;
+
+  const cashbackEnabled = Boolean(settings?.cashback_enabled ?? tenant?.cashback_enabled);
+  const activeCashbackRate = Number(settings?.cashback_rate ?? tenant?.cashback_rate ?? 0);
+  const showCashbackCard = !isVisualOnly && !urlMesa && !searchQuery.trim() && cashbackEnabled && activeCashbackRate > 0;
+
+  const hasAnyHighlightCard = showDeliveryCard || showCashbackCard;
+  const isSingleHighlightCard = (showDeliveryCard && !showCashbackCard) || (!showDeliveryCard && showCashbackCard);
+
   if (CustomMenuTemplate) {
     return (
       <>
@@ -1058,16 +1153,12 @@ export default function MenuPage() {
 
                 <span className="opacity-40 shrink-0">|</span>
 
-                <span className="flex items-center gap-1.5 font-medium opacity-90 shrink-0">
-                  <span className={`w-2 h-2 rounded-full shrink-0 animate-pulse ${storeIsOpen ? 'bg-emerald-400' : 'bg-white'}`} />
+                <span className="flex items-center gap-1.5 font-bold shrink-0">
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${storeIsOpen ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
                   <span>
-                    {storeIsOpen ? (
-                      settings?.opening_time && settings?.closing_time 
-                        ? `${settings.opening_time} – ${settings.closing_time}` 
-                        : '01:00 – 00:00'
-                    ) : (
-                      settings?.opening_time ? `Abre às ${settings.opening_time}` : 'Fechado'
-                    )}
+                    {storeIsOpen 
+                      ? (settings?.opening_time && settings?.closing_time ? `${settings.opening_time} - ${settings.closing_time}` : '01:00 - 00:00')
+                      : 'Fechado no momento'}
                   </span>
                 </span>
               </div>
@@ -1228,32 +1319,7 @@ export default function MenuPage() {
         </div>
       )}
 
-      {/* Banner Superior de Cashback (Conforme Modelo Solicitado) */}
-      {!isVisualOnly && Boolean(settings?.cashback_enabled ?? tenant?.cashback_enabled) && Number(settings?.cashback_rate ?? tenant?.cashback_rate ?? 5) > 0 && (
-        <div className="mt-3 container mx-auto px-4 max-w-6xl">
-          <div 
-            onClick={() => setIsUserProfileOpen(true)}
-            className="bg-[#F0FDF4] border border-[#D1E9DF] hover:bg-[#E6F8EE] rounded-2xl p-3.5 sm:p-4 transition-all cursor-pointer flex items-center justify-between gap-3 shadow-2xs"
-          >
-            <div className="flex-1 min-w-0 pr-1">
-              <h3 
-                className="font-bold text-sm sm:text-base text-[#046c4e] tracking-tight leading-tight"
-                style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
-              >
-                {currentUser 
-                  ? `Cashback de ${Number(settings?.cashback_rate ?? tenant?.cashback_rate ?? 5)}% ativado` 
-                  : `Cashback de ${Number(settings?.cashback_rate ?? tenant?.cashback_rate ?? 5)}% disponível`}
-              </h3>
-              <p className="text-xs sm:text-sm text-stone-600 mt-1 leading-snug font-normal">
-                {currentUser 
-                  ? `Faça um pedido e ganhe ${Number(settings?.cashback_rate ?? tenant?.cashback_rate ?? 5)}% do valor de volta para usar nas próximas compras.` 
-                  : `Crie sua conta para ganhar ${Number(settings?.cashback_rate ?? tenant?.cashback_rate ?? 5)}% do valor de volta e usar nas próximas compras.`}
-              </p>
-            </div>
-            <ChevronRight className="w-5 h-5 text-[#046c4e] shrink-0" />
-          </div>
-        </div>
-      )}
+      
 
       {/* Banners Carrossel (Full Width, com cantos superiores arredondados logo abaixo da navbar reta) */}
       {hasBanners && (
@@ -1288,10 +1354,10 @@ export default function MenuPage() {
                       setActiveCategory(category.id);
                       setSearchQuery("");
                     }}
-                    className={`flex-shrink-0 px-4 sm:px-5 py-2 rounded-2xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap select-none ${
+                    className={`flex-shrink-0 px-4 sm:px-5 py-2 rounded-full text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap select-none ${
                       isActive
                         ? "bg-[#046c4e] text-white shadow-xs"
-                        : "bg-gray-100/90 text-gray-700 hover:bg-gray-200/80"
+                        : "bg-stone-100 text-stone-700 hover:bg-stone-200"
                     }`}
                   >
                     {category.name}
@@ -1310,7 +1376,7 @@ export default function MenuPage() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Buscar no cardápio..."
-              className="w-full bg-gray-50/90 border border-gray-200/80 rounded-2xl pl-10 pr-9 py-2.5 text-xs sm:text-sm text-gray-900 placeholder:text-gray-400 focus:bg-white focus:border-[#046c4e] focus:ring-1 focus:ring-[#046c4e]/30 outline-none shadow-2xs transition-all"
+              className="w-full bg-gray-50/90 border border-gray-200/80 rounded-full pl-10 pr-9 py-2.5 text-xs sm:text-sm text-gray-900 placeholder:text-gray-400 focus:bg-white focus:border-[#046c4e] focus:ring-1 focus:ring-[#046c4e]/30 outline-none shadow-2xs transition-all"
             />
             {searchQuery && (
               <button
@@ -1324,24 +1390,78 @@ export default function MenuPage() {
             )}
           </div>
 
-          {/* Card de Frete Dinâmico (Conforme Modelo da Foto de Referência) */}
-          {!isVisualOnly && !urlMesa && !searchQuery.trim() && deliveryFeeDisplay && (
-            <div 
-              onClick={() => setIsUserProfileOpen(true)}
-              className="bg-[#F0FDF4] border border-[#D1E9DF] hover:bg-[#E6F8EE] rounded-2xl p-3.5 sm:p-4 transition-all cursor-pointer flex items-center justify-between gap-3 shadow-2xs"
-            >
-              <div className="flex-1 min-w-0 pr-1">
-                <h3 
-                  className="font-bold text-sm sm:text-base text-[#046c4e] tracking-tight leading-tight"
-                  style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
+          {/* Grid Dinâmico dos Cards de Destaque: Entrega & Cashback */}
+          {hasAnyHighlightCard && (
+            <div className={`grid gap-2.5 sm:gap-3.5 ${isSingleHighlightCard ? "grid-cols-1 w-full" : "grid-cols-2"}`}>
+              {/* Card 1: Entrega com background entrega.png */}
+              {showDeliveryCard && (
+                <div 
+                  onClick={() => setIsUserProfileOpen(true)}
+                  className="relative rounded-2xl p-3 sm:p-3.5 overflow-hidden border border-emerald-100/90 shadow-2xs hover:shadow-xs transition-all cursor-pointer flex flex-col justify-between min-h-[110px] sm:min-h-[125px] group select-none w-full"
+                  style={{ 
+                    backgroundImage: "url('/imgs/entrega.png')",
+                    backgroundSize: "100% 100%",
+                    backgroundPosition: "center",
+                    backgroundRepeat: "no-repeat"
+                  }}
                 >
-                  {deliveryFeeDisplay.title}
-                </h3>
-                <p className="text-xs sm:text-sm text-stone-600 mt-0.5 leading-snug font-normal">
-                  {deliveryFeeDisplay.subtitle}
-                </p>
-              </div>
-              <ChevronRight className="w-5 h-5 text-[#046c4e] shrink-0" />
+                  {/* Linha superior: Rótulo e Seta */}
+                  <div className="flex items-start justify-between gap-1 relative z-10">
+                    <span className="text-[11px] sm:text-xs font-semibold text-emerald-950/80 leading-tight">
+                      Entrega a partir de
+                    </span>
+                    <ChevronRight className="w-4 h-4 text-emerald-900/60 group-hover:translate-x-0.5 transition-transform shrink-0" />
+                  </div>
+
+                  {/* Valor em destaque e Subtítulo */}
+                  <div className="relative z-10 mt-1 max-w-[70%]">
+                    <span 
+                      className="text-base sm:text-xl font-black text-emerald-950 tracking-tight block leading-tight"
+                      style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
+                    >
+                      {minDeliveryFeeFormatted}
+                    </span>
+                    <p className="text-[10px] sm:text-[11px] text-emerald-900/75 mt-0.5 leading-snug line-clamp-2 font-normal">
+                      {deliveryFeeDisplay?.subtitle || "Valor calculado para seu endereço."}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Card 2: Cashback com background cashback.png */}
+              {showCashbackCard && (
+                <div 
+                  onClick={() => setIsUserProfileOpen(true)}
+                  className="relative rounded-2xl p-3 sm:p-3.5 overflow-hidden border border-amber-100/90 shadow-2xs hover:shadow-xs transition-all cursor-pointer flex flex-col justify-between min-h-[110px] sm:min-h-[125px] group select-none w-full"
+                  style={{ 
+                    backgroundImage: "url('/imgs/cashback.png')",
+                    backgroundSize: "100% 100%",
+                    backgroundPosition: "center",
+                    backgroundRepeat: "no-repeat"
+                  }}
+                >
+                  {/* Linha superior: Rótulo e Seta */}
+                  <div className="flex items-start justify-between gap-1 relative z-10">
+                    <span className="text-[11px] sm:text-xs font-semibold text-amber-950/80 leading-tight">
+                      Ganhe
+                    </span>
+                    <ChevronRight className="w-4 h-4 text-amber-900/60 group-hover:translate-x-0.5 transition-transform shrink-0" />
+                  </div>
+
+                  {/* Valor em destaque e Subtítulo */}
+                  <div className="relative z-10 mt-1 max-w-[70%]">
+                    <span 
+                      className="text-base sm:text-xl font-black text-amber-950 tracking-tight block leading-tight"
+                      style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
+                    >
+                      {activeCashbackRate}% de volta
+                    </span>
+                    <p className="text-[10px] sm:text-[11px] text-amber-900/75 mt-0.5 leading-snug line-clamp-2 font-normal">
+                      Faça um pedido e use nas próximas compras.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -1381,17 +1501,32 @@ export default function MenuPage() {
           <div key={section.id} className="space-y-3">
             {/* Título da Categoria Estilo Foto 1 */}
             <div className="flex items-center justify-between px-1">
-              <h3 
-                className="text-sm sm:text-base font-black text-[#171717] uppercase tracking-wider"
-                style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
+              <div className="flex items-center gap-2">
+                <h3 
+                  className="text-base sm:text-lg font-black text-[#171717] tracking-tight"
+                  style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
+                >
+                  {section.name}
+                </h3>
+                {section.description && (
+                  <p className="text-xs text-stone-400 hidden sm:block">
+                    {section.description}
+                  </p>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveCategory(section.id);
+                  const el = document.getElementById("menu-categories-row");
+                  if (el) el.scrollIntoView({ behavior: "smooth" });
+                }}
+                className="text-xs font-bold text-[#046c4e] hover:underline flex items-center gap-0.5 cursor-pointer"
               >
-                {section.name}
-              </h3>
-              {section.description && (
-                <p className="text-xs text-stone-400 hidden sm:block">
-                  {section.description}
-                </p>
-              )}
+                <span>Ver todos</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
             </div>
 
             {/* Componente Grande Card Branco Englobando os Produtos */}
@@ -1538,41 +1673,21 @@ export default function MenuPage() {
           </div>
 
           <div className="md:col-span-4 space-y-2.5 text-xs text-stone-600">
-            <p className="font-black uppercase tracking-wider text-stone-400 text-[11px]">Horário de Funcionamento</p>
+            <p className="font-black uppercase tracking-wider text-stone-400 text-[11px]">Status da Loja</p>
             <div className="flex items-center gap-2">
               <div className={`w-2 h-2 rounded-full ${storeIsOpen ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
               <span className={storeIsOpen ? 'text-emerald-700 font-bold' : 'text-red-600 font-bold'}>
-                {storeIsOpen ? 'Aberto Agora' : 'Fechado'}
+                {storeIsOpen ? 'Aberto no momento' : 'Fechado no momento'}
               </span>
             </div>
-            <p className="text-stone-500">
-              {settings?.opening_time && settings?.closing_time ? `${settings.opening_time} às ${settings.closing_time}` : 'Consulte nosso horário'}
+            <p className="text-stone-500 text-[11px]">
+              {storeIsOpen ? 'Recebendo novos pedidos normalmente.' : 'No momento não estamos aceitando novos pedidos.'}
             </p>
           </div>
         </div>
 
-        <div className="container mx-auto max-w-6xl pt-8 mt-8 border-t border-stone-200 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-stone-500">
+        <div className="container mx-auto max-w-6xl pt-8 mt-8 border-t border-stone-200 flex flex-col sm:flex-row items-center justify-center text-xs text-stone-500">
           <p>© {new Date().getFullYear()} {settings?.restaurant_name || resolvedInitialStoreName}. Todos os direitos reservados.</p>
-          <p>
-            Desenvolvido por{" "}
-            <a
-              href="https://instagram.com/davialeixo_nogueira"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-stone-800 hover:text-stone-950 font-semibold transition-colors"
-            >
-              Davi Aleixo
-            </a>
-            {" | "}
-            <a
-              href="https://wa.me/5531982607426"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-stone-800 hover:text-stone-950 font-semibold transition-colors"
-            >
-              31982607426
-            </a>
-          </p>
         </div>
       </footer>
 

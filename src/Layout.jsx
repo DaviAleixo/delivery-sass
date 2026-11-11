@@ -1,11 +1,11 @@
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { LayoutDashboard, Package, ShoppingBag, Settings, LogOut, Image as ImageIcon, Tag, BarChart, Folder, Users, Monitor, Layers, Flame, Lock, CreditCard, ExternalLink, RefreshCw, Bike, ChevronRight, ChevronDown, Printer, Clock, UtensilsCrossed, Wallet } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingBag, Settings, LogOut, Image as ImageIcon, Tag, BarChart, Folder, Users, Monitor, Layers, Flame, Lock, CreditCard, ExternalLink, RefreshCw, Bike, ChevronRight, ChevronDown, UtensilsCrossed, Wallet } from "lucide-react";
 import { Settings as SettingsEntity } from "@/entities/Settings";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useAuth } from "@/lib/AuthContext";
-import { getStoreStatusInfo, getTodayDateKey } from "@/utils/storeStatus";
+import { getStoreStatusInfo } from "@/utils/storeStatus";
 import PrinterNavbarControl from "@/components/admin/PrinterNavbarControl";
 import {
   DropdownMenu,
@@ -158,7 +158,7 @@ export default function Layout({ children, currentPageName }) {
   }, [location.pathname, currentPageName]);
 
   const pathSegments = location.pathname.split("/").filter(Boolean);
-  const RESERVED_LIST = new Set(["menu", "dashboard", "orders", "pedidos", "pdv", "kds", "deliverydrivers", "clients", "products", "categories", "banners", "coupons", "complements", "reports", "settings", "superadmin", "adminlogin", "myorders", "printorder", "home", "api"]);
+  const RESERVED_LIST = new Set(["menu", "dashboard", "orders", "pedidos", "pdv", "kds", "deliverydrivers", "clients", "products", "categories", "banners", "coupons", "complements", "reports", "settings", "superadmin", "adminlogin", "login", "myorders", "printorder", "home", "api"]);
   const routeStoreSlug = pathSegments.length > 0 && !RESERVED_LIST.has(pathSegments[0].toLowerCase()) ? pathSegments[0].toLowerCase() : null;
   const prettySlugName = routeStoreSlug ? routeStoreSlug.split("-").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") : null;
 
@@ -166,12 +166,16 @@ export default function Layout({ children, currentPageName }) {
     || (routeStoreSlug ? (routeStoreSlug === "vrumm" || routeStoreSlug === "vruum-burguer" ? "Vruum Burguer" : prettySlugName) : (typeof window !== "undefined" ? localStorage.getItem("current_tenant_name") : null)) 
     || 'Vruum Burguer';
 
-  // Se estiver na página de Pedidos, limpa o contador de não lidos
+  // Sincroniza em tempo real o contador de pedidos pendentes na barra lateral
   React.useEffect(() => {
-    if (currentPageName === "Orders" || location.pathname.endsWith("/Orders")) {
-      setPendingOrdersCount(0);
-    }
-  }, [currentPageName, location.pathname]);
+    const handleCountChange = (e) => {
+      if (typeof e.detail === "number") {
+        setPendingOrdersCount(e.detail);
+      }
+    };
+    window.addEventListener("pendingOrdersCountChanged", handleCountChange);
+    return () => window.removeEventListener("pendingOrdersCountChanged", handleCountChange);
+  }, []);
 
   React.useEffect(() => {
     if (!isPublicPage && !isAdminAuthenticated && !isLoadingAuth && !isCheckingAuth) {
@@ -205,15 +209,10 @@ export default function Layout({ children, currentPageName }) {
         // Atualiza o alarme sonoro contínuo do restaurante
         soundAlert.setPendingCount(currentPending.length);
 
-        // Se NÃO estiver na página de Pedidos, atualiza a numeração de notificação
-        const isCurrentlyOnOrdersPage = currentPageName === "Orders" || window.location.pathname.endsWith("/Orders");
-        if (!isCurrentlyOnOrdersPage) {
-          setPendingOrdersCount(currentPending.length);
-          if (typeof document !== "undefined" && currentPending.length > 0) {
-            document.title = `(${currentPending.length}) 🛵 ${currentStoreName} — Pedidos`;
-          }
-        } else {
-          setPendingOrdersCount(0);
+        // Atualiza a numeração de pedidos pendentes na barra lateral
+        setPendingOrdersCount(currentPending.length);
+        if (typeof document !== "undefined" && currentPending.length > 0) {
+          document.title = `(${currentPending.length}) 🛵 ${currentStoreName} — Pedidos`;
         }
 
         if (!isFirstLoad.current) {
@@ -440,7 +439,7 @@ export default function Layout({ children, currentPageName }) {
   const loadSettings = async () => {
     try {
       const segments = location.pathname.split("/").filter(Boolean);
-      const RESERVED = new Set(["menu", "dashboard", "orders", "pedidos", "pdv", "tables", "kds", "deliverydrivers", "clients", "products", "categories", "banners", "coupons", "complements", "reports", "settings", "superadmin", "adminlogin", "myorders", "printorder", "home", "api"]);
+      const RESERVED = new Set(["menu", "dashboard", "orders", "pedidos", "pdv", "tables", "kds", "deliverydrivers", "clients", "products", "categories", "banners", "coupons", "complements", "reports", "settings", "superadmin", "adminlogin", "login", "myorders", "printorder", "home", "api"]);
       const slugFromPath = segments.length > 0 && !RESERVED.has(segments[0].toLowerCase()) ? segments[0].toLowerCase() : null;
       const targetSlug = slugFromPath || localStorage.getItem("current_tenant_slug");
       const currentTenantId = localStorage.getItem("current_tenant_id");
@@ -533,47 +532,10 @@ export default function Layout({ children, currentPageName }) {
     const targetTenantId = settings?.id || localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001";
     setIsTogglingStore(true);
     try {
-      const todayKey = getTodayDateKey();
       const newStatus = !currentStatus.isOpen;
 
       const updatedData = {
         manual_store_open: newStatus,
-        manual_override_date: todayKey,
-      };
-
-      await SettingsEntity.update(targetTenantId, updatedData);
-
-      const newSettings = { ...settings, ...updatedData, id: targetTenantId };
-      setSettings(newSettings);
-
-      window.dispatchEvent(new CustomEvent("settings_updated", { detail: newSettings }));
-
-      if (!newStatus) {
-        sonnerToast("🔴 Loja fechada manualmente!", {
-          description: "Os clientes verão a loja como fechada até o próximo turno ou reabertura manual.",
-          duration: 6000,
-        });
-      } else {
-        sonnerToast.success("🟢 Loja aberta manualmente!", {
-          description: "Os clientes já podem fazer novos pedidos no cardápio.",
-          duration: 6000,
-        });
-      }
-    } catch (err) {
-      console.error("Erro ao alterar status da loja:", err);
-      sonnerToast.error("Erro ao alterar status da loja. Tente novamente.");
-    } finally {
-      setIsTogglingStore(false);
-    }
-  };
-
-  const handleResetToAuto = async () => {
-    const targetTenantId = settings?.id || localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001";
-    setIsTogglingStore(true);
-    try {
-      const updatedData = {
-        manual_store_open: null,
-        manual_override_date: null,
       };
 
       await SettingsEntity.update(targetTenantId, updatedData);
@@ -623,8 +585,24 @@ export default function Layout({ children, currentPageName }) {
     );
   }
 
-  // Se a loja estiver pausada / suspensa por inadimplência, bloquear o acesso administrativo da loja
-  if (settings && settings.is_active === false && user?.role !== "super_admin") {
+  // Se a loja estiver pausada / suspensa por inadimplência ou vencimento da fatura
+  let isTenantSuspended = false;
+  if (settings && user?.role !== "super_admin") {
+    if (settings.is_active === false) {
+      isTenantSuspended = true;
+    } else if (settings.next_due_date && settings.subscription_status !== "ACTIVE" && settings.subscription_status !== "active") {
+      try {
+        const dueDate = new Date(settings.next_due_date + "T23:59:59");
+        const now = new Date();
+        const toleranceMs = 2 * 24 * 60 * 60 * 1000; // 2 dias de carência
+        if (now.getTime() > dueDate.getTime() + toleranceMs) {
+          isTenantSuspended = true;
+        }
+      } catch (_e) {}
+    }
+  }
+
+  if (isTenantSuspended) {
     const paymentLink = settings?.payment_link || "https://sandbox.asaas.com/i/r7wwc9plm0m0fp4n";
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
@@ -679,6 +657,20 @@ export default function Layout({ children, currentPageName }) {
 
   // Se não for a página do Menu, mostrar layout admin
   if (currentPageName !== "Menu" && currentPageName !== "MyOrders" && currentPageName !== "PrintOrder" && currentPageName !== "PrintShiftClosing") {
+    // 🍳 Modo TV / Kiosk do KDS (sem barra lateral, sem menus, 100% tela cheia para TV ou Tablet na cozinha)
+    const searchParams = new URLSearchParams(location.search);
+    const isKioskMode = searchParams.get("kiosk") === "true" || searchParams.get("mode") === "kiosk";
+    const isKitchenOnlyUser = userPermissions.length === 1 && userPermissions[0] === "KDS";
+    const isKioskKDS = currentPageName === "KDS" && (isKioskMode || isKitchenOnlyUser);
+
+    if (isKioskKDS) {
+      return (
+        <div className="min-h-screen w-full bg-[#F7F9F8] overflow-x-hidden">
+          {children}
+        </div>
+      );
+    }
+
     const pageTitles = {
       Dashboard: "Dashboard",
       Orders: "Pedidos",
@@ -715,19 +707,13 @@ export default function Layout({ children, currentPageName }) {
             )}
             
             {/* Header da Sidebar com a Logo PedeMuleke Oficial */}
-            <SidebarHeader className="border-b border-gray-100 p-5 bg-white">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-200/80 flex items-center justify-center text-[#047857] shadow-2xs">
-                  <svg className="w-5 h-5 text-[#047857]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" />
-                    <path d="M3 6h18" />
-                    <path d="M16 10a4 4 0 0 1-8 0" />
-                  </svg>
-                </div>
-                <div className="flex items-baseline tracking-tight">
-                  <span className="text-xl font-black text-gray-950">Pede</span>
-                  <span className="text-xl font-black text-[#047857]">Muleke</span>
-                </div>
+            <SidebarHeader className="border-b border-gray-100 p-4 bg-white flex items-center justify-center">
+              <div className="flex items-center justify-center w-full">
+                <img
+                  src="/imgs/logo-painel.png"
+                  alt="PedeMuleke"
+                  className="w-full max-w-[210px] h-auto object-contain object-center select-none mx-auto"
+                />
               </div>
             </SidebarHeader>
             
@@ -867,11 +853,7 @@ export default function Layout({ children, currentPageName }) {
                     >
                       <span className={`w-2 h-2 rounded-full ${storeStatus.isOpen ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`} />
                       <span className="text-gray-800 font-bold">{storeStatus.isOpen ? "Loja Aberta" : "Loja Fechada"}</span>
-                      {storeStatus.isManual && (
-                        <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-200 font-bold px-1.5 py-0.2 rounded-full hidden sm:inline">
-                          Manual
-                        </span>
-                      )}
+                      
                       <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
                     </button>
                   </DropdownMenuTrigger>
@@ -886,7 +868,7 @@ export default function Layout({ children, currentPageName }) {
                         </span>
                       </div>
                       <p className="text-[11px] text-gray-500">
-                        {storeStatus.isManual ? "Modo manual forçado para hoje" : "Seguindo os horários da programação"}
+                        Controle manual pelo lojista
                       </p>
                     </DropdownMenuLabel>
 
@@ -902,19 +884,10 @@ export default function Layout({ children, currentPageName }) {
                       }`}
                     >
                       <span className={`w-2.5 h-2.5 rounded-full ${storeStatus.isOpen ? "bg-rose-500" : "bg-emerald-500 animate-pulse"}`} />
-                      <span>{storeStatus.isOpen ? "Fechar Loja Manualmente" : "Abrir Loja Manualmente"}</span>
+                      <span>{storeStatus.isOpen ? "Fechar Loja" : "Abrir Loja"}</span>
                     </DropdownMenuItem>
 
-                    {/* Voltar para Horário Automático (se estiver em modo manual) */}
-                    {storeStatus.isManual && (
-                      <DropdownMenuItem
-                        onClick={handleResetToAuto}
-                        className="cursor-pointer text-amber-700 hover:bg-amber-50 focus:bg-amber-50 rounded-xl font-bold text-xs p-2.5 flex items-center gap-2.5"
-                      >
-                        <Clock className="w-3.5 h-3.5 text-amber-600" />
-                        <span>Voltar p/ Horário Automático</span>
-                      </DropdownMenuItem>
-                    )}
+                    
 
                     <DropdownMenuSeparator className="my-1 bg-gray-100" />
 
@@ -931,15 +904,6 @@ export default function Layout({ children, currentPageName }) {
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-
-                {/* Avatar da Loja / Usuário */}
-                <div 
-                  onClick={() => navigate(`/${activeSlug}/Settings`)}
-                  className="w-8 h-8 rounded-full bg-stone-900 text-white font-bold text-xs flex items-center justify-center shadow-2xs uppercase cursor-pointer hover:ring-2 hover:ring-emerald-500 transition-all"
-                  title="Perfil do Restaurante"
-                >
-                  {(settings?.restaurant_name || currentStoreName || "SR").substring(0, 2)}
-                </div>
               </div>
             </header>
 

@@ -119,20 +119,83 @@ export function formatOrderToThermalText(order, options = {}) {
   const width = options.paperWidth === "58mm" ? 32 : 42;
   const lines = [];
 
+  const isProductionOnly = options.contentMode === "production_only";
+  const isShortReceipt = options.contentMode === "short_receipt";
+  const sectorName = options.sectorName ? cleanText(options.sectorName).toUpperCase() : "";
   const rawStoreName = options.storeName || order.restaurant_name || "PEDEMULEKE DELIVERY";
   const storeName = cleanText(rawStoreName);
-  const orderId = String(order.id || "").slice(-6).toUpperCase();
+  const orderId = String(order.order_number || order.id || "").slice(-6).toUpperCase();
   const orderType = order.order_type || (order.table_number ? "dine_in" : "delivery");
 
-  // Cabeçalho da Loja
+  // Modo Senha Curta / Autoatendimento / Maquininha do Garcom
+  if (isShortReceipt) {
+    lines.push(divider("=", width));
+    lines.push(centerText(`*** SENHA: #${orderId} ***`, width));
+    lines.push(centerText(storeName.toUpperCase(), width));
+    lines.push(divider("=", width));
+
+    const dataHoraCurta = order.created_date
+      ? new Date(order.created_date).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })
+      : new Date().toLocaleString("pt-BR");
+    lines.push(padLine("Hora:", dataHoraCurta, width));
+    if (order.table_number) {
+      lines.push(`Mesa/Local: ${cleanText(order.table_number)}`);
+    }
+    if (order.customer_name) {
+      lines.push(`Cliente: ${cleanText(order.customer_name)}`);
+    }
+    lines.push(divider("-", width));
+
+    let shortItems = [];
+    if (Array.isArray(options.items)) {
+      shortItems = options.items;
+    } else {
+      try {
+        shortItems = Array.isArray(order.items) ? order.items : JSON.parse(order.items || "[]");
+      } catch (_e) {
+        shortItems = [];
+      }
+    }
+
+    shortItems.forEach((item) => {
+      const qty = item.quantity || 1;
+      const name = cleanText(item.product_name || item.name || "Item");
+      const itemTotal = item.total_price || item.subtotal || ((item.price || item.product_price || 0) * qty);
+      formatItemLines(qty, name, `R$ ${formatMoney(itemTotal)}`, width).forEach((l) => lines.push(l));
+    });
+
+    const shortTotal = Number(order.total_amount || order.total || 0);
+    lines.push(divider("-", width));
+    lines.push(padLine("TOTAL:", `R$ ${formatMoney(shortTotal)}`, width));
+    if (order.payment_method) {
+      lines.push(`Pagto: ${cleanText(order.payment_method).toUpperCase()}`);
+    }
+    lines.push(divider("=", width));
+    lines.push(centerText("Aguarde chamar sua senha!", width));
+    lines.push("");
+    lines.push("");
+    lines.push("");
+    return lines.join("\r\n");
+  }
+
+  // Cabeçalho da Loja ou Banner de Setor
   lines.push(divider("=", width));
+  if (sectorName) {
+    lines.push(centerText(`*** SETOR: ${sectorName} ***`, width));
+  }
   lines.push(centerText(storeName.toUpperCase(), width));
-  lines.push(centerText("SISTEMA PEDEMULEKE", width));
+  if (!isProductionOnly) {
+    lines.push(centerText("SISTEMA PEDEMULEKE", width));
+  }
   lines.push(divider("=", width));
   lines.push("");
 
   // Número do Pedido e Identificação
   lines.push(centerText(`>>> PEDIDO #${orderId} <<<`, width));
+
+  if (!isProductionOnly && order.driver_name) {
+    lines.push(centerText(`*** MOTOBOY: ${cleanText(order.driver_name).toUpperCase()} ***`, width));
+  }
   
   let channelBadge = "DELIVERY - ENTREGA";
   if (orderType === "takeaway" || orderType === "pickup" || orderType === "balcao") {
@@ -161,50 +224,60 @@ export function formatOrderToThermalText(order, options = {}) {
     }
   } else {
     lines.push(`CLIENTE: ${cleanText(order.customer_name || "Nao informado")}`);
-    if (order.customer_phone) {
-      lines.push(`WhatsApp/Tel: ${cleanText(order.customer_phone)}`);
-    }
+    if (!isProductionOnly) {
+      if (order.customer_phone) {
+        lines.push(`WhatsApp/Tel: ${cleanText(order.customer_phone)}`);
+      }
 
-    if (orderType === "delivery") {
-      lines.push("");
-      lines.push("ENDERECO DE ENTREGA:");
-      const rawAddr = order.customer_address || order.delivery_address || "";
-      const wrappedAddr = wordWrap(cleanText(rawAddr), width);
-      wrappedAddr.forEach((a) => lines.push(a));
+      if (orderType === "delivery") {
+        lines.push("");
+        lines.push("ENDERECO DE ENTREGA:");
+        const rawAddr = order.customer_address || order.delivery_address || "";
+        const wrappedAddr = wordWrap(cleanText(rawAddr), width);
+        wrappedAddr.forEach((a) => lines.push(a));
 
-      if (order.customer_complement) {
-        const wrappedCompl = wordWrap(`Compl: ${cleanText(order.customer_complement)}`, width);
-        wrappedCompl.forEach((c) => lines.push(c));
+        if (order.customer_complement) {
+          const wrappedCompl = wordWrap(`Compl: ${cleanText(order.customer_complement)}`, width);
+          wrappedCompl.forEach((c) => lines.push(c));
+        }
+        if (order.customer_reference) {
+          const wrappedRef = wordWrap(`Ref: ${cleanText(order.customer_reference)}`, width);
+          wrappedRef.forEach((r) => lines.push(r));
+        }
+        if (order.customer_neighborhood) {
+          lines.push(`Bairro: ${cleanText(order.customer_neighborhood)}`);
+        }
+      } else {
+        lines.push("MODALIDADE: Retirada pelo cliente na loja");
       }
-      if (order.customer_reference) {
-        const wrappedRef = wordWrap(`Ref: ${cleanText(order.customer_reference)}`, width);
-        wrappedRef.forEach((r) => lines.push(r));
-      }
-      if (order.customer_neighborhood) {
-        lines.push(`Bairro: ${cleanText(order.customer_neighborhood)}`);
-      }
-    } else {
-      lines.push("MODALIDADE: Retirada pelo cliente na loja");
     }
   }
 
   lines.push(divider("=", width));
-  lines.push(padLine("QTD ITEM", "VALOR", width));
+  if (isProductionOnly) {
+    lines.push("QTD  ITENS PARA PREPARO");
+  } else {
+    lines.push(padLine("QTD ITEM", "VALOR", width));
+  }
   lines.push(divider("-", width));
 
-  // Itens do Pedido
+  // Itens do Pedido (respeita options.items quando filtrado por setor)
   let items = [];
-  try {
-    items = Array.isArray(order.items) ? order.items : JSON.parse(order.items || "[]");
-  } catch (_e) {
-    items = [];
+  if (Array.isArray(options.items)) {
+    items = options.items;
+  } else {
+    try {
+      items = Array.isArray(order.items) ? order.items : JSON.parse(order.items || "[]");
+    } catch (_e) {
+      items = [];
+    }
   }
 
   items.forEach((item) => {
     const qty = item.quantity || 1;
     const name = cleanText(item.product_name || item.name || "Item sem nome");
-    const itemTotal = (item.total_price || ((item.price || 0) * qty));
-    const priceStr = `R$ ${formatMoney(itemTotal)}`;
+    const itemTotal = (item.total_price || item.subtotal || ((item.price || item.product_price || 0) * qty));
+    const priceStr = isProductionOnly ? "" : `R$ ${formatMoney(itemTotal)}`;
 
     const formattedLines = formatItemLines(qty, name, priceStr, width);
     formattedLines.forEach((l) => lines.push(l));
@@ -220,7 +293,7 @@ export function formatOrderToThermalText(order, options = {}) {
           f.additionals.forEach((fAdd) => {
             const addName = cleanText(fAdd.name || "");
             const addPrice = Number(fAdd.price || 0);
-            const addPriceStr = addPrice > 0 ? ` (+R$ ${formatMoney(addPrice)})` : "";
+            const addPriceStr = !isProductionOnly && addPrice > 0 ? ` (+R$ ${formatMoney(addPrice)})` : "";
             lines.push(`     + ${addName}${addPriceStr}`);
           });
         }
@@ -236,7 +309,7 @@ export function formatOrderToThermalText(order, options = {}) {
       adds.forEach((add) => {
         const addName = cleanText(add.name || add.additional_name || "");
         const addPrice = Number(add.price || 0);
-        const addPriceStr = addPrice > 0 ? ` (+R$ ${formatMoney(addPrice)})` : "";
+        const addPriceStr = !isProductionOnly && addPrice > 0 ? ` (+R$ ${formatMoney(addPrice)})` : "";
         const fullAdd = ` + ${addName}${addPriceStr}`;
         const wrappedAdd = wordWrap(fullAdd, width - 2);
         wrappedAdd.forEach((wa) => lines.push(`  ${wa}`));
@@ -259,6 +332,16 @@ export function formatOrderToThermalText(order, options = {}) {
     const wrappedGeneralNotes = wordWrap(`"${cleanText(order.notes)}"`, width);
     wrappedGeneralNotes.forEach((gn) => lines.push(gn));
     lines.push(divider("-", width));
+  }
+
+  if (isProductionOnly) {
+    lines.push("");
+    lines.push(centerText(`FIM COMANDA - #${orderId}`, width));
+    lines.push("");
+    lines.push("");
+    lines.push("");
+    lines.push("");
+    return lines.join("\r\n");
   }
 
   // Totais Financeiros

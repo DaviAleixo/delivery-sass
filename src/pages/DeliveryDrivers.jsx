@@ -11,7 +11,7 @@ export default function DeliveryDriversPage() {
 
   const loadTenant = async () => {
     const segments = window.location.pathname.split("/").filter(Boolean);
-    const RESERVED = ["settings", "dashboard", "orders", "pdv", "menu", "adminlogin", "superadmin", "deliverydrivers", "kds"];
+    const RESERVED = ["settings", "dashboard", "orders", "pdv", "menu", "adminlogin", "login", "superadmin", "deliverydrivers", "kds"];
     const urlSlug = segments.length > 0 && !RESERVED.includes(segments[0].toLowerCase()) ? segments[0].toLowerCase() : null;
     const currentSlug = urlSlug || localStorage.getItem("current_tenant_slug");
     const activeTenantId = localStorage.getItem("current_tenant_id");

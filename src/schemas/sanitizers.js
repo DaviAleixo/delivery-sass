@@ -25,11 +25,15 @@ export function sanitizeOrderData(rawOrder = {}) {
           product_id: item.product_id ? String(item.product_id) : undefined,
           product_name: String(item.product_name || item.name || "Item sem nome").trim(),
           name: String(item.name || item.product_name || "Item sem nome").trim(),
+          category_id: item.category_id ? String(item.category_id) : null,
           category_name: item.category_name ? String(item.category_name).trim() : (item.category ? String(item.category).trim() : null),
+          sector_id: item.sector_id ? String(item.sector_id) : null,
+          sector_name: item.sector_name ? String(item.sector_name).trim() : null,
           price: itemPrice,
           product_price: itemPrice,
           quantity: itemQty,
           subtotal: itemSubtotal,
+          pizza_flavors: Array.isArray(item.pizza_flavors) ? item.pizza_flavors : [],
           additionals: Array.isArray(item.additionals)
             ? item.additionals.map((ad) => ({
                 id: ad.id,
@@ -165,6 +169,9 @@ export function sanitizeProductUpdateData(rawUpdate = {}) {
   if (rawUpdate.image_url !== undefined) {
     sanitized.image_url = String(rawUpdate.image_url).trim();
   }
+  if (rawUpdate.sector_id !== undefined) {
+    sanitized.sector_id = rawUpdate.sector_id ? String(rawUpdate.sector_id) : null;
+  }
 
   delete sanitized.updated_at;
   sanitized.updated_date = new Date().toISOString();
@@ -188,6 +195,7 @@ export function sanitizeProductData(rawProduct = {}) {
     price: parseNum(rawProduct.price, 0),
     category: rawProduct.category ? String(rawProduct.category).trim() : "",
     category_id: rawProduct.category_id ? String(rawProduct.category_id) : null,
+    sector_id: rawProduct.sector_id ? String(rawProduct.sector_id) : null,
     image_url: rawProduct.image_url ? String(rawProduct.image_url).trim() : "",
     available: rawProduct.available !== false,
     popular: Boolean(rawProduct.popular),

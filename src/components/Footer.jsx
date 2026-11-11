@@ -77,29 +77,9 @@ export default function Footer() {
         </div>
 
         <div className="border-t border-gray-800 pt-6 mt-6">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-gray-400">
+          <div className="flex flex-col md:flex-row justify-center items-center gap-4 text-sm text-gray-400">
             <p>
               © {currentYear} {settings?.restaurant_name || "Restaurante"}. Todos os direitos reservados.
-            </p>
-            <p>
-              Desenvolvido por{" "}
-              <a
-                href="https://instagram.com/davialeixo_nogueira"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-red-500 hover:text-red-400 font-medium transition-colors"
-              >
-                Davi Aleixo
-              </a>
-              {" | "}
-              <a
-                href="https://wa.me/5531982607426"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-red-500 hover:text-red-400 font-medium transition-colors"
-              >
-                31982607426
-              </a>
             </p>
           </div>
         </div>

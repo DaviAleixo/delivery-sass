@@ -288,7 +288,7 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
 
   useEffect(() => {
     loadUserData();
-  }, []);
+  }, [open]);
 
   useEffect(() => {
     let timer;
@@ -398,7 +398,7 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
       // Carrega saldo de cashback do cliente nesta loja
       if (cleanPhone) {
         try {
-          const currentTenantId = localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001";
+          const currentTenantId = (typeof window !== "undefined" ? localStorage.getItem("current_tenant_id") : null) || "5489690b-a8dd-4f5e-bd75-de339521ac47";
           if (isSupabaseConfigured() && supabase) {
             const { data: cbData, error: cbErr } = await supabase.rpc("get_customer_cashback_balance", {
               p_tenant_id: currentTenantId,
@@ -636,12 +636,12 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
           </button>
         )}
       </SheetTrigger>
-      <SheetContent className={`overflow-y-auto p-6 scrollbar-hide ${
+      <SheetContent className={`w-full max-w-full sm:max-w-md overflow-y-auto p-4 sm:p-6 scrollbar-hide ${
         dark 
           ? "bg-[#14100e] text-stone-100 border-l border-stone-800" 
           : "bg-white text-[#171717] border-l border-[#E5EAE7]"
       }`}>
-        <SheetHeader className={`pb-3.5 border-b ${dark ? "border-stone-800" : "border-[#E5EAE7]"}`}>
+        <SheetHeader className={`pb-4 border-b pr-10 text-left ${dark ? "border-stone-800" : "border-[#E5EAE7]"}`}>
           <div>
             <SheetTitle 
               className={`text-xl sm:text-2xl font-black ${dark ? "text-white" : "text-[#171717]"}`}
@@ -660,33 +660,23 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
         <div className="py-6">
           {user ? (
             <div className="space-y-6">
-              {/* Card do Usuário Logado (Conforme Foto 1) */}
-              <div className={`p-4 rounded-3xl border transition-all flex items-center justify-between gap-3 shadow-2xs ${
+              {/* Card do Usuário Logado */}
+              <div className={`p-4 rounded-3xl border transition-all shadow-sm ${
                 dark 
                   ? "bg-stone-900/90 border-stone-800" 
-                  : "bg-[#F9FAFB] border-stone-200/80"
+                  : "bg-white border-stone-200/90"
               }`}>
-                <div className="flex items-center gap-3.5 min-w-0">
-                  {/* Avatar Circular com botãozinho de edição */}
-                  <div className="relative shrink-0">
-                    <div className={`w-14 h-14 rounded-full flex items-center justify-center font-black text-2xl shadow-sm ${
-                      dark 
-                        ? "bg-red-900/80 border border-red-500/40 text-red-200" 
-                        : "bg-[#0b3827] text-white"
-                    }`}>
-                      {user.full_name?.charAt(0)?.toUpperCase() || "D"}
-                    </div>
-                    <button 
-                      type="button" 
-                      onClick={() => { setNewName(user.full_name || ""); setIsEditingName(true); }}
-                      className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-white border border-stone-200 text-stone-700 flex items-center justify-center shadow-xs hover:bg-stone-50 cursor-pointer"
-                      title="Alterar foto / nome"
-                    >
-                      <Pencil className="w-2.5 h-2.5" />
-                    </button>
+                <div className="flex items-center gap-3.5">
+                  {/* Avatar Circular */}
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center font-black text-xl shrink-0 shadow-sm ${
+                    dark 
+                      ? "bg-emerald-950 border border-emerald-500/40 text-emerald-300" 
+                      : "bg-[#0b3827] text-white"
+                  }`}>
+                    {user.full_name?.charAt(0)?.toUpperCase() || "C"}
                   </div>
 
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     {isEditingName ? (
                       <form onSubmit={handleSaveName} className="space-y-1.5 py-0.5">
                         <div className="flex items-center gap-1.5">
@@ -719,48 +709,39 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
                     ) : (
                       <div>
                         <div className="flex items-center gap-1.5">
-                          <span className={`font-extrabold text-base truncate ${dark ? "text-white" : "text-stone-900"}`}>
+                          <span className={`font-black text-base truncate ${dark ? "text-white" : "text-stone-900"}`}>
                             {user.full_name || "Cliente"}
                           </span>
                           <button 
                             type="button" 
                             onClick={() => { setNewName(user.full_name || ""); setIsEditingName(true); }}
-                            className="text-stone-400 hover:text-stone-700 p-0.5 cursor-pointer"
+                            className="text-stone-400 hover:text-stone-700 p-0.5 cursor-pointer shrink-0"
                             title="Editar nome"
                           >
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
                         </div>
-                        <div className={`mt-1 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                          dark 
-                            ? "bg-emerald-950/70 border border-emerald-500/30 text-emerald-400" 
-                            : "bg-[#EBF3EF] border border-[#D1E9DF] text-[#047857]"
-                        }`}>
-                          <PhoneCall className="w-3 h-3" />
-                          <span>{user.phone || "WhatsApp Conectado"}</span>
+
+                        <div className="mt-1">
+                          <div className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ${
+                            dark 
+                              ? "bg-emerald-950/70 border border-emerald-500/30 text-emerald-400" 
+                              : "bg-[#EBF3EF] border border-[#D1E9DF] text-[#047857]"
+                          }`}>
+                            <PhoneCall className="w-3 h-3 shrink-0" />
+                            <span className="font-mono tracking-tight">{user.phone || "Sem WhatsApp"}</span>
+                          </div>
                         </div>
                       </div>
                     )}
                   </div>
                 </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border ${
-                    dark 
-                      ? "bg-emerald-950/80 border-emerald-500/40 text-emerald-400" 
-                      : "bg-[#E6F4EA] border-[#CEEAD6] text-[#137333]"
-                  }`}>
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#137333]" />
-                    Conectado
-                  </span>
-                  <ChevronRight className="w-4 h-4 text-stone-400" />
-                </div>
               </div>
 
-              {/* Card de Cashback da Loja (Idêntico à Foto 1) */}
-              <div className={`rounded-3xl p-5 text-white relative overflow-hidden shadow-sm transition-all ${
+              {/* Card de Cashback da Loja */}
+              <div className={`rounded-3xl p-4 sm:p-5 text-white relative overflow-hidden shadow-sm transition-all ${
                 dark 
-                  ? "bg-gradient-to-br from-[#0c2f21] to-[#082218] border border-emerald-900/50" 
+                  ? "bg-gradient-to-br from-[#0c2f21] via-[#082218] to-[#0a2c1e] border border-emerald-900/50" 
                   : "bg-gradient-to-br from-[#123e2c] via-[#0d3424] to-[#0a2c1e] border border-emerald-900/30"
               }`}>
                 {/* Marca d'água decorativa % grande */}
@@ -768,37 +749,43 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
                   %
                 </span>
 
-                <p className="text-[11px] font-bold tracking-wider text-emerald-300 uppercase">
-                  CASHBACK DA LOJA
-                </p>
+                <div className="flex items-center justify-between relative z-10">
+                  <p className="text-[11px] font-bold tracking-wider text-emerald-300 uppercase flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                    CASHBACK DA LOJA
+                  </p>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    Ativo
+                  </span>
+                </div>
 
-                <div className="flex items-start justify-between gap-3 mt-1 relative z-10">
-                  <div className="flex-1 pr-1">
-                    <h2 className="text-3xl font-black text-white tracking-tight">
+                <div className="flex items-center justify-between gap-3 mt-3 relative z-10">
+                  <div className="flex-1 min-w-0 pr-1">
+                    <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight leading-tight">
                       {Number(cashbackData?.rate || 5)}% de volta
                     </h2>
-                    <p className="text-xs text-emerald-100/75 leading-relaxed mt-1.5 max-w-[210px] font-normal">
-                      Faça seus pedidos e ganhe saldo de volta para usar nas próximas compras.
+                    <p className="text-xs text-emerald-100/80 leading-relaxed mt-1 font-normal">
+                      Acumule saldo em cada pedido para usar nas próximas compras.
                     </p>
                   </div>
 
-                  <div className="bg-[#072418]/90 border border-emerald-500/20 rounded-2xl py-2.5 px-3.5 text-center min-w-[110px] shrink-0">
+                  <div className="bg-[#072418]/90 border border-emerald-500/20 rounded-2xl py-2 px-3 text-center min-w-[105px] shrink-0 shadow-inner">
                     <span className="text-[10px] font-medium text-emerald-300/90 block">
                       Saldo acumulado
                     </span>
-                    <span className="text-xl font-black text-white block mt-0.5">
+                    <span className="text-lg sm:text-xl font-black text-white block mt-0.5 whitespace-nowrap">
                       R$ {Number(cashbackData?.balance || 0).toFixed(2).replace('.', ',')}
                     </span>
                   </div>
                 </div>
 
-                <div className="bg-[#092b1d]/90 border border-emerald-500/20 rounded-2xl p-2.5 px-3 flex items-center justify-between mt-4 relative z-10">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-7 h-7 rounded-full bg-[#051c13] flex items-center justify-center shrink-0 text-amber-400">
-                      <Coins className="w-4 h-4" />
+                <div className="bg-[#092b1d]/90 border border-emerald-500/20 rounded-2xl p-2.5 px-3 flex items-center justify-between mt-3.5 relative z-10">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-6 h-6 rounded-full bg-[#051c13] flex items-center justify-center shrink-0 text-amber-400">
+                      <Coins className="w-3.5 h-3.5" />
                     </div>
-                    <span className="text-xs text-emerald-100 font-medium truncate">
-                      O valor cai automaticamente na sua conta.
+                    <span className="text-[11px] sm:text-xs text-emerald-100 font-medium truncate">
+                      O valor cai automaticamente na sua conta
                     </span>
                   </div>
                   <ChevronRight className="w-4 h-4 text-emerald-300 shrink-0 ml-1" />
@@ -862,32 +849,32 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
                   {addresses.map(addr => (
                     <div 
                       key={addr.id} 
-                      className={`p-3.5 rounded-2xl border transition-all flex justify-between items-start gap-3 ${
+                      className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between gap-2.5 ${
                         dark 
                           ? "bg-stone-900/80 border-stone-800" 
-                          : "bg-white border-stone-200 hover:border-[#D1E9DF] shadow-2xs hover:shadow-xs"
+                          : "bg-white border-stone-200/90 hover:border-[#D1E9DF] shadow-2xs hover:shadow-xs"
                       }`}
                     >
-                      <div className="flex gap-3 min-w-0">
-                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
-                          dark ? "bg-stone-800 text-red-400" : "bg-[#D1E9DF]/60 text-[#047857]"
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                          dark ? "bg-stone-800 text-emerald-400" : "bg-[#D1E9DF]/60 text-[#047857]"
                         }`}>
                           <MapPin className="w-4 h-4" />
                         </div>
-                        <div className="min-w-0">
-                          <p className={`font-black text-sm truncate ${dark ? "text-white" : "text-[#171717]"}`}>
+                        <div className="min-w-0 flex-1">
+                          <p className={`font-bold text-sm truncate ${dark ? "text-white" : "text-[#171717]"}`}>
                             {addr.name}
                           </p>
-                          <p className={`text-xs mt-0.5 leading-relaxed line-clamp-2 ${dark ? "text-stone-400" : "text-stone-500"}`}>
-                            {`${addr.street}, ${addr.number}${addr.complement ? ` (${addr.complement})` : ''} - ${addr.neighborhood}, ${addr.city}`}
+                          <p className={`text-xs mt-0.5 leading-snug line-clamp-1 ${dark ? "text-stone-400" : "text-stone-500"}`}>
+                            {`${addr.street}, ${addr.number}${addr.complement ? ` (${addr.complement})` : ''} - ${addr.neighborhood}`}
                           </p>
                         </div>
                       </div>
-                      <div className="flex gap-1 shrink-0">
+                      <div className="flex items-center gap-1 shrink-0">
                         <Button 
                           variant="ghost" 
                           size="icon" 
-                          className={`w-7 h-7 rounded-lg cursor-pointer transition-colors ${
+                          className={`w-8 h-8 rounded-lg cursor-pointer transition-colors ${
                             dark 
                               ? "text-stone-400 hover:text-white hover:bg-stone-800" 
                               : "text-stone-400 hover:text-[#047857] hover:bg-[#D1E9DF]/40"
@@ -900,7 +887,7 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
                         <Button 
                           variant="ghost" 
                           size="icon" 
-                          className={`w-7 h-7 rounded-lg cursor-pointer transition-colors ${
+                          className={`w-8 h-8 rounded-lg cursor-pointer transition-colors ${
                             dark 
                               ? "text-stone-400 hover:text-rose-400 hover:bg-rose-950/30" 
                               : "text-stone-400 hover:text-rose-600 hover:bg-rose-50"
@@ -910,7 +897,6 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
-                        <ChevronRight className="w-4 h-4 text-stone-400 ml-0.5" />
                       </div>
                     </div>
                   ))}

@@ -3,10 +3,7 @@ import {
   Printer, 
   ChevronDown, 
   Settings, 
-  Zap, 
-  Check, 
-  RefreshCw, 
-  AlertCircle 
+  Zap 
 } from "lucide-react";
 import { useFifoPrintQueue } from "@/hooks/useFifoPrintQueue";
 import SpoolerManagerModal from "@/components/admin/SpoolerManagerModal";
@@ -14,7 +11,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";

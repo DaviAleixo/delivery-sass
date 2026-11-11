@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Plus } from "lucide-react";
+import { Plus, ChevronRight } from "lucide-react";
 
 function PopularProductCard({ product, index, hasMoved, onProductClick, isVisualOnly = false }) {
   const [imageError, setImageError] = useState(false);
@@ -109,14 +109,28 @@ export default function PopularProductsRow({ products = [], onProductClick, _isS
 
   return (
     <section className="space-y-3">
-      {/* Cabeçalho limpo fora de container, idêntico à Foto 1 */}
-      <div className="flex items-center gap-2 px-1">
-        <h2 className="text-lg sm:text-xl font-black text-gray-950 tracking-tight">
-          Mais pedidos
-        </h2>
-        <span className="text-[#046c4e] text-xs font-bold bg-emerald-50 border border-emerald-200/60 px-2.5 py-0.5 rounded-full">
-          Top {popularProducts.length}
-        </span>
+      {/* Cabeçalho com Mais pedidos, Top X e Ver todos */}
+      <div className="flex items-center justify-between px-1">
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg sm:text-xl font-black text-gray-950 tracking-tight" style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}>
+            Mais pedidos
+          </h2>
+          <span className="text-[#046c4e] text-xs font-bold bg-emerald-50 border border-emerald-200/60 px-2 py-0.5 rounded-full">
+            Top {popularProducts.length}
+          </span>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            const el = document.getElementById("menu-categories-row");
+            if (el) el.scrollIntoView({ behavior: "smooth" });
+          }}
+          className="text-xs font-bold text-[#046c4e] hover:underline flex items-center gap-0.5 cursor-pointer"
+        >
+          <span>Ver todos</span>
+          <ChevronRight className="w-3.5 h-3.5" />
+        </button>
       </div>
 
       {/* Fileira de cards com arrastar fluido */}

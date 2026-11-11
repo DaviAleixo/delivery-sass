@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useLocation } from "react-router-dom";
 import { Category } from "@/entities/Category";
+import { ProductionSector } from "@/entities/ProductionSector";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Edit, Trash2, Sparkles, ChevronUp, ChevronDown } from "lucide-react";
+import { Plus, Edit, Trash2, Sparkles, ChevronUp, ChevronDown, Flame } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 
@@ -22,6 +23,7 @@ export default function CategoriesPage() {
   const { slug } = useParams();
   const location = useLocation();
   const [categories, setCategories] = useState([]);
+  const [productionSectors, setProductionSectors] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
@@ -32,6 +34,7 @@ export default function CategoriesPage() {
     is_combo: false,
     type: "standard",
     pizza_sizes: [],
+    sector_id: null,
   });
 
   useEffect(() => {
@@ -41,11 +44,15 @@ export default function CategoriesPage() {
 
   const loadData = async () => {
     setIsLoading(true);
-    const categoriesData = await Category.list("order_index");
+    const [categoriesData, sectorsData] = await Promise.all([
+      Category.list("order_index"),
+      ProductionSector.list("order_index").catch(() => []),
+    ]);
     const sorted = Array.isArray(categoriesData)
       ? [...categoriesData].sort((a, b) => (Number(a.order_index) || 0) - (Number(b.order_index) || 0))
       : [];
     setCategories(sorted);
+    setProductionSectors(Array.isArray(sectorsData) ? sectorsData : []);
     setIsLoading(false);
   };
 
@@ -104,6 +111,7 @@ export default function CategoriesPage() {
 
       const payload = {
         ...categoryForm,
+        sector_id: categoryForm.sector_id || null,
         order_index: nextOrder,
         type: categoryForm.type || "standard",
         pizza_sizes: categoryForm.type === "pizza" 
@@ -151,6 +159,7 @@ export default function CategoriesPage() {
       is_combo: false,
       type: "standard",
       pizza_sizes: [],
+      sector_id: null,
     });
     setEditingCategory(null);
   };
@@ -165,6 +174,7 @@ export default function CategoriesPage() {
       pizza_sizes: Array.isArray(category.pizza_sizes) && category.pizza_sizes.length > 0
         ? category.pizza_sizes
         : (isPizza ? DEFAULT_PIZZA_SIZES : []),
+      sector_id: category.sector_id || null,
     });
     setEditingCategory(category);
     setShowModal(true);
@@ -317,6 +327,15 @@ export default function CategoriesPage() {
                           <Sparkles className="w-3 h-3" /> Combos
                         </span>
                       )}
+
+                      {category.sector_id && (() => {
+                        const matchedSector = productionSectors.find((s) => String(s.id) === String(category.sector_id));
+                        return matchedSector ? (
+                          <span className="inline-flex items-center gap-1 bg-sky-50 text-sky-800 border border-sky-200 text-[11px] font-bold px-2 py-0.5 rounded-full">
+                            <Flame className="w-3 h-3 text-sky-700" /> {matchedSector.name}
+                          </span>
+                        ) : null;
+                      })()}
                     </div>
 
                     {/* Coluna 3: Tipo / Configuração */}
@@ -537,6 +556,34 @@ export default function CategoriesPage() {
                     onChange={(e) => setCategoryForm({...categoryForm, order_index: parseInt(e.target.value) || 0})}
                     className="border-stone-200 focus:border-[#047857] mt-1"
                   />
+                </div>
+
+                {/* Vínculo com Setor de Produção */}
+                <div>
+                  <Label className="text-xs font-bold text-gray-700">
+                    Setor de Preparo (Impressão & KDS)
+                  </Label>
+                  <Select
+                    value={categoryForm.sector_id || "__none__"}
+                    onValueChange={(value) =>
+                      setCategoryForm({ ...categoryForm, sector_id: value === "__none__" ? null : value })
+                    }
+                  >
+                    <SelectTrigger className="border-stone-200 focus:border-[#047857] mt-1">
+                      <SelectValue placeholder="Padrão / Nenhum setor específico" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">Nenhum setor específico</SelectItem>
+                      {productionSectors.map((sec) => (
+                        <SelectItem key={sec.id} value={String(sec.id)}>
+                          {sec.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    Todos os produtos desta categoria irão automaticamente para este setor (a menos que você altere no produto).
+                  </p>
                 </div>
 
                 {/* Flag de Categoria de Combos */}

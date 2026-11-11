@@ -233,15 +233,46 @@ export function calculateShiftClosing({
       dineInCount++;
     }
 
-    // Agregação de pagamento
-    if (payments[paymentMethodKey]) {
-      payments[paymentMethodKey].count++;
-      payments[paymentMethodKey].total += orderAmount;
+    // Agregação de pagamento (com suporte a pagamentos combinados/múltiplos no salão)
+    let parsedPayments = null;
+    if (order.payment_details) {
+      if (Array.isArray(order.payment_details.payments) && order.payment_details.payments.length > 0) {
+        parsedPayments = order.payment_details.payments;
+      } else if (typeof order.payment_details === "string") {
+        try {
+          const parsed = JSON.parse(order.payment_details);
+          if (Array.isArray(parsed?.payments) && parsed.payments.length > 0) {
+            parsedPayments = parsed.payments;
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
+
+    if (parsedPayments && parsedPayments.length > 0) {
+      parsedPayments.forEach(p => {
+        const pMethodKey = normalizePaymentMethod(p.method);
+        const pAmt = Number(p.amount || 0);
+        if (payments[pMethodKey]) {
+          payments[pMethodKey].count++;
+          payments[pMethodKey].total += pAmt;
+        } else {
+          payments.other.count++;
+          payments.other.total += pAmt;
+        }
+      });
       payments.total += orderAmount;
     } else {
-      payments.other.count++;
-      payments.other.total += orderAmount;
-      payments.total += orderAmount;
+      if (payments[paymentMethodKey]) {
+        payments[paymentMethodKey].count++;
+        payments[paymentMethodKey].total += orderAmount;
+        payments.total += orderAmount;
+      } else {
+        payments.other.count++;
+        payments.other.total += orderAmount;
+        payments.total += orderAmount;
+      }
     }
 
     // Reconciliação de Entregador (apenas pedidos enviados ou entregues com motoboy)

@@ -9,7 +9,7 @@ import {
   ResponsiveContainer,
   Cell,
 } from "recharts";
-import { Clock, Flame, Users } from "lucide-react";
+import { Clock, Flame } from "lucide-react";
 
 export default function PeakHoursChart({ data = [], peakHourInfo = null }) {
   const hasOrders = Array.isArray(data) && data.some((d) => d.ordersCount > 0);

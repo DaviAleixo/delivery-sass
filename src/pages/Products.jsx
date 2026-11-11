@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Product } from "@/entities/Product";
 import { ProductAdditional } from "@/entities/ProductAdditional";
 import { Category } from "@/entities/Category";
+import { ProductionSector } from "@/entities/ProductionSector";
 import { ComplementGroup } from "@/entities/ComplementGroup";
 import { ProductComplementGroup } from "@/entities/ProductComplementGroup";
 import { UploadFile } from "@/integrations/Core";
@@ -116,6 +117,7 @@ export default function ProductsPage() {
   const [products, setProducts] = useState([]);
   const [allAdditionals, setAllAdditionals] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [productionSectors, setProductionSectors] = useState([]);
   const [complementGroups, setComplementGroups] = useState([]);
   const [productComplementGroups, setProductComplementGroups] = useState([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState([]);
@@ -132,6 +134,7 @@ export default function ProductsPage() {
     description: "",
     price: "",
     category: "",
+    sector_id: null,
     image_url: "",
     available: true
   });
@@ -152,18 +155,20 @@ export default function ProductsPage() {
   const loadProducts = async () => {
     setIsLoading(true);
     try {
-      const [productsData, additionalsData, categoriesData, groupsData, pcgData] = await Promise.all([
+      const [productsData, additionalsData, categoriesData, groupsData, pcgData, sectorsData] = await Promise.all([
         Product.list("-created_date"),
         ProductAdditional.list(),
         Category.list("order_index"),
         ComplementGroup.list("order_index"),
-        ProductComplementGroup.list("-created_date")
+        ProductComplementGroup.list("-created_date"),
+        ProductionSector.list("order_index").catch(() => []),
       ]);
       setProducts(productsData || []);
       setAllAdditionals(additionalsData || []);
       setCategories(categoriesData || []);
       setComplementGroups(groupsData || []);
       setProductComplementGroups(pcgData || []);
+      setProductionSectors(Array.isArray(sectorsData) ? sectorsData : []);
     } catch (err) {
       console.error("Erro ao carregar produtos:", err);
     } finally {
@@ -239,6 +244,7 @@ export default function ProductsPage() {
 
       const productData = {
         ...productForm,
+        sector_id: productForm.sector_id || null,
         price: finalPrice,
         available: Boolean(productForm.available),
         pizza_prices: cleanPizzaPrices,
@@ -330,6 +336,7 @@ export default function ProductsPage() {
       description: "",
       price: "",
       category: "",
+      sector_id: null,
       image_url: "",
       available: true,
       pizza_prices: {},
@@ -344,6 +351,7 @@ export default function ProductsPage() {
       description: product.description || "",
       price: product.price !== undefined && product.price !== null ? formatToBRL(product.price) : "",
       category: product.category || "",
+      sector_id: product.sector_id || null,
       image_url: product.image_url || "",
       available: product.available !== false,
       pizza_prices: product.pizza_prices || {},
@@ -781,6 +789,43 @@ export default function ProductsPage() {
                         </SelectContent>
                       </Select>
                     </div>
+                  </div>
+                );
+              })()}
+
+              {/* Setor de Produção (Opcional - sobrescreve o setor da categoria) */}
+              {productionSectors.length > 0 && (() => {
+                const selectedCatObj = categories.find(c => c.id === productForm.category || c.name === productForm.category);
+                const inheritedSector = selectedCatObj?.sector_id
+                  ? productionSectors.find(s => String(s.id) === String(selectedCatObj.sector_id))
+                  : null;
+                return (
+                  <div>
+                    <Label htmlFor="product-sector" className="text-xs font-bold text-gray-700">
+                      Setor de Preparo / Impressão (Opcional)
+                    </Label>
+                    <Select
+                      value={productForm.sector_id || "__inherit__"}
+                      onValueChange={(value) =>
+                        setProductForm({ ...productForm, sector_id: value === "__inherit__" ? null : value })
+                      }
+                    >
+                      <SelectTrigger id="product-sector" className="mt-1">
+                        <SelectValue placeholder="Herdar da categoria" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__inherit__">
+                          {inheritedSector
+                            ? `Herdar da categoria (${inheritedSector.name})`
+                            : "Herdar da categoria (sem setor específico)"}
+                        </SelectItem>
+                        {productionSectors.map((sec) => (
+                          <SelectItem key={sec.id} value={String(sec.id)}>
+                            {sec.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 );
               })()}

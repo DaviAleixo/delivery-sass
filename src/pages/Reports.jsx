@@ -28,10 +28,8 @@ import {
   X,
   Receipt,
   Clock,
-  Sparkles,
-  Flame,
   Calendar,
-  Percent,
+  FileText,
 } from "lucide-react";
 import { subDays, startOfMonth, endOfMonth, startOfYear, endOfYear, startOfDay, endOfDay } from "date-fns";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
@@ -40,11 +38,14 @@ import DailySalesChart from "@/components/admin/reports/DailySalesChart";
 import PeakHoursChart from "@/components/admin/reports/PeakHoursChart";
 import ShiftClosingHistoryTable from "@/components/admin/reports/ShiftClosingHistoryTable";
 import ServiceFeeAccumulatedChart from "@/components/admin/reports/ServiceFeeAccumulatedChart";
+import PaymentMethodsReport from "@/components/admin/reports/PaymentMethodsReport";
+import ReportsCenterTab from "@/components/admin/reports/ReportsCenterTab";
 import {
   aggregateDailySales,
   aggregateCategoryDistribution,
   aggregatePeakHours,
   aggregateServiceFeeCumulative,
+  aggregatePaymentMethodsDistribution,
 } from "@/utils/reportsAnalytics";
 
 export default function ReportsPage() {
@@ -256,6 +257,12 @@ export default function ReportsPage() {
     [periodSessions, validOrders, dateRange, isSingleDay]
   );
 
+  // 5. Agregação Consolidada por Método de Pagamento
+  const paymentMethodsAnalytics = useMemo(
+    () => aggregatePaymentMethodsDistribution(validOrders),
+    [validOrders]
+  );
+
   const isServiceFeeEnabled = tenantSettings?.table_service_fee_enabled === true;
   const serviceFeeRate = Number(tenantSettings?.table_service_fee_rate ?? 10);
   const showServiceFeeReport = isServiceFeeEnabled || serviceFeeMetrics.totalServiceFee > 0;
@@ -274,399 +281,440 @@ export default function ReportsPage() {
   const formatMoney = (val) =>
     `R$ ${Number(val || 0).toFixed(2).replace(".", ",")}`;
 
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-[#F7F9F8]">
+        <div className="text-center space-y-3">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#047857] mx-auto"></div>
+          <p className="text-stone-600 font-semibold text-sm">Carregando relatórios...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="p-4 sm:p-8 bg-gray-50 min-h-screen">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Cabeçalho */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tight flex items-center gap-2.5">
-              <span>Relatórios & Gestão</span>
-              <span className="text-xs bg-rose-100 text-rose-800 font-bold px-2 py-0.5 rounded-lg">
-                Inteligência
-              </span>
+    <div className="p-4 sm:p-6 lg:p-8 bg-[#F7F9F8] min-h-screen space-y-6 max-w-7xl mx-auto">
+      {/* Cabeçalho Executivo */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-xl sm:text-2xl font-bold text-stone-900 tracking-tight">
+              Relatórios & Indicadores
             </h1>
-            <p className="text-gray-600 text-xs sm:text-sm mt-1">
-              Acompanhe o faturamento diário, horários de pico e histórico de fechamento de caixa
-            </p>
+            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md border border-stone-300 bg-stone-100 text-stone-700">
+              Analytics
+            </span>
           </div>
-
-          <Button
-            type="button"
-            onClick={() => navigate(createPageUrl("CashManagement") + "?tab=closing")}
-            className="h-10 px-4 bg-gradient-to-r from-stone-900 to-stone-800 hover:from-black hover:to-stone-900 text-white rounded-2xl text-xs font-black shadow-md flex items-center gap-2 cursor-pointer border border-stone-700 self-start sm:self-auto transition-all active:scale-95"
-            title="Abrir Fechamento de Caixa do Turno"
-          >
-            <Receipt className="w-4 h-4 text-amber-400" />
-            <span>Fechamento de Caixa</span>
-          </Button>
+          <p className="text-xs text-stone-500 mt-0.5">
+            Acompanhe o faturamento diário, horários de pico e histórico de fechamento de turnos
+          </p>
         </div>
 
-        {/* Abas Principais: Vendas vs Histórico de Fechamentos */}
-        <div className="flex items-center gap-1.5 p-1 bg-stone-200/80 rounded-2xl w-fit border border-stone-300">
-          <button
-            type="button"
-            onClick={() => setActiveTab("sales")}
-            className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
-              activeTab === "sales"
-                ? "bg-white text-stone-900 shadow-sm"
-                : "text-stone-600 hover:text-stone-900"
-            }`}
-          >
-            <TrendingUp className="w-4 h-4 text-[#047857]" />
-            <span>📊 Vendas & Análise</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("history")}
-            className={`px-4 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer ${
-              activeTab === "history"
-                ? "bg-white text-stone-900 shadow-sm"
-                : "text-stone-600 hover:text-stone-900"
-            }`}
-          >
-            <Receipt className="w-4 h-4 text-amber-600" />
-            <span>🧾 Histórico de Fechamentos</span>
-            {closings.length > 0 && (
-              <Badge className="bg-stone-100 text-stone-700 text-[10px] px-1.5 py-0">
-                {closings.length}
-              </Badge>
-            )}
-          </button>
-        </div>
+        <Button
+          type="button"
+          onClick={() => navigate(createPageUrl("CashManagement") + "?tab=closing")}
+          className="h-9 px-3.5 bg-stone-900 hover:bg-black text-white rounded-lg text-xs font-semibold shadow-2xs flex items-center gap-2 cursor-pointer border border-stone-800 self-start sm:self-auto transition-colors"
+          title="Abrir Fechamento de Caixa do Turno"
+        >
+          <Receipt className="w-4 h-4 text-stone-300" />
+          <span>Fechamento de Caixa</span>
+        </Button>
+      </div>
 
-        {/* ================= ABA 1: VENDAS & ANÁLISE ================= */}
-        {activeTab === "sales" && (
-          <div className="space-y-6">
-            {/* Filtro de Período */}
-            <Card className="border-stone-200 shadow-sm bg-white">
-              <CardContent className="p-4 sm:p-5">
-                <div className="flex flex-wrap gap-4 items-end">
-                  <div className="flex-1 min-w-[200px]">
-                    <Label htmlFor="period" className="text-xs font-bold text-stone-700">
-                      Período de Análise
-                    </Label>
-                    <Select value={reportPeriod} onValueChange={setReportPeriod}>
-                      <SelectTrigger className="border-stone-200 focus:border-[#047857] rounded-xl mt-1 text-xs font-semibold">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-xl">
-                        <SelectItem value="today">Hoje</SelectItem>
-                        <SelectItem value="last_7_days">Últimos 7 dias</SelectItem>
-                        <SelectItem value="last_30_days">Últimos 30 dias</SelectItem>
-                        <SelectItem value="this_month">Este mês</SelectItem>
-                        <SelectItem value="this_year">Este ano</SelectItem>
-                        <SelectItem value="custom">Período personalizado</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+      {/* Abas Principais: Vendas vs Histórico de Fechamentos vs Emissor de Relatórios */}
+      <div className="flex items-center gap-1.5 p-1 bg-stone-200/70 rounded-xl w-fit border border-stone-300/80">
+        <button
+          type="button"
+          onClick={() => setActiveTab("sales")}
+          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-2 cursor-pointer ${
+            activeTab === "sales"
+              ? "bg-white text-stone-900 shadow-2xs"
+              : "text-stone-600 hover:text-stone-900"
+          }`}
+        >
+          <TrendingUp className="w-3.5 h-3.5 text-emerald-700" />
+          <span>Vendas & Análise</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("history")}
+          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-2 cursor-pointer ${
+            activeTab === "history"
+              ? "bg-white text-stone-900 shadow-2xs"
+              : "text-stone-600 hover:text-stone-900"
+          }`}
+        >
+          <Receipt className="w-3.5 h-3.5 text-stone-700" />
+          <span>Histórico de Fechamentos</span>
+          {closings.length > 0 && (
+            <Badge className="bg-stone-100 text-stone-700 border border-stone-300 text-[10px] px-1.5 py-0 font-mono">
+              {closings.length}
+            </Badge>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("export")}
+          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-2 cursor-pointer ${
+            activeTab === "export"
+              ? "bg-white text-stone-900 shadow-2xs"
+              : "text-stone-600 hover:text-stone-900"
+          }`}
+        >
+          <FileText className="w-3.5 h-3.5 text-blue-700" />
+          <span>Central de Relatórios (PDF / Excel)</span>
+        </button>
+      </div>
 
-                  {reportPeriod === "custom" && (
-                    <>
-                      <div>
-                        <Label htmlFor="start-date" className="text-xs font-bold text-stone-700">
-                          Data inicial
-                        </Label>
-                        <Input
-                          id="start-date"
-                          type="date"
-                          value={customStartDate}
-                          onChange={(e) => setCustomStartDate(e.target.value)}
-                          className="border-stone-200 focus:border-[#047857] rounded-xl mt-1 text-xs"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="end-date" className="text-xs font-bold text-stone-700">
-                          Data final
-                        </Label>
-                        <Input
-                          id="end-date"
-                          type="date"
-                          value={customEndDate}
-                          onChange={(e) => setCustomEndDate(e.target.value)}
-                          className="border-stone-200 focus:border-[#047857] rounded-xl mt-1 text-xs"
-                        />
-                      </div>
-                    </>
-                  )}
+      {/* ================= ABA 1: VENDAS & ANÁLISE ================= */}
+      {activeTab === "sales" && (
+        <div className="space-y-6">
+          {/* Filtro de Período */}
+          <Card className="border border-stone-200 rounded-xl shadow-2xs bg-white">
+            <CardContent className="p-4 sm:p-5">
+              <div className="flex flex-wrap gap-4 items-end">
+                <div className="flex-1 min-w-[200px]">
+                  <Label htmlFor="period" className="text-xs font-semibold text-stone-700">
+                    Período de Análise
+                  </Label>
+                  <Select value={reportPeriod} onValueChange={setReportPeriod}>
+                    <SelectTrigger className="border-stone-200 focus:border-[#047857] rounded-lg mt-1 text-xs font-semibold">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-lg">
+                      <SelectItem value="today">Hoje</SelectItem>
+                      <SelectItem value="last_7_days">Últimos 7 dias</SelectItem>
+                      <SelectItem value="last_30_days">Últimos 30 dias</SelectItem>
+                      <SelectItem value="this_month">Este mês</SelectItem>
+                      <SelectItem value="this_year">Este ano</SelectItem>
+                      <SelectItem value="custom">Período personalizado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {reportPeriod === "custom" && (
+                  <>
+                    <div>
+                      <Label htmlFor="start-date" className="text-xs font-semibold text-stone-700">
+                        Data inicial
+                      </Label>
+                      <Input
+                        id="start-date"
+                        type="date"
+                        value={customStartDate}
+                        onChange={(e) => setCustomStartDate(e.target.value)}
+                        className="border-stone-200 focus:border-[#047857] rounded-lg mt-1 text-xs font-mono"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="end-date" className="text-xs font-semibold text-stone-700">
+                        Data final
+                      </Label>
+                      <Input
+                        id="end-date"
+                        type="date"
+                        value={customEndDate}
+                        onChange={(e) => setCustomEndDate(e.target.value)}
+                        className="border-stone-200 focus:border-[#047857] rounded-lg mt-1 text-xs font-mono"
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* 4 KPIs Principais */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card className="border border-stone-200 rounded-xl shadow-2xs bg-white">
+              <CardHeader className="flex flex-row items-center justify-between pb-2 pt-4 px-4">
+                <CardTitle className="text-[11px] font-semibold uppercase tracking-wider text-stone-500">
+                  Receita Total
+                </CardTitle>
+                <DollarSign className="h-4 w-4 text-emerald-700" />
+              </CardHeader>
+              <CardContent className="px-4 pb-4">
+                <div className="text-xl sm:text-2xl font-mono font-bold text-stone-900">
+                  {formatMoney(totalRevenue)}
                 </div>
               </CardContent>
             </Card>
 
-            {/* 4 KPIs Principais */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <Card className="border-0 shadow-sm bg-white">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-gray-500">
-                    Receita Total
-                  </CardTitle>
-                  <DollarSign className="h-4 w-4 text-emerald-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xl sm:text-2xl font-black text-gray-900">
-                    {formatMoney(totalRevenue)}
-                  </div>
-                </CardContent>
-              </Card>
+            <Card className="border border-stone-200 rounded-xl shadow-2xs bg-white">
+              <CardHeader className="flex flex-row items-center justify-between pb-2 pt-4 px-4">
+                <CardTitle className="text-[11px] font-semibold uppercase tracking-wider text-stone-500">
+                  Total de Pedidos
+                </CardTitle>
+                <ShoppingBag className="h-4 w-4 text-stone-600" />
+              </CardHeader>
+              <CardContent className="px-4 pb-4">
+                <div className="text-xl sm:text-2xl font-mono font-bold text-stone-900">
+                  {totalOrdersCount}
+                </div>
+              </CardContent>
+            </Card>
 
-              <Card className="border-0 shadow-sm bg-white">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-gray-500">
-                    Total de Pedidos
-                  </CardTitle>
-                  <ShoppingBag className="h-4 w-4 text-blue-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xl sm:text-2xl font-black text-gray-900">
-                    {totalOrdersCount}
-                  </div>
-                </CardContent>
-              </Card>
+            <Card className="border border-stone-200 rounded-xl shadow-2xs bg-white">
+              <CardHeader className="flex flex-row items-center justify-between pb-2 pt-4 px-4">
+                <CardTitle className="text-[11px] font-semibold uppercase tracking-wider text-stone-500">
+                  Ticket Médio
+                </CardTitle>
+                <TrendingUp className="h-4 w-4 text-stone-600" />
+              </CardHeader>
+              <CardContent className="px-4 pb-4">
+                <div className="text-xl sm:text-2xl font-mono font-bold text-stone-900">
+                  {formatMoney(avgTicket)}
+                </div>
+              </CardContent>
+            </Card>
 
-              <Card className="border-0 shadow-sm bg-white">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-gray-500">
-                    Ticket Médio
-                  </CardTitle>
-                  <TrendingUp className="h-4 w-4 text-purple-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xl sm:text-2xl font-black text-gray-900">
-                    {formatMoney(avgTicket)}
-                  </div>
-                </CardContent>
-              </Card>
+            <Card className="border border-stone-200 rounded-xl shadow-2xs bg-white">
+              <CardHeader className="flex flex-row items-center justify-between pb-2 pt-4 px-4">
+                <CardTitle className="text-[11px] font-semibold uppercase tracking-wider text-stone-500">
+                  Produtos Vendidos
+                </CardTitle>
+                <Package className="h-4 w-4 text-stone-600" />
+              </CardHeader>
+              <CardContent className="px-4 pb-4">
+                <div className="text-xl sm:text-2xl font-mono font-bold text-stone-900">
+                  {totalProductsSold} un.
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
-              <Card className="border-0 shadow-sm bg-white">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-gray-500">
-                    Produtos Vendidos
-                  </CardTitle>
-                  <Package className="h-4 w-4 text-amber-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xl sm:text-2xl font-black text-gray-900">
-                    {totalProductsSold} un.
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+          {/* Cancelamentos */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Card className="border border-rose-200 bg-rose-50/40 rounded-xl shadow-2xs">
+              <CardHeader className="flex flex-row items-center justify-between pb-1 pt-4 px-4">
+                <CardTitle className="text-[11px] font-semibold uppercase tracking-wider text-rose-700">
+                  Pedidos Cancelados
+                </CardTitle>
+                <X className="h-4 w-4 text-rose-600" />
+              </CardHeader>
+              <CardContent className="px-4 pb-4">
+                <div className="text-xl font-mono font-bold text-rose-700">
+                  {canceledOrdersCount}
+                </div>
+                <p className="text-[11px] text-rose-600 mt-0.5">
+                  {totalOrdersCount + canceledOrdersCount > 0
+                    ? `${(((canceledOrdersCount) / (totalOrdersCount + canceledOrdersCount)) * 100).toFixed(1)}% do volume total`
+                    : "0% do total"}
+                </p>
+              </CardContent>
+            </Card>
 
-            {/* Cancelamentos */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Card className="border-0 shadow-sm bg-rose-50/50 border-rose-100">
-                <CardHeader className="flex flex-row items-center justify-between pb-1">
-                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-rose-700">
-                    Pedidos Cancelados
-                  </CardTitle>
-                  <X className="h-4 w-4 text-rose-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xl font-black text-rose-700">
-                    {canceledOrdersCount}
-                  </div>
-                  <p className="text-[11px] text-rose-500 mt-0.5">
-                    {totalOrdersCount + canceledOrdersCount > 0
-                      ? `${(((canceledOrdersCount) / (totalOrdersCount + canceledOrdersCount)) * 100).toFixed(1)}% do volume total`
-                      : "0% do total"}
-                  </p>
-                </CardContent>
-              </Card>
+            <Card className="border border-rose-200 bg-rose-50/40 rounded-xl shadow-2xs">
+              <CardHeader className="flex flex-row items-center justify-between pb-1 pt-4 px-4">
+                <CardTitle className="text-[11px] font-semibold uppercase tracking-wider text-rose-700">
+                  Receita Perdida
+                </CardTitle>
+                <DollarSign className="h-4 w-4 text-rose-600" />
+              </CardHeader>
+              <CardContent className="px-4 pb-4">
+                <div className="text-xl font-mono font-bold text-rose-700">
+                  {formatMoney(lostRevenue)}
+                </div>
+                <p className="text-[11px] text-rose-600 mt-0.5">Devido a cancelamentos</p>
+              </CardContent>
+            </Card>
+          </div>
 
-              <Card className="border-0 shadow-sm bg-rose-50/50 border-rose-100">
-                <CardHeader className="flex flex-row items-center justify-between pb-1">
-                  <CardTitle className="text-xs font-bold uppercase tracking-wider text-rose-700">
-                    Receita Perdida
-                  </CardTitle>
-                  <DollarSign className="h-4 w-4 text-rose-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xl font-black text-rose-700">
-                    {formatMoney(lostRevenue)}
-                  </div>
-                  <p className="text-[11px] text-rose-500 mt-0.5">Devido a cancelamentos</p>
-                </CardContent>
-              </Card>
-            </div>
+          {/* 1. GRÁFICO DE BARRAS: VENDAS DIA A DIA */}
+          <Card className="border border-stone-200 rounded-xl shadow-2xs bg-white overflow-hidden">
+            <CardHeader className="bg-stone-50/70 border-b border-stone-200/80 pb-3 flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-sm font-bold text-stone-900 flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-stone-700" />
+                  <span>Evolução Diária de Vendas</span>
+                </CardTitle>
+                <p className="text-xs text-stone-500 mt-0.5">
+                  Faturamento apurado dia a dia no período selecionado
+                </p>
+              </div>
+              <Badge variant="outline" className="text-xs font-semibold bg-white text-stone-700 border-stone-300">
+                {dailySalesData.filter((d) => d.revenue > 0).length} dias com vendas
+              </Badge>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <DailySalesChart data={dailySalesData} />
+            </CardContent>
+          </Card>
 
-            {/* 1. GRÁFICO DE BARRAS: VENDAS DIA A DIA (SEM CATEGORIA) */}
-            <Card className="border-0 shadow-md bg-white overflow-hidden">
-              <CardHeader className="bg-stone-50 border-b border-stone-100 pb-3 flex flex-row items-center justify-between">
+          {/* GRÁFICO DE VALOR ACUMULADO DA TAXA DE SERVIÇO (SE CASO ATIVO) */}
+          {showServiceFeeReport && (
+            <ServiceFeeAccumulatedChart
+              data={serviceFeeMetrics.dailyData}
+              totalServiceFee={serviceFeeMetrics.totalServiceFee}
+              totalSessionsCount={serviceFeeMetrics.totalSessionsCount}
+              avgServiceFee={serviceFeeMetrics.avgServiceFee}
+              serviceFeeRate={serviceFeeRate}
+              isEnabled={isServiceFeeEnabled}
+              isHourly={serviceFeeMetrics.isHourly}
+            />
+          )}
+
+          {/* PAINEL CONSOLIDADO DE MÉTODOS DE PAGAMENTO */}
+          <PaymentMethodsReport analyticsData={paymentMethodsAnalytics} />
+
+          {/* 2. GRID: DONUT DE CATEGORIAS + HORÁRIOS DE PICO */}
+          <div className="grid lg:grid-cols-2 gap-6">
+            {/* Gráfico Redondo: Distribuição por Categoria (Com Snapshot Histórico) */}
+            <Card className="border border-stone-200 rounded-xl shadow-2xs bg-white">
+              <CardHeader className="border-b border-stone-200/80 pb-3 flex flex-row items-center justify-between bg-stone-50/70">
                 <div>
-                  <CardTitle className="text-base font-black text-gray-900 flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-rose-600" />
-                    <span>Evolução Diária de Vendas (Faturamento dos Dias)</span>
+                  <CardTitle className="text-sm font-bold text-stone-900 flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 text-emerald-700" />
+                    <span>Distribuição por Categoria</span>
                   </CardTitle>
                   <p className="text-xs text-stone-500 mt-0.5">
-                    Faturamento cronológico apurado dia a dia no período selecionado
+                    Preserva nomes originais das categorias mesmo se forem excluídas
                   </p>
                 </div>
-                <Badge variant="outline" className="text-xs font-bold bg-white text-stone-700">
-                  {dailySalesData.filter((d) => d.revenue > 0).length} dias com vendas
+                <Badge variant="outline" className="text-xs font-semibold bg-white text-stone-700 border-stone-300">
+                  {categoryMetrics.length} categorias
                 </Badge>
               </CardHeader>
               <CardContent className="pt-4">
-                <DailySalesChart data={dailySalesData} />
+                {categoryMetrics.length === 0 ? (
+                  <div className="h-[280px] flex flex-col items-center justify-center text-stone-400 gap-2">
+                    <TrendingUp className="w-10 h-10 stroke-1 text-stone-300" />
+                    <p className="text-sm font-medium">Sem dados de distribuição para este período</p>
+                  </div>
+                ) : (
+                  <div className="h-[280px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={categoryMetrics}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percentage }) => `${name} ${percentage}%`}
+                          outerRadius={95}
+                          innerRadius={45}
+                          paddingAngle={3}
+                          dataKey="revenue"
+                        >
+                          {categoryMetrics.map((entry, index) => (
+                            <Cell
+                              key={`cell-${index}`}
+                              fill={COLORS[index % COLORS.length]}
+                            />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          formatter={(value) => [formatMoney(value), "Receita"]}
+                          contentStyle={{
+                            borderRadius: "8px",
+                            border: "1px solid #e7e5e4",
+                            boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.05)",
+                            fontWeight: "600",
+                            fontSize: "12px",
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
-            {/* GRÁFICO DE VALOR ACUMULADO DA TAXA DE SERVIÇO (SE CASO ATIVO) */}
-            {showServiceFeeReport && (
-              <ServiceFeeAccumulatedChart
-                data={serviceFeeMetrics.dailyData}
-                totalServiceFee={serviceFeeMetrics.totalServiceFee}
-                totalSessionsCount={serviceFeeMetrics.totalSessionsCount}
-                avgServiceFee={serviceFeeMetrics.avgServiceFee}
-                serviceFeeRate={serviceFeeRate}
-                isEnabled={isServiceFeeEnabled}
-                isHourly={serviceFeeMetrics.isHourly}
-              />
-            )}
-
-            {/* 2. GRID: DONUT DE CATEGORIAS + HORÁRIOS DE PICO */}
-            <div className="grid lg:grid-cols-2 gap-6">
-              {/* Gráfico Redondo: Distribuição por Categoria (Com Snapshot Histórico) */}
-              <Card className="border-0 shadow-md bg-white">
-                <CardHeader className="border-b border-stone-100 pb-3 flex flex-row items-center justify-between">
-                  <div>
-                    <CardTitle className="text-base font-black text-gray-900 flex items-center gap-2">
-                      <TrendingUp className="w-4 h-4 text-rose-600" />
-                      <span>Distribuição por Categoria</span>
-                    </CardTitle>
-                    <p className="text-xs text-stone-500 mt-0.5">
-                      Preserva nomes originais das categorias mesmo se forem excluídas
-                    </p>
-                  </div>
-                  <Badge variant="outline" className="text-xs font-bold bg-stone-50">
-                    {categoryMetrics.length} categorias
-                  </Badge>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  {categoryMetrics.length === 0 ? (
-                    <div className="h-[280px] flex flex-col items-center justify-center text-stone-400 gap-2">
-                      <TrendingUp className="w-10 h-10 stroke-1 text-stone-300" />
-                      <p className="text-sm font-medium">Sem dados de distribuição para este período</p>
-                    </div>
-                  ) : (
-                    <div className="h-[280px] w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={categoryMetrics}
-                            cx="50%"
-                            cy="50%"
-                            labelLine={false}
-                            label={({ name, percentage }) => `${name} ${percentage}%`}
-                            outerRadius={95}
-                            innerRadius={45}
-                            paddingAngle={3}
-                            dataKey="revenue"
-                          >
-                            {categoryMetrics.map((entry, index) => (
-                              <Cell
-                                key={`cell-${index}`}
-                                fill={COLORS[index % COLORS.length]}
-                              />
-                            ))}
-                          </Pie>
-                          <Tooltip
-                            formatter={(value) => [formatMoney(value), "Receita"]}
-                            contentStyle={{
-                              borderRadius: "14px",
-                              border: "none",
-                              boxShadow: "0 6px 25px rgba(0,0,0,0.12)",
-                              fontWeight: "bold",
-                            }}
-                          />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Gráfico de Horários de Pico */}
-              <Card className="border-0 shadow-md bg-white">
-                <CardHeader className="border-b border-stone-100 pb-3 flex flex-row items-center justify-between">
-                  <div>
-                    <CardTitle className="text-base font-black text-gray-900 flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-amber-500" />
-                      <span>Horários de Pico (Volume por Hora)</span>
-                    </CardTitle>
-                    <p className="text-xs text-stone-500 mt-0.5">
-                      Distribuição de pedidos das 00h às 23h (Fuso de Brasília)
-                    </p>
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-4">
-                  <PeakHoursChart
-                    data={peakHoursResult.hourlyData}
-                    peakHourInfo={peakHoursResult.peakHourInfo}
-                  />
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* 3. Tabela Detalhada por Categoria */}
-            {categoryMetrics.length > 0 && (
-              <Card className="border-0 shadow-md overflow-hidden bg-white">
-                <CardHeader className="bg-stone-50 border-b border-stone-100 pb-3">
-                  <CardTitle className="text-sm font-bold text-stone-900">
-                    Detalhamento por Categoria (Snapshot Histórico Preservado)
+            {/* Gráfico de Horários de Pico */}
+            <Card className="border border-stone-200 rounded-xl shadow-2xs bg-white">
+              <CardHeader className="border-b border-stone-200/80 pb-3 flex flex-row items-center justify-between bg-stone-50/70">
+                <div>
+                  <CardTitle className="text-sm font-bold text-stone-900 flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-stone-700" />
+                    <span>Horários de Pico (Volume por Hora)</span>
                   </CardTitle>
-                </CardHeader>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs sm:text-sm">
-                    <thead className="bg-stone-100/70 text-stone-600 uppercase text-[11px] font-bold border-b border-stone-200">
-                      <tr>
-                        <th className="py-3 px-4">Categoria</th>
-                        <th className="py-3 px-4 text-center">Itens Vendidos</th>
-                        <th className="py-3 px-4 text-right">Faturamento Total</th>
-                        <th className="py-3 px-4 text-right">% do Faturamento</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-stone-100 bg-white font-medium">
-                      {categoryMetrics.map((cat, idx) => (
-                        <tr key={idx} className="hover:bg-stone-50 transition-colors">
-                          <td className="py-3 px-4 flex items-center gap-2">
-                            <span
-                              className="w-3 h-3 rounded-full flex-shrink-0"
-                              style={{ backgroundColor: COLORS[idx % COLORS.length] }}
-                            />
-                            <span className="font-bold text-stone-900">{cat.name}</span>
-                          </td>
-                          <td className="py-3 px-4 text-center font-semibold text-stone-700">
-                            {cat.items} un.
-                          </td>
-                          <td className="py-3 px-4 text-right font-bold text-stone-900">
-                            {formatMoney(cat.revenue)}
-                          </td>
-                          <td className="py-3 px-4 text-right font-bold text-rose-600">
-                            {cat.percentage}%
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <p className="text-xs text-stone-500 mt-0.5">
+                    Distribuição de pedidos das 00h às 23h (Fuso de Brasília)
+                  </p>
                 </div>
-              </Card>
-            )}
+              </CardHeader>
+              <CardContent className="pt-4">
+                <PeakHoursChart
+                  data={peakHoursResult.hourlyData}
+                  peakHourInfo={peakHoursResult.peakHourInfo}
+                />
+              </CardContent>
+            </Card>
           </div>
-        )}
 
-        {/* ================= ABA 2: HISTÓRICO DE FECHAMENTOS ================= */}
-        {activeTab === "history" && (
-          <ShiftClosingHistoryTable
-            closings={closings}
-            isLoading={isLoading}
-            storeName={
-              tenantSettings?.restaurant_name ||
-              localStorage.getItem("current_tenant_name") ||
-              "Restaurante"
-            }
-          />
-        )}
-      </div>
+          {/* 3. Tabela Detalhada por Categoria */}
+          {categoryMetrics.length > 0 && (
+            <Card className="border border-stone-200 rounded-xl shadow-2xs overflow-hidden bg-white">
+              <CardHeader className="bg-stone-50/70 border-b border-stone-200/80 pb-3">
+                <CardTitle className="text-sm font-bold text-stone-900">
+                  Detalhamento por Categoria (Snapshot Histórico Preservado)
+                </CardTitle>
+              </CardHeader>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs sm:text-sm">
+                  <thead className="bg-stone-50/70 text-stone-500 uppercase text-[10px] font-semibold border-b border-stone-200/80">
+                    <tr>
+                      <th className="py-2.5 px-4">Categoria</th>
+                      <th className="py-2.5 px-4 text-center">Itens Vendidos</th>
+                      <th className="py-2.5 px-4 text-right">Faturamento Total</th>
+                      <th className="py-2.5 px-4 text-right">% do Faturamento</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-100 bg-white font-medium">
+                    {categoryMetrics.map((cat, idx) => (
+                      <tr key={idx} className="hover:bg-stone-50/60 transition-colors">
+                        <td className="py-2.5 px-4 flex items-center gap-2">
+                          <span
+                            className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: COLORS[idx % COLORS.length] }}
+                          />
+                          <span className="font-semibold text-stone-900">{cat.name}</span>
+                        </td>
+                        <td className="py-2.5 px-4 text-center font-mono font-medium text-stone-700">
+                          {cat.items} un.
+                        </td>
+                        <td className="py-2.5 px-4 text-right font-mono font-bold text-stone-900">
+                          {formatMoney(cat.revenue)}
+                        </td>
+                        <td className="py-2.5 px-4 text-right font-mono font-bold text-emerald-700">
+                          {cat.percentage}%
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* ================= ABA 2: HISTÓRICO DE FECHAMENTOS ================= */}
+      {activeTab === "history" && (
+        <ShiftClosingHistoryTable
+          closings={closings}
+          isLoading={isLoading}
+          storeName={
+            tenantSettings?.restaurant_name ||
+            localStorage.getItem("current_tenant_name") ||
+            "Restaurante"
+          }
+        />
+      )}
+
+      {/* ================= ABA 3: CENTRAL DE EMISSÃO DE RELATÓRIOS OFICIAIS ================= */}
+      {activeTab === "export" && (
+        <ReportsCenterTab
+          orders={allOrders}
+          sessions={tableSessions}
+          tenantSettings={tenantSettings}
+          storeName={
+            tenantSettings?.restaurant_name ||
+            localStorage.getItem("current_tenant_name") ||
+            "Restaurante"
+          }
+        />
+      )}
 
       {/* Modal Interativo de Fechamento de Caixa */}
       <ShiftClosingModal

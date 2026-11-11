@@ -34,6 +34,7 @@ export default function DeliveryFeesTab({
   handleAddNeighborhood,
   handleRemoveNeighborhood,
   handleToggleNeighborhood,
+  handleToggleAllNeighborhoods,
   // Edição inline
   editingNeighborhoodId,
   setEditingNeighborhoodId,
@@ -68,6 +69,7 @@ export default function DeliveryFeesTab({
   handleBatchImportNeighborhoods,
 }) {
   const neighborhoods = settings.delivery_neighborhoods || [];
+  const [showBulkEditor, setShowBulkEditor] = React.useState(false);
 
   const filteredNeighborhoods = neighborhoods.filter((n) =>
     (n.name || "").toLowerCase().includes(neighborhoodSearchTerm.toLowerCase().trim())
@@ -75,24 +77,25 @@ export default function DeliveryFeesTab({
 
   return (
     <div className="space-y-6">
-      <Card className="border-0 shadow-md">
-        <CardHeader>
-          <CardTitle className="text-xl font-bold text-stone-900">
-            Regras de Entrega & Taxas de Delivery
+      <Card className="border border-stone-200 rounded-xl shadow-2xs bg-white">
+        <CardHeader className="border-b border-stone-100 pb-3">
+          <CardTitle className="text-base font-bold text-stone-900 flex items-center gap-2">
+            <Bike className="w-4 h-4 text-stone-700" />
+            <span>Regras de Entrega & Taxas de Delivery</span>
           </CardTitle>
-          <p className="text-xs text-stone-500">
+          <p className="text-xs text-stone-500 mt-0.5">
             Escolha como seu delivery cobra taxas e atende os bairros da sua cidade.
           </p>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-6 pt-4">
           {settings.accepts_delivery === false && (
-            <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3">
-              <span className="text-xl">⚠️</span>
+            <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
+              <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
               <div>
-                <h4 className="text-xs sm:text-sm font-bold text-amber-900">
+                <h4 className="text-xs font-bold text-amber-900">
                   O serviço de Delivery está desativado nas Configurações Gerais
                 </h4>
-                <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
+                <p className="text-[11px] text-amber-700 mt-0.5 leading-relaxed">
                   Seus clientes atualmente só conseguem pedir para <strong>Retirada no Balcão</strong>. As taxas e bairros configurados abaixo só serão cobrados se você reativar o Delivery na aba <strong>Geral & Loja</strong>.
                 </p>
               </div>
@@ -101,31 +104,31 @@ export default function DeliveryFeesTab({
 
           {/* Seletor de Tipo de Taxa */}
           <div>
-            <Label className="text-sm font-bold text-stone-800 block mb-2">
+            <Label className="text-xs font-semibold text-stone-700 block mb-2">
               Modelo de Cobrança de Entrega
             </Label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button
                 type="button"
                 onClick={() => handleInputChange("delivery_fee_type", "fixed")}
-                className={`p-4 rounded-xl border text-left flex items-start gap-3 transition-all cursor-pointer ${
+                className={`p-3.5 rounded-xl border text-left flex items-start gap-3 transition-colors cursor-pointer ${
                   settings.delivery_fee_type === "fixed"
-                    ? "border-rose-500 bg-rose-50/50 ring-2 ring-rose-500/20 shadow-xs"
+                    ? "border-emerald-700 bg-emerald-50/30 shadow-2xs ring-1 ring-emerald-700"
                     : "border-stone-200 bg-white hover:border-stone-300"
                 }`}
               >
                 <div
                   className={`p-2 rounded-lg ${
                     settings.delivery_fee_type === "fixed"
-                      ? "bg-rose-600 text-white"
+                      ? "bg-emerald-700 text-white"
                       : "bg-stone-100 text-stone-600"
                   }`}
                 >
-                  <DollarSign className="w-5 h-5" />
+                  <DollarSign className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className="font-bold text-sm text-stone-900">Taxa Fixa Única</div>
-                  <div className="text-xs text-stone-500 mt-0.5">
+                  <div className="font-semibold text-xs text-stone-900">Taxa Fixa Única</div>
+                  <div className="text-[11px] text-stone-500 mt-0.5">
                     O mesmo valor para qualquer entrega na cidade.
                   </div>
                 </div>
@@ -134,29 +137,29 @@ export default function DeliveryFeesTab({
               <button
                 type="button"
                 onClick={() => handleInputChange("delivery_fee_type", "neighborhood")}
-                className={`p-4 rounded-xl border text-left flex items-start gap-3 transition-all cursor-pointer ${
+                className={`p-3.5 rounded-xl border text-left flex items-start gap-3 transition-colors cursor-pointer ${
                   settings.delivery_fee_type === "neighborhood"
-                    ? "border-rose-500 bg-rose-50/50 ring-2 ring-rose-500/20 shadow-xs"
+                    ? "border-emerald-700 bg-emerald-50/30 shadow-2xs ring-1 ring-emerald-700"
                     : "border-stone-200 bg-white hover:border-stone-300"
                 }`}
               >
                 <div
                   className={`p-2 rounded-lg ${
                     settings.delivery_fee_type === "neighborhood"
-                      ? "bg-rose-600 text-white"
+                      ? "bg-emerald-700 text-white"
                       : "bg-stone-100 text-stone-600"
                   }`}
                 >
-                  <MapPin className="w-5 h-5" />
+                  <MapPin className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className="font-bold text-sm text-stone-900 flex items-center gap-1.5">
+                  <div className="font-semibold text-xs text-stone-900 flex items-center gap-1.5">
                     <span>Taxa por Bairro</span>
-                    <span className="text-[10px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded font-bold">
+                    <span className="text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200 px-1.5 py-0.2 rounded font-semibold">
                       Recomendado
                     </span>
                   </div>
-                  <div className="text-xs text-stone-500 mt-0.5">
+                  <div className="text-[11px] text-stone-500 mt-0.5">
                     Defina o valor para cada bairro atendido com busca tolerante a erros.
                   </div>
                 </div>
@@ -336,21 +339,72 @@ export default function DeliveryFeesTab({
                 </div>
               </div>
 
-              {/* Tabela e Ferramentas em Lote */}
+              {/* Tabela e Ferramentas de Bairros */}
               <div className="space-y-3">
+                {/* Banner explicativo de Atendimento */}
+                <div className="p-3.5 bg-emerald-50/80 border border-emerald-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-start gap-2.5">
+                    <MapPin className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
+                    <div>
+                      <div className="text-xs font-bold text-emerald-950 flex items-center gap-2">
+                        <span>Regra de Atendimento & Checkout</span>
+                        <span className="text-[10px] bg-emerald-200/80 text-emerald-900 px-1.5 py-0.2 rounded font-semibold">
+                          Salva Automaticamente
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-emerald-800 mt-0.5 leading-relaxed">
+                        • <strong>Marcado (☑️):</strong> Você entrega neste bairro com a taxa configurada.<br />
+                        • <strong>Desmarcado (⬜):</strong> Você <strong>NÃO entrega</strong>. O checkout bloqueia a entrega na hora e oferece Retirada no Balcão.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleToggleAllNeighborhoods?.(true)}
+                      className="h-7 text-[11px] font-bold text-emerald-800 bg-white hover:bg-emerald-100 border-emerald-300 shadow-2xs"
+                    >
+                      ✓ Ativar Todos
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleToggleAllNeighborhoods?.(false)}
+                      className="h-7 text-[11px] font-bold text-rose-800 bg-white hover:bg-rose-50 border-rose-300 shadow-2xs"
+                    >
+                      ✕ Pausar Todos
+                    </Button>
+                  </div>
+                </div>
+
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold text-stone-800">
                       Bairros Cadastrados ({neighborhoods.length})
                     </span>
-                    {selectedNeighborhoodIds.size > 0 && (
-                      <span className="text-[11px] bg-rose-100 text-rose-800 font-bold px-2 py-0.5 rounded-full">
-                        {selectedNeighborhoodIds.size} selecionado(s)
-                      </span>
-                    )}
+                    <span className="text-[11px] text-stone-500">
+                      ({neighborhoods.filter(n => n.active !== false).length} atendidos)
+                    </span>
                   </div>
 
                   <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowBulkEditor(!showBulkEditor)}
+                      className={`h-8 text-xs font-semibold rounded-lg ${
+                        showBulkEditor ? "bg-amber-100 text-amber-900 border-amber-300" : "bg-white text-stone-700"
+                      }`}
+                    >
+                      <DollarSign className="w-3.5 h-3.5 mr-1 text-amber-600" />
+                      <span>{showBulkEditor ? "Ocultar Reajuste" : "Reajustar Valores em Lote"}</span>
+                    </Button>
+
                     <div className="relative">
                       <Search className="w-3.5 h-3.5 text-stone-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
                       <Input
@@ -364,11 +418,16 @@ export default function DeliveryFeesTab({
                   </div>
                 </div>
 
-                {/* Barra de ação em lote */}
-                {selectedNeighborhoodIds.size > 0 && (
+                {/* Barra de reajuste em lote */}
+                {showBulkEditor && (
                   <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex flex-wrap items-center justify-between gap-3 animate-in fade-in">
-                    <div className="text-xs font-bold text-amber-900">
-                      Alterar taxa dos {selectedNeighborhoodIds.size} bairros selecionados:
+                    <div>
+                      <div className="text-xs font-bold text-amber-900">
+                        Reajustar taxa de entrega em lote:
+                      </div>
+                      <div className="text-[11px] text-amber-700 mt-0.5">
+                        Aplica este valor a todos os <strong>{filteredNeighborhoods.length}</strong> bairros visíveis na lista abaixo.
+                      </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <CurrencyInput
@@ -379,11 +438,14 @@ export default function DeliveryFeesTab({
                       />
                       <Button
                         type="button"
-                        onClick={handleApplyBulkFee}
+                        onClick={() => {
+                          handleToggleSelectAllFiltered(filteredNeighborhoods);
+                          handleApplyBulkFee();
+                        }}
                         disabled={!bulkApplyFee}
-                        className="bg-amber-600 hover:bg-amber-700 text-white h-8 text-xs font-bold px-3 rounded-lg"
+                        className="bg-amber-600 hover:bg-amber-700 text-white h-8 text-xs font-bold px-3 rounded-lg shadow-2xs cursor-pointer"
                       >
-                        Aplicar a Todos
+                        Aplicar nos {filteredNeighborhoods.length} Bairros
                       </Button>
                     </div>
                   </div>
@@ -391,128 +453,123 @@ export default function DeliveryFeesTab({
 
                 {/* Tabela de Bairros */}
                 <div className="border border-stone-200 rounded-xl overflow-hidden bg-white shadow-2xs">
-                  <div className="max-h-80 overflow-y-auto divide-y divide-stone-100">
+                  <div className="p-2.5 bg-stone-50 border-b border-stone-100 text-[11px] font-bold text-stone-500 flex items-center justify-between">
+                    <span>Bairro & Status (☑️ Atendido | ⬜ Não Atendido)</span>
+                    <span>Taxa de Entrega</span>
+                  </div>
+
+                  <div className="max-h-96 overflow-y-auto divide-y divide-stone-100">
                     {filteredNeighborhoods.length === 0 ? (
                       <div className="py-8 text-center text-xs text-stone-400">
                         Nenhum bairro cadastrado ou encontrado com este filtro.
                       </div>
                     ) : (
-                      <>
-                        <div className="p-2.5 bg-stone-50 text-[11px] font-bold text-stone-500 flex items-center justify-between">
-                          <button
-                            type="button"
-                            onClick={() => handleToggleSelectAllFiltered(filteredNeighborhoods)}
-                            className="flex items-center gap-1.5 hover:text-stone-800 cursor-pointer"
+                      filteredNeighborhoods.map((n) => {
+                        const isEditing = editingNeighborhoodId === n.id;
+                        const isDelivered = n.active !== false;
+
+                        return (
+                          <div
+                            key={n.id}
+                            className={`p-3 flex items-center justify-between gap-3 transition-colors ${
+                              isDelivered ? "bg-white hover:bg-emerald-50/20" : "bg-stone-50/80 hover:bg-stone-100/70"
+                            }`}
                           >
-                            {selectedNeighborhoodIds.size === filteredNeighborhoods.length && filteredNeighborhoods.length > 0 ? (
-                              <CheckSquare className="w-3.5 h-3.5 text-rose-600" />
-                            ) : (
-                              <Square className="w-3.5 h-3.5 text-stone-400" />
-                            )}
-                            <span>Selecionar Visíveis</span>
-                          </button>
-                          <span>Ações e Valores</span>
-                        </div>
-
-                        {filteredNeighborhoods.map((n) => {
-                          const isSelected = selectedNeighborhoodIds.has(n.id);
-                          const isEditing = editingNeighborhoodId === n.id;
-
-                          return (
-                            <div
-                              key={n.id}
-                              className={`p-3 flex items-center justify-between gap-3 transition-colors ${
-                                isSelected ? "bg-rose-50/50" : "hover:bg-stone-50/70"
-                              }`}
-                            >
-                              <div className="flex items-center gap-2.5">
-                                <input
-                                  type="checkbox"
-                                  checked={isSelected}
-                                  onChange={() => handleToggleSelectNeighborhood(n.id)}
-                                  className="w-4 h-4 accent-rose-600 rounded cursor-pointer"
-                                />
-                                <div>
-                                  <span className={`text-xs font-bold block ${n.active !== false ? "text-stone-800" : "text-stone-400 line-through"}`}>
+                            {/* Checkbox de Atendimento */}
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="checkbox"
+                                id={`nh-check-${n.id}`}
+                                checked={isDelivered}
+                                onChange={() => handleToggleNeighborhood(n.id)}
+                                className="w-5 h-5 accent-emerald-600 rounded cursor-pointer shrink-0"
+                                title={isDelivered ? "Clique para desmarcar e NÃO entregar neste bairro" : "Clique para marcar e ENTREGAR neste bairro"}
+                              />
+                              <label htmlFor={`nh-check-${n.id}`} className="cursor-pointer select-none">
+                                <div className="flex items-center gap-2">
+                                  <span className={`text-xs font-bold ${isDelivered ? "text-stone-900" : "text-stone-400 line-through"}`}>
                                     {n.name}
                                   </span>
-                                  <span className="text-[10px] text-stone-400">
-                                    {n.active !== false ? "Ativo" : "Pausado temporariamente"}
-                                  </span>
+                                  {isDelivered ? (
+                                    <span className="text-[10px] bg-emerald-50 text-emerald-800 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
+                                      ✓ Entregamos Aqui
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] bg-rose-50 text-rose-800 font-bold px-2 py-0.5 rounded-full border border-rose-200">
+                                      ✕ Não Entregamos (Bloqueado)
+                                    </span>
+                                  )}
                                 </div>
-                              </div>
-
-                              <div className="flex items-center gap-2">
-                                {isEditing ? (
-                                  <div className="flex items-center gap-1">
-                                    <CurrencyInput
-                                      value={editingNeighborhoodFee}
-                                      onChange={(e) => setEditingNeighborhoodFee(e.target.value)}
-                                      className="h-7 w-24 text-xs font-bold bg-white"
-                                      autoFocus
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={() => handleSaveInlineFee(n.id)}
-                                      className="p-1 text-emerald-600 hover:bg-emerald-50 rounded"
-                                      title="Salvar"
-                                    >
-                                      <Check className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setEditingNeighborhoodId(null)}
-                                      className="p-1 text-stone-400 hover:bg-stone-100 rounded"
-                                      title="Cancelar"
-                                    >
-                                      <X className="w-4 h-4" />
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center gap-2">
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setEditingNeighborhoodId(n.id);
-                                        setEditingNeighborhoodFee(formatToBRL(n.fee || 0));
-                                      }}
-                                      className="text-xs font-bold text-stone-800 bg-stone-100 hover:bg-stone-200 px-2 py-1 rounded-md flex items-center gap-1 cursor-pointer"
-                                      title="Clique para editar taxa"
-                                    >
-                                      <span>{formatToBRL(n.fee || 0)}</span>
-                                      <Edit2 className="w-3 h-3 text-stone-400" />
-                                    </button>
-
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handleToggleNeighborhood(n.id)}
-                                      className={`h-7 px-2 text-[11px] font-bold rounded ${
-                                        n.active !== false
-                                          ? "text-emerald-700 hover:bg-emerald-50"
-                                          : "text-amber-700 hover:bg-amber-50"
-                                      }`}
-                                    >
-                                      {n.active !== false ? "Pausar" : "Ativar"}
-                                    </Button>
-
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handleRemoveNeighborhood(n.id)}
-                                      className="h-7 w-7 p-0 text-stone-400 hover:text-rose-600 hover:bg-rose-50 rounded"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </Button>
-                                  </div>
-                                )}
-                              </div>
+                                <span className="text-[10px] text-stone-400 block mt-0.5">
+                                  {isDelivered
+                                    ? "Entrega liberada no checkout"
+                                    : "Entrega bloqueada — Cliente convidado para retirar no balcão"}
+                                </span>
+                              </label>
                             </div>
-                          );
-                        })}
-                      </>
+
+                            {/* Taxa e Ações */}
+                            <div className="flex items-center gap-2">
+                              {isEditing ? (
+                                <div className="flex items-center gap-1">
+                                  <CurrencyInput
+                                    value={editingNeighborhoodFee}
+                                    onChange={(e) => setEditingNeighborhoodFee(e.target.value)}
+                                    className="h-7 w-24 text-xs font-bold bg-white"
+                                    autoFocus
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSaveInlineFee(n.id)}
+                                    className="p-1 text-emerald-600 hover:bg-emerald-50 rounded cursor-pointer"
+                                    title="Salvar taxa"
+                                  >
+                                    <Check className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingNeighborhoodId(null)}
+                                    className="p-1 text-stone-400 hover:bg-stone-100 rounded cursor-pointer"
+                                    title="Cancelar"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingNeighborhoodId(n.id);
+                                      setEditingNeighborhoodFee(formatToBRL(n.fee || 0));
+                                    }}
+                                    className={`text-xs font-bold px-2.5 py-1 rounded-md flex items-center gap-1.5 cursor-pointer transition-colors ${
+                                      isDelivered
+                                        ? "text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200"
+                                        : "text-stone-400 bg-stone-100 hover:bg-stone-200 line-through"
+                                    }`}
+                                    title="Clique para editar taxa"
+                                  >
+                                    <span>{formatToBRL(n.fee || 0)}</span>
+                                    <Edit2 className="w-3 h-3 text-stone-400" />
+                                  </button>
+
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleRemoveNeighborhood(n.id)}
+                                    className="h-7 w-7 p-0 text-stone-400 hover:text-rose-600 hover:bg-rose-50 rounded cursor-pointer"
+                                    title="Excluir bairro"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
                     )}
                   </div>
                 </div>

@@ -8,6 +8,8 @@ const AuthContext = createContext({
   tenantId: null,
   isAdminAuthenticated: false,
   isLoadingAuth: true,
+  isPasswordRecovery: false,
+  clearPasswordRecovery: () => {},
   logout: async () => {},
   refreshSession: async () => {},
 });
@@ -16,6 +18,17 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return (
+      window.location.hash.includes("type=recovery") ||
+      window.location.search.includes("type=recovery")
+    );
+  });
+
+  const clearPasswordRecovery = useCallback(() => {
+    setIsPasswordRecovery(false);
+  }, []);
 
   // Carrega os dados de autorização do usuário na tabela tenant_admins
   const fetchUserProfile = useCallback(async (authUser) => {
@@ -135,7 +148,11 @@ export const AuthProvider = ({ children }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
 
-      if (event === "SIGNED_OUT" || !session) {
+      if (event === "PASSWORD_RECOVERY") {
+        setIsPasswordRecovery(true);
+        setIsLoadingAuth(false);
+      } else if (event === "SIGNED_OUT" || !session) {
+        setIsPasswordRecovery(false);
         clearSession();
         setIsLoadingAuth(false);
       } else if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
@@ -189,6 +206,8 @@ export const AuthProvider = ({ children }) => {
         tenantId: user?.tenant_id || null,
         isAdminAuthenticated,
         isLoadingAuth,
+        isPasswordRecovery,
+        clearPasswordRecovery,
         logout,
         refreshSession,
       }}

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Settings } from "@/entities/Settings";
 import { AdminUser } from "@/entities/AdminUser";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
@@ -7,11 +8,11 @@ import { Button } from "@/components/ui/button";
 import { 
   Save, 
   Store, 
-  Clock, 
   Bike, 
   Users,
   CreditCard,
-  Wallet
+  Wallet,
+  Printer
 } from "lucide-react";
 import { fetchCityNeighborhoods } from "@/services/cityNeighborhoods";
 import { parseBRLToNumber } from "@/utils/moneyMask";
@@ -20,11 +21,11 @@ import { validateSchema, settingsSchema, adminUserSchema } from "@/schemas";
 
 // Sub-abas modularizadas
 import GeneralSettingsTab from "@/components/admin/settings/GeneralSettingsTab";
-import HoursTab from "@/components/admin/settings/HoursTab";
 import DeliveryFeesTab from "@/components/admin/settings/DeliveryFeesTab";
 import AdminUsersTab from "@/components/admin/settings/AdminUsersTab";
 import SubscriptionTab from "@/components/admin/settings/SubscriptionTab";
 import PaymentMethodsTab from "@/components/admin/settings/PaymentMethodsTab";
+import ProductionSectorsTab from "@/components/admin/settings/ProductionSectorsTab";
 
 // Constantes e utilitários compartilhados
 import {
@@ -49,7 +50,30 @@ export {
 };
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState("geral");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTabParam = searchParams.get("tab");
+  const validTabs = ["geral", "entregas", "pagamentos", "setores", "usuarios", "assinatura"];
+  const [activeTab, setActiveTabState] = useState(
+    validTabs.includes(initialTabParam) ? initialTabParam : "geral"
+  );
+
+  const setActiveTab = (tab) => {
+    setActiveTabState(tab);
+    const next = new URLSearchParams(searchParams);
+    if (tab === "geral") {
+      next.delete("tab");
+    } else {
+      next.set("tab", tab);
+    }
+    setSearchParams(next, { replace: true });
+  };
+
+  useEffect(() => {
+    const paramTab = searchParams.get("tab");
+    if (paramTab && validTabs.includes(paramTab) && paramTab !== activeTab) {
+      setActiveTabState(paramTab);
+    }
+  }, [searchParams]);
   const [tenantDetails, setTenantDetails] = useState(null);
 
   const [settings, setSettings] = useState({
@@ -78,6 +102,7 @@ export default function SettingsPage() {
     salon_mode: "full",
     accepts_delivery: true,
     accepts_takeaway: true,
+    auto_accept_delivery: false,
     pizza_pricing_rule: "highest_price",
     table_service_fee_enabled: false,
     table_service_fee_rate: 10,
@@ -141,7 +166,7 @@ export default function SettingsPage() {
   const loadSettings = async () => {
     try {
       const segments = window.location.pathname.split("/").filter(Boolean);
-      const RESERVED = ["settings", "dashboard", "orders", "pdv", "menu", "adminlogin", "superadmin"];
+      const RESERVED = ["settings", "dashboard", "orders", "pdv", "menu", "adminlogin", "login", "superadmin"];
       const urlSlug = segments.length > 0 && !RESERVED.includes(segments[0].toLowerCase()) ? segments[0].toLowerCase() : null;
       const currentSlug = urlSlug || localStorage.getItem("current_tenant_slug");
       const currentTenantId = localStorage.getItem("current_tenant_id");
@@ -203,6 +228,7 @@ export default function SettingsPage() {
             salon_mode: tenantData.salon_mode || (tenantData.plan === "showcase" ? "showcase" : (tenantData.plan === "table" ? "table_only" : "full")),
             accepts_delivery: tenantData.accepts_delivery !== false,
             accepts_takeaway: tenantData.accepts_takeaway !== false,
+            auto_accept_delivery: tenantData.auto_accept_delivery === true,
             pizza_pricing_rule: tenantData.pizza_pricing_rule || "highest_price",
             table_service_fee_enabled: tenantData.table_service_fee_enabled === true,
             table_service_fee_rate: Number(tenantData.table_service_fee_rate ?? 10),
@@ -402,8 +428,8 @@ export default function SettingsPage() {
     }
   };
 
-  // Funções de dias e horários
-  const handleToggleDay = (dayIndex) => {
+  // Funções de dias e horários (legado mantido para compatibilidade de esquema)
+  const _handleToggleDay = (dayIndex) => {
     setSettings(prev => ({
       ...prev,
       open_days: prev.open_days.map(d =>
@@ -412,7 +438,7 @@ export default function SettingsPage() {
     }));
   };
 
-  const handleDayTime = (dayIndex, field, value) => {
+  const _handleDayTime = (dayIndex, field, value) => {
     setSettings(prev => ({
       ...prev,
       open_days: prev.open_days.map(d =>
@@ -421,7 +447,7 @@ export default function SettingsPage() {
     }));
   };
 
-  const handleCopyDayTimeToAll = (openTime, closeTime) => {
+  const _handleCopyDayTimeToAll = (openTime, closeTime) => {
     setSettings(prev => ({
       ...prev,
       opening_time: openTime,
@@ -435,7 +461,7 @@ export default function SettingsPage() {
     toast.success("Horário replicado para todos os dias!");
   };
 
-  const handleToggleAllDays = (enabledState) => {
+  const _handleToggleAllDays = (enabledState) => {
     setSettings(prev => ({
       ...prev,
       open_days: prev.open_days.map(d => ({
@@ -471,13 +497,80 @@ export default function SettingsPage() {
     toast.success("Bairro removido");
   };
 
-  const handleToggleNeighborhood = (id) => {
+  const handleToggleNeighborhood = async (id) => {
+    let targetName = "";
+    let willBeActive = true;
+    const updated = (settings.delivery_neighborhoods || []).map(n => {
+      if (n.id === id) {
+        willBeActive = n.active === false ? true : false;
+        targetName = n.name;
+        return { ...n, active: willBeActive };
+      }
+      return n;
+    });
+
     setSettings(prev => ({
       ...prev,
-      delivery_neighborhoods: (prev.delivery_neighborhoods || []).map(n =>
-        n.id === id ? { ...n, active: n.active === false ? true : false } : n
-      )
+      delivery_neighborhoods: updated
     }));
+
+    // Auto-save no Supabase para garantir que não perde
+    const resolvedId = settingsId || localStorage.getItem("current_tenant_id");
+    const currentSlug = localStorage.getItem("current_tenant_slug");
+    if (isSupabaseConfigured() && supabase && (resolvedId || currentSlug)) {
+      try {
+        let query = supabase.from("tenants").update({
+          delivery_neighborhoods: updated,
+          updated_date: new Date().toISOString()
+        });
+        if (resolvedId) query = query.eq("id", resolvedId);
+        else if (currentSlug) query = query.eq("slug", currentSlug);
+        await query;
+      } catch (err) {
+        console.error("Erro ao salvar status do bairro:", err);
+      }
+    }
+
+    if (willBeActive) {
+      toast.success(`"${targetName}" marcado: entregas ativadas (salvo)!`);
+    } else {
+      toast.warning(`"${targetName}" desmarcado: entregas bloqueadas neste bairro (salvo)!`);
+    }
+  };
+
+  const handleToggleAllNeighborhoods = async (makeActive) => {
+    const updated = (settings.delivery_neighborhoods || []).map(n => ({
+      ...n,
+      active: makeActive
+    }));
+
+    setSettings(prev => ({
+      ...prev,
+      delivery_neighborhoods: updated
+    }));
+
+    // Auto-save no Supabase
+    const resolvedId = settingsId || localStorage.getItem("current_tenant_id");
+    const currentSlug = localStorage.getItem("current_tenant_slug");
+    if (isSupabaseConfigured() && supabase && (resolvedId || currentSlug)) {
+      try {
+        let query = supabase.from("tenants").update({
+          delivery_neighborhoods: updated,
+          updated_date: new Date().toISOString()
+        });
+        if (resolvedId) query = query.eq("id", resolvedId);
+        else if (currentSlug) query = query.eq("slug", currentSlug);
+        await query;
+      } catch (err) {
+        console.error("Erro ao salvar status em lote:", err);
+      }
+    }
+
+    if (makeActive) {
+      toast.success("Todos os bairros foram marcados como atendidos (salvo)!");
+    } else {
+      toast.warning("Todos os bairros foram desmarcados (bloqueados no delivery)!");
+    }
   };
 
   const handleSaveInlineFee = (id) => {
@@ -813,6 +906,7 @@ export default function SettingsPage() {
         delivery_neighborhoods: settings.delivery_neighborhoods || [],
         accepts_delivery: settings.accepts_delivery !== false,
         accepts_takeaway: settings.accepts_takeaway !== false,
+        auto_accept_delivery: settings.auto_accept_delivery === true,
         pizza_pricing_rule: settings.pizza_pricing_rule || "highest_price",
         salon_mode: settings.salon_mode || "full",
         table_service_fee_enabled: settings.table_service_fee_enabled === true,
@@ -828,7 +922,7 @@ export default function SettingsPage() {
       }
 
       const segments = window.location.pathname.split("/").filter(Boolean);
-      const RESERVED = ["settings", "dashboard", "orders", "pdv", "menu", "adminlogin", "superadmin"];
+      const RESERVED = ["settings", "dashboard", "orders", "pdv", "menu", "adminlogin", "login", "superadmin"];
       const urlSlug = segments.length > 0 && !RESERVED.includes(segments[0].toLowerCase()) ? segments[0].toLowerCase() : null;
       const currentSlug = urlSlug || localStorage.getItem("current_tenant_slug");
       const targetTenantId = settingsId || localStorage.getItem("current_tenant_id");
@@ -864,6 +958,7 @@ export default function SettingsPage() {
           salon_mode: settings.salon_mode || 'full',
           accepts_delivery: settings.accepts_delivery !== false,
           accepts_takeaway: settings.accepts_takeaway !== false,
+          auto_accept_delivery: settings.auto_accept_delivery === true,
           pizza_pricing_rule: settings.pizza_pricing_rule || 'highest_price',
           table_service_fee_enabled: settings.table_service_fee_enabled === true,
           table_service_fee_rate: Number(settings.table_service_fee_rate ?? 10),
@@ -945,11 +1040,10 @@ export default function SettingsPage() {
 
   if (isLoading) {
     return (
-      <div className="p-8 bg-gray-50 min-h-screen">
-        <div className="max-w-4xl mx-auto animate-pulse space-y-6">
-          <div className="h-8 bg-gray-200 rounded w-48"></div>
-          <div className="h-4 bg-gray-200 rounded w-64"></div>
-          <div className="bg-white p-6 rounded-2xl h-64"></div>
+      <div className="flex h-screen items-center justify-center bg-[#F7F9F8]">
+        <div className="text-center space-y-3">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#047857] mx-auto"></div>
+          <p className="text-stone-600 font-semibold text-sm">Carregando configurações...</p>
         </div>
       </div>
     );
@@ -961,129 +1055,133 @@ export default function SettingsPage() {
   const isTableOnly = currentSalonMode === "table_only" || currentPlan === "table";
 
   return (
-    <div className="p-4 sm:p-8 bg-stone-50/60 min-h-screen">
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Cabeçalho */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-stone-900 tracking-tight">
-              Configurações
+    <div className="p-4 sm:p-6 lg:p-8 bg-[#F7F9F8] min-h-screen space-y-6 max-w-7xl mx-auto">
+      {/* Cabeçalho Executivo */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-xl sm:text-2xl font-bold text-stone-900 tracking-tight">
+              Configurações da Loja
             </h1>
-            <p className="text-xs sm:text-sm text-stone-500 mt-1">
-              Gerencie as informações da sua loja, horários, taxas de entrega e acessos.
-            </p>
+            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md border border-stone-300 bg-stone-100 text-stone-700">
+              Administração
+            </span>
           </div>
-
-          <Button
-            type="button"
-            onClick={handleSubmit}
-            disabled={isSaving}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm h-11 px-6 rounded-2xl shadow-md flex items-center gap-2 cursor-pointer self-start sm:self-auto"
-          >
-            {isSaving ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
-                <span>Salvando...</span>
-              </>
-            ) : (
-              <>
-                <Save className="w-4 h-4" />
-                <span>Salvar Tudo</span>
-              </>
-            )}
-          </Button>
+          <p className="text-xs text-stone-500 mt-0.5">
+            Gerencie as informações da sua loja, taxas de entrega, pagamentos e acessos
+          </p>
         </div>
 
-        {/* Barra de Abas Elegante */}
-        <div className="flex items-center gap-2 border-b border-stone-200 overflow-x-auto pb-1">
-          <button
-            type="button"
-            onClick={() => setActiveTab("geral")}
-            className={`flex items-center gap-2 py-3 px-4 font-bold text-xs sm:text-sm border-b-2 transition-all whitespace-nowrap cursor-pointer ${
-              activeTab === "geral"
-                ? "border-rose-600 text-rose-600"
-                : "border-transparent text-stone-500 hover:text-stone-800"
-            }`}
-          >
-            <Store className="w-4 h-4" />
-            <span>Geral & Loja</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("horarios")}
-            className={`flex items-center gap-2 py-3 px-4 font-bold text-xs sm:text-sm border-b-2 transition-all whitespace-nowrap cursor-pointer ${
-              activeTab === "horarios"
-                ? "border-rose-600 text-rose-600"
-                : "border-transparent text-stone-500 hover:text-stone-800"
-            }`}
-          >
-            <Clock className="w-4 h-4" />
-            <span>Horários de Funcionamento</span>
-          </button>
-
-          {!isVisualOnly && !isTableOnly && (
-            <button
-              type="button"
-              onClick={() => setActiveTab("entregas")}
-              className={`flex items-center gap-2 py-3 px-4 font-bold text-xs sm:text-sm border-b-2 transition-all whitespace-nowrap cursor-pointer ${
-                activeTab === "entregas"
-                  ? "border-rose-600 text-rose-600"
-                  : "border-transparent text-stone-500 hover:text-stone-800"
-              }`}
-            >
-              <Bike className="w-4 h-4" />
-              <span>Taxas & Bairros</span>
-            </button>
+        <Button
+          type="button"
+          onClick={handleSubmit}
+          disabled={isSaving}
+          className="h-9 px-4 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs rounded-lg shadow-2xs flex items-center gap-2 cursor-pointer transition-colors self-start sm:self-auto"
+        >
+          {isSaving ? (
+            <>
+              <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white" />
+              <span>Salvando...</span>
+            </>
+          ) : (
+            <>
+              <Save className="w-3.5 h-3.5" />
+              <span>Salvar Alterações</span>
+            </>
           )}
+        </Button>
+      </div>
 
-          {!isVisualOnly && (
-            <button
-              type="button"
-              onClick={() => setActiveTab("pagamentos")}
-              className={`flex items-center gap-2 py-3 px-4 font-bold text-xs sm:text-sm border-b-2 transition-all whitespace-nowrap cursor-pointer ${
-                activeTab === "pagamentos"
-                  ? "border-emerald-600 text-emerald-600 bg-emerald-50/40 rounded-t-lg"
-                  : "border-transparent text-stone-500 hover:text-stone-800"
-              }`}
-            >
-              <Wallet className="w-4 h-4" />
-              <span>Formas de Pagamento</span>
-            </button>
+      {/* Barra de Abas Executiva */}
+      <div className="flex items-center gap-1.5 p-1 bg-stone-200/70 rounded-xl w-fit border border-stone-300/80 overflow-x-auto">
+        <button
+          type="button"
+          onClick={() => setActiveTab("geral")}
+          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === "geral"
+              ? "bg-white text-stone-900 shadow-2xs"
+              : "text-stone-600 hover:text-stone-900"
+          }`}
+        >
+          <Store className="w-3.5 h-3.5 text-stone-700" />
+          <span>Geral & Loja</span>
+        </button>
+
+        {!isVisualOnly && !isTableOnly && (
+          <button
+            type="button"
+            onClick={() => setActiveTab("entregas")}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+              activeTab === "entregas"
+                ? "bg-white text-stone-900 shadow-2xs"
+                : "text-stone-600 hover:text-stone-900"
+            }`}
+          >
+            <Bike className="w-3.5 h-3.5 text-stone-700" />
+            <span>Taxas & Bairros</span>
+          </button>
+        )}
+
+        {!isVisualOnly && (
+          <button
+            type="button"
+            onClick={() => setActiveTab("pagamentos")}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+              activeTab === "pagamentos"
+                ? "bg-white text-stone-900 shadow-2xs"
+                : "text-stone-600 hover:text-stone-900"
+            }`}
+          >
+            <Wallet className="w-3.5 h-3.5 text-stone-700" />
+            <span>Formas de Pagamento</span>
+          </button>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("setores")}
+          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === "setores"
+              ? "bg-white text-stone-900 shadow-2xs"
+              : "text-stone-600 hover:text-stone-900"
+          }`}
+        >
+          <Printer className="w-3.5 h-3.5 text-stone-700" />
+          <span>Setores & Impressão</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("usuarios")}
+          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === "usuarios"
+              ? "bg-white text-stone-900 shadow-2xs"
+              : "text-stone-600 hover:text-stone-900"
+          }`}
+        >
+          <Users className="w-3.5 h-3.5 text-stone-700" />
+          <span>Usuários & Acessos</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("assinatura")}
+          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap ${
+            activeTab === "assinatura"
+              ? "bg-white text-stone-900 shadow-2xs"
+              : "text-stone-600 hover:text-stone-900"
+          }`}
+        >
+          <CreditCard className="w-3.5 h-3.5 text-stone-700" />
+          <span>Minha Assinatura</span>
+          {tenantDetails?.subscription_status === "pending" && (
+            <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" title="Pagamento pendente" />
           )}
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("usuarios")}
-            className={`flex items-center gap-2 py-3 px-4 font-bold text-xs sm:text-sm border-b-2 transition-all whitespace-nowrap cursor-pointer ${
-              activeTab === "usuarios"
-                ? "border-purple-600 text-purple-600"
-                : "border-transparent text-stone-500 hover:text-stone-800"
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            <span>Usuários & Acessos</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab("assinatura")}
-            className={`flex items-center gap-2 py-3 px-4 font-bold text-xs sm:text-sm border-b-2 transition-all whitespace-nowrap cursor-pointer ${
-              activeTab === "assinatura"
-                ? "border-rose-600 text-rose-600 bg-rose-50/40 rounded-t-lg"
-                : "border-transparent text-stone-500 hover:text-stone-800"
-            }`}
-          >
-            <CreditCard className="w-4 h-4 text-rose-500" />
-            <span>Minha Assinatura</span>
-            {tenantDetails?.subscription_status === "pending" && (
-              <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" title="Pagamento pendente" />
-            )}
-          </button>
-        </div>
+        </button>
+      </div>
 
         {/* Conteúdo das Abas Gerais (com formulário) */}
-        {["geral", "horarios", "entregas"].includes(activeTab) && (
+        {["geral", "entregas"].includes(activeTab) && (
           <form onSubmit={handleSubmit} className="space-y-6">
             {activeTab === "geral" && (
               <GeneralSettingsTab
@@ -1100,16 +1198,6 @@ export default function SettingsPage() {
               />
             )}
 
-            {activeTab === "horarios" && (
-              <HoursTab
-                settings={settings}
-                handleToggleAllDays={handleToggleAllDays}
-                handleToggleDay={handleToggleDay}
-                handleDayTime={handleDayTime}
-                handleCopyDayTimeToAll={handleCopyDayTimeToAll}
-              />
-            )}
-
             {activeTab === "entregas" && (
               <DeliveryFeesTab
                 settings={settings}
@@ -1119,6 +1207,7 @@ export default function SettingsPage() {
                 handleAddNeighborhood={handleAddNeighborhood}
                 handleRemoveNeighborhood={handleRemoveNeighborhood}
                 handleToggleNeighborhood={handleToggleNeighborhood}
+                handleToggleAllNeighborhoods={handleToggleAllNeighborhoods}
                 editingNeighborhoodId={editingNeighborhoodId}
                 setEditingNeighborhoodId={setEditingNeighborhoodId}
                 editingNeighborhoodFee={editingNeighborhoodFee}
@@ -1156,16 +1245,16 @@ export default function SettingsPage() {
               <Button
                 type="submit"
                 disabled={isSaving}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm h-11 px-8 rounded-2xl shadow-md flex items-center gap-2 cursor-pointer"
+                className="h-9 px-5 bg-emerald-700 hover:bg-emerald-800 text-white font-semibold text-xs rounded-lg shadow-2xs flex items-center gap-2 cursor-pointer transition-colors"
               >
                 {isSaving ? (
                   <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                    <div className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white" />
                     <span>Salvando Alterações...</span>
                   </>
                 ) : (
                   <>
-                    <Save className="w-4 h-4" />
+                    <Save className="w-3.5 h-3.5" />
                     <span>Salvar Configurações</span>
                   </>
                 )}
@@ -1209,6 +1298,14 @@ export default function SettingsPage() {
           </div>
         )}
 
+        {activeTab === "setores" && (
+          <div className="space-y-6">
+            <ProductionSectorsTab
+              storeSlug={tenantDetails?.slug || localStorage.getItem("current_tenant_slug") || ""}
+            />
+          </div>
+        )}
+
         {activeTab === "assinatura" && (
           <div className="space-y-6">
             <SubscriptionTab 
@@ -1218,6 +1315,5 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
-    </div>
-  );
-}
+    );
+  }

@@ -45,7 +45,7 @@ export default function PixOnlineModal({
   onClose,
   order,
   accessToken,
-  tenant,
+  tenant: _tenant,
   onPaymentApproved,
   onPaymentConvertedToDelivery,
 }) {
@@ -150,13 +150,18 @@ export default function PixOnlineModal({
           if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
           if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
 
-          // Atualiza status do pedido no Supabase para 'paid' e 'pendente' (entra na cozinha/KDS)
+          const resolvedStatusAfterPix =
+            Boolean(_tenant?.auto_accept_delivery) && (order?.order_type || "delivery") === "delivery"
+              ? "confirmado"
+              : "pendente";
+
+          // Atualiza status do pedido no Supabase para 'paid' e 'confirmado'/'pendente'
           if (isSupabaseConfigured() && supabase) {
             await supabase
               .from("orders")
               .update({
                 payment_status: "paid",
-                status: "pendente",
+                status: resolvedStatusAfterPix,
                 updated_date: new Date().toISOString(),
               })
               .eq("id", order.id);
@@ -166,7 +171,7 @@ export default function PixOnlineModal({
 
           setTimeout(() => {
             if (onPaymentApproved) {
-              onPaymentApproved({ ...order, payment_status: "paid", status: "pendente" });
+              onPaymentApproved({ ...order, payment_status: "paid", status: resolvedStatusAfterPix });
             }
           }, 2000);
           return;

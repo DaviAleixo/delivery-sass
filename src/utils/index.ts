@@ -17,6 +17,7 @@ const RESERVED_SLUGS = new Set([
   "settings",
   "superadmin",
   "adminlogin",
+  "login",
   "myorders",
   "printorder",
   "printshiftclosing",
@@ -40,9 +41,13 @@ export function createPageUrl(pageName: string, customSlug?: string): string {
   const cleanName = pageName.replace(/^\//, "").replace(/ /g, "-");
   const lower = cleanName.toLowerCase();
 
-  // SuperAdmin e login master geral nunca usam prefixo de slug
+  // SuperAdmin e login nunca usam prefixo de slug
   if (lower.startsWith("superadmin")) {
     return "/SuperAdmin";
+  }
+
+  if (lower === "adminlogin" || lower === "login") {
+    return "/login";
   }
 
   const slug = customSlug || getActiveSlug();

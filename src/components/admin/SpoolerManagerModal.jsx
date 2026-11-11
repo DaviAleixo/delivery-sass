@@ -15,9 +15,17 @@ import {
   RefreshCw, 
   Check, 
   Zap, 
-  Download
+  Download,
+  Cloud,
+  CloudOff,
+  Copy,
+  KeyRound
 } from "lucide-react";
 import { toast } from "sonner";
+import { useNavigate, useParams } from "react-router-dom";
+import { createPageUrl } from "@/utils";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { getActiveTenantId } from "@/entities/storage";
 import { useFifoPrintQueue } from "@/hooks/useFifoPrintQueue";
 
 export default function SpoolerManagerModal({
@@ -32,6 +40,8 @@ export default function SpoolerManagerModal({
   trigger,
 }) {
   const queueCtx = useFifoPrintQueue();
+  const navigate = useNavigate();
+  const { slug } = useParams();
 
   const isSpoolerOnline = propIsSpoolerOnline !== undefined ? propIsSpoolerOnline : queueCtx?.isSpoolerOnline;
   const spoolerConfig = propSpoolerConfig !== undefined ? propSpoolerConfig : queueCtx?.spoolerConfig;
@@ -39,6 +49,10 @@ export default function SpoolerManagerModal({
   const testSpoolerPrint = propTestSpoolerPrint || queueCtx?.testSpoolerPrint;
   const fetchSpoolerPrinters = propFetchSpoolerPrinters || queueCtx?.fetchSpoolerPrinters;
   const saveSpoolerConfig = propSaveSpoolerConfig || queueCtx?.saveSpoolerConfig;
+
+  const isSpoolerCloudPaired = queueCtx?.isSpoolerCloudPaired || Boolean(spoolerConfig?.cloudConnected);
+  const pairSpoolerWithCloud = queueCtx?.pairSpoolerWithCloud;
+  const unpairSpoolerCloud = queueCtx?.unpairSpoolerCloud;
 
   const [internalOpen, setInternalOpen] = useState(false);
   const isControlled = propOpen !== undefined;
@@ -51,6 +65,8 @@ export default function SpoolerManagerModal({
   const [isTesting, setIsTesting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
+  const [isPairingCloud, setIsPairingCloud] = useState(false);
+  const [generatedPairingCode, setGeneratedPairingCode] = useState("");
 
   // Carrega a lista de impressoras e dados do spooler ao abrir
   useEffect(() => {
@@ -130,6 +146,46 @@ export default function SpoolerManagerModal({
       }
     } finally {
       setIsChecking(false);
+    }
+  };
+
+  const handlePairCloud = async () => {
+    const activeTenantId = getActiveTenantId();
+    if (!activeTenantId || !isSupabaseConfigured() || !supabase) {
+      toast.error("Loja não identificada para pareamento.");
+      return;
+    }
+
+    setIsPairingCloud(true);
+    try {
+      const { data, error } = await supabase.rpc("generate_spooler_pairing_code", {
+        p_tenant_id: activeTenantId,
+      });
+
+      if (error || !data?.station_token) {
+        toast.error(error?.message || "Erro ao gerar código de pareamento.");
+        return;
+      }
+
+      setGeneratedPairingCode(data.pairing_code || "");
+
+      if (isSpoolerOnline && pairSpoolerWithCloud) {
+        await pairSpoolerWithCloud({
+          stationToken: data.station_token,
+          tenantId: activeTenantId,
+          tenantName: localStorage.getItem("current_tenant_name") || undefined,
+          tenantSlug: slug || localStorage.getItem("current_tenant_slug") || undefined,
+          supabaseUrl: import.meta.env.VITE_SUPABASE_URL,
+          anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+        });
+      } else {
+        toast.success(`Código gerado: ${data.pairing_code}`);
+      }
+    } catch (err) {
+      console.error("Erro ao parear Spooler:", err);
+      toast.error("Erro ao parear estação.");
+    } finally {
+      setIsPairingCloud(false);
     }
   };
 
@@ -279,6 +335,97 @@ export default function SpoolerManagerModal({
               >
                 {isSaving ? "Salvando..." : "Salvar Configuração"}
               </Button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                navigate(`${createPageUrl("Settings", slug)}?tab=setores`);
+              }}
+              className="w-full py-2.5 px-3 rounded-xl bg-stone-100 hover:bg-stone-200/80 text-stone-700 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <Zap className="w-3.5 h-3.5 text-[#047857]" />
+              Configurar Setores & Múltiplas Impressoras (Cozinha, Bar...)
+            </button>
+
+            {/* Modo Autônomo (Etapa 2: Imprimir mesmo com o navegador fechado) */}
+            <div className="p-3.5 rounded-2xl border border-sky-200 bg-sky-50/50 space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  {isSpoolerCloudPaired ? (
+                    <Cloud className="w-4 h-4 text-[#047857]" />
+                  ) : (
+                    <CloudOff className="w-4 h-4 text-sky-700" />
+                  )}
+                  <span className="text-xs font-extrabold text-stone-900">
+                    Modo Autônomo (Navegador Fechado)
+                  </span>
+                </div>
+                <Badge
+                  variant="outline"
+                  className={
+                    isSpoolerCloudPaired
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] font-bold"
+                      : "bg-white text-sky-800 border-sky-200 text-[10px] font-bold"
+                  }
+                >
+                  {isSpoolerCloudPaired ? "Pareado na Nuvem ✓" : "Não pareado"}
+                </Badge>
+              </div>
+
+              <p className="text-[11px] text-stone-600 leading-relaxed">
+                {isSpoolerCloudPaired
+                  ? `Conectado à loja "${spoolerConfig?.tenantName || "Atual"}". O .exe imprime pedidos novos e setores automaticamente mesmo se fechar o navegador.`
+                  : "Conecte o .exe direto à sua loja para continuar imprimindo no Bar, Cozinha e Caixa mesmo se fecharem o Chrome."}
+              </p>
+
+              {generatedPairingCode && (
+                <div className="p-2 rounded-xl bg-white border border-sky-200 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 text-xs font-mono font-black text-sky-900">
+                    <KeyRound className="w-3.5 h-3.5 text-sky-600" />
+                    <span>{generatedPairingCode}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard?.writeText(generatedPairingCode);
+                      toast.success("Código copiado!");
+                    }}
+                    className="text-[11px] font-bold text-sky-700 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <Copy className="w-3 h-3" />
+                    Copiar
+                  </button>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handlePairCloud}
+                  disabled={isPairingCloud}
+                  className="flex-1 h-8 text-xs font-bold bg-sky-700 hover:bg-sky-800 text-white rounded-xl cursor-pointer"
+                >
+                  <Cloud className="w-3.5 h-3.5 mr-1.5" />
+                  {isPairingCloud
+                    ? "Pareando..."
+                    : (isSpoolerCloudPaired ? "Renovar Pareamento" : "Parear Este PC Agora")}
+                </Button>
+
+                {isSpoolerCloudPaired && unpairSpoolerCloud && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={unpairSpoolerCloud}
+                    className="h-8 text-xs border-stone-200 text-stone-600 rounded-xl cursor-pointer"
+                  >
+                    Desconectar
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
         ) : (

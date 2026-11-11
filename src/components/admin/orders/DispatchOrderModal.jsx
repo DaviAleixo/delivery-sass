@@ -1,18 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { 
   Bike, 
-  MapPin, 
   CheckCircle2, 
-  Package, 
-  Coins, 
-  Car, 
-  Clock, 
-  User, 
   Send,
-  AlertCircle
+  AlertCircle,
+  Printer
 } from "lucide-react";
 
 export default function DispatchOrderModal({
@@ -26,6 +20,10 @@ export default function DispatchOrderModal({
   const [selectedDriverId, setSelectedDriverId] = useState("");
   const [selectedOrderIds, setSelectedOrderIds] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [printDriverSlip, setPrintDriverSlip] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("dispatch_auto_print_slip") === "true";
+  });
 
   useEffect(() => {
     if (isOpen && mainOrder) {
@@ -53,10 +51,14 @@ export default function DispatchOrderModal({
     setIsSubmitting(true);
     try {
       const tripId = `trip_${Date.now().toString().slice(-6)}`;
+      try {
+        localStorage.setItem("dispatch_auto_print_slip", printDriverSlip ? "true" : "false");
+      } catch {}
       await onConfirmDispatch({
         driver: selectedDriver,
         orderIds: selectedOrderIds,
-        tripId
+        tripId,
+        printDriverSlip,
       });
       onClose();
     } catch (err) {
@@ -233,6 +235,20 @@ export default function DispatchOrderModal({
             </div>
           </div>
         </div>
+
+        {/* Opção de Imprimir Via / Etiqueta do Motoboy */}
+        <label className="flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200 cursor-pointer hover:bg-stone-100/70 transition-colors">
+          <div className="flex items-center gap-2 text-xs font-bold text-stone-800">
+            <Printer className="w-4 h-4 text-orange-600 shrink-0" />
+            <span>Imprimir etiqueta / via do motoboy ao despachar</span>
+          </div>
+          <input
+            type="checkbox"
+            checked={printDriverSlip}
+            onChange={(e) => setPrintDriverSlip(e.target.checked)}
+            className="accent-orange-600 h-4 w-4 rounded cursor-pointer"
+          />
+        </label>
 
         {/* Rodapé com Resumo e Ação */}
         <DialogFooter className="pt-3 border-t border-stone-100 flex-shrink-0 flex items-center justify-between gap-3">

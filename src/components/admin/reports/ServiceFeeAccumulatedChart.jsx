@@ -10,7 +10,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
-import { Percent, TrendingUp, Receipt, DollarSign, Calendar, Sparkles } from "lucide-react";
+import { Percent, TrendingUp, Receipt, DollarSign, Calendar } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 

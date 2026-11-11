@@ -29,6 +29,7 @@ const RESERVED_SLUGS = new Set([
   "settings",
   "superadmin",
   "adminlogin",
+  "login",
   "myorders",
   "printorder",
   "home",

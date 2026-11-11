@@ -30,8 +30,7 @@ import {
   ArrowUpRight,
   Mail,
   FileText,
-  ShieldAlert,
-  Bug
+  ShieldAlert
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -72,6 +71,7 @@ export default function SuperAdminPage() {
     name: "",
     slug: "",
     plan: "basic",
+    monthly_price: "89.00",
     custom_template: "default",
     accepts_delivery: true,
     accepts_takeaway: true,
@@ -90,10 +90,15 @@ export default function SuperAdminPage() {
     name: "",
     slug: "",
     plan: "basic",
+    monthly_price: "89.00",
     custom_template: "default",
     accepts_delivery: true,
     accepts_takeaway: true,
     logo_url: "",
+    email: "",
+    phone: "",
+    cpf_cnpj: "",
+    subscription_status: "pending",
     admin_username: "admin",
     admin_password: "",
   });
@@ -302,10 +307,11 @@ export default function SuperAdminPage() {
     setIsSubmitting(true);
     try {
       if (isSupabaseConfigured() && supabase) {
-        const monthlyPrice = 
+        const monthlyPrice = parseFloat(newTenant.monthly_price) || (
           newTenant.plan === "custom" ? 249.00 : 
           newTenant.plan === "table" ? 79.00 :
-          newTenant.plan === "showcase" ? 49.00 : 89.00;
+          newTenant.plan === "showcase" ? 49.00 : 89.00
+        );
 
         const defaultSalonMode = 
           newTenant.plan === "showcase" ? "showcase" :
@@ -505,15 +511,26 @@ export default function SuperAdminPage() {
 
   // 6. Abrir Modal de Edição de Empresa
   const handleOpenEditModal = (tenant) => {
+    const resolvedEmail =
+      tenant.email ||
+      (tenant.admin_email && !tenant.admin_email.endsWith(".delivery.internal")
+        ? tenant.admin_email
+        : "");
+
     setEditingTenant(tenant);
     setEditForm({
       name: tenant.name || "",
       slug: tenant.slug || "",
       plan: tenant.plan || "basic",
+      monthly_price: tenant.monthly_price ? String(tenant.monthly_price) : "89.00",
       custom_template: tenant.custom_template || "default",
       accepts_delivery: tenant.accepts_delivery !== false,
       accepts_takeaway: tenant.accepts_takeaway !== false,
       logo_url: tenant.logo_url || "",
+      email: resolvedEmail,
+      phone: tenant.phone || tenant.whatsapp || "",
+      cpf_cnpj: tenant.cpf_cnpj || "",
+      subscription_status: tenant.subscription_status || "pending",
       admin_username: tenant.admin_username || "admin",
       admin_password: "",
     });
@@ -544,6 +561,7 @@ export default function SuperAdminPage() {
           p_admin_username: editForm.admin_username.trim() || "admin",
           p_admin_password: editForm.admin_password ? editForm.admin_password : null,
           p_custom_template: editForm.custom_template === "default" ? null : editForm.custom_template,
+          p_admin_email: editForm.email.trim(),
         });
 
         if (error) throw error;
@@ -566,6 +584,12 @@ export default function SuperAdminPage() {
             salon_mode: computedSalonMode,
             accepts_delivery: computedDelivery,
             accepts_takeaway: computedTakeaway,
+            monthly_price: parseFloat(editForm.monthly_price) || 89.00,
+            email: editForm.email.trim() || null,
+            phone: editForm.phone.trim() || null,
+            whatsapp: editForm.phone.trim() || null,
+            cpf_cnpj: editForm.cpf_cnpj.trim() || null,
+            subscription_status: editForm.subscription_status || "pending",
           })
           .eq("id", editingTenant.id);
 
@@ -681,67 +705,67 @@ export default function SuperAdminPage() {
 
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8">
+    <div className="min-h-screen bg-[#F7F9F8] text-stone-900 p-4 md:p-8">
       {/* Header Superior */}
-      <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4 pb-8 border-b border-slate-800">
+      <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-stone-200/80">
         <div>
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-tr from-rose-600 to-amber-500 flex items-center justify-center shadow-lg shadow-rose-900/40">
+          <div className="flex items-center gap-3.5">
+            <div className="h-11 w-11 rounded-2xl bg-gradient-to-tr from-[#047857] to-emerald-500 flex items-center justify-center shadow-md shadow-emerald-900/15">
               <Flame className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
+              <h1 className="text-2xl md:text-3xl font-black tracking-tight text-stone-900">
                 Painel Master — Super Admin
               </h1>
-              <p className="text-sm text-slate-400">
+              <p className="text-sm text-stone-500">
                 Torre de controle do seu SaaS de Delivery & Cardápio Digital
               </p>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           <Button
             variant="outline"
             size="sm"
             onClick={loadTenants}
-            className="border-slate-800 bg-slate-900/60 hover:bg-slate-800 text-slate-300"
+            className="border-stone-200 bg-white hover:bg-stone-50 text-stone-700 shadow-2xs h-9 px-3.5 rounded-xl cursor-pointer"
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin text-[#047857]" : "text-stone-500"}`} />
             Atualizar
           </Button>
           <Button
             onClick={() => setIsCreateModalOpen(true)}
-            className="bg-rose-600 hover:bg-rose-700 text-white font-semibold shadow-lg shadow-rose-900/30"
+            className="bg-[#047857] hover:bg-[#065f46] text-white font-bold shadow-sm shadow-emerald-900/15 h-9 px-4 rounded-xl cursor-pointer"
           >
-            <Plus className="h-4 w-4 mr-2" />
+            <Plus className="h-4 w-4 mr-1.5" />
             Nova Empresa
           </Button>
           <Button
-            variant="ghost"
+            variant="outline"
             size="icon"
             onClick={handleLogout}
             title="Sair do Super Admin"
-            className="text-slate-400 hover:text-rose-400 hover:bg-rose-950/30"
+            className="border-stone-200 bg-white text-stone-500 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-200 h-9 w-9 rounded-xl cursor-pointer"
           >
-            <LogOut className="h-5 w-5" />
+            <LogOut className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
       {/* Navegação entre Módulos: Lojas vs Central de Pendências */}
-      <div className="max-w-7xl mx-auto flex items-center gap-2 mt-6 mb-2 border-b border-slate-800 pb-3">
+      <div className="max-w-7xl mx-auto flex flex-wrap items-center gap-2 mt-6 mb-2 border-b border-stone-200/80 pb-3">
         <button
           onClick={() => setActiveTab("tenants")}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all cursor-pointer ${
             activeTab === "tenants"
-              ? "bg-slate-900 text-white border border-slate-700 shadow-md"
-              : "text-slate-400 hover:text-white hover:bg-slate-900/40"
+              ? "bg-white text-stone-900 border border-stone-200 shadow-xs"
+              : "text-stone-500 hover:text-stone-900 hover:bg-stone-200/60"
           }`}
         >
-          <Store className="h-4 w-4 text-rose-500" />
+          <Store className="h-4 w-4 text-[#047857]" />
           Restaurantes & Clientes
-          <Badge variant="outline" className="text-xs bg-slate-950 border-slate-800 text-slate-400 ml-1">
+          <Badge variant="outline" className="text-xs bg-stone-100 border-stone-200 text-stone-700 font-bold ml-1">
             {tenants.length}
           </Badge>
         </button>
@@ -750,18 +774,18 @@ export default function SuperAdminPage() {
           onClick={() => setActiveTab("issues")}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all cursor-pointer relative ${
             activeTab === "issues"
-              ? "bg-slate-900 text-white border border-slate-700 shadow-md"
-              : "text-slate-400 hover:text-white hover:bg-slate-900/40"
+              ? "bg-white text-stone-900 border border-stone-200 shadow-xs"
+              : "text-stone-500 hover:text-stone-900 hover:bg-stone-200/60"
           }`}
         >
-          <ShieldAlert className={`h-4 w-4 ${urgentIssuesCount > 0 ? "text-rose-500 animate-pulse" : "text-amber-400"}`} />
+          <ShieldAlert className={`h-4 w-4 ${urgentIssuesCount > 0 ? "text-rose-600" : "text-emerald-600"}`} />
           Central de Pendências & Sentry
           {urgentIssuesCount > 0 ? (
-            <Badge className="bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full animate-bounce">
+            <Badge className="bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold px-2 py-0.5 rounded-full ml-1">
               {urgentIssuesCount} {urgentIssuesCount === 1 ? "urgente" : "urgentes"}
             </Badge>
           ) : (
-            <Badge variant="outline" className="text-[10px] bg-slate-950 border-slate-800 text-emerald-400 ml-1">
+            <Badge variant="outline" className="text-[11px] bg-emerald-50 border-emerald-200 text-emerald-700 font-semibold ml-1">
               ✓ Tudo OK
             </Badge>
           )}
@@ -771,58 +795,66 @@ export default function SuperAdminPage() {
       {activeTab === "tenants" ? (
         <>
           {/* Grid de Métricas do Negócio */}
-          <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 my-8">
-        <Card className="bg-slate-900/50 border-slate-800 backdrop-blur-sm">
+          <div className="max-w-7xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 my-7">
+        <Card className="bg-white border-stone-200/90 shadow-xs rounded-2xl">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-400">Restaurantes Ativos</CardTitle>
-            <Building2 className="h-5 w-5 text-rose-500" />
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-stone-500">Restaurantes Ativos</CardTitle>
+            <div className="h-9 w-9 rounded-xl bg-emerald-50 text-[#047857] flex items-center justify-center">
+              <Building2 className="h-4.5 w-4.5" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-black text-white">{activeTenants} <span className="text-sm text-slate-500 font-normal">/ {totalTenants}</span></div>
-            <p className="text-xs text-emerald-400 mt-1 flex items-center">
-              <CheckCircle2 className="h-3 w-3 mr-1 inline" /> 100% de adimplência na rede
+            <div className="text-3xl font-black text-stone-900">{activeTenants} <span className="text-sm text-stone-400 font-semibold">/ {totalTenants}</span></div>
+            <p className="text-xs text-emerald-600 font-medium mt-1.5 flex items-center">
+              <CheckCircle2 className="h-3.5 w-3.5 mr-1 inline" /> 100% de adimplência na rede
             </p>
           </CardContent>
         </Card>
 
-        <Card className="bg-slate-900/50 border-slate-800 backdrop-blur-sm">
+        <Card className="bg-white border-stone-200/90 shadow-xs rounded-2xl">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-400">MRR (Recorrência Mensal)</CardTitle>
-            <DollarSign className="h-5 w-5 text-emerald-400" />
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-stone-500">MRR (Recorrência Mensal)</CardTitle>
+            <div className="h-9 w-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <DollarSign className="h-4.5 w-4.5" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-black text-emerald-400">
+            <div className="text-3xl font-black text-[#047857] font-mono">
               R$ {estimatedMRR.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
             </div>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-stone-500 mt-1.5">
               Cobrança direta fixa sem taxa de pedidos
             </p>
           </CardContent>
         </Card>
 
-        <Card className="bg-slate-900/50 border-slate-800 backdrop-blur-sm">
+        <Card className="bg-white border-stone-200/90 shadow-xs rounded-2xl">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-400">Total de Pedidos na Rede</CardTitle>
-            <ShoppingBag className="h-5 w-5 text-amber-400" />
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-stone-500">Total de Pedidos na Rede</CardTitle>
+            <div className="h-9 w-9 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center">
+              <ShoppingBag className="h-4.5 w-4.5" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-black text-white">{totalOrdersProcessed}</div>
-            <p className="text-xs text-slate-400 mt-1">
+            <div className="text-3xl font-black text-stone-900">{totalOrdersProcessed}</div>
+            <p className="text-xs text-stone-500 mt-1.5">
               Pedidos processados nos painéis KDS
             </p>
           </CardContent>
         </Card>
 
-        <Card className="bg-slate-900/50 border-slate-800 backdrop-blur-sm">
+        <Card className="bg-white border-stone-200/90 shadow-xs rounded-2xl">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-400">Faturas Pendentes</CardTitle>
-            <CreditCard className="h-5 w-5 text-amber-400" />
+            <CardTitle className="text-xs font-semibold uppercase tracking-wider text-stone-500">Faturas Pendentes</CardTitle>
+            <div className={`h-9 w-9 rounded-xl flex items-center justify-center ${pendingInvoicesCount > 0 ? "bg-amber-50 text-amber-600" : "bg-emerald-50 text-emerald-600"}`}>
+              <CreditCard className="h-4.5 w-4.5" />
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-black text-amber-400">
+            <div className={`text-3xl font-black font-mono ${pendingInvoicesCount > 0 ? "text-amber-600" : "text-emerald-700"}`}>
               {pendingInvoicesCount}
             </div>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-stone-500 mt-1.5">
               {pendingInvoicesCount === 0 ? "Todas as lojas em dia" : "Aguardando pagamento no Asaas"}
             </p>
           </CardContent>
@@ -833,50 +865,50 @@ export default function SuperAdminPage() {
       <div className="max-w-7xl mx-auto space-y-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h2 className="text-xl font-bold text-white flex items-center gap-2">
-              <Store className="h-5 w-5 text-rose-500" />
+            <h2 className="text-xl font-bold text-stone-900 flex items-center gap-2">
+              <Store className="h-5 w-5 text-[#047857]" />
               Restaurantes & Clientes
             </h2>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-stone-500 mt-0.5">
               Gerencie acessos, planos e entre no painel de qualquer cliente
             </p>
           </div>
 
-          <div className="relative w-full sm:w-72">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+          <div className="relative w-full sm:w-80">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-stone-400" />
             <Input
-              placeholder="Buscar por nome ou slug..."
+              placeholder="Buscar por nome, slug ou #código..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 bg-slate-900/80 border-slate-800 text-white placeholder:text-slate-500"
+              className="pl-9 bg-white border-stone-200 text-stone-900 placeholder:text-stone-400 shadow-2xs rounded-xl focus-visible:ring-[#047857]"
             />
           </div>
         </div>
 
         {/* Tabela de Empresas */}
-        <div className="bg-slate-900/40 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
+        <div className="bg-white border border-stone-200/90 rounded-2xl overflow-hidden shadow-xs">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="bg-slate-950/60 text-slate-400 text-xs uppercase tracking-wider border-b border-slate-800">
+              <thead className="bg-stone-50/90 text-stone-500 text-[11px] font-bold uppercase tracking-wider border-b border-stone-200">
                 <tr>
-                  <th className="py-4 px-6">Restaurante</th>
-                  <th className="py-4 px-4">Link Público</th>
-                  <th className="py-4 px-4">Plano</th>
-                  <th className="py-4 px-4">Status da Loja</th>
-                  <th className="py-4 px-6 text-right">Ações</th>
+                  <th className="py-3.5 px-6">Restaurante</th>
+                  <th className="py-3.5 px-4">Link Público</th>
+                  <th className="py-3.5 px-4">Plano</th>
+                  <th className="py-3.5 px-4">Status da Loja</th>
+                  <th className="py-3.5 px-6 text-right">Ações</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/60">
+              <tbody className="divide-y divide-stone-100">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={5} className="py-12 text-center text-slate-500">
-                      <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2 text-rose-500" />
+                    <td colSpan={5} className="py-12 text-center text-stone-500">
+                      <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2 text-[#047857]" />
                       Carregando empresas...
                     </td>
                   </tr>
                 ) : filteredTenants.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-12 text-center text-slate-500">
+                    <td colSpan={5} className="py-12 text-center text-stone-500">
                       Nenhum restaurante encontrado.
                     </td>
                   </tr>
@@ -885,38 +917,38 @@ export default function SuperAdminPage() {
                     <tr 
                       key={t.id} 
                       onClick={() => setSelectedTenantDrawer(t)}
-                      className="hover:bg-slate-800/50 transition-colors cursor-pointer group"
+                      className="hover:bg-emerald-50/35 transition-colors cursor-pointer group"
                     >
                       <td className="py-4 px-6">
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3.5">
                           {t.logo_url ? (
                             <img
                               src={t.logo_url}
                               alt={t.name}
-                              className="h-10 w-10 rounded-lg object-cover border border-slate-700"
+                              className="h-11 w-11 rounded-xl object-cover border border-stone-200 shadow-2xs"
                             />
                           ) : (
-                            <div className="h-10 w-10 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400 font-bold border border-slate-700">
+                            <div className="h-11 w-11 rounded-xl bg-stone-100 flex items-center justify-center text-stone-600 font-black text-sm border border-stone-200">
                               {t.name.substring(0, 2).toUpperCase()}
                             </div>
                           )}
                           <div>
-                            <div className="font-semibold text-white flex items-center gap-2 group-hover:text-rose-400 transition-colors">
-                              <span className="font-mono text-xs font-black bg-slate-800 text-rose-400 px-2 py-0.5 rounded border border-slate-700/80 shadow-2xs" title="Código de Login da Loja">
+                            <div className="font-bold text-stone-900 flex items-center gap-2 group-hover:text-[#047857] transition-colors">
+                              <span className="font-mono text-xs font-black bg-emerald-50 text-[#047857] px-2 py-0.5 rounded-md border border-emerald-200/80" title="Código de Login da Loja">
                                 #{t.code || 1}
                               </span>
                               <span>{t.name}</span>
                               {t.slug === "vruum-burguer" && (
-                                <Badge variant="outline" className="text-[10px] bg-rose-950/60 border-rose-800 text-rose-300">
+                                <Badge variant="outline" className="text-[10px] bg-rose-50 border-rose-200 text-rose-700 font-semibold">
                                   Piloto
                                 </Badge>
                               )}
                             </div>
 
-                            <div className="text-xs text-slate-500 flex items-center gap-2">
-                              <span>Admin: <span className="text-slate-400 font-mono">{t.admin_username || "admin"}</span></span>
-                              <span className="text-slate-600">•</span>
-                              <span className="text-[11px] text-rose-400/80 group-hover:underline">Ver detalhes ➔</span>
+                            <div className="text-xs text-stone-500 flex items-center gap-2 mt-0.5">
+                              <span>Admin: <span className="text-stone-700 font-mono font-medium">{t.admin_username || "admin"}</span></span>
+                              <span className="text-stone-300">•</span>
+                              <span className="text-[11px] font-semibold text-[#047857] group-hover:underline">Ver detalhes ➔</span>
                             </div>
                           </div>
                         </div>
@@ -927,7 +959,7 @@ export default function SuperAdminPage() {
                           href={`/${t.slug}`}
                           target="_blank"
                           rel="noreferrer"
-                          className="font-mono text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 hover:underline"
+                          className="font-mono text-xs font-medium text-[#047857] hover:text-[#065f46] inline-flex items-center gap-1 bg-emerald-50/70 hover:bg-emerald-100/70 px-2.5 py-1 rounded-lg border border-emerald-200/60 transition-colors"
                         >
                           /{t.slug}
                           <ExternalLink className="h-3 w-3" />
@@ -937,30 +969,30 @@ export default function SuperAdminPage() {
                       <td className="py-4 px-4">
                         {t.plan === "custom" || t.custom_template ? (
                           <div className="flex flex-col gap-1 items-start">
-                            <Badge className="bg-gradient-to-r from-purple-900/80 to-pink-900/80 border-purple-600 text-purple-200 font-bold shadow-xs">
+                            <Badge variant="outline" className="bg-purple-50 border-purple-200 text-purple-700 font-bold">
                               👑 VIP Personalizado
                             </Badge>
                             {t.custom_template ? (
-                              <span className="text-[10px] text-purple-300/90 font-mono">
+                              <span className="text-[10px] text-purple-600 font-mono font-medium">
                                 Tmpl: {t.custom_template}
                               </span>
                             ) : (
-                              <span className="text-[10px] text-slate-500 italic">
+                              <span className="text-[10px] text-stone-500 italic">
                                 (Cardápio padrão ativo)
                               </span>
                             )}
                           </div>
                         ) : t.plan === "showcase" || t.salon_mode === "showcase" ? (
-                          <Badge className="bg-sky-950/70 border-sky-600 text-sky-300 font-medium">
+                          <Badge variant="outline" className="bg-sky-50 border-sky-200 text-sky-700 font-semibold">
                             👁️ Visual Vitrine
                           </Badge>
                         ) : t.plan === "table" || t.salon_mode === "table_only" ? (
-                          <Badge className="bg-amber-950/70 border-amber-600 text-amber-300 font-medium">
+                          <Badge variant="outline" className="bg-amber-50 border-amber-200 text-amber-800 font-semibold">
                             🍽️ Autoatendimento (Mesas)
                           </Badge>
                         ) : (
                           <div className="flex flex-col gap-1 items-start">
-                            <Badge className="bg-emerald-950/70 border-emerald-600 text-emerald-300 font-medium">
+                            <Badge variant="outline" className="bg-emerald-50 border-emerald-200 text-emerald-700 font-semibold">
                               {t.accepts_delivery === false && t.accepts_takeaway !== false
                                 ? "🛍️ Só Retirada"
                                 : t.accepts_delivery !== false && t.accepts_takeaway === false
@@ -973,13 +1005,13 @@ export default function SuperAdminPage() {
 
                       <td className="py-4 px-4">
                         {t.is_active ? (
-                          <Badge className="bg-emerald-950/60 border-emerald-800 text-emerald-400 flex items-center gap-1 w-fit">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          <Badge variant="outline" className="bg-emerald-50 border-emerald-200 text-emerald-700 font-semibold flex items-center gap-1.5 w-fit">
+                            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                             No ar
                           </Badge>
                         ) : (
-                          <Badge className="bg-rose-950/60 border-rose-800 text-rose-400 flex items-center gap-1 w-fit">
-                            <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
+                          <Badge variant="outline" className="bg-rose-50 border-rose-200 text-rose-700 font-semibold flex items-center gap-1.5 w-fit">
+                            <span className="h-2 w-2 rounded-full bg-rose-500" />
                             Pausada
                           </Badge>
                         )}
@@ -989,11 +1021,23 @@ export default function SuperAdminPage() {
                         <div className="flex items-center justify-end gap-1.5 flex-wrap">
                           <Button
                             size="sm"
+                            variant="outline"
                             onClick={() => setSelectedTenantDrawer(t)}
-                            className="bg-slate-800 hover:bg-slate-700 text-white font-medium text-xs h-8 px-2.5"
+                            className="bg-white border-stone-200 hover:bg-stone-100 text-stone-800 font-semibold text-xs h-8 px-3 rounded-lg shadow-2xs cursor-pointer"
                           >
                             Detalhes
-                            <ChevronRight className="h-3 w-3 ml-1" />
+                            <ChevronRight className="h-3.5 w-3.5 ml-1 text-stone-500" />
+                          </Button>
+
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleOpenEditModal(t)}
+                            title="Editar dados, plano e template"
+                            className="border-sky-200 bg-sky-50/70 hover:bg-sky-100 hover:border-sky-300 text-sky-700 font-semibold text-xs h-8 px-3 rounded-lg cursor-pointer"
+                          >
+                            <Pencil className="h-3.5 w-3.5 mr-1" />
+                            Editar
                           </Button>
 
                           <Button
@@ -1001,13 +1045,13 @@ export default function SuperAdminPage() {
                             variant="outline"
                             onClick={() => handleToggleStatus(t)}
                             title={t.is_active ? "Pausar e tirar do ar" : "Reativar loja no ar"}
-                            className={`text-xs h-8 px-2.5 ${
+                            className={`text-xs h-8 px-3 rounded-lg font-semibold cursor-pointer ${
                               t.is_active
-                                ? "border-slate-800 hover:bg-amber-950/40 hover:text-amber-400 text-slate-400"
-                                : "border-emerald-800 bg-emerald-950/40 text-emerald-300 hover:bg-emerald-900/60"
+                                ? "border-stone-200 bg-white hover:bg-amber-50 hover:border-amber-300 hover:text-amber-800 text-stone-700"
+                                : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
                             }`}
                           >
-                            <Power className="h-3 w-3 mr-1" />
+                            <Power className="h-3.5 w-3.5 mr-1" />
                             {t.is_active ? "Pausar" : "Reativar"}
                           </Button>
 
@@ -1016,9 +1060,9 @@ export default function SuperAdminPage() {
                             variant="outline"
                             onClick={() => handleOpenDeleteModal(t)}
                             title="Excluir empresa"
-                            className="text-xs border-rose-900/50 bg-rose-950/30 hover:bg-rose-900/60 text-rose-300 hover:text-white h-8 px-2.5"
+                            className="text-xs border-rose-200 bg-rose-50/70 hover:bg-rose-100 hover:border-rose-300 text-rose-600 hover:text-rose-700 h-8 w-8 p-0 rounded-lg cursor-pointer"
                           >
-                            <Trash2 className="h-3 w-3" />
+                            <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>
                       </td>
@@ -1032,35 +1076,45 @@ export default function SuperAdminPage() {
 
         {/* DRAWER LATERAL 360° DO CLIENTE */}
         {selectedTenantDrawer && (
-          <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm transition-all animate-in fade-in duration-200">
-            <div 
-              className="w-full max-w-lg bg-slate-900 border-l border-slate-800 h-full overflow-y-auto shadow-2xl p-6 sm:p-8 flex flex-col justify-between animate-in slide-in-from-right duration-300"
+          <div
+            className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-xs transition-all animate-in fade-in duration-200"
+            onClick={() => setSelectedTenantDrawer(null)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-lg bg-white border-l border-stone-200 text-stone-900 h-full overflow-y-auto shadow-2xl p-6 sm:p-8 flex flex-col justify-between animate-in slide-in-from-right duration-300"
             >
-              <div className="space-y-6">
+              <div className="space-y-5">
                 {/* Header do Drawer */}
-                <div className="flex items-start justify-between pb-4 border-b border-slate-800">
-                  <div className="flex items-center gap-3">
+                <div className="flex items-start justify-between pb-4 border-b border-stone-200">
+                  <div className="flex items-center gap-3.5">
                     {selectedTenantDrawer.logo_url ? (
                       <img
                         src={selectedTenantDrawer.logo_url}
                         alt={selectedTenantDrawer.name}
-                        className="h-12 w-12 rounded-xl object-cover border border-slate-700 shadow"
+                        className="h-12 w-12 rounded-xl object-cover border border-stone-200 shadow-2xs"
                       />
                     ) : (
-                      <div className="h-12 w-12 rounded-xl bg-slate-800 flex items-center justify-center text-slate-300 font-black text-lg border border-slate-700">
+                      <div className="h-12 w-12 rounded-xl bg-emerald-50 flex items-center justify-center text-[#047857] font-black text-lg border border-emerald-200">
                         {selectedTenantDrawer.name.substring(0, 2).toUpperCase()}
                       </div>
                     )}
                     <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-xl font-bold text-white">{selectedTenantDrawer.name}</h3>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-xl font-black text-stone-900 tracking-tight">{selectedTenantDrawer.name}</h3>
                         {selectedTenantDrawer.is_active ? (
-                          <Badge className="bg-emerald-950/60 border-emerald-800 text-emerald-400 text-xs">No ar</Badge>
+                          <Badge variant="outline" className="bg-emerald-50 border-emerald-200 text-emerald-700 font-semibold text-xs flex items-center gap-1.5">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            No ar
+                          </Badge>
                         ) : (
-                          <Badge className="bg-rose-950/60 border-rose-800 text-rose-400 text-xs">Pausada</Badge>
+                          <Badge variant="outline" className="bg-rose-50 border-rose-200 text-rose-700 font-semibold text-xs flex items-center gap-1.5">
+                            <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                            Pausada
+                          </Badge>
                         )}
                       </div>
-                      <p className="text-xs text-slate-400 font-mono mt-0.5">/{selectedTenantDrawer.slug}</p>
+                      <p className="text-xs text-stone-500 font-mono mt-0.5">/{selectedTenantDrawer.slug}</p>
                     </div>
                   </div>
 
@@ -1068,30 +1122,30 @@ export default function SuperAdminPage() {
                     variant="ghost"
                     size="icon"
                     onClick={() => setSelectedTenantDrawer(null)}
-                    className="text-slate-400 hover:text-white hover:bg-slate-800 rounded-full h-8 w-8"
+                    className="text-stone-500 hover:text-stone-900 hover:bg-stone-100 rounded-full h-8 w-8 cursor-pointer"
                   >
                     <X className="h-5 w-5" />
                   </Button>
                 </div>
 
                 {/* Bloco VIP / Front-End Ativo */}
-                <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                      <Sparkles className="h-3.5 w-3.5 text-purple-400" />
+                <div className="p-4 rounded-2xl bg-stone-50 border border-stone-200/90 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
+                      <Sparkles className="h-4 w-4 text-purple-600" />
                       Front-End & Template:
                     </span>
                     {selectedTenantDrawer.custom_template ? (
-                      <Badge className="bg-purple-950/90 border-purple-600 text-purple-200 text-xs font-mono">
+                      <Badge variant="outline" className="bg-purple-50 border-purple-200 text-purple-700 text-xs font-mono font-bold">
                         👑 {selectedTenantDrawer.custom_template}
                       </Badge>
                     ) : (
-                      <Badge variant="outline" className="text-slate-400 text-xs">
+                      <Badge variant="outline" className="bg-white border-stone-200 text-stone-600 text-xs font-medium">
                         Padrão da Plataforma
                       </Badge>
                     )}
                   </div>
-                  <p className="text-[11px] text-slate-400">
+                  <p className="text-xs text-stone-500 leading-relaxed">
                     {selectedTenantDrawer.custom_template
                       ? "Esta empresa está renderizando um layout exclusivo sob medida."
                       : "Renderizando o cardápio oficial de alta conversão. Você pode associar um template exclusivo a qualquer momento."}
@@ -1099,21 +1153,21 @@ export default function SuperAdminPage() {
                 </div>
 
                 {/* Canais de Atendimento */}
-                <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 flex items-center justify-between text-xs">
-                  <span className="text-slate-400 font-medium">Canais de Pedido:</span>
+                <div className="p-3.5 rounded-2xl bg-stone-50 border border-stone-200/90 flex items-center justify-between text-xs">
+                  <span className="text-stone-600 font-semibold">Canais de Pedido:</span>
                   <div className="flex items-center gap-1.5">
                     {selectedTenantDrawer.accepts_delivery !== false && (
-                      <Badge className="bg-emerald-950/80 border-emerald-800 text-emerald-300 text-[10px]">
+                      <Badge variant="outline" className="bg-emerald-50 border-emerald-200 text-emerald-700 font-semibold text-[11px]">
                         🛵 Delivery
                       </Badge>
                     )}
                     {selectedTenantDrawer.accepts_takeaway !== false && (
-                      <Badge className="bg-amber-950/80 border-amber-800 text-amber-300 text-[10px]">
+                      <Badge variant="outline" className="bg-amber-50 border-amber-200 text-amber-800 font-semibold text-[11px]">
                         🛍️ Retirada
                       </Badge>
                     )}
                     {selectedTenantDrawer.accepts_delivery === false && selectedTenantDrawer.accepts_takeaway === false && (
-                      <Badge className="bg-rose-950/80 border-rose-800 text-rose-300 text-[10px]">
+                      <Badge variant="outline" className="bg-rose-50 border-rose-200 text-rose-700 font-semibold text-[11px]">
                         Nenhum canal ativo
                       </Badge>
                     )}
@@ -1121,21 +1175,21 @@ export default function SuperAdminPage() {
                 </div>
 
                 {/* Botões de WhatsApp 1-Clique */}
-                <div className="p-4 rounded-2xl bg-emerald-950/30 border border-emerald-500/30 space-y-3">
+                <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200 space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5 uppercase tracking-wider">
+                    <span className="text-xs font-bold text-[#047857] flex items-center gap-1.5 uppercase tracking-wider">
                       <MessageSquare className="h-4 w-4" />
                       Ações no WhatsApp
                     </span>
-                    <span className="text-xs font-mono text-slate-400">
+                    <span className="text-xs font-mono font-medium text-emerald-800/80">
                       {selectedTenantDrawer.phone || selectedTenantDrawer.whatsapp || "(31) 98260-7426"}
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <Button
                       onClick={() => handleOpenWhatsAppBilling(selectedTenantDrawer)}
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs h-10 shadow-lg shadow-emerald-950/40 flex items-center justify-center gap-1.5 cursor-pointer"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-10 rounded-xl shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
                     >
                       <MessageSquare className="h-4 w-4" />
                       Cobrar no WhatsApp
@@ -1144,7 +1198,7 @@ export default function SuperAdminPage() {
                     <Button
                       variant="outline"
                       onClick={() => handleOpenWhatsAppChat(selectedTenantDrawer)}
-                      className="border-emerald-700/60 bg-emerald-900/20 hover:bg-emerald-800/40 text-emerald-300 font-semibold text-xs h-10 flex items-center justify-center gap-1.5 cursor-pointer"
+                      className="border-emerald-300 bg-white hover:bg-emerald-50 text-[#047857] font-semibold text-xs h-10 rounded-xl flex items-center justify-center gap-1.5 cursor-pointer"
                     >
                       <Phone className="h-3.5 w-3.5" />
                       Chamar no WhatsApp
@@ -1153,43 +1207,43 @@ export default function SuperAdminPage() {
                 </div>
 
                 {/* Bloco 1: Raio-X Financeiro (Asaas) */}
-                <div className="p-5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                      <CreditCard className="h-4 w-4 text-rose-500" />
+                <div className="p-5 rounded-2xl bg-stone-50 border border-stone-200/90 space-y-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="text-sm font-bold text-stone-900 flex items-center gap-2">
+                      <CreditCard className="h-4 w-4 text-[#047857]" />
                       Situação Financeira (Asaas)
                     </h4>
                     {selectedTenantDrawer.subscription_status === "active" ? (
-                      <Badge className="bg-emerald-950 border-emerald-700 text-emerald-300">🟢 Em dia</Badge>
+                      <Badge variant="outline" className="bg-emerald-50 border-emerald-200 text-emerald-700 font-semibold">🟢 Em dia</Badge>
                     ) : selectedTenantDrawer.subscription_status === "overdue" ? (
-                      <Badge className="bg-rose-950 border-rose-700 text-rose-300">🔴 Fatura Vencida</Badge>
+                      <Badge variant="outline" className="bg-rose-50 border-rose-200 text-rose-700 font-semibold">🔴 Fatura Vencida</Badge>
                     ) : (
-                      <Badge className="bg-amber-950 border-amber-700 text-amber-300">🟡 Pagamento Pendente</Badge>
+                      <Badge variant="outline" className="bg-amber-50 border-amber-200 text-amber-800 font-semibold">🟡 Pagamento Pendente</Badge>
                     )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800">
-                      <span className="text-xs text-slate-400">Mensalidade</span>
-                      <p className="text-lg font-black text-rose-400 mt-0.5">
+                    <div className="p-3.5 bg-white rounded-xl border border-stone-200 shadow-2xs">
+                      <span className="text-xs font-medium text-stone-500">Mensalidade</span>
+                      <p className="text-lg font-black text-[#047857] mt-0.5 font-mono">
                         R$ {(parseFloat(selectedTenantDrawer.monthly_price) || 149).toFixed(2).replace(".", ",")}
                       </p>
                     </div>
-                    <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800">
-                      <span className="text-xs text-slate-400">Vencimento</span>
-                      <p className="text-base font-bold text-slate-200 mt-1">
+                    <div className="p-3.5 bg-white rounded-xl border border-stone-200 shadow-2xs">
+                      <span className="text-xs font-medium text-stone-500">Vencimento</span>
+                      <p className="text-base font-bold text-stone-900 mt-1 font-mono">
                         {selectedTenantDrawer.next_due_date ? new Date(selectedTenantDrawer.next_due_date).toLocaleDateString("pt-BR") : "14/10/2026"}
                       </p>
                     </div>
                   </div>
 
                   {selectedTenantDrawer.payment_link && (
-                    <div className="pt-2 flex items-center gap-2">
+                    <div className="pt-1 flex items-center gap-2">
                       <a
                         href={selectedTenantDrawer.payment_link}
                         target="_blank"
                         rel="noreferrer"
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow transition-all"
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-xs transition-all"
                       >
                         Abrir Fatura Oficial Asaas
                         <ExternalLink className="h-3.5 w-3.5" />
@@ -1198,48 +1252,54 @@ export default function SuperAdminPage() {
                         variant="outline"
                         size="sm"
                         onClick={() => handleCopyPaymentLink(selectedTenantDrawer.payment_link, selectedTenantDrawer.id)}
-                        className="border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs h-10 px-3"
+                        title="Copiar link da fatura"
+                        className="border-stone-200 bg-white hover:bg-stone-100 text-stone-700 text-xs h-10 px-3 rounded-xl cursor-pointer"
                       >
-                        {copiedId === selectedTenantDrawer.id ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+                        {copiedId === selectedTenantDrawer.id ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
                       </Button>
                     </div>
                   )}
 
                   {/* Dados Fiscais & Cadastrais da Loja */}
-                  <div className="pt-3 border-t border-slate-900 grid grid-cols-1 gap-2 text-xs text-slate-400">
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 text-slate-500" /> E-mail de Cobrança:</span>
-                      <span className="font-mono text-slate-200">{selectedTenantDrawer.email || "Não informado"}</span>
+                  <div className="pt-3 border-t border-stone-200 grid grid-cols-1 gap-2 text-xs text-stone-500">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 text-stone-400" /> E-mail (Acesso & Cobrança):</span>
+                      <span className="font-mono text-stone-800 font-medium truncate">
+                        {selectedTenantDrawer.email ||
+                          (selectedTenantDrawer.admin_email && !selectedTenantDrawer.admin_email.endsWith(".delivery.internal")
+                            ? selectedTenantDrawer.admin_email
+                            : "Não informado")}
+                      </span>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-1.5"><FileText className="h-3.5 w-3.5 text-slate-500" /> CPF / CNPJ:</span>
-                      <span className="font-mono text-slate-200">{selectedTenantDrawer.cpf_cnpj || "Não cadastrado"}</span>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="flex items-center gap-1.5"><FileText className="h-3.5 w-3.5 text-stone-400" /> CPF / CNPJ:</span>
+                      <span className="font-mono text-stone-800 font-medium">{selectedTenantDrawer.cpf_cnpj || "Não cadastrado"}</span>
                     </div>
                     {selectedTenantDrawer.asaas_customer_id && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-slate-500">ID Asaas:</span>
-                        <span className="font-mono text-emerald-400 text-[11px]">{selectedTenantDrawer.asaas_customer_id}</span>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-stone-500">ID Asaas:</span>
+                        <span className="font-mono text-[#047857] font-semibold text-[11px]">{selectedTenantDrawer.asaas_customer_id}</span>
                       </div>
                     )}
                   </div>
                 </div>
 
                 {/* Bloco 2: Métricas de Pedidos e Vendas Reais */}
-                <div className="p-5 rounded-2xl bg-slate-950/80 border border-slate-800 space-y-3">
-                  <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                    <ShoppingBag className="h-4 w-4 text-amber-400" />
+                <div className="p-5 rounded-2xl bg-stone-50 border border-stone-200/90 space-y-3">
+                  <h4 className="text-sm font-bold text-stone-900 flex items-center gap-2">
+                    <ShoppingBag className="h-4 w-4 text-amber-600" />
                     Métricas Operacionais da Loja
                   </h4>
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800">
-                      <span className="text-xs text-slate-400">Pedidos no Painel</span>
-                      <p className="text-2xl font-black text-white mt-0.5">
+                    <div className="p-3.5 bg-white rounded-xl border border-stone-200 shadow-2xs">
+                      <span className="text-xs font-medium text-stone-500">Pedidos no Painel</span>
+                      <p className="text-2xl font-black text-stone-900 mt-0.5">
                         {selectedTenantDrawer.total_orders || 0}
                       </p>
                     </div>
-                    <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800">
-                      <span className="text-xs text-slate-400">Faturamento da Loja</span>
-                      <p className="text-2xl font-black text-emerald-400 mt-0.5">
+                    <div className="p-3.5 bg-white rounded-xl border border-stone-200 shadow-2xs">
+                      <span className="text-xs font-medium text-stone-500">Faturamento da Loja</span>
+                      <p className="text-xl sm:text-2xl font-black text-[#047857] mt-0.5 font-mono">
                         R$ {parseFloat(selectedTenantDrawer.total_revenue || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                       </p>
                     </div>
@@ -1248,10 +1308,10 @@ export default function SuperAdminPage() {
               </div>
 
               {/* Rodapé com Ações da Loja */}
-              <div className="pt-6 border-t border-slate-800 space-y-2 mt-6">
+              <div className="pt-5 border-t border-stone-200 space-y-2.5 mt-6">
                 <Button
                   onClick={() => handleAccessStoreDashboard(selectedTenantDrawer)}
-                  className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs h-11 rounded-xl flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full bg-[#047857] hover:bg-[#065f46] text-white font-bold text-xs h-11 rounded-xl flex items-center justify-center gap-2 shadow-sm cursor-pointer"
                 >
                   Entrar no Painel do Restaurante (Impersonate)
                   <ArrowUpRight className="h-4 w-4" />
@@ -1264,7 +1324,7 @@ export default function SuperAdminPage() {
                     setSelectedTenantDrawer(null);
                     handleOpenEditModal(t);
                   }}
-                  className="w-full border-sky-800/60 bg-sky-950/30 hover:bg-sky-900/50 text-sky-300 font-bold text-xs h-10 rounded-xl flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full border-sky-200 bg-sky-50 hover:bg-sky-100 text-sky-800 font-bold text-xs h-10 rounded-xl flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Pencil className="h-4 w-4" />
                   Editar Dados & Trocar Template
@@ -1279,8 +1339,8 @@ export default function SuperAdminPage() {
                     }}
                     className={`flex-1 text-xs h-10 rounded-xl font-bold cursor-pointer ${
                       selectedTenantDrawer.is_active
-                        ? "border-amber-900/60 bg-amber-950/20 hover:bg-amber-950/50 text-amber-300"
-                        : "border-emerald-800 bg-emerald-950/40 text-emerald-300 hover:bg-emerald-900/60"
+                        ? "border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-800"
+                        : "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
                     }`}
                   >
                     <Power className="h-3.5 w-3.5 mr-1.5" />
@@ -1294,7 +1354,7 @@ export default function SuperAdminPage() {
                       setSelectedTenantDrawer(null);
                       handleOpenDeleteModal(t);
                     }}
-                    className="border-rose-900/40 bg-rose-950/20 hover:bg-rose-900/50 text-rose-400 hover:text-white text-xs h-10 px-3 rounded-xl cursor-pointer"
+                    className="border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-600 hover:text-rose-700 text-xs h-10 px-3.5 rounded-xl cursor-pointer"
                     title="Excluir Empresa"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -1314,22 +1374,22 @@ export default function SuperAdminPage() {
 
       {/* Modal de Criação de Nova Empresa */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-slate-900 border border-slate-800 text-white rounded-2xl max-w-lg w-full p-6 shadow-2xl relative space-y-4 max-h-[92vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white border border-stone-200 text-stone-900 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative space-y-4 max-h-[92vh] overflow-y-auto">
             <div className="flex items-start justify-between">
               <div>
-                <h3 className="text-xl font-bold flex items-center gap-2 text-white">
-                  <Sparkles className="h-5 w-5 text-rose-500" />
+                <h3 className="text-xl font-bold flex items-center gap-2 text-stone-900">
+                  <Sparkles className="h-5 w-5 text-[#047857]" />
                   Cadastrar Nova Empresa
                 </h3>
-                <p className="text-xs text-slate-400 mt-1">
+                <p className="text-xs text-stone-500 mt-1">
                   Cria a loja limpa, credenciais de login e emite a fatura oficial no Asaas.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsCreateModalOpen(false)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+                className="text-stone-500 hover:text-stone-900 p-1 rounded-lg hover:bg-stone-100 transition-colors"
               >
                 <XCircle className="h-5 w-5" />
               </button>
@@ -1337,18 +1397,18 @@ export default function SuperAdminPage() {
 
             <form onSubmit={handleCreateTenant} className="space-y-4 pt-2">
               <div>
-                <Label className="text-slate-300 text-xs">Nome do Restaurante *</Label>
+                <Label className="text-stone-700 text-xs">Nome do Restaurante *</Label>
                 <Input
                   required
                   placeholder="Ex: Texas Burger & Grill"
                   value={newTenant.name}
                   onChange={handleNameChange}
-                  className="bg-slate-950 border-slate-800 text-white mt-1"
+                  className="bg-white border-stone-300 text-stone-900 mt-1"
                 />
               </div>
 
               <div>
-                <Label className="text-slate-300 text-xs">Slug da URL (Endereço do Cardápio) *</Label>
+                <Label className="text-stone-700 text-xs">Slug da URL (Endereço do Cardápio) *</Label>
                 <div className="flex items-center gap-1 mt-1">
                   <span className="text-slate-500 text-xs font-mono">seusaas.com/</span>
                   <Input
@@ -1356,35 +1416,69 @@ export default function SuperAdminPage() {
                     placeholder="texas-burger"
                     value={newTenant.slug}
                     onChange={(e) => setNewTenant({ ...newTenant, slug: e.target.value })}
-                    className="bg-slate-950 border-slate-800 text-white font-mono text-sm"
+                    className="bg-white border-stone-300 text-stone-900 font-mono text-sm"
                   />
                 </div>
               </div>
 
               <div>
-                <Label className="text-slate-300 text-xs">Plano de Assinatura</Label>
+                <Label className="text-stone-700 text-xs font-semibold">Plano de Assinatura (Módulos do Sistema)</Label>
                 <select
                   value={newTenant.plan}
-                  onChange={(e) => setNewTenant({ ...newTenant, plan: e.target.value })}
-                  className="mt-1 w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
+                  onChange={(e) => {
+                    const nextPlan = e.target.value;
+                    const defaultPrices = { showcase: "49.00", table: "79.00", basic: "89.00", custom: "249.00" };
+                    setNewTenant((prev) => ({
+                      ...prev,
+                      plan: nextPlan,
+                      monthly_price: defaultPrices[nextPlan] || prev.monthly_price || "89.00",
+                    }));
+                  }}
+                  className="mt-1 w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 text-sm text-stone-900 outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500 cursor-pointer"
                 >
-                  <option value="showcase">👁️ Plano Visual (R$ 49,00/mês — Cardápio Digital sem Pedidos)</option>
-                  <option value="table">🍽️ Plano Autoatendimento (R$ 79,00/mês — QR Code Mesas & KDS)</option>
-                  <option value="basic">🛵 Plano Normal (R$ 89,00/mês — Delivery Completo & Balcão)</option>
-                  <option value="custom">👑 Plano Personalizado (R$ 249,00/mês — VIP Front-End Exclusivo)</option>
+                  <option value="showcase">👁️ Plano Visual (Cardápio Digital Informativo sem Pedidos)</option>
+                  <option value="table">🍽️ Plano Autoatendimento (QR Code Mesas, KDS & Balcão)</option>
+                  <option value="basic">🛵 Plano Normal (Delivery Completo, Balcão & KDS)</option>
+                  <option value="custom">👑 Plano Personalizado (VIP Front-End Exclusivo)</option>
                 </select>
+              </div>
+
+              {/* Campo de Valor Livre da Mensalidade */}
+              <div>
+                <div className="flex items-center justify-between">
+                  <Label className="text-stone-700 text-xs font-bold">Valor da Mensalidade (R$) *</Label>
+                  <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                    Valor Livre Customizável
+                  </span>
+                </div>
+                <div className="relative mt-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-stone-500">R$</span>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    required
+                    placeholder="89.00"
+                    value={newTenant.monthly_price}
+                    onChange={(e) => setNewTenant({ ...newTenant, monthly_price: e.target.value })}
+                    className="bg-white border-stone-300 text-stone-900 pl-10 font-mono font-bold text-base h-10 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+                <p className="text-[11px] text-stone-500 mt-1">
+                  💡 Digite o valor exato negociado com o cliente. O Asaas gerará as cobranças mensais exatamente neste valor.
+                </p>
               </div>
 
               {newTenant.plan === "custom" && (
                 <div>
-                  <Label className="text-slate-300 text-xs flex items-center gap-1.5">
+                  <Label className="text-stone-700 text-xs flex items-center gap-1.5">
                     <Sparkles className="h-3.5 w-3.5 text-purple-400" />
                     Template Inicial de Cardápio VIP
                   </Label>
                   <select
                     value={newTenant.custom_template || "default"}
                     onChange={(e) => setNewTenant({ ...newTenant, custom_template: e.target.value })}
-                    className="w-full mt-1 px-3 py-2 bg-slate-950 border border-purple-800/60 rounded-lg text-white text-xs focus:outline-hidden"
+                    className="w-full mt-1 px-3 py-2 bg-white border border-purple-200 rounded-lg text-stone-900 text-xs focus:outline-hidden focus:border-purple-400"
                   >
                     {availableTemplates.map((tmpl) => (
                       <option key={tmpl.id} value={tmpl.id}>
@@ -1392,19 +1486,19 @@ export default function SuperAdminPage() {
                       </option>
                     ))}
                   </select>
-                  <p className="text-[11px] text-purple-300/70 mt-1">
+                  <p className="text-[11px] text-purple-700 mt-1">
                     💡 Dica: Se o front-end exclusivo ainda estiver em desenvolvimento, mantenha &quot;Padrão da Plataforma&quot;. O cliente já poderá vender normalmente!
                   </p>
                 </div>
               )}
 
               {/* Canais de Atendimento Iniciais */}
-              <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-2.5">
-                <Label className="text-slate-300 text-xs font-bold uppercase tracking-wider block">
+              <div className="p-3.5 rounded-xl bg-stone-50 border border-stone-200 space-y-2.5">
+                <Label className="text-stone-700 text-xs font-bold uppercase tracking-wider block">
                   Canais de Atendimento do Cardápio
                 </Label>
                 <div className="grid grid-cols-2 gap-2.5">
-                  <label className="flex items-center gap-2 p-2.5 rounded-lg border border-slate-800 bg-slate-900/60 cursor-pointer hover:border-slate-700">
+                  <label className="flex items-center gap-2 p-2.5 rounded-lg border border-stone-200 bg-white cursor-pointer hover:border-stone-200">
                     <input
                       type="checkbox"
                       checked={newTenant.accepts_delivery !== false}
@@ -1412,12 +1506,12 @@ export default function SuperAdminPage() {
                       className="accent-rose-500 h-4 w-4 rounded"
                     />
                     <div className="text-xs">
-                      <p className="font-bold text-white">🛵 Delivery</p>
-                      <p className="text-[10px] text-slate-400">Entrega no endereço</p>
+                      <p className="font-bold text-stone-900">🛵 Delivery</p>
+                      <p className="text-[10px] text-stone-500">Entrega no endereço</p>
                     </div>
                   </label>
 
-                  <label className="flex items-center gap-2 p-2.5 rounded-lg border border-slate-800 bg-slate-900/60 cursor-pointer hover:border-slate-700">
+                  <label className="flex items-center gap-2 p-2.5 rounded-lg border border-stone-200 bg-white cursor-pointer hover:border-stone-200">
                     <input
                       type="checkbox"
                       checked={newTenant.accepts_takeaway !== false}
@@ -1425,27 +1519,27 @@ export default function SuperAdminPage() {
                       className="accent-rose-500 h-4 w-4 rounded"
                     />
                     <div className="text-xs">
-                      <p className="font-bold text-white">🛍️ Retirada</p>
-                      <p className="text-[10px] text-slate-400">Busca no balcão</p>
+                      <p className="font-bold text-stone-900">🛍️ Retirada</p>
+                      <p className="text-[10px] text-stone-500">Busca no balcão</p>
                     </div>
                   </label>
                 </div>
               </div>
 
               {/* Bloco de Faturamento & Asaas */}
-              <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-3">
+              <div className="p-3.5 rounded-xl bg-stone-50 border border-stone-200 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-rose-400 flex items-center gap-1.5 uppercase tracking-wider">
+                  <span className="text-xs font-bold text-emerald-700 flex items-center gap-1.5 uppercase tracking-wider">
                     <CreditCard className="h-3.5 w-3.5" />
                     Faturamento & Notificações (Asaas)
                   </span>
-                  <Badge variant="outline" className="border-slate-800 text-slate-400 text-[10px]">
+                  <Badge variant="outline" className="bg-white border-emerald-200 text-emerald-700 text-[10px]">
                     Automação Ativa
                   </Badge>
                 </div>
 
                 <div>
-                  <Label className="text-slate-300 text-xs flex items-center gap-1.5">
+                  <Label className="text-stone-700 text-xs flex items-center gap-1.5">
                     <Mail className="h-3.5 w-3.5 text-slate-500" />
                     E-mail do Lojista (Faturas & Recibos) *
                   </Label>
@@ -1455,7 +1549,7 @@ export default function SuperAdminPage() {
                     placeholder="financeiro@lojista.com"
                     value={newTenant.email}
                     onChange={(e) => setNewTenant({ ...newTenant, email: e.target.value })}
-                    className="bg-slate-900 border-slate-800 text-white mt-1 text-sm"
+                    className="bg-white border-stone-300 text-stone-900 mt-1 text-sm"
                   />
                   <p className="text-[11px] text-slate-500 mt-1">
                     O Asaas enviará as faturas, Pix e comprovantes para este e-mail.
@@ -1464,7 +1558,7 @@ export default function SuperAdminPage() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <Label className="text-slate-300 text-xs flex items-center gap-1.5">
+                    <Label className="text-stone-700 text-xs flex items-center gap-1.5">
                       <Phone className="h-3.5 w-3.5 text-slate-500" />
                       WhatsApp de Cobrança
                     </Label>
@@ -1472,12 +1566,12 @@ export default function SuperAdminPage() {
                       placeholder="(31) 98888-7777"
                       value={newTenant.phone}
                       onChange={(e) => setNewTenant({ ...newTenant, phone: e.target.value })}
-                      className="bg-slate-900 border-slate-800 text-white mt-1 text-sm"
+                      className="bg-white border-stone-300 text-stone-900 mt-1 text-sm"
                     />
                   </div>
 
                   <div>
-                    <Label className="text-slate-300 text-xs flex items-center gap-1.5">
+                    <Label className="text-stone-700 text-xs flex items-center gap-1.5">
                       <FileText className="h-3.5 w-3.5 text-slate-500" />
                       CPF ou CNPJ (Opcional)
                     </Label>
@@ -1485,51 +1579,51 @@ export default function SuperAdminPage() {
                       placeholder="00.000.000/0001-00"
                       value={newTenant.cpf_cnpj}
                       onChange={(e) => setNewTenant({ ...newTenant, cpf_cnpj: e.target.value })}
-                      className="bg-slate-900 border-slate-800 text-white mt-1 text-sm"
+                      className="bg-white border-stone-300 text-stone-900 mt-1 text-sm"
                     />
                   </div>
                 </div>
               </div>
 
               {/* Bloco de Login do Lojista */}
-              <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-800/80">
+              <div className="grid grid-cols-2 gap-4 pt-3 border-t border-stone-200">
                 <div>
-                  <Label className="text-slate-300 text-xs">Usuário de Login Admin *</Label>
+                  <Label className="text-stone-700 text-xs">Usuário de Login Admin *</Label>
                   <Input
                     required
                     placeholder="admin"
                     value={newTenant.admin_username}
                     onChange={(e) => setNewTenant({ ...newTenant, admin_username: e.target.value })}
-                    className="bg-slate-950 border-slate-800 text-white mt-1 font-mono"
+                    className="bg-white border-stone-300 text-stone-900 mt-1 font-mono"
                   />
                 </div>
 
                 <div>
-                  <Label className="text-slate-300 text-xs">Senha de Acesso do Dono *</Label>
+                  <Label className="text-stone-700 text-xs">Senha de Acesso do Dono *</Label>
                   <Input
                     required
                     type="password"
                     placeholder="Defina uma senha"
                     value={newTenant.admin_password}
                     onChange={(e) => setNewTenant({ ...newTenant, admin_password: e.target.value })}
-                    className="bg-slate-950 border-slate-800 text-white mt-1"
+                    className="bg-white border-stone-300 text-stone-900 mt-1"
                   />
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800/80">
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-stone-200">
                 <Button
                   type="button"
                   variant="ghost"
                   onClick={() => setIsCreateModalOpen(false)}
-                  className="text-slate-400 hover:text-white"
+                  className="text-stone-500 hover:text-stone-900"
                 >
                   Cancelar
                 </Button>
                 <Button
                   type="submit"
                   disabled={isSubmitting}
-                  className="bg-rose-600 hover:bg-rose-700 text-white font-semibold cursor-pointer shadow-lg shadow-rose-950/40"
+                  className="bg-[#047857] hover:bg-[#065f46] text-white font-semibold cursor-pointer shadow-sm"
                 >
                   {isSubmitting ? (
                     <>
@@ -1548,22 +1642,22 @@ export default function SuperAdminPage() {
 
       {/* Modal de Edição de Empresa */}
       {isEditModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-slate-900 border border-slate-800 text-white rounded-2xl max-w-lg w-full p-6 shadow-2xl relative space-y-4 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white border border-stone-200 text-stone-900 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-start justify-between">
               <div>
-                <h3 className="text-xl font-bold flex items-center gap-2 text-white">
-                  <Pencil className="h-5 w-5 text-sky-400" />
+                <h3 className="text-xl font-bold flex items-center gap-2 text-stone-900">
+                  <Pencil className="h-5 w-5 text-sky-600" />
                   Editar Restaurante
                 </h3>
-                <p className="text-xs text-slate-400 mt-1">
-                  Atualize os dados e acessos de <span className="font-semibold text-white">{editingTenant?.name}</span>.
+                <p className="text-xs text-stone-500 mt-1">
+                  Atualize os dados e acessos de <span className="font-bold text-stone-900">{editingTenant?.name}</span>.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsEditModalOpen(false)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+                className="text-stone-500 hover:text-stone-900 p-1 rounded-lg hover:bg-stone-100 transition-colors cursor-pointer"
               >
                 <XCircle className="h-5 w-5" />
               </button>
@@ -1571,18 +1665,18 @@ export default function SuperAdminPage() {
 
             <form onSubmit={handleSaveEditTenant} className="space-y-4 pt-2">
               <div>
-                <Label className="text-slate-300 text-xs">Nome do Restaurante *</Label>
+                <Label className="text-stone-700 text-xs">Nome do Restaurante *</Label>
                 <Input
                   required
                   placeholder="Ex: Texas Burger & Grill"
                   value={editForm.name}
                   onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                  className="bg-slate-950 border-slate-800 text-white mt-1"
+                  className="bg-white border-stone-300 text-stone-900 mt-1"
                 />
               </div>
 
               <div>
-                <Label className="text-slate-300 text-xs">Slug da URL (Endereço do Cardápio) *</Label>
+                <Label className="text-stone-700 text-xs">Slug da URL (Endereço do Cardápio) *</Label>
                 <div className="flex items-center gap-1 mt-1">
                   <span className="text-slate-500 text-xs font-mono">seusaas.com/</span>
                   <Input
@@ -1590,42 +1684,68 @@ export default function SuperAdminPage() {
                     placeholder="texas-grill"
                     value={editForm.slug}
                     onChange={(e) => setEditForm({ ...editForm, slug: e.target.value })}
-                    className="bg-slate-950 border-slate-800 text-white font-mono text-sm"
+                    className="bg-white border-stone-300 text-stone-900 font-mono text-sm"
                   />
                   <span className="text-slate-500 text-xs font-mono">/menu</span>
                 </div>
               </div>
 
               <div>
-                <Label className="text-slate-300 text-xs">Plano de Assinatura</Label>
+                <Label className="text-stone-700 text-xs">Plano de Assinatura</Label>
                 <Select
                   value={editForm.plan}
                   onValueChange={(val) => setEditForm({ ...editForm, plan: val })}
                 >
-                  <SelectTrigger className="bg-slate-950 border-slate-800 text-white mt-1">
+                  <SelectTrigger className="bg-white border-stone-300 text-stone-900 mt-1">
                     <SelectValue placeholder="Selecione o plano" />
                   </SelectTrigger>
-                  <SelectContent className="bg-slate-900 border-slate-800 text-white">
-                    <SelectItem value="showcase">👁️ Visual (R$ 49/mês — Cardápio Digital sem Pedidos)</SelectItem>
-                    <SelectItem value="table">🍽️ Autoatendimento (R$ 79/mês — QR Code Mesas & KDS)</SelectItem>
-                    <SelectItem value="basic">🛵 Normal (R$ 89/mês — Delivery Completo & Balcão)</SelectItem>
-                    <SelectItem value="custom">👑 Personalizado (R$ 249/mês — Front-End Exclusivo)</SelectItem>
+                  <SelectContent className="bg-white border-stone-300 text-stone-900">
+                    <SelectItem value="showcase">👁️ Visual (Cardápio Digital sem Pedidos)</SelectItem>
+                    <SelectItem value="table">🍽️ Autoatendimento (QR Code Mesas & KDS)</SelectItem>
+                    <SelectItem value="basic">🛵 Normal (Delivery Completo & Balcão)</SelectItem>
+                    <SelectItem value="custom">👑 Personalizado (Front-End Exclusivo)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
+              {/* Valor da Mensalidade Editável */}
               <div>
                 <div className="flex items-center justify-between">
-                  <Label className="text-slate-300 text-xs flex items-center gap-1.5">
+                  <Label className="text-stone-700 text-xs font-bold">Valor da Mensalidade (R$) *</Label>
+                  <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                    Cobrança Asaas
+                  </span>
+                </div>
+                <div className="relative mt-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-stone-500">R$</span>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    required
+                    placeholder="89.00"
+                    value={editForm.monthly_price}
+                    onChange={(e) => setEditForm({ ...editForm, monthly_price: e.target.value })}
+                    className="bg-white border-stone-300 text-stone-900 pl-10 font-mono font-bold text-base h-10 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+                <p className="text-[11px] text-stone-500 mt-1">
+                  Reajuste o valor da mensalidade deste cliente conforme sua negociação.
+                </p>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between">
+                  <Label className="text-stone-700 text-xs flex items-center gap-1.5">
                     <Sparkles className="h-3.5 w-3.5 text-purple-400" />
                     Template do Cardápio
                   </Label>
                   {editForm.custom_template && editForm.custom_template !== "default" ? (
-                    <Badge className="bg-purple-950/80 border-purple-700 text-purple-300 text-[10px]">
+                    <Badge variant="outline" className="bg-purple-50 border-purple-200 text-purple-700 text-[10px]">
                       Front-End VIP Ativo
                     </Badge>
                   ) : (
-                    <Badge variant="outline" className="text-slate-400 text-[10px]">
+                    <Badge variant="outline" className="text-stone-500 text-[10px]">
                       Padrão Oficial
                     </Badge>
                   )}
@@ -1633,7 +1753,7 @@ export default function SuperAdminPage() {
                 <select
                   value={editForm.custom_template || "default"}
                   onChange={(e) => setEditForm({ ...editForm, custom_template: e.target.value })}
-                  className="w-full mt-1.5 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-xs focus:outline-hidden focus:border-rose-500"
+                  className="w-full mt-1.5 px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-stone-900 text-xs focus:outline-hidden focus:border-rose-500"
                 >
                   {availableTemplates.map((tmpl) => (
                     <option key={tmpl.id} value={tmpl.id}>
@@ -1649,99 +1769,159 @@ export default function SuperAdminPage() {
               </div>
 
               <div>
-                <Label className="text-slate-300 text-xs">Foto do Restaurante / Logo (URL da Imagem)</Label>
+                <Label className="text-stone-700 text-xs">Foto do Restaurante / Logo (URL da Imagem)</Label>
                 <Input
                   placeholder="https://exemplo.com/minha-foto.png (ou deixe vazio para sem logo)"
                   value={editForm.logo_url}
                   onChange={(e) => setEditForm({ ...editForm, logo_url: e.target.value })}
-                  className="bg-slate-950 border-slate-800 text-white mt-1 text-xs"
+                  className="bg-white border-stone-300 text-stone-900 mt-1 text-xs"
                 />
                 {editForm.logo_url && (
                   <div className="mt-2 flex items-center gap-2">
                     <img
                       src={editForm.logo_url}
                       alt="Prévia"
-                      className="h-10 w-10 rounded-lg object-cover border border-slate-700 bg-slate-950"
+                      className="h-10 w-10 rounded-lg object-cover border border-stone-200 bg-stone-50"
                       onError={(e) => { e.currentTarget.style.display = 'none'; }}
                     />
-                    <span className="text-[11px] text-slate-400">Prévia do logo da empresa</span>
+                    <span className="text-[11px] text-stone-500">Prévia do logo da empresa</span>
                   </div>
                 )}
               </div>
 
               {/* Canais de Atendimento */}
-              <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-2.5">
-                <Label className="text-slate-300 text-xs font-bold uppercase tracking-wider block">
+              <div className="p-3.5 rounded-xl bg-stone-50 border border-stone-200 space-y-2.5">
+                <Label className="text-stone-700 text-xs font-bold uppercase tracking-wider block">
                   Canais de Atendimento do Cardápio
                 </Label>
                 <div className="grid grid-cols-2 gap-2.5">
-                  <label className="flex items-center gap-2 p-2.5 rounded-lg border border-slate-800 bg-slate-900/60 cursor-pointer hover:border-slate-700">
+                  <label className="flex items-center gap-2 p-2.5 rounded-lg border border-stone-200 bg-white cursor-pointer hover:border-emerald-300">
                     <input
                       type="checkbox"
                       checked={editForm.accepts_delivery !== false}
                       onChange={(e) => setEditForm({ ...editForm, accepts_delivery: e.target.checked })}
-                      className="accent-rose-500 h-4 w-4 rounded"
+                      className="accent-emerald-600 h-4 w-4 rounded"
                     />
                     <div className="text-xs">
-                      <p className="font-bold text-white">🛵 Delivery</p>
-                      <p className="text-[10px] text-slate-400">Entrega no endereço</p>
+                      <p className="font-bold text-stone-900">🛵 Delivery</p>
+                      <p className="text-[10px] text-stone-500">Entrega no endereço</p>
                     </div>
                   </label>
 
-                  <label className="flex items-center gap-2 p-2.5 rounded-lg border border-slate-800 bg-slate-900/60 cursor-pointer hover:border-slate-700">
+                  <label className="flex items-center gap-2 p-2.5 rounded-lg border border-stone-200 bg-white cursor-pointer hover:border-emerald-300">
                     <input
                       type="checkbox"
                       checked={editForm.accepts_takeaway !== false}
                       onChange={(e) => setEditForm({ ...editForm, accepts_takeaway: e.target.checked })}
-                      className="accent-rose-500 h-4 w-4 rounded"
+                      className="accent-emerald-600 h-4 w-4 rounded"
                     />
                     <div className="text-xs">
-                      <p className="font-bold text-white">🛍️ Retirada</p>
-                      <p className="text-[10px] text-slate-400">Busca no balcão</p>
+                      <p className="font-bold text-stone-900">🛍️ Retirada</p>
+                      <p className="text-[10px] text-stone-500">Busca no balcão</p>
                     </div>
                   </label>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-800/80">
+              {/* Contato & Cobrança */}
+              <div className="p-3.5 rounded-xl bg-stone-50 border border-stone-200 space-y-3">
                 <div>
-                  <Label className="text-slate-300 text-xs">Usuário de Acesso do Dono</Label>
+                  <Label className="text-stone-700 text-xs font-bold uppercase tracking-wider block">
+                    E-mail do Lojista, Contato & Cobrança
+                  </Label>
+                  <p className="text-[11px] text-stone-500 mt-0.5">
+                    O e-mail abaixo fica vinculado ao login (recuperação de senha) e às faturas do Asaas.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-stone-700 text-xs">E-mail (Acesso, Senha & Asaas)</Label>
+                    <Input
+                      type="email"
+                      placeholder="dono@lojista.com"
+                      value={editForm.email}
+                      onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                      className="bg-white border-stone-300 text-stone-900 mt-1 text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <Label className="text-stone-700 text-xs">WhatsApp de Cobrança</Label>
+                    <Input
+                      placeholder="(31) 98888-7777"
+                      value={editForm.phone}
+                      onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                      className="bg-white border-stone-300 text-stone-900 mt-1 text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-stone-700 text-xs">CPF ou CNPJ</Label>
+                    <Input
+                      placeholder="00.000.000/0001-00"
+                      value={editForm.cpf_cnpj}
+                      onChange={(e) => setEditForm({ ...editForm, cpf_cnpj: e.target.value })}
+                      className="bg-white border-stone-300 text-stone-900 mt-1 text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <Label className="text-stone-700 text-xs">Status da Assinatura</Label>
+                    <select
+                      value={editForm.subscription_status || "pending"}
+                      onChange={(e) => setEditForm({ ...editForm, subscription_status: e.target.value })}
+                      className="w-full mt-1 px-3 py-2 h-9 bg-white border border-stone-300 rounded-md text-stone-900 text-xs focus:outline-hidden focus:border-emerald-500 cursor-pointer"
+                    >
+                      <option value="active">🟢 Em dia (Ativa)</option>
+                      <option value="pending">🟡 Pagamento Pendente</option>
+                      <option value="overdue">🔴 Fatura Vencida</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-stone-200">
+                <div>
+                  <Label className="text-stone-700 text-xs">Usuário de Acesso do Dono</Label>
                   <Input
                     placeholder="admin"
                     value={editForm.admin_username}
                     onChange={(e) => setEditForm({ ...editForm, admin_username: e.target.value })}
-                    className="bg-slate-950 border-slate-800 text-white mt-1"
+                    className="bg-white border-stone-300 text-stone-900 mt-1"
                   />
                 </div>
 
                 <div>
-                  <Label className="text-slate-300 text-xs">Nova Senha (Opcional)</Label>
+                  <Label className="text-stone-700 text-xs">Nova Senha (Opcional)</Label>
                   <Input
                     type="password"
                     placeholder="Deixe vazio p/ manter"
                     value={editForm.admin_password}
                     onChange={(e) => setEditForm({ ...editForm, admin_password: e.target.value })}
-                    className="bg-slate-950 border-slate-800 text-white mt-1"
+                    className="bg-white border-stone-300 text-stone-900 mt-1"
                   />
                 </div>
               </div>
-              <p className="text-[11px] text-slate-500">
+              <p className="text-[11px] text-stone-500">
                 💡 Só preencha a nova senha se desejar redefinir o acesso do restaurante.
               </p>
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800/80">
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-stone-200">
                 <Button
                   type="button"
                   variant="ghost"
                   onClick={() => setIsEditModalOpen(false)}
-                  className="text-slate-400 hover:text-white"
+                  className="text-stone-500 hover:text-stone-900"
                 >
                   Cancelar
                 </Button>
                 <Button
                   type="submit"
                   disabled={isSubmitting}
-                  className="bg-sky-600 hover:bg-sky-700 text-white font-semibold"
+                  className="bg-sky-600 hover:bg-sky-700 text-white font-semibold cursor-pointer"
                 >
                   {isSubmitting ? (
                     <>
@@ -1760,33 +1940,33 @@ export default function SuperAdminPage() {
 
       {/* Modal de Exclusão de Empresa */}
       {isDeleteModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-slate-900 border border-rose-900/60 text-white rounded-2xl max-w-md w-full p-6 shadow-2xl relative space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white border border-rose-200 text-stone-900 rounded-2xl max-w-md w-full p-6 shadow-2xl relative space-y-4">
             <div className="flex items-start gap-3">
-              <div className="p-3 bg-rose-950/80 border border-rose-800 rounded-xl text-rose-400 shrink-0">
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-600 shrink-0">
                 <AlertTriangle className="h-6 w-6" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-white">
+                <h3 className="text-lg font-bold text-stone-900">
                   Excluir Restaurante
                 </h3>
-                <p className="text-xs text-slate-400 mt-1">
-                  Tem certeza que deseja excluir <span className="font-bold text-rose-300">{deletingTenant?.name}</span>?
+                <p className="text-xs text-stone-500 mt-1">
+                  Tem certeza que deseja excluir <span className="font-bold text-rose-600">{deletingTenant?.name}</span>?
                 </p>
               </div>
             </div>
 
-            <div className="p-3 bg-rose-950/30 border border-rose-900/40 rounded-xl text-xs text-rose-200/90 leading-relaxed">
+            <div className="p-3.5 bg-rose-50/80 border border-rose-200 rounded-xl text-xs text-rose-800 leading-relaxed">
               ⚠️ <strong>Ação permanente:</strong> Isso apagará definitivamente o cardápio, pedidos, produtos, categorias, clientes e credenciais deste restaurante.
             </div>
 
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-stone-200">
               <Button
                 type="button"
                 variant="ghost"
                 disabled={isDeleting}
                 onClick={() => setIsDeleteModalOpen(false)}
-                className="text-slate-400 hover:text-white"
+                className="text-stone-500 hover:text-stone-900 cursor-pointer"
               >
                 Cancelar
               </Button>
@@ -1794,7 +1974,7 @@ export default function SuperAdminPage() {
                 type="button"
                 disabled={isDeleting}
                 onClick={handleConfirmDeleteTenant}
-                className="bg-rose-600 hover:bg-rose-700 text-white font-semibold"
+                className="bg-rose-600 hover:bg-rose-700 text-white font-semibold cursor-pointer"
               >
                 {isDeleting ? (
                   <>

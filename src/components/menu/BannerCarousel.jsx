@@ -23,7 +23,7 @@ export default function BannerCarousel({ banners = [] }) {
   return (
     <div className="w-full relative overflow-hidden bg-white">
       <div 
-        className="relative w-full overflow-hidden rounded-t-[18px] sm:rounded-t-[20px] aspect-[16/10] sm:aspect-[16/9] md:aspect-[2.4/1] bg-white"
+        className="relative w-full overflow-hidden rounded-t-[18px] sm:rounded-t-[20px] h-[170px] sm:h-[195px] md:h-[230px] bg-white"
       >
         <AnimatePresence mode="wait">
           <motion.div
@@ -32,12 +32,12 @@ export default function BannerCarousel({ banners = [] }) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.35 }}
-            className="absolute inset-0 select-none"
+            className="absolute inset-0 select-none flex items-center justify-center bg-white"
           >
             <img
               src={currentBanner?.image_url}
               alt={currentBanner?.title || "Banner"}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover object-center"
               draggable={false}
             />
           </motion.div>
@@ -60,8 +60,8 @@ export default function BannerCarousel({ banners = [] }) {
               <ChevronRight className="w-4 h-4" />
             </button>
 
-            {/* Indicadores centralizados na base do banner (posicionados acima da sobreposição da folha branca) */}
-            <div className="absolute bottom-9 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-20 pointer-events-auto">
+            {/* Indicadores centralizados na base do banner */}
+            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-20 pointer-events-auto">
               {banners.map((_, index) => (
                 <button
                   key={index}

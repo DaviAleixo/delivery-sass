@@ -11,16 +11,8 @@ import {
   Trash2, 
   Pencil, 
   Phone, 
-  CheckCircle2, 
   AlertCircle, 
-  Coins, 
-  DollarSign, 
-  Car, 
-  Zap, 
-  QrCode,
-  UserCheck,
-  UserX,
-  Info,
+  Car,
   AlertTriangle
 } from "lucide-react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
@@ -195,7 +187,7 @@ export default function DeliveryDriversTab({ tenantData, onUpdateTenant }) {
     }
   };
 
-  const handleToggleActive = async (driverId) => {
+  const _handleToggleActive = async (driverId) => {
     const updated = drivers.map((d) => (d.id === driverId ? { ...d, active: !d.active } : d));
     await persistDrivers(updated);
     toast.success("Status do entregador alterado.");

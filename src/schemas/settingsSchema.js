@@ -39,6 +39,7 @@ export const settingsSchema = z.object({
   delivery_neighborhoods: z.array(neighborhoodItemSchema).optional().default([]),
   accepts_delivery: z.boolean().optional().default(true),
   accepts_takeaway: z.boolean().optional().default(true),
+  auto_accept_delivery: z.boolean().optional().default(false),
   pizza_pricing_rule: z.enum(["highest_price", "average"]).optional().default("highest_price"),
   salon_mode: z.string().optional().default("full"),
   table_service_fee_enabled: z.boolean().optional().default(false),

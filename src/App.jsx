@@ -4,7 +4,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
 import NavigationTracker from '@/lib/NavigationTracker'
 import { pagesConfig } from './pages.config'
-import { BrowserRouter as Router, Route, Routes, Navigate, useParams } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, Navigate, useParams, useLocation } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import { TenantProvider } from '@/lib/TenantContext';
@@ -34,6 +34,19 @@ const StoreRootRedirect = () => {
   const { slug } = useParams();
   const targetSlug = slug || (typeof window !== "undefined" ? localStorage.getItem("current_tenant_slug") : null) || "vrumm";
   return <Navigate to={`/${targetSlug}/menu`} replace />;
+};
+
+// Redireciona rotas legadas de login para /login preservando query/hash (ex: token de recuperação) e slug opcional
+const LoginRedirect = () => {
+  const { slug } = useParams();
+  const location = useLocation();
+  return (
+    <Navigate
+      to={`/login${location.search || ""}${location.hash || ""}`}
+      replace
+      state={slug ? { slug: slug.toLowerCase() } : location.state}
+    />
+  );
 };
 
 // Redireciona rotas soltas para a rota da loja ativa com prefixo /:slug
@@ -92,7 +105,7 @@ const AuthenticatedApp = () => {
       )}
       {Pages["AdminLogin"] && (
         <Route
-          path="/AdminLogin"
+          path="/login"
           element={
             <LayoutWrapper currentPageName="AdminLogin">
               {React.createElement(Pages["AdminLogin"])}
@@ -100,16 +113,9 @@ const AuthenticatedApp = () => {
           }
         />
       )}
-      {Pages["AdminLogin"] && (
-        <Route
-          path="/adminlogin"
-          element={
-            <LayoutWrapper currentPageName="AdminLogin">
-              {React.createElement(Pages["AdminLogin"])}
-            </LayoutWrapper>
-          }
-        />
-      )}
+      <Route path="/Login" element={<LoginRedirect />} />
+      <Route path="/AdminLogin" element={<LoginRedirect />} />
+      <Route path="/adminlogin" element={<LoginRedirect />} />
 
       {/* 3. Redirecionamentos de rotas soltas (ex: /Menu, /Dashboard) para a rota com slug da loja ativa */}
       <Route path="/Menu" element={<SlugRedirect targetPage="menu" />} />
@@ -158,11 +164,10 @@ const AuthenticatedApp = () => {
           {Pages["MyOrders"] ? React.createElement(Pages["MyOrders"]) : <MainPage />}
         </LayoutWrapper>
       } />
-      <Route path="/:slug/admin" element={
-        <LayoutWrapper currentPageName="AdminLogin">
-          {Pages["AdminLogin"] ? React.createElement(Pages["AdminLogin"]) : <MainPage />}
-        </LayoutWrapper>
-      } />
+      <Route path="/:slug/admin" element={<LoginRedirect />} />
+      <Route path="/:slug/login" element={<LoginRedirect />} />
+      <Route path="/:slug/AdminLogin" element={<LoginRedirect />} />
+      <Route path="/:slug/adminlogin" element={<LoginRedirect />} />
       <Route path="/:slug/PDV" element={
         <LayoutWrapper currentPageName="PDV">
           <PDVPage />
@@ -175,7 +180,9 @@ const AuthenticatedApp = () => {
       } />
 
       {/* Mapeamento de todas as páginas do painel com prefixo do slug da loja (:slug/:path) */}
-      {Object.entries(Pages).flatMap(([path, Page]) => [
+      {Object.entries(Pages)
+        .filter(([path]) => path !== "AdminLogin" && path !== "SuperAdmin")
+        .flatMap(([path, Page]) => [
         <Route
           key={`slug-${path}`}
           path={`/:slug/${path}`}

@@ -12,3 +12,4 @@ export { ProductAdditional } from "./ProductAdditional";
 export { ComplementGroup } from "./ComplementGroup";
 export { ComplementItem } from "./ComplementItem";
 export { ProductComplementGroup } from "./ProductComplementGroup";
+export { ProductionSector, PrintJob } from "./ProductionSector";

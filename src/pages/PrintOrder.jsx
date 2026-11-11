@@ -1,17 +1,30 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Order } from "@/entities/Order";
 import { Settings } from "@/entities/Settings";
+import { ProductionSector } from "@/entities/ProductionSector";
+import { Product } from "@/entities/Product";
+import { Category } from "@/entities/Category";
+import { findSectorByParam, filterOrderItemsForSector } from "@/utils/sectorUtils";
 import { formatInBrasilia } from "@/utils/dateTime";
 
 export default function PrintOrderPage() {
+  const urlParams = useMemo(() => new URLSearchParams(window.location.search), []);
+  const sectorParam = urlParams.get("sector") || "";
+  const modeParam = urlParams.get("mode") || "";
+  const paperParam = urlParams.get("paper") || "";
+
   const [order, setOrder] = useState(null);
   const [settings, setSettings] = useState(null);
+  const [sectors, setSectors] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [customerOrderCount, setCustomerOrderCount] = useState(1);
-  const [printTwoCopies, setPrintTwoCopies] = useState(true);
+  const [printTwoCopies, setPrintTwoCopies] = useState(
+    !sectorParam && modeParam !== "production_only" && modeParam !== "short_receipt"
+  );
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
     const orderId = urlParams.get("id");
 
     if (orderId) {
@@ -19,16 +32,22 @@ export default function PrintOrderPage() {
     } else {
       setIsLoading(false);
     }
-  }, []);
+  }, [urlParams]);
 
   const loadOrderData = async (orderId) => {
     try {
-      const [orderData, settingsData, allOrders] = await Promise.all([
+      const [orderData, settingsData, allOrders, sectorsData, productsData, categoriesData] = await Promise.all([
         Order.get(orderId),
         Settings.list(),
         Order.list("-created_date", 200).catch(() => []),
+        ProductionSector.list("order_index").catch(() => []),
+        Product.list().catch(() => []),
+        Category.list("order_index").catch(() => []),
       ]);
       setOrder(orderData);
+      setSectors(Array.isArray(sectorsData) ? sectorsData : []);
+      setProducts(Array.isArray(productsData) ? productsData : []);
+      setCategories(Array.isArray(categoriesData) ? categoriesData : []);
       if (settingsData && settingsData.length > 0) {
         setSettings(settingsData[0]);
       }
@@ -47,6 +66,21 @@ export default function PrintOrderPage() {
       setIsLoading(false);
     }
   };
+
+  const selectedSector = useMemo(() => {
+    return findSectorByParam(sectors, sectorParam);
+  }, [sectors, sectorParam]);
+
+  const effectiveContentMode = modeParam || selectedSector?.content_mode || "full_ticket";
+  const isSectorProductionOnly = effectiveContentMode === "production_only";
+  const isShortReceipt = effectiveContentMode === "short_receipt";
+
+  const items = useMemo(() => (Array.isArray(order?.items) ? order.items : []), [order]);
+  const filteredSectorItems = useMemo(() => {
+    if (!order) return [];
+    if (!selectedSector || effectiveContentMode === "full_ticket" || effectiveContentMode === "short_receipt") return items;
+    return filterOrderItemsForSector(order, selectedSector, { sectors, products, categories });
+  }, [order, items, selectedSector, effectiveContentMode, sectors, products, categories]);
 
   useEffect(() => {
     if (!isLoading && order) {
@@ -89,8 +123,6 @@ export default function PrintOrderPage() {
     ? formatInBrasilia(order.created_date)
     : formatInBrasilia(new Date());
 
-  const items = Array.isArray(order.items) ? order.items : [];
-  
   const subtotal = items.reduce((sum, i) => {
     const itemSub = Number(i.subtotal) || ((Number(i.product_price || i.price || 0)) * (Number(i.quantity || i.qty || 1)));
     return sum + itemSub;
@@ -115,15 +147,41 @@ export default function PrintOrderPage() {
   const minutesDelayed = Math.floor((Date.now() - orderCreatedAt) / 60000);
   const isDelayedOffline = minutesDelayed >= 10;
 
-  // Componente de Cupom Único (Reutilizado na Via 1 e Via 2)
+  // Componente de Cupom Único (Reutilizado na Via 1 e Via 2 ou filtrado por Setor)
   const ReceiptCopy = ({ isKitchenOnly = false }) => (
     <div className="receipt-copy bg-white text-black font-sans text-[13px] leading-snug select-none font-bold">
+      {/* Banner do Setor ou Senha Curta */}
+      {isShortReceipt ? (
+        <div className="border-2 border-black bg-black text-white text-center py-2 px-2 mb-2">
+          <p className="font-black text-xl tracking-widest uppercase">
+            SENHA #{orderNumber}
+          </p>
+          <p className="text-[11px] font-bold uppercase opacity-90">{restaurantName}</p>
+        </div>
+      ) : (
+        selectedSector && (
+          <div className="border-2 border-black bg-black text-white text-center py-1 px-2 mb-2">
+            <p className="font-black text-sm tracking-widest uppercase">
+              SETOR: {selectedSector.name}
+            </p>
+          </div>
+        )
+      )}
+
       {/* Topo / Header */}
       <div className="text-center space-y-0.5 pb-1">
         <p className="font-black text-base tracking-wider uppercase text-black">{orderTypeTitle}</p>
         <p className="text-[12px] font-bold text-black">{orderDateFormatted}</p>
-        <p className="text-[12px] font-black text-black uppercase">{restaurantName}</p>
+        {!isShortReceipt && <p className="text-[12px] font-black text-black uppercase">{restaurantName}</p>}
       </div>
+
+      {!isSectorProductionOnly && !isShortReceipt && order.driver_name && (
+        <div className="border-2 border-black bg-stone-100 text-center py-1 px-2 my-1">
+          <p className="font-black text-xs uppercase text-black">
+            MOTOBOY: {order.driver_name}
+          </p>
+        </div>
+      )}
 
       {isDelayedOffline && (
         <div className="border-2 border-black p-1.5 my-1 text-center font-black text-[12px] bg-black text-white leading-snug">
@@ -142,11 +200,15 @@ export default function PrintOrderPage() {
       {/* Itens */}
       <div className="pt-1 pb-1">
         <div className="border-b-2 border-black pb-1 mb-2 flex justify-between items-center">
-          <p className="font-black text-[14px] uppercase text-black">ITENS DO PEDIDO</p>
-          <p className="text-[11px] font-bold text-black">QTD / VALOR</p>
+          <p className="font-black text-[14px] uppercase text-black">
+            {selectedSector && isKitchenOnly ? `ITENS — ${selectedSector.name}` : "ITENS DO PEDIDO"}
+          </p>
+          <p className="text-[11px] font-bold text-black">
+            {isKitchenOnly ? "QTD" : "QTD / VALOR"}
+          </p>
         </div>
         <div className="space-y-2.5">
-          {items.map((item, idx) => {
+          {filteredSectorItems.map((item, idx) => {
             const qty = item.quantity || item.qty || 1;
             const price = Number(item.product_price || item.price || 0);
             const itemTotal = Number(item.subtotal || price * qty);
@@ -210,7 +272,7 @@ export default function PrintOrderPage() {
                 )}
 
                 {/* Linha separadora entre itens */}
-                {idx < items.length - 1 && (
+                {idx < filteredSectorItems.length - 1 && (
                   <div className="border-b border-dashed border-black my-1.5" />
                 )}
               </div>
@@ -227,7 +289,7 @@ export default function PrintOrderPage() {
         </div>
       )}
 
-      {/* Seção Cliente */}
+      {/* Seção Cliente (omite endereço e dados pessoais extras em comanda pura de cozinha) */}
       <div className="border-t-2 border-dashed border-black pt-2 my-2 space-y-1 text-black text-[13px]">
         <p className="font-black text-[14px] uppercase border-b border-black pb-0.5 mb-1">
           {order.order_type === 'dine_in' || (order.table_number && String(order.table_number).toLowerCase().includes('mesa'))
@@ -237,20 +299,22 @@ export default function PrintOrderPage() {
                 : 'DADOS DE ENTREGA')}
         </p>
         <p className="leading-snug"><b>CLIENTE:</b> <span className="font-black">{customerName}</span></p>
-        {order.cpf && <p><b>CPF/CNPJ:</b> {order.cpf}</p>}
-        {customerPhone && customerPhone !== "-" && (
+        {!isKitchenOnly && !isShortReceipt && order.cpf && <p><b>CPF/CNPJ:</b> {order.cpf}</p>}
+        {!isKitchenOnly && !isShortReceipt && customerPhone && customerPhone !== "-" && (
           <p className="leading-snug"><b>WHATSAPP:</b> <span className="font-black text-[14px]">{customerPhone}</span></p>
         )}
-        <p className="text-[12px]"><b>TOTAL DE PEDIDOS DO CLIENTE:</b> {String(customerOrderCount).padStart(2, "0")}</p>
+        {!isKitchenOnly && !isShortReceipt && (
+          <p className="text-[12px]"><b>TOTAL DE PEDIDOS DO CLIENTE:</b> {String(customerOrderCount).padStart(2, "0")}</p>
+        )}
 
-        {order.order_type === 'delivery' && deliveryAddress && (
+        {!isKitchenOnly && !isShortReceipt && order.order_type === 'delivery' && deliveryAddress && (
           <div className="pt-1.5 mt-1.5 border-t border-black space-y-1">
             <p className="font-black text-[12px] uppercase">ENDEREÇO COMPLETO:</p>
             <p className="font-black text-[14px] leading-snug">{deliveryAddress}</p>
           </div>
         )}
 
-        {order.driver_name && (
+        {!isKitchenOnly && !isShortReceipt && order.driver_name && (
           <div className="pt-1 mt-1 border-t border-dashed border-black">
             <p className="text-[12px]"><b>ENTREGADOR:</b> <span className="font-black uppercase">{order.driver_name}</span></p>
           </div>
@@ -319,7 +383,7 @@ export default function PrintOrderPage() {
 
       {/* Rodapé */}
       <div className="text-center pt-2 mt-2 border-t border-dashed border-black text-[11px] space-y-0.5 text-black font-bold">
-        <p>{restaurantName} - Delivery & Cardápio</p>
+        <p>{isShortReceipt ? "Aguarde chamar sua senha!" : `${restaurantName} - Delivery & Cardápio`}</p>
       </div>
     </div>
   );
@@ -416,16 +480,18 @@ export default function PrintOrderPage() {
         </div>
       </div>
 
-      {/* Área Imprimível (Térmica 58mm / 80mm com margens de segurança) */}
+      {/* Área Imprimível (Térmica 58mm / 80mm ou Folha Comum A4) */}
       <div
         id="printable-area"
-        className="w-full max-w-[300px] mx-auto bg-white p-4 shadow-xl border border-stone-300 space-y-4 rounded-lg box-border"
+        className={`w-full mx-auto bg-white shadow-xl border border-stone-300 space-y-4 rounded-lg box-border ${
+          paperParam === "a4" ? "max-w-[680px] p-8" : "max-w-[300px] p-4"
+        }`}
       >
-        {/* Via 1: Completa (Entrega / Caixa) */}
-        <ReceiptCopy isKitchenOnly={false} />
+        {/* Via 1 */}
+        <ReceiptCopy isKitchenOnly={isSectorProductionOnly} />
 
-        {/* Via 2: Cozinha / Entrega (se ativada) */}
-        {printTwoCopies && (
+        {/* Via 2 (somente em cupom completo padrão quando marcado 2 Vias) */}
+        {printTwoCopies && !isSectorProductionOnly && !isShortReceipt && (
           <>
             <div className="my-4 border-t-2 border-dashed border-black text-center relative py-1">
               <span className="bg-white px-2 text-[10px] font-bold uppercase tracking-wider text-black">

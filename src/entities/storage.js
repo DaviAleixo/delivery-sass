@@ -17,8 +17,8 @@ const STORAGE_PREFIX = "vrumburguer_db_";
 // Retorna apenas as colunas indispensáveis para economizar banda/egress do Supabase
 const TABLE_COLUMNS = {
   settings: "id,restaurant_name,restaurant_logo,opening_time,closing_time,open_days,phone,address,instagram,whatsapp,delivery_fee,min_order_value,delivery_time,manual_store_open,manual_override_date,pizza_pricing_rule",
-  categories: "id,tenant_id,name,order_index,is_combo,created_date,type,pizza_sizes",
-  products: "id,tenant_id,name,description,price,category,category_id,image_url,available,popular,created_date,pizza_prices",
+  categories: "id,tenant_id,name,order_index,is_combo,created_date,type,pizza_sizes,sector_id",
+  products: "id,tenant_id,name,description,price,category,category_id,image_url,available,popular,created_date,pizza_prices,sector_id",
   product_additionals: "id,tenant_id,product_id,name,price,required,max_quantity,active",
   complement_groups: "id,tenant_id,name,description,min_quantity,max_quantity,required,active,order_index,is_pizza_crust",
   complement_items: "id,tenant_id,group_id,name,description,price,max_quantity,image_url,active,order_index",
@@ -27,19 +27,22 @@ const TABLE_COLUMNS = {
   banners: "id,tenant_id,title,image_url,order_index,active",
   coupons: "id,tenant_id,code,name,description,discount_type,discount_value,apply_to,applicable_products,min_order_value,usage_limit,start_date,end_date,active",
   coupon_usages: "id,tenant_id,coupon_id,user_email,order_id,created_date",
-  orders: "id,tenant_id,order_number,customer_name,customer_phone,customer_email,customer_address,delivery_address,total_amount,total,subtotal,delivery_fee,status,payment_method,order_type,table_number,table_session_id,notes,coupon_code,discount_amount,discount,user_email,items,sent_at,created_date,print_status,printed_at,print_count",
+  orders: "id,tenant_id,order_number,customer_name,customer_phone,customer_email,customer_address,delivery_address,total_amount,total,subtotal,delivery_fee,status,payment_method,payment_status,mp_payment_id,pix_refund_status,pix_refund_id,pix_refund_amount,cashback_discount,cashback_earned,order_type,table_number,table_session_id,notes,coupon_code,discount_amount,discount,user_email,items,sent_at,dispatched_at,delivered_at,created_date,print_status,printed_at,print_count,cancel_reason,card_brand",
   users: "id,full_name,email,phone,role,created_date",
   user_addresses: "id,tenant_id,user_email,user_phone,name,cep,zip_code,street,number,complement,neighborhood,city,state,reference,is_default",
   admin_users: "id,tenant_id,username,role,active,permissions,created_date,updated_date",
   shift_closings: "id,tenant_id,shift_date,period_mode,period_label,opened_at,closed_at,cashier_name,gross_revenue,net_revenue,total_orders,delivery_orders,counter_orders,dine_in_orders,average_ticket,payment_breakdown,cash_drawer,driver_settlements,raw_closing_data,created_at",
   restaurant_tables: "id,tenant_id,table_number,label,capacity,status,created_at,updated_at",
   table_sessions: "id,tenant_id,table_id,table_number,customer_name,customer_phone,people_count,opened_at,closed_at,subtotal,service_fee,discount,total_amount,status,payment_method,payment_details,notes,created_at,updated_at",
+  production_sectors: "id,tenant_id,name,slug,content_mode,operation_mode,printer_name,printer_type,paper_width,copies,allowed_channels,print_on_delivery,order_index,is_active,created_date,updated_date",
+  print_jobs: "id,tenant_id,order_id,sector_id,sector_key,sector_name,printer_name,printer_type,paper_width,content_mode,copies,items_payload,status,attempts,error_message,created_date,printed_at,updated_date",
 };
 
 // Tabelas estáticas elegíveis para cache persistido em LocalStorage
 const PERSISTENT_CACHE_TABLES = new Set([
   "settings",
   "categories",
+  "production_sectors",
   "complement_groups",
   "complement_items",
   "product_complement_groups",
@@ -72,12 +75,16 @@ const CACHE_TTL_MAP = {
   admin_users: 5 * 1000,                 // 5 segundos
   restaurant_tables: 2 * 1000,           // 2 segundos (sincronização ágil de salão)
   table_sessions: 2 * 1000,              // 2 segundos
+  production_sectors: 10 * 1000,         // 10 segundos
+  print_jobs: 3 * 1000,                  // 3 segundos
 };
 
 // Coleções com dados isolados por restaurante (tenant_id)
 const MULTI_TENANT_COLLECTIONS = new Set([
   "categories",
   "products",
+  "production_sectors",
+  "print_jobs",
   "product_additionals",
   "complement_groups",
   "complement_items",
@@ -98,7 +105,7 @@ const MULTI_TENANT_COLLECTIONS = new Set([
 const RESERVED_ROUTE_SLUGS = new Set([
   "menu", "dashboard", "orders", "pedidos", "pdv", "pdvorders",
   "clients", "products", "categories", "banners", "coupons",
-  "complements", "reports", "settings", "superadmin", "adminlogin",
+  "complements", "reports", "settings", "superadmin", "adminlogin", "login",
   "myorders", "meus-pedidos", "printorder", "printshiftclosing", "home", "api",
   "tables", "kds", "deliverydrivers"
 ]);
@@ -720,7 +727,7 @@ export function createEntityModel(collectionKey, defaultData = []) {
         sanitized = sanitizeProductData(data);
       }
 
-      const isUuidTable = ["orders", "coupons", "coupon_usages", "users", "user_addresses", "settings", "admin_users", "restaurant_tables", "table_sessions"].includes(collectionKey);
+      const isUuidTable = ["orders", "coupons", "coupon_usages", "users", "user_addresses", "settings", "admin_users", "restaurant_tables", "table_sessions", "production_sectors", "print_jobs"].includes(collectionKey);
       const newId = sanitized.id || (isUuidTable && typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" 
         ? crypto.randomUUID() 
         : `${collectionKey}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`);

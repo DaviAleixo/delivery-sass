@@ -1,17 +1,12 @@
 import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Receipt,
   Printer,
   Share2,
   Eye,
-  Calendar,
-  Clock,
-  DollarSign,
   Bike,
-  Sparkles,
 } from "lucide-react";
 import { generateWhatsAppClosingText } from "@/utils/shiftClosingWhatsAppFormatter";
 import { createPageUrl } from "@/utils";

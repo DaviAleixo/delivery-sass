@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
@@ -25,6 +25,7 @@ import BannerCarousel from "@/components/menu/BannerCarousel";
 import StoreInfoSheet from "@/components/menu/StoreInfoSheet";
 import UserProfileSheet from "@/components/menu/UserProfileSheet";
 import { User } from "@/entities/User";
+import { Order } from "@/entities/Order";
 import OrderModal from "@/components/menu/OrderModal";
 import PixOnlineModal from "@/components/menu/PixOnlineModal";
 
@@ -569,28 +570,8 @@ export default function VrummMenu({
           </div>
         </div>
 
-        <div className="container mx-auto max-w-6xl pt-8 mt-8 border-t border-stone-800/60 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-stone-400">
+        <div className="container mx-auto max-w-6xl pt-8 mt-8 border-t border-stone-800/60 flex flex-col sm:flex-row items-center justify-center gap-4 text-xs text-stone-400">
           <p>© {new Date().getFullYear()} {settings?.restaurant_name || resolvedInitialStoreName}. Todos os direitos reservados.</p>
-          <p>
-            Desenvolvido por{" "}
-            <a
-              href="https://instagram.com/davialeixo_nogueira"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-red-400 hover:text-red-300 font-medium transition-colors"
-            >
-              Davi Aleixo
-            </a>
-            {" | "}
-            <a
-              href="https://wa.me/5531982607426"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-red-400 hover:text-red-300 font-medium transition-colors"
-            >
-              31982607426
-            </a>
-          </p>
         </div>
       </footer>
 

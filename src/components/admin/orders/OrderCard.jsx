@@ -12,6 +12,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { createPageUrl } from "@/utils";
 import { Link } from "react-router-dom";
 import OrderCountdownTimer from "@/components/admin/OrderCountdownTimer";
+import { getPaymentBrandInfo } from "@/constants/paymentBrands";
 
 export default function OrderCard({
   order,
@@ -320,6 +321,19 @@ export default function OrderCard({
                         className="bg-purple-600 hover:bg-purple-700 text-xs md:text-sm flex-1 md:flex-none cursor-pointer"
                       >
                         Iniciar Preparo
+                      </Button>
+                      <Button
+                        onClick={() =>
+                          onUpdateStatus(
+                            order.id,
+                            order.order_type === "delivery" ? "enviado" : "entregue"
+                          )
+                        }
+                        variant="outline"
+                        className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-xs md:text-sm flex-1 md:flex-none cursor-pointer"
+                        title="Pular etapa de preparo (útil quando Bar/Cozinha operam só na impressora sem KDS)"
+                      >
+                        {order.order_type === "delivery" ? "Despachar Direto" : "Concluir Direto"}
                       </Button>
                       <Button
                         onClick={handleCancel}

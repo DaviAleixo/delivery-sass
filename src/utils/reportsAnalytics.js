@@ -469,3 +469,169 @@ export function aggregateServiceFeeCumulative(
     isHourly: false,
   };
 }
+
+/**
+ * Agrega faturamento, volume de transações, ticket médio e % de representatividade por método de pagamento.
+ * Suporta pagamentos únicos e pagamentos múltiplos fracionados (ex: mesas amortizadas).
+ * 
+ * @param {Array} orders Lista de pedidos do período
+ * @returns {Object} { methods: Array, totalRevenue: number, totalTransactions: number, topMethodByRevenue: Object, topMethodByVolume: Object }
+ */
+export function aggregatePaymentMethodsDistribution(orders = []) {
+  const methodMap = {
+    pix: {
+      id: "pix",
+      label: "Pix",
+      count: 0,
+      revenue: 0,
+      color: "#059669",
+      badgeClass: "bg-emerald-50 text-emerald-800 border-emerald-200",
+      dotClass: "bg-emerald-500",
+      icon: "pix",
+    },
+    cartao_credito: {
+      id: "cartao_credito",
+      label: "Cartão de Crédito",
+      count: 0,
+      revenue: 0,
+      color: "#2563eb",
+      badgeClass: "bg-blue-50 text-blue-800 border-blue-200",
+      dotClass: "bg-blue-500",
+      icon: "credit_card",
+    },
+    cartao_debito: {
+      id: "cartao_debito",
+      label: "Cartão de Débito",
+      count: 0,
+      revenue: 0,
+      color: "#0284c7",
+      badgeClass: "bg-sky-50 text-sky-800 border-sky-200",
+      dotClass: "bg-sky-500",
+      icon: "credit_card",
+    },
+    dinheiro: {
+      id: "dinheiro",
+      label: "Dinheiro",
+      count: 0,
+      revenue: 0,
+      color: "#16a34a",
+      badgeClass: "bg-green-50 text-green-800 border-green-200",
+      dotClass: "bg-green-500",
+      icon: "banknote",
+    },
+    vale_refeicao: {
+      id: "vale_refeicao",
+      label: "Vale Refeição / Voucher",
+      count: 0,
+      revenue: 0,
+      color: "#d97706",
+      badgeClass: "bg-amber-50 text-amber-900 border-amber-200",
+      dotClass: "bg-amber-500",
+      icon: "receipt",
+    },
+    outros: {
+      id: "outros",
+      label: "Outros / Não Identificado",
+      count: 0,
+      revenue: 0,
+      color: "#78716c",
+      badgeClass: "bg-stone-50 text-stone-800 border-stone-200",
+      dotClass: "bg-stone-500",
+      icon: "help_circle",
+    },
+  };
+
+  const normalizeKey = (key) => {
+    if (!key) return "outros";
+    const k = String(key).toLowerCase().trim();
+    if (k.includes("pix") || k === "mercadopago") return "pix";
+    if (k.includes("crédito") || k.includes("credito") || k === "credit") return "cartao_credito";
+    if (k.includes("débito") || k.includes("debito") || k === "debit") return "cartao_debito";
+    if (k.includes("dinheiro") || k === "cash") return "dinheiro";
+    if (k.includes("vale") || k.includes("refei") || k.includes("alimenta") || k === "voucher") return "vale_refeicao";
+    return "outros";
+  };
+
+  let grandTotalRevenue = 0;
+  let grandTotalTransactions = 0;
+
+  orders.forEach((order) => {
+    if (order.status === "cancelado") return;
+    const orderTotal = Number(order.total_amount ?? order.total ?? 0) || 0;
+    if (orderTotal <= 0) return;
+
+    // 1. Verifica se possui múltiplos pagamentos detalhados (ex: mesas e comandas fracionadas)
+    let detailsPayments = null;
+    if (order.payment_details) {
+      if (Array.isArray(order.payment_details.payments) && order.payment_details.payments.length > 0) {
+        detailsPayments = order.payment_details.payments;
+      } else if (Array.isArray(order.payment_details) && order.payment_details.length > 0) {
+        detailsPayments = order.payment_details;
+      } else if (typeof order.payment_details === "string") {
+        try {
+          const parsed = JSON.parse(order.payment_details);
+          if (Array.isArray(parsed?.payments) && parsed.payments.length > 0) {
+            detailsPayments = parsed.payments;
+          } else if (Array.isArray(parsed) && parsed.length > 0) {
+            detailsPayments = parsed;
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
+
+    if (detailsPayments && detailsPayments.length > 0) {
+      // Decompõe cada parcela para o seu método com exatidão
+      detailsPayments.forEach((p) => {
+        const pAmt = Number(p.amount) || 0;
+        if (pAmt <= 0) return;
+        const normKey = normalizeKey(p.method);
+        methodMap[normKey].revenue += pAmt;
+        methodMap[normKey].count += 1;
+        grandTotalRevenue += pAmt;
+        grandTotalTransactions += 1;
+      });
+    } else {
+      // Pagamento em método único
+      const normKey = normalizeKey(order.payment_method);
+      methodMap[normKey].revenue += orderTotal;
+      methodMap[normKey].count += 1;
+      grandTotalRevenue += orderTotal;
+      grandTotalTransactions += 1;
+    }
+  });
+
+  grandTotalRevenue = Number(grandTotalRevenue.toFixed(2));
+
+  // Converte para lista ordenada por faturamento
+  const methodsList = Object.values(methodMap)
+    .filter((m) => m.revenue > 0 || m.count > 0)
+    .map((m) => {
+      const revenue = Number(m.revenue.toFixed(2));
+      const percentage = grandTotalRevenue > 0 ? Number(((revenue / grandTotalRevenue) * 100).toFixed(1)) : 0;
+      const txPercentage = grandTotalTransactions > 0 ? Number(((m.count / grandTotalTransactions) * 100).toFixed(1)) : 0;
+      const averageTicket = m.count > 0 ? Number((revenue / m.count).toFixed(2)) : 0;
+      return {
+        ...m,
+        revenue,
+        percentage,
+        txPercentage,
+        averageTicket,
+      };
+    })
+    .sort((a, b) => b.revenue - a.revenue);
+
+  const topMethodByRevenue = methodsList[0] || null;
+  const topMethodByVolume = [...methodsList].sort((a, b) => b.count - a.count)[0] || null;
+  const overallAverageTicket = grandTotalTransactions > 0 ? Number((grandTotalRevenue / grandTotalTransactions).toFixed(2)) : 0;
+
+  return {
+    methods: methodsList,
+    totalRevenue: grandTotalRevenue,
+    totalTransactions: grandTotalTransactions,
+    overallAverageTicket,
+    topMethodByRevenue,
+    topMethodByVolume,
+  };
+}

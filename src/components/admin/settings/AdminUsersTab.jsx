@@ -57,22 +57,22 @@ export default function AdminUsersTab({
   return (
     <div className="space-y-6">
       {/* Banner de Identificação da Loja para Login */}
-      <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-50 via-indigo-50/60 to-white border border-purple-200/90 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+      <div className="p-4 rounded-xl bg-white border border-stone-200 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-xl bg-purple-600 text-white flex items-center justify-center font-black shadow-sm shrink-0 text-lg">
+          <div className="w-10 h-10 rounded-lg bg-stone-900 text-white flex items-center justify-center font-mono font-bold text-sm shrink-0">
             #{displayCode}
           </div>
           <div>
-            <p className="text-[11px] font-bold text-purple-800 uppercase tracking-wider flex items-center gap-1.5">
-              <span>🏷️ Código Numérico da sua Loja</span>
-              <span className="bg-purple-200/70 text-purple-900 px-1.5 py-0.2 rounded text-[10px]">Para Login</span>
-            </p>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider">Código da Loja</span>
+              <span className="bg-stone-100 text-stone-700 px-1.5 py-0.2 rounded text-[10px] font-semibold border border-stone-200">Login</span>
+            </div>
             <div className="flex items-center gap-2 mt-0.5">
-              <span className="font-mono text-xl font-black text-purple-950 bg-white px-3 py-0.5 rounded-lg border border-purple-200 shadow-2xs select-all">
+              <span className="font-mono text-lg font-bold text-stone-900 select-all">
                 {displayCode}
               </span>
-              <span className="text-xs text-stone-600 font-medium">
-                (Informe o número <strong>{displayCode}</strong> no campo <i>Código da Loja</i> ao fazer login)
+              <span className="text-xs text-stone-500">
+                (Informe este código no campo <i>Código da Loja</i> na tela de login)
               </span>
             </div>
           </div>
@@ -82,20 +82,19 @@ export default function AdminUsersTab({
           variant="outline"
           size="sm"
           onClick={handleCopyStoreCode}
-          className="text-xs font-bold text-purple-700 border-purple-300 hover:bg-purple-100/60 shrink-0 self-start sm:self-auto cursor-pointer"
+          className="text-xs font-semibold text-stone-700 border-stone-300 hover:bg-stone-100 shrink-0 self-start sm:self-auto cursor-pointer h-8 rounded-lg"
         >
-          {copiedCode ? <Check className="w-3.5 h-3.5 mr-1 text-emerald-600" /> : <Copy className="w-3.5 h-3.5 mr-1" />}
+          {copiedCode ? <Check className="w-3.5 h-3.5 mr-1 text-emerald-700" /> : <Copy className="w-3.5 h-3.5 mr-1 text-stone-500" />}
           <span>{copiedCode ? "Copiado!" : `Copiar Código #${displayCode}`}</span>
         </Button>
       </div>
 
-
-      <Card className="border-0 shadow-md">
-        <CardHeader>
+      <Card className="border border-stone-200 rounded-xl shadow-2xs bg-white">
+        <CardHeader className="border-b border-stone-100 pb-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <CardTitle className="text-xl font-bold text-stone-900 flex items-center gap-2">
-                <Users className="w-5 h-5 text-purple-600" />
+              <CardTitle className="text-base font-bold text-stone-900 flex items-center gap-2">
+                <Users className="w-4 h-4 text-stone-700" />
                 <span>Usuários & Acessos do Painel</span>
               </CardTitle>
               <p className="text-xs text-stone-500 mt-0.5">
@@ -105,7 +104,7 @@ export default function AdminUsersTab({
             <Button
               type="button"
               onClick={handleOpenAddUser}
-              className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs h-9 px-4 rounded-xl flex items-center gap-1.5 shadow-sm self-start sm:self-auto cursor-pointer"
+              className="bg-stone-900 hover:bg-black text-white font-semibold text-xs h-9 px-3.5 rounded-lg flex items-center gap-1.5 shadow-2xs self-start sm:self-auto cursor-pointer transition-colors"
             >
               <UserPlus className="w-4 h-4" />
               <span>Novo Usuário</span>
@@ -113,16 +112,16 @@ export default function AdminUsersTab({
           </div>
         </CardHeader>
 
-        <CardContent>
-          <div className="border border-stone-200 rounded-2xl overflow-hidden bg-white shadow-2xs">
+        <CardContent className="pt-4">
+          <div className="border border-stone-200/80 rounded-xl overflow-hidden bg-white">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr className="bg-stone-50 text-stone-600 border-b border-stone-200 font-bold">
-                    <th className="py-3 px-4">Usuário</th>
-                    <th className="py-3 px-4">Cargo</th>
-                    <th className="py-3 px-4">Permissões</th>
-                    <th className="py-3 px-4">Status</th>
+                  <tr className="bg-stone-50/70 text-stone-500 border-b border-stone-200/80 font-semibold uppercase text-[10px]">
+                    <th className="py-2.5 px-4">Usuário</th>
+                    <th className="py-2.5 px-4">Cargo</th>
+                    <th className="py-2.5 px-4">Permissões</th>
+                    <th className="py-2.5 px-4">Status</th>
                     <th className="py-3 px-4 text-right">Ações</th>
                   </tr>
                 </thead>

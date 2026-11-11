@@ -3,8 +3,14 @@ function canPlayStoreAudio() {
   try {
     const path = window.location.pathname.toLowerCase();
     // Apenas silencia estritamente na tela de gestão do SaaS (/superadmin)
-    // ou na tela de login (/adminlogin). Em qualquer tela de restaurante, o som funciona!
-    if (path === "/superadmin" || path.startsWith("/superadmin/") || path.includes("/adminlogin")) {
+    // ou na tela de login (/login). Em qualquer tela de restaurante, o som funciona!
+    if (
+      path === "/superadmin" ||
+      path.startsWith("/superadmin/") ||
+      path === "/login" ||
+      path.startsWith("/login/") ||
+      path.includes("/adminlogin")
+    ) {
       return false;
     }
   } catch {
@@ -65,6 +71,9 @@ class SoundAlertManager {
   // Atualiza a contagem de pedidos pendentes
   setPendingCount(count) {
     this.pendingCount = Math.max(0, Number(count) || 0);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("pendingOrdersCountChanged", { detail: this.pendingCount }));
+    }
     if (this.pendingCount > 0 && this.enabled && canPlayStoreAudio()) {
       this.startContinuousAlert();
     } else {

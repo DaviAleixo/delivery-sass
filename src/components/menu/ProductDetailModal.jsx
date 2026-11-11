@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { Plus, Minus, Check, ArrowLeft, MoreVertical, ChevronDown, AlertCircle } from 'lucide-react';
+import { Plus, Minus, Check, ArrowLeft, ChevronDown, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function ProductDetailModal({ 
@@ -222,11 +222,6 @@ export default function ProductDetailModal({
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-
-          {/* Botão de Opções / Três Pontos à Direita */}
-          <div className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/50 text-white flex items-center justify-center backdrop-blur-md shadow-md z-20">
-            <MoreVertical className="w-5 h-5" />
-          </div>
         </div>
 
         {/* Card do Conteúdo Sobreposto à Foto com Cantos Arredondados */}
@@ -284,7 +279,7 @@ export default function ProductDetailModal({
               {complementGroups.map((group) => {
                 const isSingleChoice = group.min_quantity === 1 && group.max_quantity === 1;
                 const selectedCount = getGroupSelectedCount(group.id);
-                const isGroupSatisfied = selectedCount >= group.min_quantity;
+                const _isGroupSatisfied = selectedCount >= group.min_quantity;
                 const isExpanded = expandedGroups[group.id] !== false;
 
                 return (

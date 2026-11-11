@@ -35,15 +35,47 @@
   - O saldo é atrelado unicamente ao número de telefone do cliente informado no pedido (sem download de app nem criação de senhas).
   - Animação de comemoração no checkout informando quanto saldo foi gerado para a próxima compra.
   - Reconhecimento automático no próximo pedido com botão de 1-toque no carrinho: *"💳 Você possui R$ X de saldo! Deseja abater deste pedido?"*.
+* **Automação & Blindagem Contra "Esquecimento do Lojista"**:
+  - *Problema Operacional*: O lojista na correria da cozinha pode esquecer de clicar em "Entregue" no painel, travando o cashback do cliente.
+  - *Solução 1 (Botão do Cliente no Rastreio)*: Botão interativo na tela de status `[ Já recebi meu pedido! 🎁 Liberar Cashback ]`, permitindo ao próprio cliente confirmar o recebimento e liberar o crédito na hora com confetes.
+  - *Solução 2 (Auto-Conclusão por Tempo)*: Timer automático de segurança: após 90 a 120 minutos do status "Enviado", se a loja não cancelou, o pedido é concluído automaticamente pelo sistema e o saldo é liberado.
+  - *Solução 3 (Virada de Noite / Fechamento de Caixa)*: Qualquer pedido do dia que ficou em aberto é liquidado como entregue ao final do expediente.
 * **Benefício Estratégico para o SaaS PedeMuleke**: Gera **Lock-in absoluto** (retenção máxima). Um restaurante com milhares de reais em saldo de cashback distribuído aos seus clientes fiéis na plataforma não pode cancelar a assinatura sem gerar atrito grave com sua própria clientela. Pode ser reservado como diferencial premium dos planos Completo / VIP.
 
 ### 📊 3. Relatório de Horários de Pico & Produtos Mais Vendidos
 * **Ideia**: Gráficos analíticos no Dashboard que mostram quais dias e faixas de horário geram mais pedidos (ex: Sexta das 19h às 22h).
 * **Benefício**: Ajuda o lojista a planejar estoque e equipe de cozinha.
 
-### 📱 4. PWA (Progressive Web App) Instalável
+### 📄 4. Emissor de Relatórios Executivos & Fiscais (PDF A4 & Planilhas CSV)
+* **Conceito ERP**: Separar o dashboard visual com gráficos do emissor contábil de relatórios formais.
+* **Formatos de Saída**:
+  1. **Folha A4 Timbrada (PDF Vetorial)**: Com dados fiscais da loja (CNPJ, endereço), resumo contábil de faturamento, discriminação bancária de recebimentos vs dinheiro em espécie, quebras de página nativas e termo de autenticidade com espaço para assinatura de gestores.
+  2. **Planilha Tabulada (.CSV compatível com Excel)**: Gerada em milissegundos com codificação UTF-8 BOM para conciliação contábil, apuração do Simples Nacional e conferência de taxas de operadoras de maquininhas.
+* **Módulo Implementado**: [[Reports]] integrado com a nova aba *Central de Relatórios (PDF / Excel)*.
+
+### 📊 10. Evolução Estratégica do Dashboard Administrativo
+* **Objetivo**: Transformar o Dashboard em uma verdadeira central de comando operacional em tempo real para o lojista, sem poluir visualmente e focando no que realmente gera ação rápida.
+* **Métricas & Indicadores de Alto Valor Sugeridos**:
+  1. **Ticket Médio do Dia**: Substituir a métrica estática de 'Total de Pedidos Acumulado' por Ticket Médio do expediente de hoje (ex: R$ 42,50). Ajuda o lojista a saber na hora se os clientes estão consumindo combos/adicionais.
+  2. **Divisão por Canal Operacional ao Vivo**: Mini-gráfico ou contadores de pedidos de hoje divididos por canal: `Delivery` vs `Retirada Balcão` vs `Mesas/Salão`.
+  3. **Funil da Cozinha / Operação em Tempo Real**:
+     - *Na Cozinha (Preparando)*: X pedidos.
+     - *Em Rota (Com Motoboy)*: Y entregas a caminho.
+     - *Mesas Ocupadas*: Z mesas consumindo agora.
+  4. **Produtos Pausados / Estoque Crítico**: Alerta rápido indicando se há produtos pausados hoje (para evitar esquecer itens importantes desativados no cardápio).
+  5. **Comparativo com a Semana Passada (% Crescimento)**: Ex: "Hoje vs mesma segunda-feira da semana anterior (+12%)".
+* **Conexão com o Backlog**: Ideias registradas para discussão futura no [[01 - 🗺️ Roadmap & Backlog]].
 * **Ideia**: Quando o cliente final abrir o cardápio no celular pelo navegador, exibir banner convidativo: *"Deseja instalar o app do [Nome do Restaurante] na tela inicial?"*.
 * **Benefício**: Dá a sensação de um aplicativo nativo próprio do restaurante, sem o custo e burocracia de publicar na Google Play ou App Store.
+
+### 🖥️ 11. KDS Dedicado / Modo Kiosk para Cozinha (Padrão Franquias & Grandes ERPs)
+* **Contexto**: A equipe de cozinha (chapeiros, cozinheiros, pizzaiolos) não deve ter acesso ao painel gerencial (faturamento, relatórios, caixa, configurações) e não precisa ver a barra lateral de navegação do ERP.
+* **Arquitetura em Grandes Redes (McDonalds, Saipos, Totvs, Toast)**:
+  1. **URL Standalone / Modo Kiosk (/kds/display ou /:slug/kds)**: Rota limpa sem barra lateral ou cabeçalho administrativo. Ocupa 100% da tela (Full Screen).
+  2. **Dispositivos na Parede**: Rodando em Smart TVs, Monitores com Android TV Box / TV Stick ou tablets industriais articulados na linha de chapa/montagem.
+  3. **Perfil de Usuário Restrito (Role: Cozinha)**: Login da equipe da cozinha que redireciona automaticamente para o KDS isolado, com bloqueio total das demais rotas gerenciais.
+  4. **Filtro por Estações de Cozinha (Fase Futura)**: Divisão de filas por posto de trabalho (ex: Chapa/Hambúrguer, Fritadeira/Porções, Forno/Pizzas, Expedição/Montagem Final).
+* **Conexão com o Backlog**: Registrado no brainstorm para planejamento no [[01 - 🗺️ Roadmap & Backlog]].
 
 ### 🔔 5. Notificação Sonora Persistente na Cozinha
 * **Ideia**: No painel do restaurante (KDS), o alerta sonoro tocar em loop até que o atendente clique em "Aceitar Pedido", garantindo que nenhum pedido passe despercebido em horários de pico barulhentos.
@@ -57,6 +89,10 @@
   3. **Checkout Adaptativo**: Se a loja só aceita Retirada, o modal de pedido já abre direto em Retirada, ocultando campos de endereço, CEP e taxa de entrega, gerando uma experiência de compra ultra rápida (15 segundos).
 
 ### 🍽️ 7. App do Garçom (Comanda Mobile PWA - Fase Futura)
+
+### 💵 8. Gestão de Caixa Executiva & Descomplicada (Padrão ERP / PDV Sério)
+* **Contexto**: Operadores de caixa e proprietários frequentemente não têm formação contábil e se assustam com telas complexas, jargões técnicos ou visual de IA com emojis e gradientes.
+* **Solução**: Design minimalista sóbrio, separação nítida entre Gaveta Física e Faturamento Digital (Pix/Cartões), linguagem amigável (Troco, Retirar, Pagar Despesa) e exportação no WhatsApp em 1 clique.
 * **Conceito**: Uma rota web dedicada (`/:slug/garcom`) otimizada para smartphones (PWA que o garçom pode instalar na tela inicial do celular com 1 clique). O motor base de mesas e comandas (`table_sessions` + `RestaurantTable`) já está 100% ativo e integrado no sistema.
 * **Fluxo de Trabalho & Próximas Evoluções**:
   1. O garçom seleciona o número da mesa em um mapa visual de mesas (livres em verde, ocupadas em amarelo, pré-conta em azul).
@@ -65,7 +101,7 @@
   4. O cliente pode pedir mais rodadas (bebidas, sobremesas) e tudo vai acumulando na mesma comanda.
   5. **Transferência de Mesas**: Capacidade de transferir pedidos de uma mesa para outra quando os clientes trocarem de lugar no salão.
   6. **Botão de Chamar Garçom**: O cliente pelo QR code da mesa (`?mesa=X`) pode tocar em "Chamar Garçom" ou "Pedir Conta", fazendo o celular da equipe vibrar.
-  7. **Divisão de Comanda por Pessoa na Mesa**: Cada pessoa pode fechar sua parte individualmente via Pix ou Cartão na maquininha móvel.
+  7. **Divisão de Comanda por Pessoa & Pagamentos Parciais (Implementado)**: Cada pessoa pode fechar sua parte individualmente via Pix, Dinheiro ou Cartão. A mesa amortiza o saldo devedor em tempo real mantendo-se aberta até quitação total, com histórico auditável de cada parcela (ver [[01 - 🗺️ Roadmap & Backlog]]).
   8. **Métricas de Giro de Salão & Lotação Passiva (Sem Fricção de Headcount)**:
      - **Problema de UX no Salão**: Exigir que o garçom conte e digite quantas pessoas sentaram na mesa na hora que os clientes chegam gera estresse, atraso e fricção operacional (em horário de pico ninguém para pra preencher).
      - **Divisão Orgânica por Pedido (`ordersByCustomer`)**: As pessoas dividem a conta com base no que cada uma consumiu de fato (ex: pessoa 1 paga só o hambúrguer dela, pessoa 2 paga o dela + 2 filhos), em vez de fórmulas matemáticas rígidas de divisão uniforme `total / N`.
@@ -1108,6 +1144,89 @@
 * **5. Notificação Transparente no Cardápio do Cliente**:
   - Na tela de status do pedido (MyOrders / Rastreador):
     - Alerta visual suave: *"Pedido cancelado pelo restaurante. Motivo: [Motivo]. O valor de R$ XX,XX foi devolvido via Pix para a sua conta bancária."*
+
+---
+
+### 🤖 11. Autoatendimento & Cashback: Arquitetura & Fluxo Sem Fricção
+* **Cenário**: O cliente chega no restaurante físico (totem na entrada ou QR Code na mesa) e faz o próprio pedido sem garçom.
+* **O Desafio do Cashback no Autoatendimento**: No delivery o telefone já é preenchido para entrega. No autoatendimento, como pedir o telefone do cliente sem gerar atrito ou fila?
+* **O Fluxo Ideal de Conversão**:
+  1. **Início do Pedido**: O cliente navega no cardápio do totem ou celular na mesa normalmente, escolhe os itens e monta lanches/pizzas.
+  2. **Isca de Fidelidade no Carrinho**:
+     - O carrinho exibe: *"🎁 Digite seu WhatsApp para ganhar R$ X,XX de cashback para sua próxima visita"*.
+     - 90%+ dos clientes digitam o DDD + WhatsApp de bom grado pelo benefício financeiro.
+  3. **Identificação Instantânea da Carteira**:
+     - Se o cliente já comprou antes (mesmo via delivery online), o sistema reconhece o saldo acumulado: *"Você tem R$ 5,00 de crédito acumulado. Deseja abater agora?"*.
+     - Se for a primeira compra, cria a carteira no tenant instantaneamente sem exigir senha nem formulário longo.
+  4. **Pagamento Integrado**:
+     - No **Totem físico**: Paga na maquininha acoplada (TEF) ou via QR Code Pix gerado na tela do totem.
+     - Na **Mesa (QR Code)**: Paga direto no celular via Pix ou seleciona "Pagar no Caixa ao Sair".
+  5. **Disparo para a Cozinha & Notificação de Saldo**:
+     - O pedido cai imediatamente no KDS da cozinha com a identificação do Totem/Mesa e o nome do cliente.
+     - Na tela final: *"Pronto! Seu pedido foi para a cozinha. Você acabou de acumular R$ X,XX de cashback válido por 15 dias!"*.
+
+---
+
+### 💳 12. Estudo Técnico e Comercial: Gateway Asaas para o PedeMuleke
+* **Por que o Asaas é referência para plataformas SaaS no Brasil?**
+  - O Mercado Pago funciona bem para chave do próprio lojista, mas o **Asaas** é especializado em **Infraestrutura BaaS (Banking as a Service) com Split de Pagamentos e Subcontas Automatizadas**.
+* **Principais Recursos do Asaas**:
+  1. **Subcontas Automáticas via API**:
+     - O PedeMuleke pode abrir uma subconta (`walletId`) para cada restaurante parceiro automaticamente.
+     - O restaurante recebe os valores de Pix e cartão diretamente na subconta dele com total conformidade fiscal (o SaaS não comete bitributação).
+  2. **Split de Pagamento Nativo**:
+     - A taxa da transação ou a mensalidade/comissão do SaaS pode ser retida na fonte e repassada automaticamente para a conta principal do PedeMuleke.
+  3. **Pix Dinâmico Instantâneo**:
+     - QR Code copia-e-cola gerado em milissegundos via API com Webhook confiável que confirma o pagamento em 1 a 2 segundos.
+  4. **Cobrança Recorrente de Assinatura (SaaS)**:
+     - Permite cobrar as mensalidades dos restaurantes via cartão de crédito com tokenização, boleto bancário ou Pix recorrente.
+* **Pontos de Atenção**:
+  - A criação de subcontas possui processo de verificação cadastral (KYC/documentos) que pode ter taxa de ativação por subconta dependendo do volume contratado.
+  - Para início rápido, o lojista pode cadastrar a chave API/Token do Asaas diretamente no painel de configurações, similar ao fluxo atual do Mercado Pago.
+
+---
+
+### 🍽️ 13. Arquitetura de Pagamento Parcial em Mesas (Salão & Comandas)
+* **Problema Real de Restaurante**:
+  - Em uma mesa com 4 pessoas, a conta total dá R$ 200,00. A Pessoa A quer pagar R$ 50,00 no Pix, a Pessoa B quer pagar R$ 50,00 no Cartão de Débito, e as Pessoas C e D vão pagar o restante depois.
+  - O sistema atual só permitia liquidar a mesa inteira de uma só vez ("Encerrar Mesa").
+* **Solução Proposta (Livro-Razão da Sessão de Mesa)**:
+  1. **Nova Ação na Comanda**: Botão `[ 💳 Receber Parcial ]` ao lado de `[ Encerrar Mesa ]`.
+  2. **Modal de Recebimento Parcial**:
+     - Exibe: Total Consumido, Total Já Pago e Saldo Restante Devedor.
+     - Campo de valor: o operador informa quanto está recebendo agora (ex: R$ 50,00).
+     - Escolha da forma de pagamento (Pix, Dinheiro, Cartão de Crédito, Débito).
+  3. **Registro Auditável**:
+     - Cria um lançamento em `table_session_payments` vinculado à sessão da mesa.
+     - Alimenta o fluxo da Gestão de Caixa em tempo real.
+  4. **Status da Mesa**:
+     - Se o saldo restante for maior que R$ 0, a mesa permanece aberta com badge `Saldo Restante: R$ 150,00`.
+     - Quando o saldo devedor atingir R$ 0,00, a mesa é liberada automaticamente ou permite encerramento limpo com emissão de comprovante.
+
+---
+
+### 🖨️ 14. Impressão & KDS Dinâmico por Setor de Produção (Estilo Saipos)
+* **Objetivo**: Permitir que cada loja crie dinamicamente quantos setores quiser (`Chapa`, `Cozinha`, `Bar`, `Fritura`, `Forno`, `Caixa` etc.) e opere simultaneamente com **KDS digital** e/ou **impressão automática separada por setor**, sem criar múltiplos KDS e sem depender de QZ Tray/Java.
+* **3 Níveis de Operação (Sem Atrito para Lojas Pequenas)**:
+  - **Simples** *(sem setores configurados)*: mantém o comportamento atual — 1 impressora padrão (cupom completo) e KDS único geral.
+  - **Intermediário** *(Caixa + Cozinha)*: 2 setores (produção na Cozinha sem preços + cupom completo no Caixa/Motoboy).
+  - **Avançado** *(Múltiplos Setores)*: vários setores independentes (`Cozinha`, `Bar`, `Fritura`, `Pizzaria`, `Expedição`), cada um com sua impressora e/ou tela KDS.
+* **Vantagem Já Existente no Projeto**:
+  - O `pedemuleke-spooler.exe` (`desktop-spooler/server.js`) já roda localmente em `127.0.0.1:9100`, lista todas as impressoras do Windows (`GET /printers`) e aceita `printerName` e `rawText` em `POST /print` via `winspool.drv` (`RAW`). Um único `.exe` no PC do caixa já consegue despachar para várias impressoras USB ou compartilhadas em rede no Windows.
+* **Fluxo Dinâmico Proposto (4 Passos)**:
+  1. **Cadastro Dinâmico de Setores (`production_sectors`)**: O lojista cria setores livres com: nome, conteúdo (`Só Produção`: itens + obs sem valor/endereço vs `Cupom Completo`: tudo + R$ + troco + endereço), modo (`Só KDS` | `Só Impressão` | `KDS + Impressão`), impressora do Windows, largura (`80mm`/`58mm`), cópias (`1`/`2`) e tipo (`Térmica RAW` vs fallback gráfico/navegador para `Comum A4`).
+  2. **Vínculo Categoria → Setor (com override opcional no Produto)**: O lojista escolhe o setor padrão na **Categoria** (todos os produtos herdam automaticamente), podendo sobrescrever em um **Produto** específico se houver exceção. No momento da compra, o pedido grava snapshot de `sector_id` e `sector_name` dentro de cada item.
+  3. **KDS Único com Abas Dinâmicas (`?sector=...`)**: O `KDS.jsx` gera as abas do topo dinamicamente a partir dos setores da loja (`Todos | Cozinha | Bar | ...`). TVs/tablets filtram apenas pedidos que tenham itens daquele setor.
+  4. **Impressão Fracionada Sem Desperdício (`print_jobs`)**: Ao confirmar pedido válido, gera 1 job por `(order_id, sector_id)` apenas para os setores que possuem itens no pedido (setor sem item não imprime) + via completa do Caixa se configurado.
+* **Evolução Técnica & Segurança do Spooler (`.exe`)**:
+  - **Etapa 1 (Painel Aberto + Setores)**: Recompilar `pedemuleke-spooler.exe` (incluindo `ticketFormatter.js` atualizado de 29/10 com pizza fracionada e bandeira de cartão), restringir `Access-Control-Allow-Origin` no `server.js` aos domínios do PedeMuleke + token local, e conectar `useFifoPrintQueue.js` à tabela `print_jobs`. (`WritePrinter` = enviado; falhas físicas de papel são tratadas com botão rápido de **Reimprimir**.)
+  - **Etapa 2 (Modo Autônomo / Navegador Fechado)**: Evoluir o `.exe` para parear com a loja via código curto (ex: `PM-4829`) e consumir `print_jobs` diretamente via Edge Function autenticada por **token de estação**, imprimindo mesmo com o Chrome fechado.
+* **Insights de Campo & Futuras Expansões de Impressão Compacta**:
+  - **Filtro de Canal por Setor (`allowed_channels`: Delivery / Balcão / Mesa)**: Seguindo o padrão de mercado (Saipos / Anota AI / Consumer), permitir que o setor `Caixa / Expedição` imprima **somente para Delivery (e opcionalmente Retirada)**, desmarcando `Mesa / Autoatendimento` para não inundar o caixa a cada rodada de mesa/totem (mesa só imprime no caixa ao fechar a conta).
+  - **Gatilho de Impressão no Delivery (Ao Aceitar vs Ao Entrar vs Via Motoboy ao Despachar)**: Configuração opcional para disparar produção/caixa após aceite e emitir via específica do motoboy na expedição/despacho.
+  - **Autoatendimento / Totem (Cupom Senha Curto)**: Impressão resumida para o cliente (número da senha/pedido e resumo rápido sem dados desnecessários de delivery), enquanto Cozinha/Bar recebem a comanda enxuta `production_only`.
+  - **Maquininha Smart POS do Garçom**: No futuro, ao cobrar direto na maquininha na mesa, imprimir recibo/comprovante compacto nela e disparar somente as comandas enxutas para o Bar e Cozinha.
+* **Conexão com o Backlog**: Registrado para planejamento futuro no [[01 - 🗺️ Roadmap & Backlog]].
 
 ---
 

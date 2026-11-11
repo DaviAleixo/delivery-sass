@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle, MapPin, Truck, Store, Plus, ArrowLeft, Loader2, Pencil, CreditCard, Banknote, Home, Building2, AlertTriangle, CheckCircle2, Zap, UtensilsCrossed, PhoneCall, Gift, Coins, Sparkles } from "lucide-react";
+import { AlertCircle, MapPin, Truck, Store, Plus, ArrowLeft, Loader2, Pencil, CreditCard, Banknote, Home, Building2, AlertTriangle, CheckCircle2, Zap, UtensilsCrossed, PhoneCall, Gift } from "lucide-react";
 import { matchNeighborhood, isCityAllowed } from "@/utils/neighborhoodMatcher";
 import { User } from "@/entities/User";
 import { UserAddress } from "@/entities/UserAddress";
@@ -1402,10 +1402,23 @@ export default function OrderModal({
                                     Bairro atendido! Taxa: {effectiveDeliveryFee === 0 ? "Grátis" : `R$ ${effectiveDeliveryFee.toFixed(2).replace('.', ',')}`}
                                   </span>
                                 ) : isDeliveryBlocked ? (
-                                  <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-lg flex items-center gap-1 w-fit">
-                                    <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
-                                    Bairro fora da área de entrega. Escolha Retirada no Balcão.
-                                  </span>
+                                  <div className="space-y-1.5 mt-1">
+                                    <span className="text-[11px] font-bold text-rose-800 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-lg flex items-center gap-1 w-fit">
+                                      <AlertTriangle className="w-3 h-3 text-rose-600 shrink-0" />
+                                      Bairro fora da área de entrega
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setOrderType('takeaway');
+                                        if (errors.address) setErrors(p => ({ ...p, address: "" }));
+                                      }}
+                                      className="text-[11px] font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 px-2.5 py-1 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
+                                    >
+                                      <Store className="w-3.5 h-3.5 text-amber-700" />
+                                      <span>Mudar para Retirada no Balcão (Economize o frete)</span>
+                                    </button>
+                                  </div>
                                 ) : (
                                   <span className="text-[11px] font-semibold text-stone-600 bg-stone-100 px-2 py-0.5 rounded-lg flex items-center gap-1 w-fit">
                                     Taxa padrão: R$ {effectiveDeliveryFee.toFixed(2).replace('.', ',')}
@@ -1936,12 +1949,30 @@ export default function OrderModal({
                     )}
 
                     {orderType === 'delivery' && isDeliveryBlocked && (
-                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs flex items-start gap-2 mt-2">
-                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                        <div>
-                          <strong className="block font-bold">Área não atendida para entrega</strong>
-                          <span>{deliveryBlockReason}</span>
+                      <div className="p-3.5 bg-amber-50 border border-amber-300/80 rounded-2xl text-amber-900 text-xs space-y-2 mt-2 shadow-2xs">
+                        <div className="flex items-start gap-2.5">
+                          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                          <div>
+                            <strong className="block font-bold text-amber-950">
+                              {isCityBlocked ? "Cidade fora da rota de entrega" : "Bairro fora da rota do motoboy"}
+                            </strong>
+                            <span className="text-[11px] text-amber-800 leading-relaxed block mt-0.5">
+                              {deliveryBlockReason}
+                            </span>
+                          </div>
                         </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOrderType('takeaway');
+                            if (errors.address) setErrors(p => ({ ...p, address: "" }));
+                          }}
+                          className="w-full py-2 px-3 bg-stone-900 hover:bg-black text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
+                        >
+                          <Store className="w-4 h-4 text-amber-400" />
+                          <span>🛍️ Mudar para Retirada no Balcão (Sem taxa)</span>
+                        </button>
                       </div>
                     )}
 

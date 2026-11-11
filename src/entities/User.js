@@ -10,7 +10,7 @@ function getStoreSlug() {
   const RESERVED = new Set([
     "menu", "dashboard", "orders", "pdv", "clients", "products",
     "categories", "banners", "coupons", "complements", "reports",
-    "settings", "superadmin", "adminlogin", "myorders", "printorder", "home", "api"
+    "settings", "superadmin", "adminlogin", "login", "myorders", "printorder", "home", "api"
   ]);
   const routeSlug = segments.length > 0 && !RESERVED.has(segments[0].toLowerCase()) ? segments[0].toLowerCase() : null;
   return routeSlug || localStorage.getItem("current_tenant_slug") || "vrumm";
