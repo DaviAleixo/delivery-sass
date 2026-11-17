@@ -329,34 +329,41 @@ export default function ProductDetailModal({
       <DialogContent className="max-w-lg max-h-[92vh] overflow-y-auto overflow-x-hidden p-0 rounded-3xl bg-white border-none text-gray-900 shadow-2xl scrollbar-hide flex flex-col gap-0">
         <DialogTitle className="sr-only">{product.name}</DialogTitle>
 
-        {/* Imagem Hero no Topo com Botões Flutuantes (Inspirado na Foto 2) */}
-        <div className="relative w-full h-64 sm:h-72 bg-stone-900 overflow-hidden shrink-0">
-          {hasValidImage ? (
+        {/* Topo: Imagem Hero se houver foto, ou Topbar limpa com fundo branco se não houver foto */}
+        {hasValidImage ? (
+          <div className="relative w-full h-64 sm:h-72 bg-stone-900 overflow-hidden shrink-0">
             <img 
               src={product.image_url} 
               alt={product.name} 
               onError={() => setImageError(true)}
               className="w-full h-full object-cover"
             />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-6xl bg-stone-850">
-              🍔
-            </div>
-          )}
 
-          {/* Botão Voltar Circular à Esquerda */}
-          <button
-            type="button"
-            onClick={onClose}
-            className="absolute top-4 left-4 w-9 h-9 rounded-full bg-black/50 hover:bg-black/75 text-white flex items-center justify-center backdrop-blur-md transition-all shadow-md z-20 cursor-pointer"
-            aria-label="Voltar"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-        </div>
+            {/* Botão Voltar Circular à Esquerda */}
+            <button
+              type="button"
+              onClick={onClose}
+              className="absolute top-4 left-4 w-9 h-9 rounded-full bg-black/50 hover:bg-black/75 text-white flex items-center justify-center backdrop-blur-md transition-all shadow-md z-20 cursor-pointer"
+              aria-label="Voltar"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+          </div>
+        ) : (
+          <div className="pt-4 px-5 sm:px-6 flex items-center justify-between bg-white shrink-0">
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-9 h-9 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-700 flex items-center justify-center transition-all cursor-pointer shadow-xs"
+              aria-label="Voltar"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+          </div>
+        )}
 
         {/* Card do Conteúdo Sobreposto à Foto com Cantos Arredondados */}
-        <div className="relative -mt-6 z-[2] bg-white rounded-t-[24px] pt-6 px-5 sm:px-6 pb-2 space-y-5">
+        <div className={`relative z-[2] bg-white px-5 sm:px-6 pb-2 space-y-5 ${hasValidImage ? "-mt-6 rounded-t-[24px] pt-6" : "pt-2"}`}>
           {/* Linha Principal: Título, Preço e Stepper de Quantidade do Produto Inline */}
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -428,11 +435,6 @@ export default function ProductDetailModal({
                           <h4 className="font-bold text-sm sm:text-base text-gray-950">
                             {group.name}
                           </h4>
-                          {group.is_size_selector && (
-                            <span className="bg-blue-50 text-blue-800 font-bold text-[10px] px-2 py-0.5 rounded-full border border-blue-200">
-                              📏 Tamanho
-                            </span>
-                          )}
                           {Number(group.free_quantity) > 0 && (
                             <span className="bg-emerald-50 text-[#046c4e] font-bold text-[10px] px-2 py-0.5 rounded-full border border-emerald-200">
                               {selectedCount < group.free_quantity

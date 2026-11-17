@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Plus, ChevronRight } from "lucide-react";
+import { Plus, ChevronRight, Package } from "lucide-react";
 import {
   formatBRLValue,
   getMinPizzaPrice,
@@ -38,8 +38,8 @@ function PopularProductCard({ product, index, hasMoved, onProductClick, isVisual
             draggable={false}
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-3xl bg-gray-50">
-            🍽️
+          <div className="w-full h-full flex items-center justify-center bg-stone-50 border border-stone-100">
+            <Package className="w-8 h-8 text-stone-300 stroke-[1.5]" />
           </div>
         )}
       </div>

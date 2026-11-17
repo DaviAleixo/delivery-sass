@@ -1,6 +1,6 @@
 import React, { forwardRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Plus } from "lucide-react";
+import { Plus, Package } from "lucide-react";
 import {
   formatBRLValue,
   getMinPizzaPrice,
@@ -41,7 +41,7 @@ const ProductCard = forwardRef(function ProductCard(
               loading="lazy"
             />
           ) : (
-            <span className="text-2xl select-none">🍽️</span>
+            <Package className="w-6 h-6 text-stone-300 stroke-[1.5]" />
           )}
         </div>
 
