@@ -27,6 +27,10 @@ import {
   CheckCircle2,
   PauseCircle,
   ShieldCheck,
+  Gift,
+  Ruler,
+  Sparkles,
+  Check,
 } from "lucide-react";
 
 export default function ComplementsPage() {
@@ -163,16 +167,17 @@ export default function ComplementsPage() {
 
     setIsSaving(true);
     try {
+      const isSize = Boolean(groupForm.is_size_selector);
       const payload = {
         name: groupForm.name.trim(),
         description: groupForm.description.trim(),
-        min_quantity: parseInt(groupForm.min_quantity) || 0,
-        max_quantity: Math.max(1, parseInt(groupForm.max_quantity) || 1),
-        free_quantity: Math.max(0, parseInt(groupForm.free_quantity) || 0),
-        is_size_selector: Boolean(groupForm.is_size_selector),
-        required: Boolean(groupForm.required || parseInt(groupForm.min_quantity) > 0),
+        min_quantity: isSize ? 1 : Math.max(0, parseInt(groupForm.min_quantity) || 0),
+        max_quantity: isSize ? 1 : Math.max(1, parseInt(groupForm.max_quantity) || 1),
+        free_quantity: isSize ? 0 : Math.max(0, parseInt(groupForm.free_quantity) || 0),
+        is_size_selector: isSize,
+        required: isSize ? true : Boolean(groupForm.required || parseInt(groupForm.min_quantity) > 0),
         active: groupForm.active,
-        is_pizza_crust: Boolean(groupForm.is_pizza_crust),
+        is_pizza_crust: isSize ? false : Boolean(groupForm.is_pizza_crust),
       };
 
       if (editingGroup) {
@@ -681,7 +686,7 @@ export default function ComplementsPage() {
                     id="grp-name"
                     value={groupForm.name}
                     onChange={(e) => setGroupForm({ ...groupForm, name: e.target.value })}
-                    placeholder="Ex: Ponto da Carne, Turbine seu Burger, Molhos"
+                    placeholder="Ex: Tamanho da Cerveja, Turbinar Açai, Ponto da Carne"
                     required
                     className="mt-1.5"
                   />
@@ -695,145 +700,315 @@ export default function ComplementsPage() {
                     id="grp-desc"
                     value={groupForm.description}
                     onChange={(e) => setGroupForm({ ...groupForm, description: e.target.value })}
-                    placeholder="Ex: Escolha até 3 adicionais"
+                    placeholder="Ex: Escolha o tamanho desejado ou selecione seus complementos"
                     className="mt-1.5"
                   />
                 </div>
               </div>
 
-              {/* Regras de Seleção */}
-              <div className="bg-white p-4 rounded-xl border border-stone-200 space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <Label htmlFor="grp-min" className="text-xs font-bold uppercase text-gray-600">
-                      Mínimo
-                    </Label>
-                    <Input
-                      id="grp-min"
-                      type="number"
-                      min="0"
-                      max="20"
-                      value={groupForm.min_quantity}
-                      onChange={(e) => {
-                        const min = parseInt(e.target.value) || 0;
-                        setGroupForm({
-                          ...groupForm,
-                          min_quantity: min,
-                          required: min > 0,
-                          max_quantity: Math.max(min, groupForm.max_quantity),
-                        });
-                      }}
-                      className="mt-1.5"
-                    />
-                    <span className="text-[11px] text-gray-500 mt-1 block">0 = Opcional, 1+ = Obrigatório</span>
-                  </div>
+              {/* Seletor Executivo de Tipo de Grupo */}
+              <div className="space-y-2">
+                <Label className="text-xs font-bold uppercase text-gray-600 block">
+                  Tipo de Complemento *
+                </Label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  {/* Tipo 1: Adicionais & Ingredientes */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGroupForm((prev) => ({
+                        ...prev,
+                        is_size_selector: false,
+                        is_pizza_crust: false,
+                        min_quantity: prev.is_size_selector ? 0 : prev.min_quantity,
+                        max_quantity: prev.is_size_selector ? 5 : Math.max(1, prev.max_quantity),
+                        required: prev.is_size_selector ? false : prev.required,
+                      }));
+                    }}
+                    className={`flex flex-col items-start p-3.5 rounded-xl border text-left transition-all ${
+                      !groupForm.is_size_selector && !groupForm.is_pizza_crust
+                        ? "border-[#047857] bg-emerald-50/80 shadow-sm ring-2 ring-[#047857]/30"
+                        : "border-stone-200 bg-white hover:border-stone-300"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full mb-1">
+                      <div className="flex items-center gap-2">
+                        <span className="p-1 rounded-md bg-emerald-100 text-emerald-800 text-xs font-black">
+                          ➕
+                        </span>
+                        <span className="text-sm font-bold text-gray-900">Adicionais</span>
+                      </div>
+                      {!groupForm.is_size_selector && !groupForm.is_pizza_crust && (
+                        <Check className="w-4 h-4 text-[#047857]" />
+                      )}
+                    </div>
+                    <span className="text-[11px] text-gray-500 leading-tight">
+                      Extras, acompanhamentos, molhos e cortesias grátis.
+                    </span>
+                  </button>
 
-                  <div>
-                    <Label htmlFor="grp-max" className="text-xs font-bold uppercase text-gray-600">
-                      Máximo
-                    </Label>
-                    <Input
-                      id="grp-max"
-                      type="number"
-                      min="1"
-                      max="50"
-                      value={groupForm.max_quantity}
-                      onChange={(e) => setGroupForm({ ...groupForm, max_quantity: parseInt(e.target.value) || 1 })}
-                      className="mt-1.5"
-                    />
-                    <span className="text-[11px] text-gray-500 mt-1 block">Limite total de escolhas</span>
-                  </div>
+                  {/* Tipo 2: Tamanhos & Medidas */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGroupForm((prev) => ({
+                        ...prev,
+                        is_size_selector: true,
+                        is_pizza_crust: false,
+                        min_quantity: 1,
+                        max_quantity: 1,
+                        free_quantity: 0,
+                        required: true,
+                      }));
+                    }}
+                    className={`flex flex-col items-start p-3.5 rounded-xl border text-left transition-all ${
+                      groupForm.is_size_selector
+                        ? "border-blue-600 bg-blue-50/80 shadow-sm ring-2 ring-blue-600/30"
+                        : "border-stone-200 bg-white hover:border-stone-300"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full mb-1">
+                      <div className="flex items-center gap-2">
+                        <span className="p-1 rounded-md bg-blue-100 text-blue-800 text-xs font-black">
+                          📏
+                        </span>
+                        <span className="text-sm font-bold text-gray-900">Tamanhos</span>
+                      </div>
+                      {groupForm.is_size_selector && (
+                        <Check className="w-4 h-4 text-blue-600" />
+                      )}
+                    </div>
+                    <span className="text-[11px] text-gray-500 leading-tight">
+                      Define o preço base do produto (300ml, 500ml, Lata, 600ml).
+                    </span>
+                  </button>
 
-                  <div>
-                    <Label htmlFor="grp-free" className="text-xs font-bold uppercase text-emerald-800 flex items-center gap-1">
-                      <span>Cortesias Grátis</span>
-                    </Label>
-                    <Input
-                      id="grp-free"
-                      type="number"
-                      min="0"
-                      max="50"
-                      value={groupForm.free_quantity}
-                      onChange={(e) => setGroupForm({ ...groupForm, free_quantity: parseInt(e.target.value) || 0 })}
-                      className="mt-1.5 border-emerald-300 focus-visible:ring-emerald-500 bg-emerald-50/30"
-                    />
-                    <span className="text-[11px] text-emerald-700 font-medium mt-1 block">0 = Tudo pago, 1+ = Grátis até X</span>
-                  </div>
+                  {/* Tipo 3: Pizza Inteira */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGroupForm((prev) => ({
+                        ...prev,
+                        is_size_selector: false,
+                        is_pizza_crust: true,
+                        free_quantity: 0,
+                      }));
+                    }}
+                    className={`flex flex-col items-start p-3.5 rounded-xl border text-left transition-all ${
+                      groupForm.is_pizza_crust
+                        ? "border-amber-600 bg-amber-50/80 shadow-sm ring-2 ring-amber-600/30"
+                        : "border-stone-200 bg-white hover:border-stone-300"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full mb-1">
+                      <div className="flex items-center gap-2">
+                        <span className="p-1 rounded-md bg-amber-100 text-amber-800 text-xs font-black">
+                          🍕
+                        </span>
+                        <span className="text-sm font-bold text-gray-900">Pizza Inteira</span>
+                      </div>
+                      {groupForm.is_pizza_crust && (
+                        <Check className="w-4 h-4 text-amber-600" />
+                      )}
+                    </div>
+                    <span className="text-[11px] text-gray-500 leading-tight">
+                      Bordas recheadas e tipos de massa para o disco todo.
+                    </span>
+                  </button>
                 </div>
+              </div>
 
-                <div className="flex items-center justify-between pt-3 border-t border-stone-100">
-                  <div className="pr-3">
-                    <p className="font-semibold text-sm text-gray-800">Escolha Obrigatória</p>
-                    <p className="text-xs text-gray-500">
-                      O cliente precisa escolher ao menos 1 opção para adicionar ao carrinho
+              {/* RENDERIZAÇÃO CONDICIONAL POR TIPO DE GRUPO */}
+
+              {/* CASO 1: SE FOR SELETOR DE TAMANHO */}
+              {groupForm.is_size_selector ? (
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50/60 border border-blue-200 rounded-xl p-4 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-sm font-bold">
+                      <Ruler className="w-5 h-5" />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-bold text-blue-950">
+                          Preço Principal por Tamanho
+                        </h4>
+                        <span className="text-[10px] uppercase font-extrabold bg-blue-200 text-blue-800 px-2 py-0.5 rounded-full">
+                          1 Obrigatório
+                        </span>
+                      </div>
+                      <p className="text-xs text-blue-900/80 leading-relaxed">
+                        Neste modo, o cliente é <strong>obrigado a escolher exatamente 1 tamanho</strong> (ex: Lata R$ 6,00, Latão R$ 7,00 ou 300ml, 500ml).
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-white/80 rounded-lg p-3 border border-blue-100 text-xs text-blue-900 space-y-1.5">
+                    <p className="font-semibold flex items-center gap-1.5 text-blue-950">
+                      <span>💡</span> Como funciona o valor de venda:
+                    </p>
+                    <p className="text-gray-600 leading-relaxed">
+                      O valor cadastrado em cada item deste grupo substitui o preço inicial do produto. Por exemplo: se o produto tiver valor R$ 0,00 e o cliente escolher <em>"Latão (R$ 7,00)"</em>, o preço final do item será R$ 7,00.
+                    </p>
+                    <p className="text-blue-700 font-medium pt-0.5 text-[11px]">
+                      ✓ Regras de Mínimo (1), Máximo (1) e Escolha Obrigatória são travadas automaticamente.
                     </p>
                   </div>
-                  <Switch
-                    checked={groupForm.required}
-                    onCheckedChange={(checked) =>
-                      setGroupForm({
-                        ...groupForm,
-                        required: checked,
-                        min_quantity: checked ? Math.max(1, groupForm.min_quantity) : 0,
-                      })
-                    }
-                  />
                 </div>
-              </div>
+              ) : (
+                /* CASO 2: SE FOR ADICIONAIS OU PIZZA INTEIRA */
+                <div className="space-y-4">
+                  {/* Bloco de Quantidades (Mínimo / Máximo / Obrigatório) */}
+                  <div className="bg-white p-4 rounded-xl border border-stone-200 space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="grp-min" className="text-xs font-bold uppercase text-gray-700">
+                          Mínimo de Escolhas
+                        </Label>
+                        <Input
+                          id="grp-min"
+                          type="number"
+                          min="0"
+                          max="20"
+                          value={groupForm.min_quantity}
+                          onChange={(e) => {
+                            const min = Math.max(0, parseInt(e.target.value) || 0);
+                            setGroupForm({
+                              ...groupForm,
+                              min_quantity: min,
+                              required: min > 0,
+                              max_quantity: Math.max(min, groupForm.max_quantity),
+                            });
+                          }}
+                          className="mt-1.5"
+                        />
+                        <span className="text-[11px] text-gray-500 mt-1 block">
+                          0 = Opcional, 1+ = Obriga o cliente a escolher
+                        </span>
+                      </div>
 
-              {/* Flag: Grupo de Tamanho / Preço Base do Produto */}
-              <div
-                className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
-                  groupForm.is_size_selector
-                    ? "border-blue-600 bg-blue-50/60"
-                    : "border-stone-200 bg-white"
-                }`}
-              >
-                <div className="space-y-0.5 pr-3">
-                  <p className="font-bold text-sm text-gray-900 flex items-center gap-1.5">
-                    <span className="text-blue-600 font-black">📏</span>
-                    Grupo de Tamanho / Preço Principal (ex: 300ml, 500ml, 700ml)
-                  </p>
-                  <p className="text-xs text-gray-500 leading-snug">
-                    Quando ativado, a opção escolhida pelo cliente define o preço base do produto (substitui o valor inicial do item).
-                  </p>
-                </div>
-                <Switch
-                  checked={groupForm.is_size_selector}
-                  onCheckedChange={(checked) =>
-                    setGroupForm((prev) => ({
-                      ...prev,
-                      is_size_selector: checked,
-                      min_quantity: checked ? 1 : prev.min_quantity,
-                      max_quantity: checked ? 1 : prev.max_quantity,
-                      required: checked ? true : prev.required,
-                    }))
-                  }
-                />
-              </div>
+                      <div>
+                        <Label htmlFor="grp-max" className="text-xs font-bold uppercase text-gray-700">
+                          Máximo de Escolhas
+                        </Label>
+                        <Input
+                          id="grp-max"
+                          type="number"
+                          min="1"
+                          max="50"
+                          value={groupForm.max_quantity}
+                          onChange={(e) =>
+                            setGroupForm({
+                              ...groupForm,
+                              max_quantity: Math.max(1, parseInt(e.target.value) || 1),
+                            })
+                          }
+                          className="mt-1.5"
+                        />
+                        <span className="text-[11px] text-gray-500 mt-1 block">
+                          Limite máximo que o cliente pode selecionar
+                        </span>
+                      </div>
+                    </div>
 
-              {/* Flag: Borda / Complemento da Pizza Inteira */}
-              <div
-                className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
-                  groupForm.is_pizza_crust
-                    ? "border-[#047857] bg-emerald-50/60"
-                    : "border-stone-200 bg-white"
-                }`}
-              >
-                <div className="space-y-0.5 pr-3">
-                  <p className="font-bold text-sm text-gray-900 flex items-center gap-1.5">
-                    <Pizza className="w-4 h-4 text-amber-600 shrink-0" />
-                    Borda Recheada / Aplicar na Pizza Inteira
-                  </p>
-                  <p className="text-xs text-gray-500 leading-snug">
-                    Ative se este grupo pertencer ao disco todo da pizza (ex: Bordas Recheadas, Tipo de Massa). Deixe desativado para adicionais por fatia/metade.
-                  </p>
+                    <div className="flex items-center justify-between pt-3 border-t border-stone-100">
+                      <div className="pr-3">
+                        <p className="font-semibold text-sm text-gray-800">Escolha Obrigatória</p>
+                        <p className="text-xs text-gray-500">
+                          O cliente só pode adicionar ao carrinho se escolher ao menos 1 item deste grupo
+                        </p>
+                      </div>
+                      <Switch
+                        checked={groupForm.required || groupForm.min_quantity > 0}
+                        onCheckedChange={(checked) =>
+                          setGroupForm({
+                            ...groupForm,
+                            required: checked,
+                            min_quantity: checked ? Math.max(1, groupForm.min_quantity) : 0,
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  {/* Bloco de Cortesias Grátis (Franquia de Adicionais) */}
+                  {!groupForm.is_pizza_crust && (
+                    <div
+                      className={`p-4 rounded-xl border transition-all ${
+                        groupForm.free_quantity > 0
+                          ? "bg-emerald-50/70 border-emerald-300 ring-1 ring-emerald-400"
+                          : "bg-white border-stone-200"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2 pr-3">
+                          <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+                            <Gift className="w-4 h-4 text-emerald-700" />
+                          </div>
+                          <div>
+                            <p className="font-bold text-sm text-gray-900">
+                              Oferecer Cortesias Grátis?
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              Ideal para açaí com frutas inclusas, hambúrguer com molho grátis, etc.
+                            </p>
+                          </div>
+                        </div>
+                        <Switch
+                          checked={groupForm.free_quantity > 0}
+                          onCheckedChange={(checked) =>
+                            setGroupForm((prev) => ({
+                              ...prev,
+                              free_quantity: checked ? Math.max(1, prev.free_quantity || 1) : 0,
+                            }))
+                          }
+                        />
+                      </div>
+
+                      {groupForm.free_quantity > 0 && (
+                        <div className="pt-3 border-t border-emerald-200/80 space-y-2">
+                          <div className="flex items-center gap-3">
+                            <div className="w-36">
+                              <Label htmlFor="grp-free" className="text-xs font-bold uppercase text-emerald-900">
+                                Quantidade Grátis
+                              </Label>
+                              <Input
+                                id="grp-free"
+                                type="number"
+                                min="1"
+                                max={groupForm.max_quantity}
+                                value={groupForm.free_quantity}
+                                onChange={(e) =>
+                                  setGroupForm({
+                                    ...groupForm,
+                                    free_quantity: Math.max(0, parseInt(e.target.value) || 0),
+                                  })
+                                }
+                                className="mt-1 bg-white border-emerald-300 font-bold text-emerald-900"
+                              />
+                            </div>
+                            <div className="flex-1 text-xs text-emerald-800 pt-5">
+                              O cliente escolhe até <strong>{groupForm.free_quantity} {groupForm.free_quantity === 1 ? "item gratuito" : "itens gratuitos"}</strong>. Itens excedentes serão cobrados pelo valor cadastrado.
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Banner Explicativo de Pizza Inteira */}
+                  {groupForm.is_pizza_crust && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 flex items-start gap-3">
+                      <Pizza className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+                      <div className="text-xs text-amber-900 space-y-0.5">
+                        <p className="font-bold text-amber-950">Aplica-se ao disco todo da pizza</p>
+                        <p className="text-amber-800">
+                          Este grupo (ex: Borda Recheada, Tipo de Massa) é cobrado e aplicado na pizza como um todo, não sendo fracionado por sabores ou metades.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <Switch
-                  checked={groupForm.is_pizza_crust}
-                  onCheckedChange={(checked) => setGroupForm((prev) => ({ ...prev, is_pizza_crust: checked }))}
-                />
-              </div>
+              )}
             </div>
 
             <div className="px-6 py-3.5 border-t border-stone-200 bg-white shrink-0 flex justify-end gap-2">
