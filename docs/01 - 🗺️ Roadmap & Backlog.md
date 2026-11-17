@@ -11,7 +11,8 @@
   - [x] Configuração das variáveis de ambiente em produção no Cloudflare Pages (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, etc.).
   - [x] Provisionamento de schema, colunas críticas de `tenants`, `categories`, `products`, `admin_users` e `whatsapp_otp_codes`.
   - [x] Criação da view pública `tenants_public` com compatibilidade retroativa e políticas de RLS para acesso público ao cardápio.
-  - [x] Execução do script DDL/DML consolidado `PRODUCAO_SYNC_TOTAL.sql`.
+  - [x] Execução direta e validação via conexão PostgreSQL oficial do script DDL/DML consolidado `PRODUCAO_SYNC_TOTAL.sql` e do hotfix `PROD_HOTFIX_ORDERS_CASH_RPC.sql` (`orders.cash_session_id`, `cash_sessions`, `cash_movements` e RPC `get_store_admin_users`).
+  - [x] Catálogo instantâneo de bairros embutido para Conselheiro Lafaiete e região no serviço de entregas (`cityNeighborhoods.js`).
 
 - [x] 🌐 **Infraestrutura de Domínio & Roteamento SPA no Cloudflare Pages (`pedemuleke.com`, `homolog.pedemuleke.com`)**:
   - [x] Configuração de CNAME no Cloudflare apontando para `delivery-sass.pages.dev` (substituindo IP antigo da Hostinger).
