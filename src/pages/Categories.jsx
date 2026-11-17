@@ -246,9 +246,7 @@ export default function CategoriesPage() {
           ? category.pizza_sizes
           : isPizza
             ? DEFAULT_PIZZA_SIZES
-            : isGrid
-              ? VARIATION_GRID_PRESETS.cervejas.sizes
-              : [],
+            : [],
       sector_id: category.sector_id || null,
     });
     setEditingCategory(category);
@@ -596,7 +594,7 @@ export default function CategoriesPage() {
                             pizza_sizes:
                               categoryForm.pizza_sizes?.length > 0
                                 ? categoryForm.pizza_sizes
-                                : VARIATION_GRID_PRESETS.cervejas.sizes,
+                                : [],
                           })
                         }
                         className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
@@ -819,7 +817,17 @@ export default function CategoriesPage() {
                     </div>
 
                     <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                      {(categoryForm.pizza_sizes || []).map((size, idx) => (
+                      {(categoryForm.pizza_sizes || []).length === 0 ? (
+                        <div className="p-4 rounded-xl border border-dashed border-stone-300 text-center bg-stone-50/60 space-y-1">
+                          <p className="text-xs font-semibold text-stone-700">
+                            Nenhuma opção cadastrada ainda
+                          </p>
+                          <p className="text-[11px] text-stone-500">
+                            Clique em <strong>+ Adicionar Opção</strong> acima para criar do seu jeito ou escolha um dos <strong>Modelos Prontos</strong> sugeridos.
+                          </p>
+                        </div>
+                      ) : (
+                        (categoryForm.pizza_sizes || []).map((size, idx) => (
                         <div
                           key={size.id || idx}
                           className="flex items-center gap-2.5 bg-white p-2.5 rounded-xl border border-stone-200 text-xs shadow-2xs"
@@ -867,7 +875,8 @@ export default function CategoriesPage() {
                             <Trash2 className="w-3.5 h-3.5" />
                           </Button>
                         </div>
-                      ))}
+                      ))
+                    )}
                     </div>
                   </div>
                 )}
