@@ -248,6 +248,11 @@ export default function ProductsPage() {
       }
 
       let finalPrice = 0;
+      const hasSizeGroupSelected = selectedGroupIds.some((gid) => {
+        const grp = complementGroups.find((g) => g.id === gid);
+        return Boolean(grp?.is_size_selector);
+      });
+
       if (isPizzaCat) {
         const sizePricesList = Object.values(cleanPizzaPrices);
         if (sizePricesList.length === 0) {
@@ -257,9 +262,17 @@ export default function ProductsPage() {
         }
         // Preço base de referência para o catálogo (menor preço dos tamanhos cadastrados)
         finalPrice = Math.min(...sizePricesList);
+      } else if (hasSizeGroupSelected) {
+        // Se tiver grupo de tamanho selecionado, o preço é opcional (o preço base é definido pelas opções de tamanho)
+        const enteredPrice = parseBRLToNumber(productForm.price);
+        const selectedSizeGroup = complementGroups.find((g) => selectedGroupIds.includes(g.id) && g.is_size_selector);
+        const sizeItems = selectedSizeGroup ? complementItems.filter((i) => i.group_id === selectedSizeGroup.id && Number(i.price) > 0) : [];
+        const minSizePrice = sizeItems.length > 0 ? Math.min(...sizeItems.map((i) => Number(i.price))) : 0;
+
+        finalPrice = (!isNaN(enteredPrice) && enteredPrice > 0) ? enteredPrice : minSizePrice;
       } else {
         finalPrice = parseBRLToNumber(productForm.price);
-        if (isNaN(finalPrice) || finalPrice < 0) {
+        if (isNaN(finalPrice) || finalPrice <= 0) {
           toast.error("Por favor, informe um preço válido para o produto.");
           setIsSubmitting(false);
           return;
@@ -724,20 +737,36 @@ export default function ProductsPage() {
                       );
                     }
 
+                    const hasSizeGroupSelected = selectedGroupIds.some((gid) => {
+                      const grp = complementGroups.find((g) => g.id === gid);
+                      return Boolean(grp?.is_size_selector);
+                    });
+
                     return (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                         <div>
                           <Label htmlFor="price" className="text-xs font-semibold text-stone-700">
-                            Preço (R$) *
+                            Preço (R$) {hasSizeGroupSelected ? (
+                              <span className="text-blue-700 font-normal text-[11px]">(Opcional · Definido nos tamanhos)</span>
+                            ) : (
+                              <span className="text-red-500">*</span>
+                            )}
                           </Label>
                           <CurrencyInput
                             id="price"
                             value={productForm.price}
                             onChange={(e) => setProductForm({...productForm, price: e.target.value})}
-                            placeholder="R$ 32,90"
-                            className="mt-1 bg-stone-50/50 border-stone-200 focus:bg-white font-mono"
-                            required
+                            placeholder={hasSizeGroupSelected ? "R$ 0,00" : "R$ 32,90"}
+                            className={`mt-1 border-stone-200 font-mono ${
+                              hasSizeGroupSelected ? "bg-blue-50/40 border-blue-200 focus:bg-white" : "bg-stone-50/50 focus:bg-white"
+                            }`}
+                            required={!hasSizeGroupSelected}
                           />
+                          {hasSizeGroupSelected && (
+                            <span className="text-[10px] text-blue-700/80 mt-1 block">
+                              ✓ Preço dispensado: o valor de venda será definido pelo tamanho que o cliente escolher.
+                            </span>
+                          )}
                         </div>
 
                         <div>
