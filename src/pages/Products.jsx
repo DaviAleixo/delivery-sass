@@ -4,6 +4,7 @@ import { ProductAdditional } from "@/entities/ProductAdditional";
 import { Category } from "@/entities/Category";
 import { ProductionSector } from "@/entities/ProductionSector";
 import { ComplementGroup } from "@/entities/ComplementGroup";
+import { ComplementItem } from "@/entities/ComplementItem";
 import { ProductComplementGroup } from "@/entities/ProductComplementGroup";
 import { UploadFile } from "@/integrations/Core";
 import { Button } from "@/components/ui/button";
@@ -138,6 +139,7 @@ export default function ProductsPage() {
   const [categories, setCategories] = useState([]);
   const [productionSectors, setProductionSectors] = useState([]);
   const [complementGroups, setComplementGroups] = useState([]);
+  const [complementItems, setComplementItems] = useState([]);
   const [productComplementGroups, setProductComplementGroups] = useState([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -167,6 +169,7 @@ export default function ProductsPage() {
     setAllAdditionals([]);
     setCategories([]);
     setComplementGroups([]);
+    setComplementItems([]);
     setProductComplementGroups([]);
     loadProducts();
   }, [slug, location.pathname, tenant?.id, tenant?.salon_mode, tenant?.plan]);
@@ -174,18 +177,20 @@ export default function ProductsPage() {
   const loadProducts = async () => {
     setIsLoading(true);
     try {
-      const [productsData, additionalsData, categoriesData, groupsData, pcgData, sectorsData] = await Promise.all([
+      const [productsData, additionalsData, categoriesData, groupsData, pcgData, sectorsData, itemsData] = await Promise.all([
         Product.list("-created_date"),
         ProductAdditional.list(),
         Category.list("order_index"),
         ComplementGroup.list("order_index"),
         ProductComplementGroup.list("-created_date"),
         ProductionSector.list("order_index").catch(() => []),
+        ComplementItem.list("order_index").catch(() => []),
       ]);
       setProducts(productsData || []);
       setAllAdditionals(additionalsData || []);
       setCategories(categoriesData || []);
       setComplementGroups(groupsData || []);
+      setComplementItems(itemsData || []);
       setProductComplementGroups(pcgData || []);
       setProductionSectors(Array.isArray(sectorsData) ? sectorsData : []);
     } catch (err) {
@@ -971,14 +976,17 @@ export default function ProductsPage() {
                       Nenhum grupo cadastrado. <Link to={createPageUrl("Complements")} className="underline font-semibold text-[#047857]">Criar grupos</Link>.
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 sm:max-h-64 overflow-y-auto pr-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-72 overflow-y-auto pr-1">
                       {complementGroups.map(grp => {
                         const isSelected = selectedGroupIds.includes(grp.id);
+                        const grpItems = complementItems.filter(i => i.group_id === grp.id);
+                        const itemsPreview = grpItems.map(i => i.name).join(", ");
+
                         return (
                           <label 
                             key={grp.id} 
-                            className={`flex items-start gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-all ${
-                              isSelected ? 'bg-[#D1E9DF]/40 border-[#047857] shadow-2xs' : 'bg-stone-50/50 border-stone-200 hover:border-stone-300'
+                            className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition-all ${
+                              isSelected ? 'bg-emerald-50/70 border-[#047857] shadow-2xs ring-1 ring-[#047857]/30' : 'bg-stone-50/60 border-stone-200 hover:border-stone-300'
                             }`}
                           >
                             <Checkbox 
@@ -990,19 +998,44 @@ export default function ProductsPage() {
                                   setSelectedGroupIds(selectedGroupIds.filter(id => id !== grp.id));
                                 }
                               }}
-                              className="mt-0.5 data-[state=checked]:bg-[#047857] data-[state=checked]:border-[#047857]"
+                              className="mt-1 data-[state=checked]:bg-[#047857] data-[state=checked]:border-[#047857]"
                             />
-                            <div className="min-w-0 flex-1 text-xs">
-                              <span className="font-semibold text-stone-800 block truncate">{grp.name}</span>
-                              {grp.description && grp.description.trim() !== "" && (
-                                <p className="text-[11px] text-stone-600 line-clamp-2 mt-0.5 leading-snug">
-                                  {grp.description}
+                            <div className="min-w-0 flex-1 text-xs space-y-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-bold text-stone-900 block truncate">{grp.name}</span>
+                                {grp.is_size_selector && (
+                                  <span className="text-[9px] font-extrabold uppercase bg-blue-100 text-blue-800 px-1.5 py-0.2 rounded">
+                                    Tamanhos
+                                  </span>
+                                )}
+                              </div>
+
+                              {grp.description && grp.description.trim() !== "" ? (
+                                <p className="text-[11px] text-emerald-900 font-medium bg-emerald-100/70 px-2 py-0.5 rounded border border-emerald-300/60 line-clamp-2">
+                                  <span className="font-bold text-emerald-950">Anotação:</span> {grp.description}
+                                </p>
+                              ) : (
+                                <p className="text-[10px] text-stone-400 italic">
+                                  (Sem anotação interna cadastrada)
                                 </p>
                               )}
-                              <span className="text-stone-500 text-[10px] block mt-0.5">
-                                {grp.is_size_selector ? 'Tamanho Principal' : grp.required || grp.min_quantity > 0 ? 'Obrigatório' : 'Opcional'} · Máx: {grp.max_quantity}
-                                {Number(grp.free_quantity) > 0 ? ` · ${grp.free_quantity} grátis` : ''}
-                              </span>
+
+                              {itemsPreview ? (
+                                <p className="text-[10px] text-stone-600 line-clamp-2">
+                                  <span className="font-semibold text-stone-700">Opções ({grpItems.length}):</span> {itemsPreview}
+                                </p>
+                              ) : (
+                                <p className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200 inline-block font-medium">
+                                  ⚠️ Nenhuma opção cadastrada
+                                </p>
+                              )}
+
+                              <div className="text-stone-500 text-[10px] pt-0.5 border-t border-stone-200/60 flex items-center justify-between">
+                                <span>{grp.is_size_selector ? 'Tamanho Principal' : grp.required || grp.min_quantity > 0 ? 'Obrigatório' : 'Opcional'} · Máx: {grp.max_quantity}</span>
+                                {Number(grp.free_quantity) > 0 && (
+                                  <span className="font-bold text-emerald-700">{grp.free_quantity} grátis</span>
+                                )}
+                              </div>
                             </div>
                           </label>
                         );
