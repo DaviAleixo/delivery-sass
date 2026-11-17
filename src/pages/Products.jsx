@@ -783,31 +783,6 @@ export default function ProductsPage() {
                     return (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                         <div>
-                          <Label htmlFor="price" className="text-xs font-semibold text-stone-700">
-                            Preço (R$) {hasPriceDefiningGroupSelected ? (
-                              <span className="text-blue-700 font-normal text-[11px]">(Opcional · Definido nas opções)</span>
-                            ) : (
-                              <span className="text-red-500">*</span>
-                            )}
-                          </Label>
-                          <CurrencyInput
-                            id="price"
-                            value={productForm.price}
-                            onChange={(e) => setProductForm({...productForm, price: e.target.value})}
-                            placeholder={hasPriceDefiningGroupSelected ? "R$ 0,00" : "R$ 32,90"}
-                            className={`mt-1 border-stone-200 font-mono ${
-                              hasPriceDefiningGroupSelected ? "bg-blue-50/40 border-blue-200 focus:bg-white" : "bg-stone-50/50 focus:bg-white"
-                            }`}
-                            required={!hasPriceDefiningGroupSelected}
-                          />
-                          {hasPriceDefiningGroupSelected && (
-                            <span className="text-[10px] text-blue-700/80 mt-1 block">
-                              ✓ Preço dispensado: o valor de venda será definido pela opção que o cliente escolher.
-                            </span>
-                          )}
-                        </div>
-
-                        <div>
                           <Label htmlFor="category" className="text-xs font-semibold text-stone-700">
                             Categoria *
                           </Label>
@@ -826,6 +801,31 @@ export default function ProductsPage() {
                               ))}
                             </SelectContent>
                           </Select>
+                        </div>
+
+                        <div>
+                          <Label htmlFor="price" className="text-xs font-semibold text-stone-700">
+                            Preço (R$) {hasPriceDefiningGroupSelected ? (
+                              <span className="text-stone-500 font-normal text-[11px]">(Opcional · Definido nas opções)</span>
+                            ) : (
+                              <span className="text-red-500">*</span>
+                            )}
+                          </Label>
+                          <CurrencyInput
+                            id="price"
+                            value={productForm.price}
+                            onChange={(e) => setProductForm({...productForm, price: e.target.value})}
+                            placeholder={hasPriceDefiningGroupSelected ? "R$ 0,00" : "R$ 32,90"}
+                            className={`mt-1 border-stone-200 font-mono ${
+                              hasPriceDefiningGroupSelected ? "bg-stone-50/70 border-stone-200 focus:bg-white" : "bg-stone-50/50 focus:bg-white"
+                            }`}
+                            required={!hasPriceDefiningGroupSelected}
+                          />
+                          {hasPriceDefiningGroupSelected && (
+                            <span className="text-[10px] text-stone-500 mt-1 block">
+                              ✓ Preço dispensado: o valor de venda será definido pela opção que o cliente escolher.
+                            </span>
+                          )}
                         </div>
                       </div>
                     );
