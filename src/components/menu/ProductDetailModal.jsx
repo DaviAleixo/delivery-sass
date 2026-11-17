@@ -464,7 +464,7 @@ export default function ProductDetailModal({
                           {Number(group.free_quantity) > 0 && (
                             <span className="bg-emerald-50 text-[#046c4e] font-bold text-[10px] px-2 py-0.5 rounded-full border border-emerald-200">
                               {selectedCount < group.free_quantity
-                                ? `🎁 ${group.free_quantity - selectedCount} de ${group.free_quantity} grátis`
+                                ? `${group.free_quantity - selectedCount} de ${group.free_quantity} grátis`
                                 : `✓ Limite de ${group.free_quantity} grátis atingido`}
                             </span>
                           )}
@@ -494,6 +494,34 @@ export default function ProductDetailModal({
                               const isMaxGroupReached = selectedCount >= group.max_quantity;
                               const isMaxItemReached = itemQty >= (item.max_quantity || 1);
 
+                              // Cálculo de unidades gratuitas vs cobradas para grupos com franquia free_quantity
+                              let freeUnitsForItem = 0;
+                              let chargedUnitsForItem = 0;
+
+                              if (Number(group.free_quantity) > 0 && isSelected) {
+                                const groupItems = Object.values(selectedComplements).filter((c) => c.group_id === group.id);
+                                const freeLimit = Number(group.free_quantity || 0);
+
+                                const expandedUnits = [];
+                                groupItems.forEach((ci) => {
+                                  const qty = ci.quantity || 1;
+                                  for (let i = 0; i < qty; i++) {
+                                    expandedUnits.push({ id: ci.id, price: Number(ci.price || 0) });
+                                  }
+                                });
+                                expandedUnits.sort((a, b) => a.price - b.price);
+
+                                let freeRemaining = freeLimit;
+                                expandedUnits.forEach((u) => {
+                                  if (freeRemaining > 0) {
+                                    freeRemaining -= 1;
+                                    if (u.id === item.id) freeUnitsForItem += 1;
+                                  } else {
+                                    if (u.id === item.id) chargedUnitsForItem += 1;
+                                  }
+                                });
+                              }
+
                               return (
                                 <div 
                                   key={item.id}
@@ -522,8 +550,29 @@ export default function ProductDetailModal({
                                           <span className="font-bold text-stone-900">
                                             R$ {Number(item.price || 0).toFixed(2).replace('.', ',')}
                                           </span>
-                                        ) : Number(group.free_quantity) > 0 && selectedCount < group.free_quantity && itemQty === 0 ? (
-                                          <span className="text-emerald-700 font-bold">Grátis</span>
+                                        ) : Number(group.free_quantity) > 0 ? (
+                                          isSelected ? (
+                                            chargedUnitsForItem === 0 ? (
+                                              <span className="text-emerald-700 font-bold">Grátis</span>
+                                            ) : freeUnitsForItem > 0 ? (
+                                              <span>
+                                                <span className="text-emerald-700 font-bold">{freeUnitsForItem}x Grátis</span>
+                                                <span className="text-stone-700 font-bold ml-1.5">
+                                                  + R$ {(chargedUnitsForItem * Number(item.price || 0)).toFixed(2).replace('.', ',')}
+                                                </span>
+                                              </span>
+                                            ) : (
+                                              <span className="font-bold text-stone-900">
+                                                + R$ {(chargedUnitsForItem * Number(item.price || 0)).toFixed(2).replace('.', ',')}
+                                              </span>
+                                            )
+                                          ) : selectedCount < group.free_quantity ? (
+                                            <span className="text-emerald-700 font-bold">Grátis</span>
+                                          ) : Number(item.price) > 0 ? (
+                                            `+ R$ ${Number(item.price).toFixed(2).replace('.', ',')}`
+                                          ) : (
+                                            <span className="text-emerald-700 font-semibold">Grátis</span>
+                                          )
                                         ) : Number(item.price) > 0 ? (
                                           `+ R$ ${Number(item.price).toFixed(2).replace('.', ',')}`
                                         ) : (
