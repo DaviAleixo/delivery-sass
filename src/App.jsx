@@ -15,6 +15,7 @@ import ErrorBoundary from '@/components/ErrorBoundary';
 import { PrintQueueProvider } from '@/hooks/useFifoPrintQueue';
 import StagingBanner from '@/components/common/StagingBanner';
 import { ConfirmDialogHost } from '@/components/ui/ConfirmDialogHost';
+import AdminLoginPage from './pages/AdminLogin';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -33,8 +34,26 @@ const LayoutWrapper = ({ children, currentPageName }) => {
 // Redireciona a raiz da loja (/:slug) para o cardápio da loja (/:slug/menu)
 const StoreRootRedirect = () => {
   const { slug } = useParams();
+  const cleanSlug = (slug || "").toLowerCase();
+  if (cleanSlug === "login" || cleanSlug === "adminlogin" || cleanSlug === "admin") {
+    return <Navigate to="/login" replace />;
+  }
   const targetSlug = slug || (typeof window !== "undefined" ? localStorage.getItem("current_tenant_slug") : null) || "vrumm";
   return <Navigate to={`/${targetSlug}/menu`} replace />;
+};
+
+// Renderiza o cardápio da loja garantindo que slugs reservados nunca abram cardápio falso
+const StoreMenuRoute = () => {
+  const { slug } = useParams();
+  const cleanSlug = (slug || "").toLowerCase();
+  if (cleanSlug === "login" || cleanSlug === "adminlogin" || cleanSlug === "admin") {
+    return <Navigate to="/login" replace />;
+  }
+  return (
+    <LayoutWrapper currentPageName="Menu">
+      {Pages["Menu"] ? React.createElement(Pages["Menu"]) : <MainPage />}
+    </LayoutWrapper>
+  );
 };
 
 // Redireciona rotas legadas de login para /login preservando query/hash (ex: token de recuperação) e slug opcional
@@ -104,16 +123,14 @@ const AuthenticatedApp = () => {
           }
         />
       )}
-      {Pages["AdminLogin"] && (
-        <Route
-          path="/login"
-          element={
-            <LayoutWrapper currentPageName="AdminLogin">
-              {React.createElement(Pages["AdminLogin"])}
-            </LayoutWrapper>
-          }
-        />
-      )}
+      <Route
+        path="/login"
+        element={
+          <LayoutWrapper currentPageName="AdminLogin">
+            <AdminLoginPage />
+          </LayoutWrapper>
+        }
+      />
       <Route path="/Login" element={<LoginRedirect />} />
       <Route path="/AdminLogin" element={<LoginRedirect />} />
       <Route path="/adminlogin" element={<LoginRedirect />} />
@@ -145,16 +162,8 @@ const AuthenticatedApp = () => {
 
       {/* 4. Rotas Multi-Tenant com Slug obrigatório (:slug, :slug/menu, :slug/dashboard, etc.) */}
       <Route path="/:slug" element={<StoreRootRedirect />} />
-      <Route path="/:slug/menu" element={
-        <LayoutWrapper currentPageName="Menu">
-          {Pages["Menu"] ? React.createElement(Pages["Menu"]) : <MainPage />}
-        </LayoutWrapper>
-      } />
-      <Route path="/:slug/Menu" element={
-        <LayoutWrapper currentPageName="Menu">
-          {Pages["Menu"] ? React.createElement(Pages["Menu"]) : <MainPage />}
-        </LayoutWrapper>
-      } />
+      <Route path="/:slug/menu" element={<StoreMenuRoute />} />
+      <Route path="/:slug/Menu" element={<StoreMenuRoute />} />
       <Route path="/:slug/myorders" element={
         <LayoutWrapper currentPageName="MyOrders">
           {Pages["MyOrders"] ? React.createElement(Pages["MyOrders"]) : <MainPage />}
