@@ -3,7 +3,7 @@ import { getActiveTenantId } from "@/entities/storage";
 import { User } from "@/entities/User";
 import { toast } from "sonner";
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://zecuwijuiqsaoeafonsv.supabase.co";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://jqwtnzdsaivbjudvjhld.supabase.co";
 const OTP_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/whatsapp-otp`;
 
 // Cache local de desenvolvimento e simulação

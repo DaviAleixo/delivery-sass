@@ -5,7 +5,7 @@
 
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://zecuwijuiqsaoeafonsv.supabase.co';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://jqwtnzdsaivbjudvjhld.supabase.co';
 const ASAAS_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/asaas`;
 
 async function getAuthHeaders() {

@@ -40,15 +40,15 @@ export default function Footer() {
           <div>
             <h3 className="font-bold text-lg mb-3">Contato</h3>
             <div className="space-y-2">
-              {settings?.phone && (
+              {(settings?.whatsapp || settings?.phone) && !/^0+$/.test(String(settings?.whatsapp || settings?.phone).replace(/\D/g, '')) && (
                 <a
-                  href={`https://wa.me/${settings.phone.replace(/\D/g, '')}`}
+                  href={`https://wa.me/55${(settings?.whatsapp || settings?.phone).replace(/\D/g, '')}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors text-sm"
                 >
-                  <Phone className="w-4 h-4" />
-                  {settings.phone}
+                  <Phone className="w-4 h-4 text-emerald-400" />
+                  {settings?.whatsapp || settings?.phone}
                 </a>
               )}
               {settings?.instagram && (

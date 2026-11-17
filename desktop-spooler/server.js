@@ -6,7 +6,7 @@ import { fileURLToPath } from "url";
 import { listWindowsPrinters, sendTextToPrinter } from "./printerService.js";
 import { formatOrderToThermalText } from "./ticketFormatter.js";
 
-const DEFAULT_SUPABASE_URL = "https://zecuwijuiqsaoeafonsv.supabase.co";
+const DEFAULT_SUPABASE_URL = "https://jqwtnzdsaivbjudvjhld.supabase.co";
 const DEFAULT_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InplY3V3aWp1aXFzYW9lYWZvbnN2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE2MjUwMTMsImV4cCI6MjEwNzIwMTAxM30.MtFRYa2nlrIDWqVWHj2WVlIwjmpuj8d_O8Xv5TG_x3I";
 const CLOUD_POLL_INTERVAL_MS = 4000;
 

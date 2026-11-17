@@ -295,13 +295,13 @@ export default function HomePage() {
               </div>
             )}
             
-            {settings?.phone && (
+            {(settings?.whatsapp || settings?.phone) && !/^0+$/.test(String(settings?.whatsapp || settings?.phone).replace(/\D/g, '')) && (
               <div className="text-center">
-                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Phone className="w-8 h-8 text-red-600" />
+                <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Phone className="w-8 h-8 text-emerald-600" />
                 </div>
-                <h3 className="font-bold text-gray-900 mb-2">Contato</h3>
-                <p className="text-gray-600">{settings.phone}</p>
+                <h3 className="font-bold text-gray-900 mb-2">WhatsApp / Contato</h3>
+                <p className="text-gray-600 font-semibold">{settings?.whatsapp || settings?.phone}</p>
               </div>
             )}
           </div>

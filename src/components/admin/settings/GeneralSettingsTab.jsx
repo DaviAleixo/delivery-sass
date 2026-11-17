@@ -2,19 +2,16 @@ import React from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
 import {
   Store,
   MapPin,
-  Clock,
   Search,
   Loader2,
-  Copy,
   Phone,
   Instagram,
   Upload,
 } from "lucide-react";
-import { DAYS_CONFIG, getDayDisplayName, formatPhone, normalizeOpenDays } from "./settingsConstants";
+import { formatPhone } from "./settingsConstants";
 
 export default function GeneralSettingsTab({
   settings,
@@ -25,17 +22,7 @@ export default function GeneralSettingsTab({
   isUploadingLogo,
   isFetchingCep,
   cepError,
-  handleToggleAllDays,
-  handleToggleDay,
-  handleDayTime,
-  handleCopyDayTimeToAll,
 }) {
-  const openDaysList = normalizeOpenDays(
-    settings.open_days,
-    settings.opening_time || "18:00",
-    settings.closing_time || "23:00"
-  );
-
   return (
     <div className="space-y-6">
       {/* SEÇÃO 1: IDENTIDADE DA LOJA & CONTATO */}
@@ -315,123 +302,6 @@ export default function GeneralSettingsTab({
               </p>
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* SEÇÃO 3: DIAS E HORÁRIOS DE ATENDIMENTO (SEMANA) */}
-      <div className="bg-white rounded-2xl border border-stone-200 shadow-2xs">
-        <div className="px-5 py-4 bg-stone-50/70 border-b border-stone-200/80 rounded-t-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
-              <Clock className="w-4 h-4 text-stone-700" />
-              <span>Dias & Horários de Funcionamento da Loja</span>
-            </h3>
-            <p className="text-xs text-stone-500 mt-0.5">
-              Grade semanal que controla quando o cardápio online aceita pedidos de clientes automaticamente.
-            </p>
-          </div>
-
-          {/* Atalhos Rápidos */}
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => handleToggleAllDays && handleToggleAllDays(true)}
-              className="text-xs font-bold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer"
-            >
-              Marcar Todos
-            </button>
-            <span className="text-stone-300">•</span>
-            <button
-              type="button"
-              onClick={() => handleToggleAllDays && handleToggleAllDays(false)}
-              className="text-xs font-bold text-stone-500 hover:text-stone-700 hover:underline cursor-pointer"
-            >
-              Desmarcar Todos
-            </button>
-          </div>
-        </div>
-
-        <div className="divide-y divide-stone-100">
-          {DAYS_CONFIG.map((cfg) => {
-            const d = openDaysList.find(
-              (item) => item.day === cfg.day || Number(item.day) === cfg.day
-            ) || { day: cfg.day, enabled: false, opening_time: "18:00", closing_time: "23:00" };
-
-            const isEnabled = Boolean(d.enabled);
-
-            return (
-              <div
-                key={cfg.day}
-                className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors ${
-                  isEnabled ? "bg-white hover:bg-stone-50/40" : "bg-stone-50/50 opacity-60"
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <Switch
-                    checked={isEnabled}
-                    onCheckedChange={() => handleToggleDay && handleToggleDay(cfg.day)}
-                    className="data-[state=checked]:bg-emerald-700 cursor-pointer"
-                  />
-                  <div>
-                    <span className="text-xs font-bold text-stone-900 block">
-                      {getDayDisplayName(cfg.day)}
-                    </span>
-                    <span className="text-[10px] font-medium text-stone-500">
-                      {isEnabled ? "Loja aberta para pedidos" : "Fechado o dia todo"}
-                    </span>
-                  </div>
-                </div>
-
-                {isEnabled ? (
-                  <div className="flex items-center gap-2 flex-wrap pl-11 sm:pl-0">
-                    <div className="flex items-center gap-1.5">
-                      <Label className="text-xs text-stone-500 font-medium">De:</Label>
-                      <Input
-                        type="time"
-                        value={d.opening_time || "18:00"}
-                        onChange={(e) =>
-                          handleDayTime && handleDayTime(d.day, "opening_time", e.target.value)
-                        }
-                        className="h-8 w-24 bg-white border-stone-300 text-xs font-semibold rounded-lg text-center"
-                      />
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <Label className="text-xs text-stone-500 font-medium">Até:</Label>
-                      <Input
-                        type="time"
-                        value={d.closing_time || "23:00"}
-                        onChange={(e) =>
-                          handleDayTime && handleDayTime(d.day, "closing_time", e.target.value)
-                        }
-                        className="h-8 w-24 bg-white border-stone-300 text-xs font-semibold rounded-lg text-center"
-                      />
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        handleCopyDayTimeToAll &&
-                        handleCopyDayTimeToAll(
-                          d.opening_time || "18:00",
-                          d.closing_time || "23:00"
-                        )
-                      }
-                      title="Replicar este horário para todos os outros dias"
-                      className="h-8 px-2 text-xs font-semibold text-stone-600 hover:text-stone-900 border-stone-200 hover:bg-stone-100 rounded-lg flex items-center gap-1 shadow-2xs"
-                    >
-                      <Copy className="w-3.5 h-3.5 text-stone-500" />
-                      <span className="hidden sm:inline">Copiar p/ todos</span>
-                    </Button>
-                  </div>
-                ) : (
-                  <span className="text-xs text-stone-400 italic pl-11 sm:pl-0">
-                    Cardápio fechado
-                  </span>
-                )}
-              </div>
-            );
-          })}
         </div>
       </div>
     </div>

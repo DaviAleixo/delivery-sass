@@ -28,7 +28,7 @@ function loadEnvFile(envPath) {
 loadEnvFile(path.resolve(process.cwd(), ".env"));
 loadEnvFile(path.resolve(process.cwd(), ".env.local"));
 
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || "https://zecuwijuiqsaoeafonsv.supabase.co";
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || "https://jqwtnzdsaivbjudvjhld.supabase.co";
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 if (!SUPABASE_KEY) {

@@ -32,7 +32,7 @@ jobs:
 
       - name: Generate Per-Company Snapshots (JSON)
         env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://zecuwijuiqsaoeafonsv.supabase.co' }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://jqwtnzdsaivbjudvjhld.supabase.co' }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           echo "Executando exportação estruturada por empresa..."

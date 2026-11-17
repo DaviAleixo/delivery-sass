@@ -14,7 +14,11 @@
 
 - [x] 🗄️ **Sincronização e Segregação do Supabase de Produção (`jqwtnzdsaivbjudvjhld`)**:
   - [x] Isolamento de credenciais: ambiente de homologação (`zecuwijuiqsaoeafonsv` / `staging`) separado do banco de produção oficial (`jqwtnzdsaivbjudvjhld` / `main`).
+  - [x] Credenciais PostgreSQL de Produção alinhadas para rotinas de backup (`pg_dump` no Supabase `jqwtnzdsaivbjudvjhld`).
+  - [x] Unificação dos fallbacks de serviços (`asaasService`, `mercadoPagoService`, `whatsappOtpService`, `export-data`, `daily-backup`, `server.js`) para apontar por padrão para o Supabase de Produção oficial (`https://jqwtnzdsaivbjudvjhld.supabase.co`).
   - [x] Configuração das variáveis de ambiente em produção no Cloudflare Pages (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, etc.).
+  - [x] **Remoção da Grade Semanal de Horários (`GeneralSettingsTab.jsx`) & Limpeza do Header do Cardápio (`Menu.jsx`)**: Removida a Seção de "Dias & Horários de Funcionamento da Loja" das Configurações Gerais (a operação segue 100% manual via controle de Abrir/Fechar Loja), e removido o indicador de horário (`| 🟢 18:00 - 23:59`) da barra superior verde do cardápio, mantendo estritamente o tempo estimado de entrega (`Entrega em até X-Y min`).
+  - [x] **Unificação de Contato Exclusivo via WhatsApp Oficial (`Menu.jsx`, `Footer.jsx`, `Home.jsx`)**: Eliminado o campo legador de telefone fixo com sequências vazias de zeros (`00000000000`) da seção "Localização & Contato" do rodapé e páginas públicas, exibindo e linkando exclusivamente o número do WhatsApp comercial da loja.
   - [x] Provisionamento de schema, colunas críticas de `tenants`, `categories`, `products`, `admin_users` e `whatsapp_otp_codes`.
   - [x] Criação da view pública `tenants_public` com compatibilidade retroativa e políticas de RLS para acesso público ao cardápio.
   - [x] Execução direta e validação via conexão PostgreSQL oficial do script DDL/DML consolidado `PRODUCAO_SYNC_TOTAL.sql` e do hotfix `PROD_HOTFIX_ORDERS_CASH_RPC.sql` (`orders.cash_session_id`, `cash_sessions`, `cash_movements` e RPC `get_store_admin_users`).

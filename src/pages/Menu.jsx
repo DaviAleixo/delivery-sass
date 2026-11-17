@@ -1183,21 +1183,17 @@ export default function MenuPage() {
           }`}>
             <div className="container mx-auto max-w-6xl flex items-center justify-center md:justify-between text-[11px] sm:text-xs font-semibold gap-2">
               <div className="flex items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap min-w-0">
-                <span className="flex items-center gap-1.5 font-bold shrink-0">
-                  <Bike className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
-                  <span>Entrega em até {settings?.delivery_time || "60–80 min"}</span>
-                </span>
-
-                <span className="opacity-40 shrink-0">|</span>
-
-                <span className="flex items-center gap-1.5 font-bold shrink-0">
-                  <span className={`w-2 h-2 rounded-full shrink-0 ${storeIsOpen ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
-                  <span>
-                    {storeIsOpen 
-                      ? (settings?.opening_time && settings?.closing_time ? `${settings.opening_time} - ${settings.closing_time}` : '01:00 - 00:00')
-                      : 'Fechado no momento'}
+                {storeIsOpen ? (
+                  <span className="flex items-center gap-1.5 font-bold shrink-0">
+                    <Bike className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
+                    <span>Entrega em até {settings?.delivery_time || "60–80 min"}</span>
                   </span>
-                </span>
+                ) : (
+                  <span className="flex items-center gap-1.5 font-bold shrink-0 text-red-100">
+                    <span className="w-2 h-2 rounded-full bg-red-400 shrink-0" />
+                    <span>Loja fechada no momento</span>
+                  </span>
+                )}
               </div>
 
               {/* Endereço da loja: Visível no Desktop */}
@@ -1629,23 +1625,22 @@ export default function MenuPage() {
               <MapPin className="w-3.5 h-3.5 text-stone-500 flex-shrink-0" />
               <span>{settings?.address || "Endereço não informado"}</span>
             </div>
-            {settings?.phone && (
+            {settings?.whatsapp ? (
+              <a
+                href={`https://wa.me/55${settings.whatsapp.replace(/\D/g, '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-stone-700 hover:text-emerald-700 transition-colors group"
+              >
+                <Phone className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0 group-hover:scale-110 transition-transform" />
+                <span className="font-medium">{settings.whatsapp}</span>
+              </a>
+            ) : settings?.phone && !/^0+$/.test(settings.phone.replace(/\D/g, '')) ? (
               <div className="flex items-center gap-2">
                 <Phone className="w-3.5 h-3.5 text-stone-500 flex-shrink-0" />
                 <span>{settings.phone}</span>
               </div>
-            )}
-            {settings?.whatsapp && (
-              <a
-                href={`https://wa.me/${settings.whatsapp.replace(/\D/g, '')}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 text-stone-700 hover:text-stone-900 transition-colors"
-              >
-                <Phone className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
-                <span>{settings.whatsapp}</span>
-              </a>
-            )}
+            ) : null}
             {settings?.instagram && (
               <a
                 href={`https://instagram.com/${settings.instagram.replace('@', '')}`}
