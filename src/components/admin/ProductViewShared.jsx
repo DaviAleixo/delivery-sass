@@ -5,6 +5,7 @@ import {
   formatBRLValue,
   getMinPizzaPrice,
   getPizzaSizePriceList,
+  hasMultipleDistinctVariationPrices,
   hasPizzaPrices,
 } from "@/utils/pizzaPricing";
 
@@ -34,11 +35,12 @@ export function ProductPrice({ product, categorySizes = [], compact = false }) {
   if (hasPizzaPrices(product)) {
     const minPrice = getMinPizzaPrice(product, categorySizes);
     const sizeList = getPizzaSizePriceList(product, categorySizes);
+    const hasMultipleDistinct = hasMultipleDistinctVariationPrices(product, categorySizes);
 
     return (
       <div className={compact ? "text-right" : ""}>
         <span className="text-xs font-semibold text-stone-500 block">
-          A partir de{" "}
+          {hasMultipleDistinct && "A partir de "}
           <span
             className={`${
               compact ? "text-sm" : "text-lg"

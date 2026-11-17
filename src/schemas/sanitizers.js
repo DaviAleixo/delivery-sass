@@ -33,6 +33,8 @@ export function sanitizeOrderData(rawOrder = {}) {
           product_price: itemPrice,
           quantity: itemQty,
           subtotal: itemSubtotal,
+          size_id: item.size_id || item.pizza_size_id || null,
+          pizza_size_id: item.pizza_size_id || item.size_id || null,
           pizza_flavors: Array.isArray(item.pizza_flavors) ? item.pizza_flavors : [],
           additionals: Array.isArray(item.additionals)
             ? item.additionals.map((ad) => ({

@@ -44,6 +44,8 @@ export default function ProductDetailModal({
               name: defaultItem.name,
               price: Number(defaultItem.price) || 0,
               quantity: 1,
+              variation_size_id: defaultItem.variation_size_id || null,
+              is_category_variation: Boolean(defaultItem.is_category_variation),
             };
           }
         });
@@ -88,6 +90,8 @@ export default function ProductDetailModal({
       name: item.name,
       price: Number(item.price) || 0,
       quantity: 1,
+      variation_size_id: item.variation_size_id || null,
+      is_category_variation: Boolean(item.is_category_variation),
     };
 
     setSelectedComplements(next);
@@ -250,6 +254,7 @@ export default function ProductDetailModal({
     if (!validation.isValid) return;
 
     let effectiveBasePrice = Number(product.price || 0);
+    let selectedVariationSizeId = null;
     const additionalsList = [];
 
     if (complementGroups && complementGroups.length > 0) {
@@ -260,6 +265,9 @@ export default function ProductDetailModal({
           groupItems.forEach(item => {
             if (Number(item.price) > 0) {
               effectiveBasePrice = Number(item.price);
+            }
+            if (item.variation_size_id) {
+              selectedVariationSizeId = item.variation_size_id;
             }
             additionalsList.push({
               id: item.id,
@@ -340,6 +348,7 @@ export default function ProductDetailModal({
     const productToSend = {
       ...product,
       price: effectiveBasePrice,
+      ...(selectedVariationSizeId ? { size_id: selectedVariationSizeId } : {}),
     };
 
     onAddToCart(productToSend, additionalsList, quantity, notes.trim());

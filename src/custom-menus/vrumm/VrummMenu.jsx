@@ -30,6 +30,7 @@ import { Order } from "@/entities/Order";
 import OrderModal from "@/components/menu/OrderModal";
 import PixOnlineModal from "@/components/menu/PixOnlineModal";
 import { clearCheckoutIdempotencyKey } from "@/utils/checkoutIdempotency";
+import { buildCategoryVariationComplementGroup } from "@/utils/pizzaPricing";
 
 export default function VrummMenu({
   tenant,
@@ -582,11 +583,24 @@ export default function VrummMenu({
         <VrummProductDetailModal
           product={selectedProduct}
           complementGroups={(() => {
+            const matchedCategory = (categories || []).find(
+              c =>
+                c.id === selectedProduct.category_id ||
+                c.id === selectedProduct.category ||
+                (selectedProduct.category &&
+                  typeof selectedProduct.category === "string" &&
+                  c.name?.toLowerCase() === selectedProduct.category.toLowerCase())
+            );
+            const virtualVariationGroup = buildCategoryVariationComplementGroup(
+              selectedProduct,
+              matchedCategory
+            );
+
             const linkedGroupIds = productComplementGroups
               .filter(pcg => pcg.product_id === selectedProduct.id)
               .map(pcg => pcg.group_id);
 
-            return complementGroups
+            const dbGroups = complementGroups
               .filter(g => g.active && linkedGroupIds.includes(g.id))
               .sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
               .map(g => ({
@@ -595,6 +609,8 @@ export default function VrummMenu({
                   .filter(i => i.group_id === g.id && i.active)
                   .sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
               }));
+
+            return virtualVariationGroup ? [virtualVariationGroup, ...dbGroups] : dbGroups;
           })()}
           additionals={additionals.filter(a => a.product_id === selectedProduct.id)}
           isOpen={!!selectedProduct}

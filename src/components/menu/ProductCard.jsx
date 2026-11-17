@@ -4,15 +4,20 @@ import { Plus, Package } from "lucide-react";
 import {
   formatBRLValue,
   getMinPizzaPrice,
+  getPizzaSizePriceList,
+  hasMultipleDistinctVariationPrices,
   hasPizzaPrices,
 } from "@/utils/pizzaPricing";
 
 const ProductCard = forwardRef(function ProductCard(
-  { product, onProductClick, _isStoreOpen = true, _isPopular = false, isVisualOnly = false, cashbackRate = 0 },
+  { product, categorySizes = [], onProductClick, _isStoreOpen = true, _isPopular = false, isVisualOnly = false, cashbackRate = 0 },
   ref
 ) {
   const [imageError, setImageError] = useState(false);
   const hasValidImage = Boolean(product?.image_url && !imageError);
+  const variationList = hasPizzaPrices(product) ? getPizzaSizePriceList(product, categorySizes) : [];
+  const variationNamesSummary = variationList.map((v) => v.shortName).join(" · ");
+  const hasMultipleDistinct = hasPizzaPrices(product) && hasMultipleDistinctVariationPrices(product, categorySizes);
 
   return (
     <motion.div
@@ -56,11 +61,15 @@ const ProductCard = forwardRef(function ProductCard(
 
           {product.description && 
            product.description.trim() !== "" && 
-           !product.description.toLowerCase().trim().includes("cervejas") && (
+           !product.description.toLowerCase().trim().includes("cervejas") ? (
             <p className="text-[11px] sm:text-xs text-stone-500 leading-snug line-clamp-2 mt-0.5 font-normal">
               {product.description}
             </p>
-          )}
+          ) : variationNamesSummary ? (
+            <p className="text-[11px] sm:text-xs text-stone-500 leading-snug line-clamp-1 mt-0.5 font-normal">
+              {variationNamesSummary}
+            </p>
+          ) : null}
 
           <div className="mt-1 flex items-baseline gap-2 flex-wrap">
             <span 
@@ -69,8 +78,10 @@ const ProductCard = forwardRef(function ProductCard(
             >
               {hasPizzaPrices(product) ? (
                 <>
-                  <span className="text-[11px] font-normal text-stone-500 mr-1">A partir de</span>
-                  {formatBRLValue(getMinPizzaPrice(product))}
+                  {hasMultipleDistinct && (
+                    <span className="text-[11px] font-normal text-stone-500 mr-1">A partir de</span>
+                  )}
+                  {formatBRLValue(getMinPizzaPrice(product, categorySizes))}
                 </>
               ) : product.min_size_price && Number(product.min_size_price) > 0 ? (
                 <>

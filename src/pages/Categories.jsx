@@ -6,20 +6,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import { parseBRLToNumber, formatToBRL } from "@/utils/moneyMask";
+import {
+  CATEGORY_TYPES,
+  DEFAULT_PIZZA_SIZES,
+  VARIATION_GRID_PRESETS,
+  normalizeVariationId,
+  isVariationGridCategory,
+} from "@/utils/pizzaPricing";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Edit, Trash2, ChevronUp, ChevronDown, Flame, Pizza, UtensilsCrossed } from "lucide-react";
+import { Plus, Edit, Trash2, ChevronUp, ChevronDown, Flame, Pizza, UtensilsCrossed, LayoutGrid } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { appConfirm } from "@/components/ui/ConfirmDialogHost";
-
-const DEFAULT_PIZZA_SIZES = [
-  { id: "broto", name: "Broto (4 fatias)", slices: 4, max_flavors: 1 },
-  { id: "media", name: "Média (6 fatias)", slices: 6, max_flavors: 2 },
-  { id: "grande", name: "Grande (8 fatias)", slices: 8, max_flavors: 2 },
-  { id: "familia", name: "Família (12 fatias)", slices: 12, max_flavors: 3 },
-];
 
 export default function CategoriesPage() {
   const { slug } = useParams();
@@ -33,7 +33,7 @@ export default function CategoriesPage() {
   const [categoryForm, setCategoryForm] = useState({
     name: "",
     order_index: 0,
-    type: "standard",
+    type: CATEGORY_TYPES.STANDARD,
     pizza_sizes: [],
     sector_id: null,
   });
@@ -65,17 +65,14 @@ export default function CategoriesPage() {
     const currentItem = newCategories[index];
     const targetItem = newCategories[targetIndex];
 
-    // Inverte os itens de posição
     newCategories[index] = targetItem;
     newCategories[targetIndex] = currentItem;
 
-    // Normaliza os números de ordem sequencialmente (1, 2, 3...)
     const updatedCategories = newCategories.map((cat, idx) => ({
       ...cat,
       order_index: idx + 1,
     }));
 
-    // Feedback visual imediato
     setCategories(updatedCategories);
 
     try {
@@ -96,33 +93,62 @@ export default function CategoriesPage() {
     setIsSubmitting(true);
 
     try {
-      const nextOrder = editingCategory 
-        ? (Number(categoryForm.order_index) || 0)
-        : (categories.length > 0 ? Math.max(...categories.map(c => Number(c.order_index) || 0)) + 1 : 1);
+      const nextOrder = editingCategory
+        ? Number(categoryForm.order_index) || 0
+        : categories.length > 0
+          ? Math.max(...categories.map((c) => Number(c.order_index) || 0)) + 1
+          : 1;
 
-      const rawSizes = categoryForm.pizza_sizes?.length
-        ? categoryForm.pizza_sizes
-        : DEFAULT_PIZZA_SIZES;
-      const sanitizedSizes = rawSizes.map((s) => {
-        const parsedDefault =
-          typeof s.default_price === "number"
-            ? s.default_price
-            : s.default_price
-              ? parseBRLToNumber(String(s.default_price))
-              : 0;
-        return {
-          ...s,
-          default_price: Number.isFinite(parsedDefault) && parsedDefault > 0 ? parsedDefault : 0,
-        };
-      });
+      const isPizza = categoryForm.type === CATEGORY_TYPES.PIZZA;
+      const isGrid = categoryForm.type === CATEGORY_TYPES.VARIATION_GRID;
+      const usesMatrix = isPizza || isGrid;
+
+      let rawSizes = categoryForm.pizza_sizes || [];
+      if (isPizza && rawSizes.length === 0) {
+        rawSizes = DEFAULT_PIZZA_SIZES;
+      } else if (isGrid && rawSizes.length === 0) {
+        toast.error("Adicione pelo menos uma opção na grade da categoria (ex: Latão, Long Neck).");
+        setIsSubmitting(false);
+        return;
+      }
+
+      const usedIds = new Set();
+      const sanitizedSizes = rawSizes
+        .filter((s) => String(s?.name || "").trim() !== "")
+        .map((s, idx) => {
+          const parsedDefault =
+            typeof s.default_price === "number"
+              ? s.default_price
+              : s.default_price
+                ? parseBRLToNumber(String(s.default_price))
+                : 0;
+
+          let resolvedId = s.id;
+          if (!resolvedId || resolvedId.startsWith("size_") || resolvedId.startsWith("var_")) {
+            resolvedId = normalizeVariationId(s.name, idx);
+          }
+          if (usedIds.has(resolvedId)) {
+            resolvedId = `${resolvedId}_${idx + 1}`;
+          }
+          usedIds.add(resolvedId);
+
+          return {
+            ...s,
+            id: resolvedId,
+            name: String(s.name).trim(),
+            slices: isPizza ? Number(s.slices) || 8 : undefined,
+            max_flavors: isPizza ? Number(s.max_flavors) || 1 : undefined,
+            default_price: Number.isFinite(parsedDefault) && parsedDefault > 0 ? parsedDefault : 0,
+          };
+        });
 
       const payload = {
         ...categoryForm,
         is_combo: false,
         sector_id: categoryForm.sector_id || null,
         order_index: nextOrder,
-        type: categoryForm.type || "standard",
-        pizza_sizes: categoryForm.type === "pizza" ? sanitizedSizes : [],
+        type: categoryForm.type || CATEGORY_TYPES.STANDARD,
+        pizza_sizes: usesMatrix ? sanitizedSizes : [],
       };
 
       if (editingCategory) {
@@ -154,21 +180,22 @@ export default function CategoriesPage() {
         await Category.delete(categoryId);
         toast.success("Categoria excluída com sucesso!");
         loadData();
-      } catch (err) {
+      } catch (_err) {
         toast.error("Erro ao excluir categoria.");
       }
     }
   };
 
   const resetForm = () => {
-    const nextOrder = categories.length > 0 
-      ? Math.max(...categories.map(c => Number(c.order_index) || 0)) + 1 
-      : 1;
+    const nextOrder =
+      categories.length > 0
+        ? Math.max(...categories.map((c) => Number(c.order_index) || 0)) + 1
+        : 1;
 
     setCategoryForm({
       name: "",
       order_index: nextOrder,
-      type: "standard",
+      type: CATEGORY_TYPES.STANDARD,
       pizza_sizes: [],
       sector_id: null,
     });
@@ -176,14 +203,26 @@ export default function CategoriesPage() {
   };
 
   const openEditModal = (category) => {
-    const isPizza = category.type === "pizza";
+    const isPizza = category.type === CATEGORY_TYPES.PIZZA;
+    const isGrid = isVariationGridCategory(category);
+    const resolvedType = isPizza
+      ? CATEGORY_TYPES.PIZZA
+      : isGrid
+        ? CATEGORY_TYPES.VARIATION_GRID
+        : CATEGORY_TYPES.STANDARD;
+
     setCategoryForm({
       name: category.name,
       order_index: category.order_index || 0,
-      type: category.type || "standard",
-      pizza_sizes: Array.isArray(category.pizza_sizes) && category.pizza_sizes.length > 0
-        ? category.pizza_sizes
-        : (isPizza ? DEFAULT_PIZZA_SIZES : []),
+      type: resolvedType,
+      pizza_sizes:
+        Array.isArray(category.pizza_sizes) && category.pizza_sizes.length > 0
+          ? category.pizza_sizes
+          : isPizza
+            ? DEFAULT_PIZZA_SIZES
+            : isGrid
+              ? VARIATION_GRID_PRESETS.cervejas.sizes
+              : [],
       sector_id: category.sector_id || null,
     });
     setEditingCategory(category);
@@ -191,21 +230,28 @@ export default function CategoriesPage() {
   };
 
   const handleAddPizzaSize = () => {
-    const newId = `size_${Date.now()}`;
-    const newSize = {
-      id: newId,
-      name: "Novo Tamanho",
-      slices: 8,
-      max_flavors: 2,
-    };
-    setCategoryForm(prev => ({
+    const isPizza = categoryForm.type === CATEGORY_TYPES.PIZZA;
+    const newId = `var_${Date.now()}`;
+    const newSize = isPizza
+      ? {
+          id: newId,
+          name: "Novo Tamanho",
+          slices: 8,
+          max_flavors: 2,
+        }
+      : {
+          id: newId,
+          name: "",
+          default_price: 0,
+        };
+    setCategoryForm((prev) => ({
       ...prev,
       pizza_sizes: [...(prev.pizza_sizes || []), newSize],
     }));
   };
 
   const handleUpdatePizzaSize = (idx, field, value) => {
-    setCategoryForm(prev => {
+    setCategoryForm((prev) => {
       const nextSizes = [...(prev.pizza_sizes || [])];
       nextSizes[idx] = { ...nextSizes[idx], [field]: value };
       return { ...prev, pizza_sizes: nextSizes };
@@ -213,10 +259,20 @@ export default function CategoriesPage() {
   };
 
   const handleRemovePizzaSize = (idx) => {
-    setCategoryForm(prev => ({
+    setCategoryForm((prev) => ({
       ...prev,
       pizza_sizes: (prev.pizza_sizes || []).filter((_, i) => i !== idx),
     }));
+  };
+
+  const handleApplyGridPreset = (presetKey) => {
+    const preset = VARIATION_GRID_PRESETS[presetKey];
+    if (!preset) return;
+    setCategoryForm((prev) => ({
+      ...prev,
+      pizza_sizes: preset.sizes.map((s) => ({ ...s, default_price: 0 })),
+    }));
+    toast.success(`Grade preenchida com o modelo: ${preset.label}`);
   };
 
   return (
@@ -229,11 +285,14 @@ export default function CategoriesPage() {
               Categorias do Cardápio
             </h1>
             <p className="text-xs sm:text-sm text-stone-600 mt-1">
-              Organize a ordem em que as categorias e produtos aparecem para os clientes.
+              Organize a ordem das categorias e configure grades de tamanhos/embalagens (como Cervejas, Açaí e Pizzas).
             </p>
           </div>
-          <Button 
-            onClick={() => { resetForm(); setShowModal(true); }}
+          <Button
+            onClick={() => {
+              resetForm();
+              setShowModal(true);
+            }}
             className="bg-[#047857] hover:bg-[#065f46] text-white font-bold shadow-xs cursor-pointer h-10 px-4"
           >
             <Plus className="w-4 h-4 mr-2" />
@@ -243,7 +302,6 @@ export default function CategoriesPage() {
 
         {/* Lista de Categorias em Tabela / List View com Efeito Zebrado */}
         <div className="bg-white rounded-2xl border border-stone-200/90 shadow-xs overflow-hidden">
-          {/* Cabeçalho das Colunas (Desktop) */}
           <div className="hidden sm:grid sm:grid-cols-12 gap-4 px-6 py-3.5 bg-stone-100/80 border-b border-stone-200 text-xs font-bold text-stone-600 uppercase tracking-wider items-center">
             <div className="col-span-2 flex items-center gap-1.5">
               <span>Posição</span>
@@ -259,13 +317,18 @@ export default function CategoriesPage() {
             </div>
           </div>
 
-          {/* Linhas com efeito zebrado (1 linha branca, 1 linha cinza/cor) */}
           <div className="divide-y divide-stone-100">
             <AnimatePresence initial={false}>
               {categories.map((category, index) => {
                 const isEven = index % 2 === 0;
                 const isFirst = index === 0;
                 const isLast = index === categories.length - 1;
+                const isPizza = category.type === CATEGORY_TYPES.PIZZA;
+                const isGrid = isVariationGridCategory(category);
+                const sizesPreview = (category.pizza_sizes || [])
+                  .map((s) => s.name)
+                  .slice(0, 4)
+                  .join(", ");
 
                 return (
                   <motion.div
@@ -326,30 +389,53 @@ export default function CategoriesPage() {
                         {category.name}
                       </span>
 
-                      {category.type === "pizza" && (
+                      {isPizza && (
                         <span className="inline-flex items-center gap-1 bg-amber-500 text-white text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-2xs">
                           <Pizza className="w-3 h-3" />
                           Pizzas & Fracionados
                         </span>
                       )}
 
-                      {category.sector_id && (() => {
-                        const matchedSector = productionSectors.find((s) => String(s.id) === String(category.sector_id));
-                        return matchedSector ? (
-                          <span className="inline-flex items-center gap-1 bg-sky-50 text-sky-800 border border-sky-200 text-[11px] font-bold px-2 py-0.5 rounded-full">
-                            <Flame className="w-3 h-3 text-sky-700" /> {matchedSector.name}
-                          </span>
-                        ) : null;
-                      })()}
+                      {isGrid && (
+                        <span className="inline-flex items-center gap-1 bg-blue-600 text-white text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-2xs">
+                          <LayoutGrid className="w-3 h-3" />
+                          Grade de Tamanhos / Embalagens
+                        </span>
+                      )}
+
+                      {category.sector_id &&
+                        (() => {
+                          const matchedSector = productionSectors.find(
+                            (s) => String(s.id) === String(category.sector_id)
+                          );
+                          return matchedSector ? (
+                            <span className="inline-flex items-center gap-1 bg-sky-50 text-sky-800 border border-sky-200 text-[11px] font-bold px-2 py-0.5 rounded-full">
+                              <Flame className="w-3 h-3 text-sky-700" /> {matchedSector.name}
+                            </span>
+                          ) : null;
+                        })()}
                     </div>
 
                     {/* Coluna 3: Tipo / Configuração */}
                     <div className="sm:col-span-3 text-xs">
-                      {category.type === "pizza" ? (
+                      {isPizza ? (
                         <span className="inline-flex items-center gap-1.5 font-semibold text-amber-900 bg-amber-100/70 border border-amber-200/80 px-2.5 py-1 rounded-lg">
                           <Pizza className="w-3.5 h-3.5 text-amber-700" />
-                          {(category.pizza_sizes?.length || 4)} tamanhos cadastrados
+                          {category.pizza_sizes?.length || 4} tamanhos cadastrados
                         </span>
+                      ) : isGrid ? (
+                        <div className="space-y-0.5">
+                          <span className="inline-flex items-center gap-1.5 font-semibold text-blue-900 bg-blue-50 border border-blue-200/80 px-2.5 py-1 rounded-lg">
+                            <LayoutGrid className="w-3.5 h-3.5 text-blue-700" />
+                            {category.pizza_sizes?.length || 0} variações na grade
+                          </span>
+                          {sizesPreview && (
+                            <p className="text-[10px] text-stone-500 truncate pl-1">
+                              {sizesPreview}
+                              {(category.pizza_sizes?.length || 0) > 4 ? "..." : ""}
+                            </p>
+                          )}
+                        </div>
                       ) : (
                         <span className="inline-flex items-center gap-1.5 text-stone-600 bg-stone-100/90 border border-stone-200/70 px-2.5 py-1 rounded-lg">
                           <UtensilsCrossed className="w-3.5 h-3.5 text-stone-500" />
@@ -394,25 +480,28 @@ export default function CategoriesPage() {
               Nenhuma categoria encontrada
             </h3>
             <p className="text-xs text-stone-500 max-w-sm mx-auto mb-4">
-              Crie categorias para organizar seus produtos e pizzas no cardápio online.
+              Crie categorias para organizar seus produtos, bebidas e pizzas no cardápio online.
             </p>
             <Button
-              onClick={() => { resetForm(); setShowModal(true); }}
+              onClick={() => {
+                resetForm();
+                setShowModal(true);
+              }}
               className="bg-[#047857] hover:bg-[#065f46] text-white text-xs font-bold"
             >
               <Plus className="w-3.5 h-3.5 mr-1.5" /> Criar Categoria
             </Button>
           </div>
         )}
-        
+
         <Dialog open={showModal} onOpenChange={setShowModal}>
-          <DialogContent className="sm:max-w-xl max-h-[90vh] p-0 flex flex-col overflow-hidden bg-[#F7F9F8] border-stone-200">
+          <DialogContent className="sm:max-w-2xl max-h-[90vh] p-0 flex flex-col overflow-hidden bg-[#F7F9F8] border-stone-200">
             <DialogHeader className="px-6 py-4 bg-white border-b border-stone-200 text-left shrink-0">
               <DialogTitle className="text-stone-900 font-bold text-lg">
                 {editingCategory ? "Editar Categoria" : "Nova Categoria"}
               </DialogTitle>
               <p className="text-xs text-stone-500 mt-0.5">
-                Configure o tipo, ordem no cardápio e setor de preparo
+                Configure o modelo de precificação, grade de embalagens/tamanhos e setor de preparo
               </p>
             </DialogHeader>
 
@@ -426,24 +515,29 @@ export default function CategoriesPage() {
                     <Input
                       id="name"
                       value={categoryForm.name}
-                      onChange={(e) => setCategoryForm({...categoryForm, name: e.target.value})}
+                      onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })}
                       required
-                      placeholder="Ex: Pizzas Tradicionais, Lanches, Bebidas..."
+                      placeholder="Ex: Cervejas, Refrigerantes, Lanches, Pizzas..."
                       className="bg-stone-50/50 border-stone-200 focus:bg-white focus:border-[#047857] mt-1"
                     />
                   </div>
 
-                  {/* Seletor do Tipo de Categoria: Padrão vs Pizza */}
+                  {/* Seletor do Tipo de Categoria: Padrão vs Grade de Variações vs Pizza */}
                   <div>
                     <Label className="text-xs font-semibold text-stone-700 block mb-2">
-                      Tipo de categoria
+                      Modelo da Categoria *
                     </Label>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                       <button
                         type="button"
-                        onClick={() => setCategoryForm({ ...categoryForm, type: "standard" })}
+                        onClick={() =>
+                          setCategoryForm({
+                            ...categoryForm,
+                            type: CATEGORY_TYPES.STANDARD,
+                          })
+                        }
                         className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                          categoryForm.type !== "pizza"
+                          categoryForm.type === CATEGORY_TYPES.STANDARD
                             ? "border-[#047857] bg-[#D1E9DF]/25 ring-2 ring-[#047857]/15"
                             : "border-stone-200 hover:border-stone-300 bg-white"
                         }`}
@@ -451,21 +545,57 @@ export default function CategoriesPage() {
                         <div className="w-7 h-7 rounded-lg bg-emerald-50 border border-emerald-200/70 flex items-center justify-center mb-2">
                           <UtensilsCrossed className="w-3.5 h-3.5 text-[#047857]" />
                         </div>
-                        <p className="font-bold text-xs text-stone-900 leading-tight">Produtos Padrão</p>
+                        <p className="font-bold text-xs text-stone-900 leading-tight">
+                          Produtos Padrão
+                        </p>
                         <p className="text-[11px] text-stone-500 mt-0.5 leading-snug">
-                          Lanches, bebidas, porções, sobremesas, açaí
+                          Preço único por item (lanches, porções, sobremesas).
                         </p>
                       </button>
 
                       <button
                         type="button"
-                        onClick={() => setCategoryForm({ 
-                          ...categoryForm, 
-                          type: "pizza",
-                          pizza_sizes: categoryForm.pizza_sizes?.length ? categoryForm.pizza_sizes : DEFAULT_PIZZA_SIZES
-                        })}
+                        onClick={() =>
+                          setCategoryForm({
+                            ...categoryForm,
+                            type: CATEGORY_TYPES.VARIATION_GRID,
+                            pizza_sizes:
+                              categoryForm.pizza_sizes?.length > 0
+                                ? categoryForm.pizza_sizes
+                                : VARIATION_GRID_PRESETS.cervejas.sizes,
+                          })
+                        }
                         className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                          categoryForm.type === "pizza"
+                          categoryForm.type === CATEGORY_TYPES.VARIATION_GRID
+                            ? "border-blue-600 bg-blue-50/70 ring-2 ring-blue-600/15"
+                            : "border-stone-200 hover:border-stone-300 bg-white"
+                        }`}
+                      >
+                        <div className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-200/70 flex items-center justify-center mb-2">
+                          <LayoutGrid className="w-3.5 h-3.5 text-blue-600" />
+                        </div>
+                        <p className="font-bold text-xs text-stone-900 leading-tight">
+                          Grade de Variações
+                        </p>
+                        <p className="text-[11px] text-stone-500 mt-0.5 leading-snug">
+                          Cervejas (Latão, Long Neck, 600ml), Açaí (300ml, 500ml) ou P/M/G.
+                        </p>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setCategoryForm({
+                            ...categoryForm,
+                            type: CATEGORY_TYPES.PIZZA,
+                            pizza_sizes:
+                              categoryForm.pizza_sizes?.length > 0
+                                ? categoryForm.pizza_sizes
+                                : DEFAULT_PIZZA_SIZES,
+                          })
+                        }
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                          categoryForm.type === CATEGORY_TYPES.PIZZA
                             ? "border-amber-500 bg-amber-50/80 ring-2 ring-amber-500/15"
                             : "border-stone-200 hover:border-stone-300 bg-white"
                         }`}
@@ -473,17 +603,117 @@ export default function CategoriesPage() {
                         <div className="w-7 h-7 rounded-lg bg-amber-50 border border-amber-200/70 flex items-center justify-center mb-2">
                           <Pizza className="w-3.5 h-3.5 text-amber-600" />
                         </div>
-                        <p className="font-bold text-xs text-stone-900 leading-tight">Pizzas & Fracionados</p>
+                        <p className="font-bold text-xs text-stone-900 leading-tight">
+                          Pizzas & Fracionados
+                        </p>
                         <p className="text-[11px] text-stone-500 mt-0.5 leading-snug">
-                          Permite metades (1/2 e 1/2), tamanhos e bordas
+                          Permite metades (1/2 e 1/2), fatias e bordas recheadas.
                         </p>
                       </button>
                     </div>
                   </div>
                 </div>
 
+                {/* Seção Condicional: Grade de Variações (Cervejas, Bebidas, Açaí, Marmitas) */}
+                {categoryForm.type === CATEGORY_TYPES.VARIATION_GRID && (
+                  <div className="bg-white border border-blue-200/90 rounded-xl p-4 space-y-3.5 shadow-2xs">
+                    <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-stone-100">
+                      <div>
+                        <h4 className="font-bold text-xs text-stone-900 flex items-center gap-1.5">
+                          <LayoutGrid className="w-3.5 h-3.5 text-blue-600" />
+                          Colunas da Grade (Tamanhos / Embalagens)
+                        </h4>
+                        <p className="text-[11px] text-stone-500 mt-0.5">
+                          Defina todas as variações da categoria uma única vez. Em cada produto, você preencherá o preço apenas nas opções que ele possui!
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={handleAddPizzaSize}
+                        className="h-7 text-xs border-blue-200 text-blue-700 hover:bg-blue-50 cursor-pointer font-semibold shrink-0"
+                      >
+                        <Plus className="w-3.5 h-3.5 mr-1" />
+                        Nova Coluna
+                      </Button>
+                    </div>
+
+                    {/* Presets Rápidos em 1 clique */}
+                    <div className="space-y-1.5">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block">
+                        Modelos prontos (1 clique):
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {Object.entries(VARIATION_GRID_PRESETS).map(([key, preset]) => (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => handleApplyGridPreset(key)}
+                            className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-blue-50 text-stone-700 hover:text-blue-700 border border-stone-200 hover:border-blue-200 transition-colors cursor-pointer"
+                          >
+                            {preset.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                      {(categoryForm.pizza_sizes || []).map((size, idx) => (
+                        <div
+                          key={size.id || idx}
+                          className="flex items-center gap-2.5 bg-stone-50/70 p-2.5 rounded-xl border border-stone-200 text-xs"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <Label className="text-[10px] text-stone-500 font-semibold uppercase">
+                              Nome da Embalagem / Tamanho *
+                            </Label>
+                            <Input
+                              value={size.name}
+                              onChange={(e) => handleUpdatePizzaSize(idx, "name", e.target.value)}
+                              placeholder="Ex: Latão, Long Neck, Mega Latão, 600ml, Lata..."
+                              className="h-8 text-xs mt-0.5 bg-white"
+                            />
+                          </div>
+
+                          <div className="w-32">
+                            <Label className="text-[10px] text-stone-500 font-semibold uppercase">
+                              Preço Padrão (Opcional)
+                            </Label>
+                            <CurrencyInput
+                              value={
+                                typeof size.default_price === "number"
+                                  ? size.default_price > 0
+                                    ? formatToBRL(size.default_price)
+                                    : ""
+                                  : size.default_price || ""
+                              }
+                              onChange={(e) =>
+                                handleUpdatePizzaSize(idx, "default_price", e.target.value)
+                              }
+                              placeholder="R$ 0,00"
+                              className="h-8 text-xs mt-0.5 bg-white font-mono"
+                            />
+                          </div>
+
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRemovePizzaSize(idx)}
+                            className="h-8 w-8 text-stone-400 hover:text-rose-600 mt-4 cursor-pointer shrink-0"
+                            title="Remover opção"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Seção Condicional: Tamanhos da Pizza */}
-                {categoryForm.type === "pizza" && (
+                {categoryForm.type === CATEGORY_TYPES.PIZZA && (
                   <div className="bg-white border border-stone-200/90 rounded-xl p-4 space-y-3 shadow-2xs">
                     <div className="flex items-center justify-between pb-2 border-b border-stone-100">
                       <div>
@@ -509,12 +739,14 @@ export default function CategoriesPage() {
 
                     <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
                       {(categoryForm.pizza_sizes || []).map((size, idx) => (
-                        <div 
+                        <div
                           key={size.id || idx}
                           className="flex items-center gap-2 bg-stone-50/70 p-2.5 rounded-xl border border-stone-200 text-xs"
                         >
                           <div className="flex-1 min-w-0">
-                            <Label className="text-[10px] text-stone-500 font-semibold uppercase">Nome do Tamanho</Label>
+                            <Label className="text-[10px] text-stone-500 font-semibold uppercase">
+                              Nome do Tamanho
+                            </Label>
                             <Input
                               value={size.name}
                               onChange={(e) => handleUpdatePizzaSize(idx, "name", e.target.value)}
@@ -524,22 +756,34 @@ export default function CategoriesPage() {
                           </div>
 
                           <div className="w-16">
-                            <Label className="text-[10px] text-stone-500 font-semibold uppercase">Fatias</Label>
+                            <Label className="text-[10px] text-stone-500 font-semibold uppercase">
+                              Fatias
+                            </Label>
                             <Input
                               type="number"
                               value={size.slices}
-                              onChange={(e) => handleUpdatePizzaSize(idx, "slices", parseInt(e.target.value) || 1)}
+                              onChange={(e) =>
+                                handleUpdatePizzaSize(idx, "slices", parseInt(e.target.value) || 1)
+                              }
                               className="h-7 text-xs mt-0.5 bg-white"
                               min={1}
                             />
                           </div>
 
                           <div className="w-20">
-                            <Label className="text-[10px] text-stone-500 font-semibold uppercase">Sabores</Label>
+                            <Label className="text-[10px] text-stone-500 font-semibold uppercase">
+                              Sabores
+                            </Label>
                             <Input
                               type="number"
                               value={size.max_flavors}
-                              onChange={(e) => handleUpdatePizzaSize(idx, "max_flavors", parseInt(e.target.value) || 1)}
+                              onChange={(e) =>
+                                handleUpdatePizzaSize(
+                                  idx,
+                                  "max_flavors",
+                                  parseInt(e.target.value) || 1
+                                )
+                              }
                               className="h-7 text-xs mt-0.5 bg-white"
                               min={1}
                               max={4}
@@ -547,14 +791,20 @@ export default function CategoriesPage() {
                           </div>
 
                           <div className="w-24">
-                            <Label className="text-[10px] text-stone-500 font-semibold uppercase">Padrão</Label>
+                            <Label className="text-[10px] text-stone-500 font-semibold uppercase">
+                              Padrão
+                            </Label>
                             <CurrencyInput
                               value={
                                 typeof size.default_price === "number"
-                                  ? (size.default_price > 0 ? formatToBRL(size.default_price) : "")
-                                  : (size.default_price || "")
+                                  ? size.default_price > 0
+                                    ? formatToBRL(size.default_price)
+                                    : ""
+                                  : size.default_price || ""
                               }
-                              onChange={(e) => handleUpdatePizzaSize(idx, "default_price", e.target.value)}
+                              onChange={(e) =>
+                                handleUpdatePizzaSize(idx, "default_price", e.target.value)
+                              }
                               placeholder="Opcional"
                               className="h-7 text-xs mt-0.5 bg-white font-mono"
                             />
@@ -575,7 +825,7 @@ export default function CategoriesPage() {
                     </div>
                   </div>
                 )}
-                
+
                 {/* Bloco 3: Ordem & Setor */}
                 <div className="bg-white border border-stone-200/90 rounded-xl p-4 space-y-3.5 shadow-2xs">
                   <div>
@@ -586,7 +836,12 @@ export default function CategoriesPage() {
                       id="order"
                       type="number"
                       value={categoryForm.order_index}
-                      onChange={(e) => setCategoryForm({...categoryForm, order_index: parseInt(e.target.value) || 0})}
+                      onChange={(e) =>
+                        setCategoryForm({
+                          ...categoryForm,
+                          order_index: parseInt(e.target.value) || 0,
+                        })
+                      }
                       className="bg-stone-50/50 border-stone-200 focus:bg-white focus:border-[#047857] mt-1 font-mono"
                     />
                   </div>
@@ -598,7 +853,10 @@ export default function CategoriesPage() {
                     <Select
                       value={categoryForm.sector_id || "__none__"}
                       onValueChange={(value) =>
-                        setCategoryForm({ ...categoryForm, sector_id: value === "__none__" ? null : value })
+                        setCategoryForm({
+                          ...categoryForm,
+                          sector_id: value === "__none__" ? null : value,
+                        })
                       }
                     >
                       <SelectTrigger className="bg-stone-50/50 border-stone-200 focus:border-[#047857] mt-1">
@@ -624,7 +882,10 @@ export default function CategoriesPage() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => {setShowModal(false); resetForm();}}
+                  onClick={() => {
+                    setShowModal(false);
+                    resetForm();
+                  }}
                   className="h-9 px-4 text-xs border-stone-300 text-stone-700 hover:bg-stone-50 cursor-pointer"
                 >
                   Cancelar

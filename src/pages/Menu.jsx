@@ -27,6 +27,10 @@ import { matchNeighborhood } from "@/utils/neighborhoodMatcher";
 import StoreInfoSheet from "../components/menu/StoreInfoSheet";
 import ProductDetailModal from "../components/menu/ProductDetailModal";
 import PizzaBuilderModal from "../components/menu/PizzaBuilderModal";
+import {
+  buildCategoryVariationComplementGroup,
+  getCategoryMatrixSizes,
+} from "@/utils/pizzaPricing";
 import { 
   ShoppingBag, 
   Bike, 
@@ -1534,17 +1538,23 @@ export default function MenuPage() {
             {/* Componente Grande Card Branco Englobando os Produtos */}
             <div className="bg-white rounded-2xl sm:rounded-3xl border border-[#E5EAE7] shadow-xs overflow-hidden divide-y divide-[#E5EAE7]">
               <AnimatePresence>
-                {section.products.map((product, idx) => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    onProductClick={handleProductClick}
-                    isStoreOpen={storeIsOpen}
-                    isPopular={idx === 0 && section.id === "all"}
-                    isVisualOnly={isVisualOnly}
-                    cashbackRate={settings?.cashback_enabled ? Number(settings?.cashback_rate || 0) : 0}
-                  />
-                ))}
+                {section.products.map((product, idx) => {
+                  const matchedCat = categories.find(
+                    c => c.id === product.category_id || c.id === product.category
+                  );
+                  return (
+                    <ProductCard
+                      key={product.id}
+                      product={product}
+                      categorySizes={getCategoryMatrixSizes(matchedCat)}
+                      onProductClick={handleProductClick}
+                      isStoreOpen={storeIsOpen}
+                      isPopular={idx === 0 && section.id === "all"}
+                      isVisualOnly={isVisualOnly}
+                      cashbackRate={settings?.cashback_enabled ? Number(settings?.cashback_rate || 0) : 0}
+                    />
+                  );
+                })}
               </AnimatePresence>
             </div>
           </div>
@@ -1718,11 +1728,24 @@ export default function MenuPage() {
         <ProductDetailModal
           product={selectedProduct}
           complementGroups={(() => {
+            const matchedCategory = categories.find(
+              c =>
+                c.id === selectedProduct.category_id ||
+                c.id === selectedProduct.category ||
+                (selectedProduct.category &&
+                  typeof selectedProduct.category === "string" &&
+                  c.name?.toLowerCase() === selectedProduct.category.toLowerCase())
+            );
+            const virtualVariationGroup = buildCategoryVariationComplementGroup(
+              selectedProduct,
+              matchedCategory
+            );
+
             const linkedGroupIds = productComplementGroups
               .filter(pcg => pcg.product_id === selectedProduct.id)
               .map(pcg => pcg.group_id);
 
-            return complementGroups
+            const dbGroups = complementGroups
               .filter(g => g.active && linkedGroupIds.includes(g.id))
               .sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
               .map(g => ({
@@ -1731,6 +1754,8 @@ export default function MenuPage() {
                   .filter(i => i.group_id === g.id && i.active)
                   .sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
               }));
+
+            return virtualVariationGroup ? [virtualVariationGroup, ...dbGroups] : dbGroups;
           })()}
           additionals={additionals.filter(a => a.product_id === selectedProduct.id)}
           isOpen={!!selectedProduct}

@@ -35,7 +35,13 @@ import {
 } from "lucide-react";
 import ProductCardGrid from "@/components/admin/ProductCardGrid";
 import ProductListTable from "@/components/admin/ProductListTable";
-import { buildDefaultPizzaPrices } from "@/utils/pizzaPricing";
+import {
+  buildDefaultPizzaPrices,
+  getCategoryMatrixSizes,
+  hasCategorySizeMatrix,
+  isPizzaCategory,
+  isVariationGridCategory,
+} from "@/utils/pizzaPricing";
 import { Link, useParams, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { toast } from "sonner";
@@ -233,7 +239,8 @@ export default function ProductsPage() {
 
     try {
       const selectedCatObj = categories.find(c => c.id === productForm.category || c.name === productForm.category);
-      const isPizzaCat = selectedCatObj?.type === "pizza";
+      const isPizzaCat = isPizzaCategory(selectedCatObj);
+      const usesSizeMatrix = hasCategorySizeMatrix(selectedCatObj);
 
       const cleanPizzaPrices = {};
       if (productForm.pizza_prices && typeof productForm.pizza_prices === "object") {
@@ -255,14 +262,18 @@ export default function ProductsPage() {
         return itemsForGrp.some((i) => Number(i.price) > 0);
       });
 
-      if (isPizzaCat) {
+      if (usesSizeMatrix) {
         const sizePricesList = Object.values(cleanPizzaPrices);
         if (sizePricesList.length === 0) {
-          toast.error("Por favor, preencha o preço de pelo menos um tamanho da pizza.");
+          toast.error(
+            isPizzaCat
+              ? "Por favor, preencha o preço de pelo menos um tamanho da pizza."
+              : "Por favor, preencha o valor em pelo menos uma variação da grade."
+          );
           setIsSubmitting(false);
           return;
         }
-        // Preço base de referência para o catálogo (menor preço dos tamanhos cadastrados)
+        // Preço base de referência para o catálogo (menor preço entre as variações ativas)
         finalPrice = Math.min(...sizePricesList);
       } else if (hasPriceDefiningGroupSelected) {
         // Se tiver grupo de escolha única com valores cadastrados (ex: Lata R$ 6 / Garrafa R$ 12), o preço base é dispensado
@@ -699,13 +710,19 @@ export default function ProductsPage() {
                   {/* Preço e Categoria */}
                   {(() => {
                     const selectedCatObj = categories.find(c => c.id === productForm.category || c.name === productForm.category);
-                    const isPizzaCategory = selectedCatObj?.type === "pizza";
+                    const usesMatrix = hasCategorySizeMatrix(selectedCatObj);
+
+                    const formatCategoryOptionLabel = (cat) => {
+                      if (isPizzaCategory(cat)) return `${cat.name} (Pizza)`;
+                      if (isVariationGridCategory(cat)) return `${cat.name} (Grade de Variações)`;
+                      return cat.name;
+                    };
 
                     const handleCategoryChange = (value) => {
                       const cat = categories.find(c => c.id === value || c.name === value);
-                      const isPizza = cat?.type === "pizza";
+                      const catUsesMatrix = hasCategorySizeMatrix(cat);
                       const hasExisting = productForm.pizza_prices && Object.keys(productForm.pizza_prices).length > 0;
-                      if (isPizza && !editingProduct && !hasExisting) {
+                      if (catUsesMatrix && !editingProduct && !hasExisting) {
                         const defaults = buildDefaultPizzaPrices(cat.pizza_sizes || []);
                         setProductForm({
                           ...productForm,
@@ -717,7 +734,7 @@ export default function ProductsPage() {
                       }
                     };
 
-                    if (isPizzaCategory) {
+                    if (usesMatrix) {
                       return (
                         <div>
                           <Label htmlFor="category" className="text-xs font-semibold text-stone-700">
@@ -733,7 +750,7 @@ export default function ProductsPage() {
                             <SelectContent>
                               {categories.map(cat => (
                                 <SelectItem key={cat.id} value={cat.id}>
-                                  {cat.type === 'pizza' ? `${cat.name} (Pizza)` : cat.name}
+                                  {formatCategoryOptionLabel(cat)}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -790,7 +807,7 @@ export default function ProductsPage() {
                             <SelectContent>
                               {categories.map(cat => (
                                 <SelectItem key={cat.id} value={cat.id}>
-                                  {cat.type === 'pizza' ? `${cat.name} (Pizza)` : cat.name}
+                                  {formatCategoryOptionLabel(cat)}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -838,28 +855,40 @@ export default function ProductsPage() {
                   })()}
                 </div>
 
-                {/* Bloco 2: Preços por Tamanho para Pizzas */}
+                {/* Bloco 2: Grade de Preços por Tamanho / Embalagem da Categoria */}
                 {(() => {
                   const selectedCatObj = categories.find(c => c.id === productForm.category || c.name === productForm.category);
-                  if (selectedCatObj?.type !== "pizza") return null;
+                  if (!hasCategorySizeMatrix(selectedCatObj)) return null;
 
-                  const sizes = selectedCatObj.pizza_sizes?.length ? selectedCatObj.pizza_sizes : [
-                    { id: "broto", name: "Broto (4 fatias)" },
-                    { id: "media", name: "Média (6 fatias)" },
-                    { id: "grande", name: "Grande (8 fatias)" },
-                    { id: "familia", name: "Família (12 fatias)" },
-                  ];
+                  const isPizza = isPizzaCategory(selectedCatObj);
+                  const sizes = getCategoryMatrixSizes(selectedCatObj);
 
                   const defaultPricesMap = buildDefaultPizzaPrices(sizes);
                   const hasCategoryDefaults = Object.keys(defaultPricesMap).length > 0;
 
+                  const activeSizesCount = sizes.filter((s) => {
+                    const rawVal = productForm.pizza_prices?.[s.id];
+                    if (rawVal === undefined || rawVal === null || rawVal === "") return false;
+                    const parsed = typeof rawVal === "number" ? rawVal : parseBRLToNumber(String(rawVal));
+                    return Number.isFinite(parsed) && parsed > 0;
+                  }).length;
+
                   return (
-                    <div className="bg-white border border-stone-200/90 rounded-xl p-4 space-y-3 shadow-2xs">
-                      <div className="flex items-start justify-between gap-2 pb-2 border-b border-stone-100">
+                    <div className="bg-white border border-blue-200/90 rounded-xl p-4 space-y-3.5 shadow-2xs">
+                      <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-stone-100">
                         <div>
-                          <p className="text-xs font-bold text-stone-900">Preços por Tamanho</p>
-                          <p className="text-[11px] text-stone-500">
-                            Defina o valor deste sabor para cada tamanho disponível.
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-xs font-bold text-stone-900">
+                              {isPizza ? "Preços por Tamanho da Pizza" : `Grade de Preços — ${selectedCatObj?.name || "Categoria"}`}
+                            </p>
+                            <span className="text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-full">
+                              {activeSizesCount} de {sizes.length} opções ativas neste produto
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-stone-500 mt-0.5">
+                            {isPizza
+                              ? "Defina o valor deste sabor para cada tamanho disponível."
+                              : "Preencha apenas as opções que este produto possui. As opções deixadas em branco (---) ficarão ocultas automaticamente para este item."}
                           </p>
                         </div>
                         {hasCategoryDefaults && (
@@ -879,30 +908,65 @@ export default function ProductsPage() {
                           </Button>
                         )}
                       </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        {sizes.map((size) => (
-                          <div key={size.id}>
-                            <Label className="text-[11px] font-semibold text-stone-600">{size.name}</Label>
-                            <CurrencyInput
-                              value={productForm.pizza_prices?.[size.id] !== undefined 
-                                ? (typeof productForm.pizza_prices[size.id] === 'number' 
-                                    ? formatToBRL(productForm.pizza_prices[size.id]) 
-                                    : productForm.pizza_prices[size.id])
-                                : ""}
-                              onChange={(e) => {
-                                setProductForm(prev => ({
-                                  ...prev,
-                                  pizza_prices: {
-                                    ...(prev.pizza_prices || {}),
-                                    [size.id]: e.target.value
-                                  }
-                                }));
-                              }}
-                              placeholder="R$ 0,00"
-                              className="h-9 text-xs bg-stone-50/50 border-stone-200 focus:bg-white font-mono mt-1"
-                            />
-                          </div>
-                        ))}
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                        {sizes.map((size) => {
+                          const rawVal = productForm.pizza_prices?.[size.id];
+                          const numVal =
+                            rawVal !== undefined && rawVal !== null && rawVal !== ""
+                              ? typeof rawVal === "number"
+                                ? rawVal
+                                : parseBRLToNumber(String(rawVal))
+                              : 0;
+                          const isFilled = Number.isFinite(numVal) && numVal > 0;
+
+                          return (
+                            <div
+                              key={size.id}
+                              className={`p-2.5 rounded-xl border transition-all ${
+                                isFilled
+                                  ? "bg-emerald-50/40 border-emerald-300"
+                                  : "bg-stone-50/60 border-stone-200"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-1 mb-1">
+                                <Label className="text-[11px] font-bold text-stone-800 truncate">
+                                  {size.name}
+                                </Label>
+                                <span
+                                  className={`text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded ${
+                                    isFilled
+                                      ? "bg-emerald-100 text-emerald-800"
+                                      : "bg-stone-200/70 text-stone-500"
+                                  }`}
+                                >
+                                  {isFilled ? "Ativo" : "---"}
+                                </span>
+                              </div>
+                              <CurrencyInput
+                                value={
+                                  rawVal !== undefined
+                                    ? typeof rawVal === "number"
+                                      ? rawVal > 0
+                                        ? formatToBRL(rawVal)
+                                        : ""
+                                      : rawVal
+                                    : ""
+                                }
+                                onChange={(e) => {
+                                  setProductForm((prev) => ({
+                                    ...prev,
+                                    pizza_prices: {
+                                      ...(prev.pizza_prices || {}),
+                                      [size.id]: e.target.value,
+                                    },
+                                  }));
+                                }}
+                                placeholder="--- (Não vende)"
+                                className="h-8 text-xs bg-white border-stone-200 focus:border-[#047857] font-mono"
+                              />
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   );
