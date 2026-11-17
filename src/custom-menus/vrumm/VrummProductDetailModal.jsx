@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Minus, Check, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { formatBRLValue } from '@/utils/pizzaPricing';
 
 export default function VrummProductDetailModal({ 
   product, 
@@ -104,50 +105,49 @@ export default function VrummProductDetailModal({
     setSelectedComplements(next);
   };
 
-  const handleLegacyAdditionalToggle = (ad, checked) => {
+  const handleLegacyAdditionalToggle = (additional, isChecked) => {
     const next = { ...selectedComplements };
-    if (checked) {
-      next[ad.id] = {
-        id: ad.id,
-        group_id: "legacy",
-        group_name: "Adicionais",
-        name: ad.name,
-        price: Number(ad.price) || 0,
+    if (isChecked) {
+      next[additional.id] = {
+        id: additional.id,
+        name: additional.name,
+        price: Number(additional.price) || 0,
         quantity: 1,
+        isLegacy: true,
       };
     } else {
-      delete next[ad.id];
+      delete next[additional.id];
     }
     setSelectedComplements(next);
   };
 
-  const validateGroups = () => {
+  const calculateTotal = () => {
+    const basePrice = Number(product.price) || 0;
+    const complementsTotal = Object.values(selectedComplements).reduce((sum, item) => {
+      return sum + (item.price * (item.quantity || 1));
+    }, 0);
+    return (basePrice + complementsTotal) * quantity;
+  };
+
+  const validateRequirements = () => {
     if (!complementGroups || complementGroups.length === 0) return { isValid: true };
 
-    for (const grp of complementGroups) {
-      if (grp.min_quantity > 0) {
-        const count = getGroupSelectedCount(grp.id);
-        if (count < grp.min_quantity) {
-          return {
-            isValid: false,
-            missingGroup: grp.name,
-            minNeeded: grp.min_quantity - count,
-          };
-        }
+    for (const group of complementGroups) {
+      const count = getGroupSelectedCount(group.id);
+      if (group.min_quantity > 0 && count < group.min_quantity) {
+        return {
+          isValid: false,
+          missingGroup: group.name,
+          minRequired: group.min_quantity,
+          current: count,
+        };
       }
     }
+
     return { isValid: true };
   };
 
-  const validation = validateGroups();
-
-  const calculateTotal = () => {
-    const complementsTotal = Object.values(selectedComplements).reduce(
-      (sum, item) => sum + (item.price * (item.quantity || 1)),
-      0
-    );
-    return (Number(product.price || 0) + complementsTotal) * quantity;
-  };
+  const validation = validateRequirements();
 
   const handleAddToCart = () => {
     if (!validation.isValid) return;
@@ -169,53 +169,53 @@ export default function VrummProductDetailModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-xl max-h-[92vh] overflow-y-auto p-0 rounded-3xl bg-[#120e0d] border-stone-800 text-stone-100 shadow-2xl scrollbar-hide">
+      <DialogContent className="max-w-xl max-h-[92vh] overflow-y-auto p-0 rounded-3xl bg-white border-stone-200 text-stone-900 shadow-2xl scrollbar-hide">
         {hasValidImage ? (
-          <div className="relative w-full h-56 sm:h-72 bg-stone-950 overflow-hidden">
+          <div className="relative w-full h-56 sm:h-64 bg-stone-100 overflow-hidden">
             <img 
               src={product.image_url} 
               alt={product.name} 
               onError={() => setImageError(true)}
               className="w-full h-full object-cover"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#120e0d] via-[#120e0d]/40 to-transparent" />
-            <div className="absolute bottom-4 left-4 right-4 sm:bottom-6 sm:left-6 sm:right-6">
-              <div className="bg-[#120e0d]/90 backdrop-blur-md p-3.5 sm:p-4 rounded-2xl border border-stone-800/90 shadow-xl">
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+            <div className="absolute bottom-4 left-4 right-4 sm:bottom-5 sm:left-5 sm:right-5">
+              <div className="bg-white/95 backdrop-blur-md p-3.5 sm:p-4 rounded-2xl border border-stone-200/80 shadow-md">
                 <h3 
-                  className="text-lg sm:text-2xl font-black text-white leading-tight"
+                  className="text-base sm:text-xl font-bold text-stone-900 leading-tight"
                   style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
                 >
                   {product.name}
                 </h3>
-                <p className="text-base sm:text-lg font-black text-red-400 mt-0.5">
-                  R$ {Number(product.price || 0).toFixed(2).replace('.', ',')}
+                <p className="text-sm sm:text-base font-extrabold text-stone-950 mt-0.5">
+                  {formatBRLValue(product.price || 0)}
                 </p>
               </div>
             </div>
           </div>
         ) : (
-          <DialogHeader className="p-4 sm:p-6 pb-3 border-b border-stone-800 bg-[#16110f]">
+          <DialogHeader className="p-4 sm:p-6 pb-3 border-b border-stone-100 bg-stone-50/70">
             <DialogTitle 
-              className="text-xl sm:text-2xl font-black text-white"
+              className="text-lg sm:text-xl font-bold text-stone-900"
               style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
             >
               {product.name}
             </DialogTitle>
-            <p className="text-base sm:text-lg font-black text-red-400 mt-1">
-              R$ {Number(product.price || 0).toFixed(2).replace('.', ',')}
+            <p className="text-sm sm:text-base font-extrabold text-stone-950 mt-1">
+              {formatBRLValue(product.price || 0)}
             </p>
           </DialogHeader>
         )}
 
-        <div className="p-4 sm:p-6 space-y-5">
+        <div className="p-4 sm:p-6 space-y-4">
           {product.description && (
-            <div className="p-3.5 rounded-2xl bg-stone-900/80 border border-stone-800/80 text-xs sm:text-sm text-stone-300 leading-relaxed font-normal">
+            <div className="p-3.5 rounded-2xl bg-stone-50 border border-stone-200/80 text-xs sm:text-sm text-stone-600 leading-relaxed font-normal">
               {product.description}
             </div>
           )}
 
           {hasGroups ? (
-            <div className="space-y-5">
+            <div className="space-y-4">
               {complementGroups.map((group) => {
                 const isRequired = group.min_quantity > 0;
                 const isSingleChoice = group.min_quantity === 1 && group.max_quantity === 1;
@@ -225,25 +225,25 @@ export default function VrummProductDetailModal({
                 return (
                   <div 
                     key={group.id} 
-                    className="rounded-2xl border border-stone-800/90 overflow-hidden bg-stone-950/60 shadow-md"
+                    className="rounded-2xl border border-stone-200/80 overflow-hidden bg-white shadow-xs"
                   >
-                    <div className="p-3.5 sm:p-4 bg-stone-900/90 border-b border-stone-800/80 flex items-center justify-between gap-2">
+                    <div className="p-3.5 sm:p-4 bg-stone-50 border-b border-stone-200/80 flex items-center justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <h4 className="font-extrabold text-stone-100 text-sm sm:text-base leading-tight tracking-tight">
+                          <h4 className="font-bold text-stone-900 text-xs sm:text-sm leading-tight tracking-tight">
                             {group.name}
                           </h4>
                           {isRequired ? (
-                            <span className="bg-amber-950/90 border border-amber-500/40 text-amber-300 font-black text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md">
+                            <span className="bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md">
                               OBRIGATÓRIO
                             </span>
                           ) : (
-                            <span className="bg-stone-800/90 border border-stone-700/50 text-stone-400 font-bold text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md">
+                            <span className="bg-stone-100 border border-stone-200 text-stone-600 font-medium text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md">
                               OPCIONAL
                             </span>
                           )}
                         </div>
-                        <p className="text-[11px] sm:text-xs text-stone-400 mt-1 leading-tight font-normal">
+                        <p className="text-[11px] text-stone-500 mt-1 leading-tight font-normal">
                           {group.description || (
                             isSingleChoice 
                               ? "Escolha 1 opção" 
@@ -254,15 +254,15 @@ export default function VrummProductDetailModal({
                         </p>
                       </div>
 
-                      <div className="flex items-center gap-1.5 text-xs font-black shrink-0">
-                        <span className={`px-2 py-0.5 rounded-md ${isGroupSatisfied ? "bg-emerald-950/80 text-emerald-400 border border-emerald-500/40" : "bg-amber-950/80 text-amber-400 border border-amber-500/40"}`}>
+                      <div className="flex items-center gap-1.5 text-xs font-bold shrink-0">
+                        <span className={`px-2 py-0.5 rounded-md text-[11px] ${isGroupSatisfied ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-amber-50 text-amber-800 border border-amber-200"}`}>
                           {selectedCount}/{group.max_quantity}
                         </span>
-                        {isGroupSatisfied && <Check className="w-4 h-4 text-emerald-400 stroke-[3]" />}
+                        {isGroupSatisfied && <Check className="w-3.5 h-3.5 text-emerald-700 stroke-[3]" />}
                       </div>
                     </div>
 
-                    <div className="divide-y divide-stone-800/60">
+                    <div className="divide-y divide-stone-100">
                       {group.items && group.items.length > 0 ? (
                         group.items.map((item) => {
                           const itemQty = selectedComplements[item.id]?.quantity || 0;
@@ -275,35 +275,35 @@ export default function VrummProductDetailModal({
                               <label
                                 key={item.id}
                                 onClick={() => handleSingleSelect(group, item)}
-                                className={`flex items-center justify-between p-3.5 sm:p-4 cursor-pointer transition-all duration-200 gap-3 ${
+                                className={`flex items-center justify-between p-3.5 sm:p-4 cursor-pointer transition-colors duration-150 gap-3 ${
                                   isSelected 
-                                    ? 'bg-red-950/30 text-white' 
-                                    : 'hover:bg-stone-900/50 text-stone-300'
+                                    ? 'bg-emerald-50/50 text-stone-900' 
+                                    : 'hover:bg-stone-50 text-stone-700'
                                 }`}
                               >
                                 <div className="flex items-center gap-3 min-w-0 flex-1">
                                   <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all shrink-0 ${
                                     isSelected 
-                                      ? 'border-red-500 bg-red-600 shadow-sm shadow-red-500/50' 
-                                      : 'border-stone-600 bg-stone-900'
+                                      ? 'border-emerald-700 bg-emerald-700 shadow-xs' 
+                                      : 'border-stone-300 bg-white'
                                   }`}>
                                     {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
                                   </div>
                                   <div className="min-w-0 flex-1">
-                                    <p className={`text-xs sm:text-sm font-bold leading-tight ${isSelected ? 'text-white' : 'text-stone-200'}`}>
+                                    <p className={`text-xs sm:text-sm font-semibold leading-tight ${isSelected ? 'text-stone-900' : 'text-stone-700'}`}>
                                       {item.name}
                                     </p>
                                     {item.description && (
-                                      <p className="text-[11px] text-stone-400 mt-0.5 leading-tight line-clamp-2">
+                                      <p className="text-[11px] text-stone-500 mt-0.5 leading-tight line-clamp-2">
                                         {item.description}
                                       </p>
                                     )}
                                   </div>
                                 </div>
-                                <span className={`text-xs sm:text-sm font-extrabold shrink-0 whitespace-nowrap pl-1 ${
-                                  item.price > 0 ? 'text-amber-400' : 'text-emerald-400'
+                                <span className={`text-xs sm:text-sm font-bold shrink-0 whitespace-nowrap pl-1 ${
+                                  item.price > 0 ? 'text-stone-900' : 'text-emerald-700'
                                 }`}>
-                                  {item.price > 0 ? `+ R$ ${Number(item.price).toFixed(2).replace('.', ',')}` : 'Grátis'}
+                                  {item.price > 0 ? `+ ${formatBRLValue(item.price)}` : 'Grátis'}
                                 </span>
                               </label>
                             );
@@ -312,37 +312,37 @@ export default function VrummProductDetailModal({
                           return (
                             <div 
                               key={item.id}
-                              className={`flex items-center justify-between p-3.5 sm:p-4 transition-all gap-3 ${
-                                isSelected ? 'bg-red-950/20' : 'hover:bg-stone-900/40'
+                              className={`flex items-center justify-between p-3.5 sm:p-4 transition-colors gap-3 ${
+                                isSelected ? 'bg-emerald-50/40' : 'hover:bg-stone-50'
                               }`}
                             >
                               <div className="min-w-0 flex-1 pr-1">
-                                <p className={`text-xs sm:text-sm font-bold leading-tight ${isSelected ? 'text-white' : 'text-stone-200'}`}>
+                                <p className={`text-xs sm:text-sm font-semibold leading-tight ${isSelected ? 'text-stone-900' : 'text-stone-700'}`}>
                                   {item.name}
                                 </p>
                                 {item.description && (
-                                  <p className="text-[11px] text-stone-400 mt-0.5 leading-tight line-clamp-2">
+                                  <p className="text-[11px] text-stone-500 mt-0.5 leading-tight line-clamp-2">
                                     {item.description}
                                   </p>
                                 )}
-                                <p className={`text-xs font-black mt-1 ${item.price > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
-                                  {item.price > 0 ? `+ R$ ${Number(item.price).toFixed(2).replace('.', ',')}` : 'Grátis'}
+                                <p className={`text-xs font-bold mt-0.5 ${item.price > 0 ? 'text-stone-900' : 'text-emerald-700'}`}>
+                                  {item.price > 0 ? `+ ${formatBRLValue(item.price)}` : 'Grátis'}
                                 </p>
                               </div>
 
                               {!isVisualOnly && (
                                 <div className="flex items-center gap-1.5 shrink-0">
                                   {itemQty > 0 ? (
-                                    <div className="flex items-center gap-1 bg-stone-900 border border-stone-700/80 rounded-xl p-1 shadow-inner">
+                                    <div className="flex items-center gap-1 bg-white border border-stone-200 rounded-xl p-1 shadow-xs">
                                       <motion.button
                                         whileTap={{ scale: 0.85 }}
                                         type="button"
                                         onClick={() => handleItemQtyChange(group, item, -1)}
-                                        className="w-7 h-7 flex items-center justify-center rounded-lg text-stone-200 hover:bg-stone-800 hover:text-red-400 transition-colors"
+                                        className="w-7 h-7 flex items-center justify-center rounded-lg text-stone-600 hover:bg-stone-100 hover:text-red-600 transition-colors cursor-pointer"
                                       >
                                         <Minus className="w-3.5 h-3.5" />
                                       </motion.button>
-                                      <span className="w-5 text-center font-black text-xs sm:text-sm text-white">
+                                      <span className="w-5 text-center font-bold text-xs sm:text-sm text-stone-900">
                                         {itemQty}
                                       </span>
                                       <motion.button
@@ -350,7 +350,7 @@ export default function VrummProductDetailModal({
                                         type="button"
                                         disabled={isMaxGroupReached || isMaxItemReached}
                                         onClick={() => handleItemQtyChange(group, item, 1)}
-                                        className="w-7 h-7 flex items-center justify-center rounded-lg text-white hover:bg-red-600 transition-colors disabled:opacity-30"
+                                        className="w-7 h-7 flex items-center justify-center rounded-lg text-stone-700 hover:bg-emerald-50 hover:text-emerald-700 transition-colors disabled:opacity-30 cursor-pointer"
                                       >
                                         <Plus className="w-3.5 h-3.5" />
                                       </motion.button>
@@ -362,7 +362,7 @@ export default function VrummProductDetailModal({
                                       size="sm"
                                       disabled={isMaxGroupReached}
                                       onClick={() => handleItemQtyChange(group, item, 1)}
-                                      className="rounded-xl text-[11px] sm:text-xs font-bold border-stone-700 bg-stone-900 text-stone-200 hover:border-red-500 hover:text-red-400 hover:bg-red-950/40 disabled:opacity-30 h-8 px-3 transition-all"
+                                      className="rounded-xl text-[11px] sm:text-xs font-semibold border-stone-200 bg-white text-stone-700 hover:border-emerald-600 hover:text-emerald-700 hover:bg-emerald-50/50 disabled:opacity-30 h-8 px-3 transition-all cursor-pointer"
                                     >
                                       <Plus className="w-3.5 h-3.5 mr-1" /> Adicionar
                                     </Button>
@@ -382,17 +382,17 @@ export default function VrummProductDetailModal({
             </div>
           ) : additionals && additionals.length > 0 ? (
             <div className="space-y-3">
-              <h4 className="font-bold text-stone-100 text-sm">Adicionais</h4>
+              <h4 className="font-bold text-stone-900 text-xs sm:text-sm">Adicionais</h4>
               <div className="space-y-2">
                 {additionals.map(ad => {
                   const isChecked = !!selectedComplements[ad.id];
                   return (
                     <label 
                       key={ad.id}
-                      className={`flex items-center justify-between p-3.5 border rounded-2xl cursor-pointer transition-all gap-2 ${
+                      className={`flex items-center justify-between p-3.5 border rounded-2xl cursor-pointer transition-colors gap-2 ${
                         isChecked 
-                          ? 'bg-red-950/30 border-red-500/50 text-white' 
-                          : 'bg-stone-900/60 border-stone-800 text-stone-300 hover:bg-stone-900'
+                          ? 'bg-emerald-50/50 border-emerald-300 text-stone-900' 
+                          : 'bg-white border-stone-200 text-stone-700 hover:bg-stone-50'
                       }`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0 flex-1">
@@ -400,12 +400,12 @@ export default function VrummProductDetailModal({
                           type="checkbox"
                           checked={isChecked}
                           onChange={(e) => handleLegacyAdditionalToggle(ad, e.target.checked)}
-                          className="w-4 h-4 text-red-600 rounded bg-stone-900 border-stone-700 shrink-0 accent-red-600"
+                          className="w-4 h-4 text-emerald-700 rounded bg-white border-stone-300 shrink-0 accent-emerald-700"
                         />
                         <span className="font-semibold text-xs sm:text-sm truncate">{ad.name}</span>
                       </div>
-                      <span className="text-xs sm:text-sm font-bold text-amber-400 shrink-0 whitespace-nowrap">
-                        + R$ {Number(ad.price || 0).toFixed(2).replace('.', ',')}
+                      <span className="text-xs sm:text-sm font-bold text-stone-900 shrink-0 whitespace-nowrap">
+                        + {formatBRLValue(ad.price || 0)}
                       </span>
                     </label>
                   );
@@ -416,7 +416,7 @@ export default function VrummProductDetailModal({
 
           {!isVisualOnly && (
             <div>
-              <label htmlFor="modal-notes" className="block text-xs font-black uppercase tracking-wider text-stone-400 mb-1.5">
+              <label htmlFor="modal-notes" className="block text-xs font-bold text-stone-700 mb-1.5">
                 Alguma observação para o preparo?
               </label>
               <Textarea
@@ -425,26 +425,26 @@ export default function VrummProductDetailModal({
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={2}
-                className="resize-none rounded-2xl text-xs sm:text-sm bg-stone-900/90 border-stone-800 text-stone-100 placeholder:text-stone-500 focus:border-red-500/80 focus:bg-stone-900 outline-none"
+                className="resize-none rounded-2xl text-xs sm:text-sm bg-stone-50 border-stone-200 text-stone-900 placeholder:text-stone-400 focus:border-emerald-600 focus:bg-white outline-none"
               />
             </div>
           )}
         </div>
 
-        <div className="sticky bottom-0 bg-[#14100e]/95 backdrop-blur-xl border-t border-stone-800 p-3.5 pb-6 sm:pb-4 sm:p-5 space-y-2.5 shadow-2xl z-20">
+        <div className="sticky bottom-0 bg-white/95 backdrop-blur-md border-t border-stone-200/80 p-3.5 pb-5 sm:pb-4 sm:p-5 space-y-2.5 shadow-lg z-20">
           {isVisualOnly ? (
-            <div className="flex items-center justify-between gap-3 bg-stone-900/90 border border-stone-800 rounded-2xl p-3.5 sm:p-4">
+            <div className="flex items-center justify-between gap-3 bg-stone-50 border border-stone-200 rounded-2xl p-3.5 sm:p-4">
               <div>
-                <span className="text-[11px] font-bold uppercase tracking-wider text-stone-400 block">Preço</span>
-                <span className="text-xl font-black text-amber-400">
-                  R$ {Number(product.price || 0).toFixed(2).replace('.', ',')}
+                <span className="text-[11px] font-semibold uppercase tracking-wider text-stone-500 block">Preço</span>
+                <span className="text-lg font-bold text-stone-900">
+                  {formatBRLValue(product.price || 0)}
                 </span>
               </div>
               <Button
                 type="button"
                 variant="outline"
                 onClick={onClose}
-                className="rounded-xl font-bold border-stone-700 bg-stone-800 text-stone-200 hover:bg-stone-700 h-10 px-5"
+                className="rounded-xl font-semibold border-stone-200 bg-white text-stone-700 hover:bg-stone-50 h-10 px-5"
               >
                 Fechar
               </Button>
@@ -452,28 +452,28 @@ export default function VrummProductDetailModal({
           ) : (
             <>
               {!validation.isValid && (
-                <div className="flex items-center gap-2 p-2.5 rounded-xl bg-amber-950/60 border border-amber-500/40 text-amber-300 text-xs font-bold animate-pulse">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-400" />
+                <div className="flex items-center gap-2 p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-600" />
                   <span>Selecione: <strong>{validation.missingGroup}</strong> para continuar.</span>
                 </div>
               )}
 
               <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1 bg-stone-900 p-1 rounded-2xl border border-stone-800 flex-shrink-0">
+                <div className="flex items-center gap-1 bg-stone-50 p-1 rounded-2xl border border-stone-200 flex-shrink-0">
                   <motion.button
                     whileTap={{ scale: 0.85 }}
                     type="button"
                     onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                    className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl hover:bg-stone-800 text-stone-300 flex items-center justify-center transition-colors"
+                    className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl hover:bg-stone-100 text-stone-600 flex items-center justify-center transition-colors cursor-pointer"
                   >
                     <Minus className="h-4 w-4" />
                   </motion.button>
-                  <span className="font-black text-sm sm:text-base w-7 sm:w-8 text-center text-white">{quantity}</span>
+                  <span className="font-bold text-sm sm:text-base w-7 sm:w-8 text-center text-stone-900">{quantity}</span>
                   <motion.button
                     whileTap={{ scale: 0.85 }}
                     type="button"
                     onClick={() => setQuantity(quantity + 1)}
-                    className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl hover:bg-stone-800 text-stone-300 flex items-center justify-center transition-colors"
+                    className="h-9 w-9 sm:h-10 sm:w-10 rounded-xl hover:bg-stone-100 text-stone-600 flex items-center justify-center transition-colors cursor-pointer"
                   >
                     <Plus className="h-4 w-4" />
                   </motion.button>
@@ -485,11 +485,11 @@ export default function VrummProductDetailModal({
                   type="button"
                   disabled={!validation.isValid}
                   onClick={handleAddToCart}
-                  className="flex-1 min-w-0 bg-gradient-to-r from-red-600 via-red-500 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white h-11 sm:h-12 rounded-2xl text-xs sm:text-sm font-black shadow-xl shadow-red-950/70 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-between px-4 sm:px-5 gap-2 border border-amber-400/20 transition-all"
+                  className="flex-1 min-w-0 bg-emerald-700 hover:bg-emerald-800 text-white h-11 sm:h-12 rounded-2xl text-xs sm:text-sm font-bold shadow-xs disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-between px-4 sm:px-5 gap-2 transition-all cursor-pointer"
                 >
                   <span className="truncate">Adicionar ao Pedido</span>
-                  <span className="shrink-0 font-black text-amber-200">
-                    R$ {calculateTotal().toFixed(2).replace('.', ',')}
+                  <span className="shrink-0 font-bold text-white">
+                    {formatBRLValue(calculateTotal())}
                   </span>
                 </motion.button>
               </div>

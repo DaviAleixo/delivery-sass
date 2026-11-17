@@ -56,8 +56,8 @@ export const AVAILABLE_TEMPLATES = [
   },
   {
     id: "vrumm",
-    name: "Vrumm Burguer VIP (Dark & Red)",
-    description: "Design exclusivo Dark & Red com carrossel dinâmico e paleta escura (#0d0a09) para hamburguerias e pubs.",
+    name: "Vrumm Burguer VIP (Clean & Pro)",
+    description: "Design moderno, clean e profissional com carrossel dinâmico e paleta institucional elegante.",
     badge: "Exclusivo Vrumm",
     component: VrummMenu,
   },

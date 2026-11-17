@@ -1,6 +1,7 @@
 import React, { useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Plus } from "lucide-react";
+import { formatBRLValue } from "@/utils/pizzaPricing";
 
 function PopularProductCard({ product, index, hasMoved, onProductClick, isVisualOnly = false }) {
   const [imageError, setImageError] = useState(false);
@@ -11,11 +12,11 @@ function PopularProductCard({ product, index, hasMoved, onProductClick, isVisual
   return (
     <motion.div
       key={product.id}
-      initial={{ opacity: 0, y: 15 }}
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: index * 0.04, ease: [0.25, 1, 0.5, 1] }}
-      whileHover={{ y: -4 }}
-      whileTap={{ scale: 0.96 }}
+      transition={{ duration: 0.25, delay: index * 0.03, ease: [0.25, 1, 0.5, 1] }}
+      whileHover={{ y: -3 }}
+      whileTap={{ scale: 0.97 }}
       className="flex-shrink-0 w-36 sm:w-44 group cursor-pointer"
       onClick={() => {
         if (!hasMoved) {
@@ -24,51 +25,48 @@ function PopularProductCard({ product, index, hasMoved, onProductClick, isVisual
       }}
     >
       <div
-        className="relative flex flex-col h-full rounded-2xl sm:rounded-3xl overflow-hidden border border-stone-800/90 group-hover:border-red-500/60 transition-all duration-300 shadow-md group-hover:shadow-2xl group-hover:shadow-red-950/40 p-2 sm:p-2.5 bg-gradient-to-b from-[#191311] via-[#140f0e] to-[#110d0c]"
+        className="relative flex flex-col h-full rounded-2xl overflow-hidden border border-stone-200/80 group-hover:border-emerald-500/40 transition-all duration-200 shadow-xs group-hover:shadow-sm p-2 sm:p-2.5 bg-white"
       >
-        {/* Glow sutil */}
-        <div className="absolute inset-0 bg-gradient-to-b from-red-500/0 via-red-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-
         {/* Imagem Quadrada */}
-        <div className="relative w-full aspect-square rounded-xl sm:rounded-2xl overflow-hidden bg-stone-900/90 border border-stone-800/60 shadow-inner">
+        <div className="relative w-full aspect-square rounded-xl overflow-hidden bg-stone-50 border border-stone-100">
           {hasValidImage ? (
             <img
               src={product.image_url}
               alt={product.name}
               onError={() => setImageError(true)}
-              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
               loading="lazy"
               draggable={false}
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-3xl bg-stone-900">
+            <div className="w-full h-full flex items-center justify-center text-3xl bg-stone-100">
               🍽️
             </div>
           )}
 
-          {/* Badge de Ranking sofisticado */}
-          <div className={`absolute top-2 left-2 backdrop-blur-md border text-[10px] sm:text-[11px] font-black px-2 py-0.5 rounded-lg shadow-lg flex items-center gap-1 ${
+          {/* Badge de Ranking sóbrio e profissional */}
+          <div className={`absolute top-2 left-2 border text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded-lg shadow-xs flex items-center gap-1 ${
             isTop1 
-              ? 'bg-amber-950/85 text-amber-300 border-amber-500/50 shadow-amber-950/50' 
+              ? 'bg-amber-50 text-amber-900 border-amber-200' 
               : (isTop3 
-                  ? 'bg-stone-900/85 text-amber-400 border-stone-700/60' 
-                  : 'bg-stone-950/80 text-stone-300 border-stone-800/80')
+                  ? 'bg-stone-50 text-stone-800 border-stone-200' 
+                  : 'bg-white/95 text-stone-700 border-stone-200')
           }`}>
             <span>#{index + 1}</span>
           </div>
 
           {/* Botão flutuante rápido */}
           {!isVisualOnly && (
-            <div className="absolute bottom-2 right-2 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-r from-red-600 to-red-500 group-hover:from-red-500 group-hover:to-amber-500 text-white flex items-center justify-center shadow-lg transition-transform active:scale-90">
-              <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[3]" />
+            <div className="absolute bottom-2 right-2 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-emerald-700 text-white flex items-center justify-center shadow-xs transition-transform active:scale-90 group-hover:bg-emerald-800">
+              <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5]" />
             </div>
           )}
         </div>
 
         {/* Informações */}
-        <div className="pt-2 sm:pt-2.5 px-1 flex flex-col flex-1 justify-between relative z-10">
+        <div className="pt-2 sm:pt-2.5 px-0.5 flex flex-col flex-1 justify-between">
           <h3
-            className="font-bold text-xs sm:text-sm text-stone-100 group-hover:text-red-400 transition-colors line-clamp-1 leading-snug tracking-tight"
+            className="font-bold text-xs sm:text-sm text-stone-900 group-hover:text-emerald-800 transition-colors line-clamp-1 leading-snug tracking-tight"
             style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}
           >
             {product.name}
@@ -76,10 +74,10 @@ function PopularProductCard({ product, index, hasMoved, onProductClick, isVisual
           
           <div className="mt-1.5 flex items-baseline justify-between gap-1">
             <span
-              className="font-black text-xs sm:text-sm text-red-500 tracking-tight"
+              className="font-bold text-xs sm:text-sm text-stone-950 tracking-tight"
               style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}
             >
-              R$ {Number(product.price || 0).toFixed(2).replace(".", ",")}
+              {formatBRLValue(product.min_size_price || product.price || 0)}
             </span>
             {product.totalSold > 0 && (
               <span className="text-[10px] text-stone-400 font-medium">
@@ -136,16 +134,16 @@ export default function VrummPopularProductsRow({ products = [], onProductClick,
   };
 
   return (
-    <section className="space-y-3.5">
+    <section className="space-y-3">
       {/* Cabeçalho */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h2
-            className="text-lg sm:text-2xl font-black text-white tracking-tight flex items-center gap-2"
+            className="text-base sm:text-lg font-bold text-stone-900 tracking-tight flex items-center gap-2"
             style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}
           >
             <span>Mais Pedidos</span>
-            <span className="text-stone-500 text-xs sm:text-sm font-bold bg-stone-900 border border-stone-800 px-2 py-0.5 rounded-full">
+            <span className="text-stone-500 text-xs font-semibold bg-stone-100 border border-stone-200/80 px-2 py-0.5 rounded-full">
               Top {popularProducts.length}
             </span>
           </h2>
@@ -159,7 +157,7 @@ export default function VrummPopularProductsRow({ products = [], onProductClick,
         onMouseLeave={handleMouseLeave}
         onMouseUp={handleMouseUp}
         onMouseMove={handleMouseMove}
-        className={`flex gap-3.5 sm:gap-4 overflow-x-auto scrollbar-hide py-2 -mx-4 px-4 sm:mx-0 sm:px-0 scroll-smooth select-none ${
+        className={`flex gap-3 sm:gap-3.5 overflow-x-auto scrollbar-hide py-1 -mx-4 px-4 sm:mx-0 sm:px-0 scroll-smooth select-none ${
           isDragging ? "cursor-grabbing" : "cursor-grab"
         }`}
       >

@@ -1,63 +1,89 @@
 import React, { forwardRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Plus } from "lucide-react";
+import { Plus, Package } from "lucide-react";
+import {
+  formatBRLValue,
+  getMinPizzaPrice,
+  getPizzaSizePriceList,
+  hasMultipleDistinctVariationPrices,
+  hasPizzaPrices,
+} from "@/utils/pizzaPricing";
 
 const VrummProductCard = forwardRef(function VrummProductCard(
-  { product, onProductClick, _isStoreOpen = true, _isPopular = false, isVisualOnly = false, cashbackRate = 0 },
+  { product, categorySizes = [], onProductClick, _isStoreOpen = true, _isPopular = false, isVisualOnly = false, cashbackRate = 0 },
   ref
 ) {
   const [imageError, setImageError] = useState(false);
   const hasValidImage = Boolean(product?.image_url && !imageError);
 
+  const variationList = hasPizzaPrices(product) ? getPizzaSizePriceList(product, categorySizes) : [];
+  const variationNamesSummary = variationList.map((v) => v.shortName).join(" · ");
+  const hasMultipleDistinct = hasPizzaPrices(product) && hasMultipleDistinctVariationPrices(product, categorySizes);
+
   return (
     <motion.div
       ref={ref}
       layout
-      initial={{ opacity: 0, y: 12 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      whileHover={{ y: -3 }}
-      whileTap={{ scale: 0.985 }}
-      transition={{ duration: 0.22, ease: [0.25, 1, 0.5, 1] }}
+      exit={{ opacity: 0, scale: 0.98 }}
+      whileHover={{ y: -2 }}
+      whileTap={{ scale: 0.99 }}
+      transition={{ duration: 0.18, ease: [0.25, 1, 0.5, 1] }}
       className="group cursor-pointer w-full select-none"
       onClick={() => onProductClick(product)}
     >
       <div 
-        className="relative flex items-center justify-between gap-3.5 sm:gap-4 p-3.5 sm:p-4 rounded-2xl sm:rounded-3xl border border-stone-800/80 hover:border-red-500/50 shadow-lg hover:shadow-2xl hover:shadow-red-950/20 transition-all duration-300 overflow-hidden bg-gradient-to-b from-[#181311] via-[#140f0e] to-[#100d0c]"
+        className="relative flex items-center justify-between gap-3 sm:gap-4 p-3.5 sm:p-4 rounded-2xl bg-white border border-stone-200/80 hover:border-emerald-500/40 hover:shadow-sm transition-all duration-200 overflow-hidden"
       >
-        {/* Ambient Hover Glow */}
-        <div className="absolute inset-0 bg-gradient-to-r from-red-500/0 via-red-500/5 to-amber-500/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-
-        {/* Lado Esquerdo / Principal: Informações e Preço */}
-        <div className="flex-1 min-w-0 pr-1 flex flex-col justify-between self-stretch py-0.5 relative z-10">
+        {/* Lado Esquerdo / Centro: Informações e Preço */}
+        <div className="flex-1 min-w-0 pr-1 flex flex-col justify-between self-stretch py-0.5">
           <div>
             <div className="flex items-center gap-1.5 flex-wrap">
               <h3 
-                className="font-extrabold text-sm sm:text-base text-stone-100 group-hover:text-red-400 transition-colors line-clamp-1 tracking-tight"
+                className="font-bold text-sm sm:text-base text-stone-900 group-hover:text-emerald-800 transition-colors line-clamp-1 tracking-tight"
                 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
               >
                 {product.name}
               </h3>
             </div>
 
-            {product.description && (
-              <p className="text-[11px] sm:text-xs text-stone-400 leading-relaxed line-clamp-2 mt-1.5 font-normal">
+            {product.description && product.description.trim() !== "" ? (
+              <p className="text-[11px] sm:text-xs text-stone-500 leading-relaxed line-clamp-2 mt-1 font-normal">
                 {product.description}
               </p>
-            )}
+            ) : variationNamesSummary ? (
+              <p className="text-[11px] sm:text-xs text-stone-500 leading-relaxed line-clamp-1 mt-1 font-normal">
+                {variationNamesSummary}
+              </p>
+            ) : null}
           </div>
 
-          <div className="pt-3 mt-auto flex items-center justify-between">
-            <div className="flex items-baseline gap-2">
+          <div className="pt-2.5 mt-auto flex items-center justify-between">
+            <div className="flex items-baseline gap-2 flex-wrap">
               <span 
-                className="font-black text-sm sm:text-base text-red-500 tracking-tight"
+                className="font-bold text-xs sm:text-sm text-stone-950 tracking-tight"
                 style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
               >
-                R$ {Number(product.price || 0).toFixed(2).replace('.', ',')}
+                {hasPizzaPrices(product) ? (
+                  <>
+                    {hasMultipleDistinct && (
+                      <span className="text-[11px] font-normal text-stone-500 mr-1">A partir de</span>
+                    )}
+                    {formatBRLValue(getMinPizzaPrice(product, categorySizes))}
+                  </>
+                ) : product.min_size_price && Number(product.min_size_price) > 0 ? (
+                  <>
+                    <span className="text-[11px] font-normal text-stone-500 mr-1">A partir de</span>
+                    {formatBRLValue(product.min_size_price)}
+                  </>
+                ) : (
+                  formatBRLValue(product.price)
+                )}
               </span>
 
               {product.promotional_price && Number(product.promotional_price) > 0 && (
-                <span className="text-[11px] text-stone-500 line-through">
+                <span className="text-[10px] text-stone-400 line-through">
                   R$ {Number(product.promotional_price).toFixed(2).replace('.', ',')}
                 </span>
               )}
@@ -66,52 +92,45 @@ const VrummProductCard = forwardRef(function VrummProductCard(
             {cashbackRate > 0 && !isVisualOnly && (() => {
               const cbVal = (Number(product.price || 0) * cashbackRate) / 100;
               return cbVal >= 0.05 ? (
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-400 bg-amber-950/60 border border-amber-800/80 px-1.5 py-0.5 rounded-md mt-0.5 w-fit">
+                <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200/80 px-1.5 py-0.5 rounded-md w-fit">
                   🎁 +R$ {cbVal.toFixed(2).replace('.', ',')} de volta
                 </span>
               ) : null;
             })()}
 
-            {/* Botão + visível no rodapé quando não há foto e não é apenas visual */}
+            {/* Botão + visível se não há foto */}
             {!hasValidImage && !isVisualOnly && (
-              <motion.button
-                type="button"
-                whileHover={{ scale: 1.12 }}
-                whileTap={{ scale: 0.9 }}
-                className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-r from-red-600 to-red-500 group-hover:from-red-500 group-hover:to-amber-500 text-white flex items-center justify-center transition-all duration-300 shadow-md shadow-red-950/70 pointer-events-none"
+              <div
+                className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-emerald-700 hover:bg-emerald-800 text-white flex items-center justify-center transition-all duration-200 shadow-xs pointer-events-none"
                 aria-label="Adicionar produto"
               >
-                <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[3]" />
-              </motion.button>
+                <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[2.5]" />
+              </div>
             )}
           </div>
         </div>
 
-        {/* Lado Direito: Imagem (Exibida SOMENTE se houver foto válida) */}
-        {hasValidImage && (
-          <div className="relative w-24 h-24 sm:w-28 sm:h-28 min-w-[96px] min-h-[96px] max-w-[96px] max-h-[96px] sm:min-w-[112px] sm:min-h-[112px] sm:max-w-[112px] sm:max-h-[112px] flex-shrink-0 rounded-2xl overflow-hidden bg-stone-900/90 border border-stone-800/80 shadow-inner group-hover:border-red-500/40 transition-colors">
+        {/* Lado Direito: Imagem Quadrada */}
+        {hasValidImage ? (
+          <div className="relative w-20 h-20 sm:w-24 sm:h-24 min-w-[80px] min-h-[80px] sm:min-w-[96px] sm:min-h-[96px] max-w-[80px] max-h-[80px] sm:max-w-[96px] sm:max-h-[96px] flex-shrink-0 rounded-2xl overflow-hidden bg-stone-50 border border-stone-100 shadow-xs group-hover:border-emerald-500/30 transition-colors">
             <img
               src={product.image_url}
               alt={product.name}
               onError={() => setImageError(true)}
-              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 block"
+              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 block"
               loading="lazy"
             />
 
-            {/* Botão flutuante + sobre a imagem */}
             {!isVisualOnly && (
-              <motion.button
-                type="button"
-                whileHover={{ scale: 1.12 }}
-                whileTap={{ scale: 0.9 }}
-                className="absolute bottom-1.5 right-1.5 w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-gradient-to-r from-red-600 to-red-500 group-hover:from-red-500 group-hover:to-amber-500 text-white flex items-center justify-center transition-all duration-300 shadow-md shadow-red-950/70 pointer-events-none"
+              <div
+                className="absolute bottom-1 right-1 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-emerald-700 text-white flex items-center justify-center transition-all duration-200 shadow-sm pointer-events-none"
                 aria-label="Adicionar produto"
               >
-                <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[3]" />
-              </motion.button>
+                <Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5 stroke-[2.5]" />
+              </div>
             )}
           </div>
-        )}
+        ) : null}
       </div>
     </motion.div>
   );
