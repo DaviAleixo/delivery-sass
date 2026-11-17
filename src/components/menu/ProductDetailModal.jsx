@@ -428,8 +428,10 @@ export default function ProductDetailModal({
             )}
           </div>
 
-          {/* Descrição do Produto em tom suave cinza */}
-          {product.description && (
+          {/* Descrição do Produto em tom suave cinza (não exibe se vazia ou redundante com a categoria) */}
+          {product.description && 
+           product.description.trim() !== "" && 
+           !product.description.toLowerCase().trim().includes("cervejas") && (
             <p className="text-xs sm:text-sm text-gray-400 font-normal leading-relaxed">
               {product.description}
             </p>

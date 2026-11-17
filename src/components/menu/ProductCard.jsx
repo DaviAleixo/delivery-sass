@@ -54,7 +54,9 @@ const ProductCard = forwardRef(function ProductCard(
             {product.name}
           </h3>
 
-          {product.description && (
+          {product.description && 
+           product.description.trim() !== "" && 
+           !product.description.toLowerCase().trim().includes("cervejas") && (
             <p className="text-[11px] sm:text-xs text-stone-500 leading-snug line-clamp-2 mt-0.5 font-normal">
               {product.description}
             </p>
