@@ -74,6 +74,8 @@ export default function ComplementsPage() {
   const [selectedProductIds, setSelectedProductIds] = useState([]);
   const [filterCategory, setFilterCategory] = useState("all");
   const [isSaving, setIsSaving] = useState(false);
+  const [modalItems, setModalItems] = useState([]);
+  const [deletedItemIds, setDeletedItemIds] = useState([]);
 
   // Filtros, KPIs e Modo de Visualização
   const [searchTerm, setSearchTerm] = useState("");
@@ -141,11 +143,16 @@ export default function ComplementsPage() {
       max_quantity: 1,
       free_quantity: 0,
       has_free_complements: false,
-      is_size_selector: false,
-      required: false,
+      is_size_selector: true, // Escolha Única como padrão
+      required: true,
       active: true,
       is_pizza_crust: false,
     });
+    setModalItems([
+      { id: `temp_${Date.now()}_1`, name: "", price: "" },
+      { id: `temp_${Date.now()}_2`, name: "", price: "" },
+    ]);
+    setDeletedItemIds([]);
     setShowGroupModal(true);
   };
 
@@ -163,12 +170,56 @@ export default function ComplementsPage() {
       active: group.active !== false,
       is_pizza_crust: Boolean(group.is_pizza_crust),
     });
+
+    const existing = items.filter((i) => i.group_id === group.id);
+    if (existing.length > 0) {
+      setModalItems(
+        existing.map((item) => ({
+          id: item.id,
+          name: item.name || "",
+          price: item.price !== null && item.price !== undefined ? Number(item.price).toFixed(2).replace(".", ",") : "",
+          isExisting: true,
+        }))
+      );
+    } else {
+      setModalItems([
+        { id: `temp_${Date.now()}_1`, name: "", price: "" },
+        { id: `temp_${Date.now()}_2`, name: "", price: "" },
+      ]);
+    }
+    setDeletedItemIds([]);
     setShowGroupModal(true);
+  };
+
+  const handleAddModalItem = () => {
+    setModalItems((prev) => [
+      ...prev,
+      { id: `temp_${Date.now()}_${prev.length + 1}`, name: "", price: "" },
+    ]);
+  };
+
+  const handleUpdateModalItem = (index, field, value) => {
+    setModalItems((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
+  };
+
+  const handleRemoveModalItem = (index) => {
+    const targetItem = modalItems[index];
+    if (targetItem?.isExisting && targetItem.id) {
+      setDeletedItemIds((prev) => [...prev, targetItem.id]);
+    }
+    setModalItems((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleSaveGroup = async (e) => {
     e.preventDefault();
-    if (!groupForm.name.trim()) return;
+    if (!groupForm.name.trim()) {
+      toast.error("Informe o nome do grupo.");
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -187,16 +238,52 @@ export default function ComplementsPage() {
         is_pizza_crust: isSize ? false : Boolean(groupForm.is_pizza_crust),
       };
 
+      let targetGroupId;
       if (editingGroup) {
         await ComplementGroup.update(editingGroup.id, payload);
+        targetGroupId = editingGroup.id;
       } else {
-        await ComplementGroup.create({
+        const created = await ComplementGroup.create({
           ...payload,
           order_index: groups.length + 1,
         });
+        targetGroupId = created?.id;
       }
+
+      // Sincronizar itens / opções adicionadas ou editadas diretamente no modal
+      if (targetGroupId) {
+        // 1. Deletar itens removidos
+        if (deletedItemIds.length > 0) {
+          await Promise.all(deletedItemIds.map((id) => ComplementItem.delete(id).catch(() => {})));
+        }
+
+        // 2. Salvar ou atualizar opções válidas
+        const validItems = modalItems.filter((i) => i.name && i.name.trim() !== "");
+        for (let idx = 0; idx < validItems.length; idx++) {
+          const item = validItems[idx];
+          const priceNum = parseBRLToNumber(item.price);
+          if (item.isExisting && item.id && !String(item.id).startsWith("temp_")) {
+            await ComplementItem.update(item.id, {
+              name: item.name.trim(),
+              price: priceNum,
+              order_index: idx + 1,
+            });
+          } else {
+            await ComplementItem.create({
+              group_id: targetGroupId,
+              name: item.name.trim(),
+              description: "",
+              price: priceNum,
+              max_quantity: 1,
+              active: true,
+              order_index: idx + 1,
+            });
+          }
+        }
+      }
+
       setShowGroupModal(false);
-      toast.success(editingGroup ? "Grupo atualizado!" : "Grupo criado com sucesso!");
+      toast.success(editingGroup ? "Grupo e opções atualizados!" : "Grupo e opções criados com sucesso!");
       await loadAllData();
     } catch (err) {
       toast.error("Erro ao salvar grupo.");
@@ -755,7 +842,7 @@ export default function ComplementsPage() {
 
               {/* Seletor Executivo de Tipo de Grupo */}
               <div className="space-y-2">
-                <Label className="text-xs font-bold uppercase text-gray-600 block">
+                <Label className="text-xs font-bold uppercase text-stone-600 block">
                   Modelo de Escolha do Cliente *
                 </Label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
@@ -774,25 +861,23 @@ export default function ComplementsPage() {
                         required: true,
                       }));
                     }}
-                    className={`flex flex-col items-start p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all cursor-pointer ${
                       groupForm.is_size_selector
-                        ? "border-blue-600 bg-blue-50/80 shadow-sm ring-2 ring-blue-600/30"
+                        ? "border-[#047857] bg-emerald-50/30 ring-1 ring-[#047857] shadow-2xs"
                         : "border-stone-200 bg-white hover:border-stone-300"
                     }`}
                   >
                     <div className="flex items-center justify-between w-full mb-1">
-                      <div className="flex items-center gap-2">
-                        <span className="p-1 rounded-md bg-blue-100 text-blue-800 text-xs font-black">
-                          🔘
-                        </span>
-                        <span className="text-sm font-bold text-gray-900">Escolha Única</span>
+                      <div className="flex items-center gap-1.5">
+                        <CheckCircle2 className={`w-4 h-4 ${groupForm.is_size_selector ? "text-[#047857]" : "text-stone-400"}`} />
+                        <span className="text-xs font-bold text-stone-900">Escolha Única</span>
                       </div>
                       {groupForm.is_size_selector && (
-                        <Check className="w-4 h-4 text-blue-600" />
+                        <Check className="w-3.5 h-3.5 text-[#047857] stroke-[3]" />
                       )}
                     </div>
-                    <span className="text-[11px] text-gray-500 leading-tight">
-                      Apenas 1 opção (ex: Ponto da carne, Coca Normal ou Zero, ou Tamanho).
+                    <span className="text-[11px] text-stone-500 leading-snug">
+                      Apenas 1 opção obrigatória (ex: Sabor, Ponto da Carne, Tamanho).
                     </span>
                   </button>
 
@@ -809,25 +894,23 @@ export default function ComplementsPage() {
                         required: prev.is_size_selector ? false : prev.required,
                       }));
                     }}
-                    className={`flex flex-col items-start p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all cursor-pointer ${
                       !groupForm.is_size_selector && !groupForm.is_pizza_crust
-                        ? "border-[#047857] bg-emerald-50/80 shadow-sm ring-2 ring-[#047857]/30"
+                        ? "border-[#047857] bg-emerald-50/30 ring-1 ring-[#047857] shadow-2xs"
                         : "border-stone-200 bg-white hover:border-stone-300"
                     }`}
                   >
                     <div className="flex items-center justify-between w-full mb-1">
-                      <div className="flex items-center gap-2">
-                        <span className="p-1 rounded-md bg-emerald-100 text-emerald-800 text-xs font-black">
-                          ➕
-                        </span>
-                        <span className="text-sm font-bold text-gray-900">Múltipla Escolha</span>
+                      <div className="flex items-center gap-1.5">
+                        <Plus className={`w-4 h-4 ${!groupForm.is_size_selector && !groupForm.is_pizza_crust ? "text-[#047857]" : "text-stone-400"}`} />
+                        <span className="text-xs font-bold text-stone-900">Múltipla Escolha</span>
                       </div>
                       {!groupForm.is_size_selector && !groupForm.is_pizza_crust && (
-                        <Check className="w-4 h-4 text-[#047857]" />
+                        <Check className="w-3.5 h-3.5 text-[#047857] stroke-[3]" />
                       )}
                     </div>
-                    <span className="text-[11px] text-gray-500 leading-tight">
-                      Extras e adicionais com + e - (bacon, molhos, frutas do açaí).
+                    <span className="text-[11px] text-stone-500 leading-snug">
+                      Vários adicionais ou nenhum (ex: Bacon, Molhos, Frutas do Açaí).
                     </span>
                   </button>
 
@@ -843,73 +926,97 @@ export default function ComplementsPage() {
                         has_free_complements: false,
                       }));
                     }}
-                    className={`flex flex-col items-start p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all cursor-pointer ${
                       groupForm.is_pizza_crust
-                        ? "border-amber-600 bg-amber-50/80 shadow-sm ring-2 ring-amber-600/30"
+                        ? "border-[#047857] bg-emerald-50/30 ring-1 ring-[#047857] shadow-2xs"
                         : "border-stone-200 bg-white hover:border-stone-300"
                     }`}
                   >
                     <div className="flex items-center justify-between w-full mb-1">
-                      <div className="flex items-center gap-2">
-                        <span className="p-1 rounded-md bg-amber-100 text-amber-800 text-xs font-black">
-                          🍕
-                        </span>
-                        <span className="text-sm font-bold text-gray-900">Pizza Inteira</span>
+                      <div className="flex items-center gap-1.5">
+                        <Pizza className={`w-4 h-4 ${groupForm.is_pizza_crust ? "text-[#047857]" : "text-stone-400"}`} />
+                        <span className="text-xs font-bold text-stone-900">Pizza Inteira</span>
                       </div>
                       {groupForm.is_pizza_crust && (
-                        <Check className="w-4 h-4 text-amber-600" />
+                        <Check className="w-3.5 h-3.5 text-[#047857] stroke-[3]" />
                       )}
                     </div>
-                    <span className="text-[11px] text-gray-500 leading-tight">
+                    <span className="text-[11px] text-stone-500 leading-snug">
                       Bordas recheadas e tipos de massa para o disco todo.
                     </span>
                   </button>
                 </div>
               </div>
 
-              {/* RENDERIZAÇÃO CONDICIONAL POR TIPO DE GRUPO */}
-
-              {/* CASO 1: SE FOR ESCOLHA ÚNICA */}
-              {groupForm.is_size_selector ? (
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50/60 border border-blue-200 rounded-xl p-4 space-y-3">
-                  <div className="flex items-start gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-sm font-bold">
-                      <CheckCircle2 className="w-5 h-5" />
-                    </div>
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-bold text-blue-950">
-                          Escolha Única Obrigatória (1 Opção)
-                        </h4>
-                        <span className="text-[10px] uppercase font-extrabold bg-blue-200 text-blue-800 px-2 py-0.5 rounded-full">
-                          1 Obrigatório
-                        </span>
-                      </div>
-                      <p className="text-xs text-blue-900/80 leading-relaxed">
-                        Neste modo, o cliente é <strong>obrigado a escolher exatamente 1 opção</strong> para adicionar o produto à sacola.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="bg-white/90 rounded-lg p-3 border border-blue-100 text-xs text-blue-900 space-y-2">
-                    <p className="font-semibold flex items-center gap-1.5 text-blue-950">
-                      <span>💡</span> Como cadastrar os valores das opções:
-                    </p>
-                    <ul className="space-y-1.5 text-gray-600 text-[11px] leading-relaxed pl-1">
-                      <li>
-                        • <strong className="text-gray-900">Opções sem custo (R$ 0,00):</strong> Se você cadastrar valor R$ 0,00 (ex: <em>"Tradicional"</em> e <em>"Zero"</em>, ou <em>"Ao ponto"</em>), o cliente escolhe a versão que quer sem alterar o preço do produto.
-                      </li>
-                      <li>
-                        • <strong className="text-gray-900">Opções com valores (Lata R$ 6,00 vs Garrafa R$ 12,00):</strong> A opção escolhida pelo cliente define automaticamente o valor final de venda do produto.
-                      </li>
-                    </ul>
-                    <p className="text-blue-700 font-medium pt-1 text-[11px] border-t border-blue-100">
-                      ✓ Regras de Mínimo (1) e Máximo (1) são travadas automaticamente para garantir a seleção do cliente.
+              {/* Seção Executiva de Gerenciamento Direto das Opções / Itens do Grupo */}
+              <div className="bg-white p-4 rounded-xl border border-stone-200/90 shadow-2xs space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-xs font-bold text-stone-900 flex items-center gap-1.5">
+                      <Layers className="w-3.5 h-3.5 text-[#047857]" />
+                      Opções deste Grupo ({modalItems.length}) *
+                    </Label>
+                    <p className="text-[11px] text-stone-500 mt-0.5">
+                      Cadastre e gerencie as opções que o cliente poderá escolher.
                     </p>
                   </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleAddModalItem}
+                    className="h-7 text-xs border-stone-200 bg-white hover:bg-stone-50 text-stone-700 cursor-pointer font-semibold"
+                  >
+                    <Plus className="w-3.5 h-3.5 mr-1" /> Adicionar Opção
+                  </Button>
                 </div>
-              ) : (
-                /* CASO 2: SE FOR ADICIONAIS OU PIZZA INTEIRA */
+
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                  {modalItems.map((item, idx) => (
+                    <div
+                      key={item.id || idx}
+                      className="flex items-center gap-2 p-2.5 rounded-xl bg-stone-50/80 border border-stone-200 text-xs"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <Input
+                          value={item.name}
+                          onChange={(e) => handleUpdateModalItem(idx, "name", e.target.value)}
+                          placeholder={`Ex: Opção ${idx + 1} (Tradicional, Zero, Bacon...)`}
+                          className="h-8 text-xs bg-white border-stone-200 font-medium"
+                          required
+                        />
+                      </div>
+
+                      <div className="w-32 shrink-0">
+                        <CurrencyInput
+                          value={item.price}
+                          onChange={(e) => handleUpdateModalItem(idx, "price", e.target.value)}
+                          placeholder="R$ 0,00"
+                          className="h-8 text-xs bg-white border-stone-200 font-mono"
+                        />
+                      </div>
+
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRemoveModalItem(idx)}
+                        className="h-8 w-8 text-stone-400 hover:text-rose-600 cursor-pointer shrink-0"
+                        title="Remover opção"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+
+                <p className="text-[11px] text-stone-500 pt-1 border-t border-stone-100 flex items-center gap-1">
+                  <span className="font-semibold text-stone-700">Dica:</span> Itens com R$ 0,00 ficam inclusos; itens com preço somam ou definem o valor do produto.
+                </p>
+              </div>
+
+              {/* RENDERIZAÇÃO CONDICIONAL PARA MÚLTIPLA ESCOLHA OU PIZZA INTEIRA */}
+              {!groupForm.is_size_selector && (
                 <div className="space-y-4">
                   {/* Bloco de Quantidades (Mínimo / Máximo / Obrigatório) */}
                   <div className="bg-white p-4 rounded-xl border border-stone-200 space-y-4">
