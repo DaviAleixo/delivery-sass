@@ -453,23 +453,41 @@ export default function ProductDetailModal({
                 const isSingleChoice = group.min_quantity === 1 && group.max_quantity === 1;
                 const selectedCount = getGroupSelectedCount(group.id);
                 const _isGroupSatisfied = selectedCount >= group.min_quantity;
-                const isExpanded = expandedGroups[group.id] !== false;
+                const isSizeSelector = Boolean(group.is_size_selector || group.is_category_variation_group);
+                const isExpanded = isSizeSelector ? true : expandedGroups[group.id] !== false;
 
                 return (
                   <div 
                     key={group.id} 
-                    className="rounded-2xl border border-gray-200/90 overflow-hidden bg-white shadow-2xs"
+                    className="rounded-2xl border border-stone-200/90 overflow-hidden bg-white shadow-2xs"
                   >
-                    {/* Cabeçalho do Grupo com Chevron Acordeom */}
+                    {/* Cabeçalho do Grupo */}
                     <div 
-                      onClick={() => toggleGroupExpanded(group.id)}
-                      className="p-3.5 sm:p-4 flex items-center justify-between cursor-pointer select-none bg-white hover:bg-gray-50/50 transition-colors"
+                      onClick={() => !isSizeSelector && toggleGroupExpanded(group.id)}
+                      className={`p-3.5 sm:p-4 flex items-center justify-between select-none bg-white ${
+                        isSizeSelector 
+                          ? 'border-b border-stone-100 cursor-default' 
+                          : 'cursor-pointer hover:bg-stone-50/60 transition-colors'
+                      }`}
                     >
-                      <div className="space-y-1">
+                      <div className="space-y-0.5">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <h4 className="font-bold text-sm sm:text-base text-gray-950">
+                          <h4 className="font-bold text-sm sm:text-base text-stone-950">
                             {group.name}
                           </h4>
+                          {isSizeSelector ? (
+                            <span className="bg-stone-100 text-stone-700 font-semibold text-[10px] px-2 py-0.5 rounded-full border border-stone-200">
+                              Obrigatório
+                            </span>
+                          ) : group.required ? (
+                            <span className="bg-stone-100 text-stone-700 font-semibold text-[10px] px-2 py-0.5 rounded-full border border-stone-200">
+                              Obrigatório
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-medium text-stone-400">
+                              Opcional
+                            </span>
+                          )}
                           {Number(group.free_quantity) > 0 && (
                             <span className="bg-emerald-50 text-[#046c4e] font-bold text-[10px] px-2 py-0.5 rounded-full border border-emerald-200">
                               {selectedCount < group.free_quantity
@@ -480,10 +498,18 @@ export default function ProductDetailModal({
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className="bg-emerald-50 text-[#046c4e] font-bold text-xs px-2.5 py-0.5 rounded-full border border-emerald-200/60">
-                          {selectedCount}/{group.max_quantity}
-                        </span>
-                        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                        {isSizeSelector ? (
+                          <span className="text-xs font-semibold text-stone-400">
+                            Selecione 1
+                          </span>
+                        ) : (
+                          <>
+                            <span className="bg-emerald-50 text-[#046c4e] font-bold text-xs px-2.5 py-0.5 rounded-full border border-emerald-200/60">
+                              {selectedCount}/{group.max_quantity}
+                            </span>
+                            <ChevronDown className={`w-4 h-4 text-stone-400 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                          </>
+                        )}
                       </div>
                     </div>
 

@@ -32,6 +32,7 @@ export default function CategoriesPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [categoryForm, setCategoryForm] = useState({
     name: "",
+    variation_title: "",
     order_index: 0,
     type: CATEGORY_TYPES.STANDARD,
     pizza_sizes: [],
@@ -136,6 +137,7 @@ export default function CategoriesPage() {
             ...s,
             id: resolvedId,
             name: String(s.name).trim(),
+            group_title: categoryForm.variation_title?.trim() || "Escolha a opção",
             slices: isPizza ? Number(s.slices) || 8 : undefined,
             max_flavors: isPizza ? Number(s.max_flavors) || 1 : undefined,
             default_price: Number.isFinite(parsedDefault) && parsedDefault > 0 ? parsedDefault : 0,
@@ -144,6 +146,7 @@ export default function CategoriesPage() {
 
       const payload = {
         ...categoryForm,
+        variation_title: categoryForm.variation_title?.trim() || "Escolha a opção",
         is_combo: false,
         sector_id: categoryForm.sector_id || null,
         order_index: nextOrder,
@@ -194,6 +197,7 @@ export default function CategoriesPage() {
 
     setCategoryForm({
       name: "",
+      variation_title: "",
       order_index: nextOrder,
       type: CATEGORY_TYPES.STANDARD,
       pizza_sizes: [],
@@ -211,8 +215,14 @@ export default function CategoriesPage() {
         ? CATEGORY_TYPES.VARIATION_GRID
         : CATEGORY_TYPES.STANDARD;
 
+    const existingTitle =
+      category.variation_title ||
+      (Array.isArray(category.pizza_sizes) && category.pizza_sizes[0]?.group_title) ||
+      "";
+
     setCategoryForm({
       name: category.name,
+      variation_title: existingTitle,
       order_index: category.order_index || 0,
       type: resolvedType,
       pizza_sizes:
@@ -390,16 +400,16 @@ export default function CategoriesPage() {
                       </span>
 
                       {isPizza && (
-                        <span className="inline-flex items-center gap-1 bg-amber-500 text-white text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-2xs">
-                          <Pizza className="w-3 h-3" />
+                        <span className="inline-flex items-center gap-1 bg-stone-100 text-stone-700 border border-stone-200 text-[11px] font-medium px-2 py-0.5 rounded-md">
+                          <Pizza className="w-3 h-3 text-stone-500" />
                           Pizzas & Fracionados
                         </span>
                       )}
 
                       {isGrid && (
-                        <span className="inline-flex items-center gap-1 bg-blue-600 text-white text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-2xs">
-                          <LayoutGrid className="w-3 h-3" />
-                          Grade de Tamanhos / Embalagens
+                        <span className="inline-flex items-center gap-1 bg-stone-100 text-stone-700 border border-stone-200 text-[11px] font-medium px-2 py-0.5 rounded-md">
+                          <LayoutGrid className="w-3 h-3 text-stone-500" />
+                          Grade de Variações
                         </span>
                       )}
 
@@ -409,8 +419,8 @@ export default function CategoriesPage() {
                             (s) => String(s.id) === String(category.sector_id)
                           );
                           return matchedSector ? (
-                            <span className="inline-flex items-center gap-1 bg-sky-50 text-sky-800 border border-sky-200 text-[11px] font-bold px-2 py-0.5 rounded-full">
-                              <Flame className="w-3 h-3 text-sky-700" /> {matchedSector.name}
+                            <span className="inline-flex items-center gap-1 bg-stone-100 text-stone-700 border border-stone-200 text-[11px] font-medium px-2 py-0.5 rounded-md">
+                              <Flame className="w-3 h-3 text-stone-500" /> {matchedSector.name}
                             </span>
                           ) : null;
                         })()}
@@ -419,14 +429,14 @@ export default function CategoriesPage() {
                     {/* Coluna 3: Tipo / Configuração */}
                     <div className="sm:col-span-3 text-xs">
                       {isPizza ? (
-                        <span className="inline-flex items-center gap-1.5 font-semibold text-amber-900 bg-amber-100/70 border border-amber-200/80 px-2.5 py-1 rounded-lg">
-                          <Pizza className="w-3.5 h-3.5 text-amber-700" />
+                        <span className="inline-flex items-center gap-1.5 font-medium text-stone-700 bg-stone-50 border border-stone-200/80 px-2.5 py-1 rounded-lg">
+                          <Pizza className="w-3.5 h-3.5 text-stone-500" />
                           {category.pizza_sizes?.length || 4} tamanhos cadastrados
                         </span>
                       ) : isGrid ? (
                         <div className="space-y-0.5">
-                          <span className="inline-flex items-center gap-1.5 font-semibold text-blue-900 bg-blue-50 border border-blue-200/80 px-2.5 py-1 rounded-lg">
-                            <LayoutGrid className="w-3.5 h-3.5 text-blue-700" />
+                          <span className="inline-flex items-center gap-1.5 font-medium text-stone-700 bg-stone-50 border border-stone-200/80 px-2.5 py-1 rounded-lg">
+                            <LayoutGrid className="w-3.5 h-3.5 text-stone-500" />
                             {category.pizza_sizes?.length || 0} variações na grade
                           </span>
                           {sizesPreview && (
@@ -437,8 +447,8 @@ export default function CategoriesPage() {
                           )}
                         </div>
                       ) : (
-                        <span className="inline-flex items-center gap-1.5 text-stone-600 bg-stone-100/90 border border-stone-200/70 px-2.5 py-1 rounded-lg">
-                          <UtensilsCrossed className="w-3.5 h-3.5 text-stone-500" />
+                        <span className="inline-flex items-center gap-1.5 font-medium text-stone-600 bg-stone-50 border border-stone-200/70 px-2.5 py-1 rounded-lg">
+                          <UtensilsCrossed className="w-3.5 h-3.5 text-stone-400" />
                           Padrão (convencional)
                         </span>
                       )}
@@ -536,19 +546,19 @@ export default function CategoriesPage() {
                             type: CATEGORY_TYPES.STANDARD,
                           })
                         }
-                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                        className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
                           categoryForm.type === CATEGORY_TYPES.STANDARD
-                            ? "border-[#047857] bg-[#D1E9DF]/25 ring-2 ring-[#047857]/15"
+                            ? "border-[#047857] bg-emerald-50/25 ring-1 ring-[#047857] shadow-2xs"
                             : "border-stone-200 hover:border-stone-300 bg-white"
                         }`}
                       >
-                        <div className="w-7 h-7 rounded-lg bg-emerald-50 border border-emerald-200/70 flex items-center justify-center mb-2">
-                          <UtensilsCrossed className="w-3.5 h-3.5 text-[#047857]" />
+                        <div className="w-7 h-7 rounded-lg bg-stone-100 border border-stone-200/80 flex items-center justify-center mb-2">
+                          <UtensilsCrossed className="w-3.5 h-3.5 text-stone-700" />
                         </div>
                         <p className="font-bold text-xs text-stone-900 leading-tight">
                           Produtos Padrão
                         </p>
-                        <p className="text-[11px] text-stone-500 mt-0.5 leading-snug">
+                        <p className="text-[11px] text-stone-500 mt-1 leading-snug font-normal">
                           Preço único por item (lanches, porções, sobremesas).
                         </p>
                       </button>
@@ -565,20 +575,20 @@ export default function CategoriesPage() {
                                 : VARIATION_GRID_PRESETS.cervejas.sizes,
                           })
                         }
-                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                        className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
                           categoryForm.type === CATEGORY_TYPES.VARIATION_GRID
-                            ? "border-blue-600 bg-blue-50/70 ring-2 ring-blue-600/15"
+                            ? "border-[#047857] bg-emerald-50/25 ring-1 ring-[#047857] shadow-2xs"
                             : "border-stone-200 hover:border-stone-300 bg-white"
                         }`}
                       >
-                        <div className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-200/70 flex items-center justify-center mb-2">
-                          <LayoutGrid className="w-3.5 h-3.5 text-blue-600" />
+                        <div className="w-7 h-7 rounded-lg bg-stone-100 border border-stone-200/80 flex items-center justify-center mb-2">
+                          <LayoutGrid className="w-3.5 h-3.5 text-stone-700" />
                         </div>
                         <p className="font-bold text-xs text-stone-900 leading-tight">
                           Grade de Variações
                         </p>
-                        <p className="text-[11px] text-stone-500 mt-0.5 leading-snug">
-                          Cervejas (Latão, Long Neck, 600ml), Açaí (300ml, 500ml) ou P/M/G.
+                        <p className="text-[11px] text-stone-500 mt-1 leading-snug font-normal">
+                          Cervejas (Latão, Long Neck), Açaí (300ml, 500ml) ou P/M/G.
                         </p>
                       </button>
 
@@ -594,19 +604,19 @@ export default function CategoriesPage() {
                                 : DEFAULT_PIZZA_SIZES,
                           })
                         }
-                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                        className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
                           categoryForm.type === CATEGORY_TYPES.PIZZA
-                            ? "border-amber-500 bg-amber-50/80 ring-2 ring-amber-500/15"
+                            ? "border-[#047857] bg-emerald-50/25 ring-1 ring-[#047857] shadow-2xs"
                             : "border-stone-200 hover:border-stone-300 bg-white"
                         }`}
                       >
-                        <div className="w-7 h-7 rounded-lg bg-amber-50 border border-amber-200/70 flex items-center justify-center mb-2">
-                          <Pizza className="w-3.5 h-3.5 text-amber-600" />
+                        <div className="w-7 h-7 rounded-lg bg-stone-100 border border-stone-200/80 flex items-center justify-center mb-2">
+                          <Pizza className="w-3.5 h-3.5 text-stone-700" />
                         </div>
                         <p className="font-bold text-xs text-stone-900 leading-tight">
                           Pizzas & Fracionados
                         </p>
-                        <p className="text-[11px] text-stone-500 mt-0.5 leading-snug">
+                        <p className="text-[11px] text-stone-500 mt-1 leading-snug font-normal">
                           Permite metades (1/2 e 1/2), fatias e bordas recheadas.
                         </p>
                       </button>
@@ -616,15 +626,15 @@ export default function CategoriesPage() {
 
                 {/* Seção Condicional: Grade de Variações (Cervejas, Bebidas, Açaí, Marmitas) */}
                 {categoryForm.type === CATEGORY_TYPES.VARIATION_GRID && (
-                  <div className="bg-white border border-blue-200/90 rounded-xl p-4 space-y-3.5 shadow-2xs">
-                    <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-stone-100">
+                  <div className="bg-stone-50/60 border border-stone-200 rounded-2xl p-4 sm:p-5 space-y-4">
+                    <div className="flex items-start justify-between gap-3 pb-3 border-b border-stone-200/80">
                       <div>
                         <h4 className="font-bold text-xs text-stone-900 flex items-center gap-1.5">
-                          <LayoutGrid className="w-3.5 h-3.5 text-blue-600" />
-                          Colunas da Grade (Tamanhos / Embalagens)
+                          <LayoutGrid className="w-3.5 h-3.5 text-[#047857]" />
+                          Variações da Categoria (Embalagens / Tamanhos)
                         </h4>
-                        <p className="text-[11px] text-stone-500 mt-0.5">
-                          Defina todas as variações da categoria uma única vez. Em cada produto, você preencherá o preço apenas nas opções que ele possui!
+                        <p className="text-[11px] text-stone-500 mt-0.5 leading-relaxed">
+                          Cadastre as opções desta categoria. No cadastro de cada produto, você preencherá o preço apenas nas opções disponíveis.
                         </p>
                       </div>
                       <Button
@@ -632,15 +642,34 @@ export default function CategoriesPage() {
                         size="sm"
                         variant="outline"
                         onClick={handleAddPizzaSize}
-                        className="h-7 text-xs border-blue-200 text-blue-700 hover:bg-blue-50 cursor-pointer font-semibold shrink-0"
+                        className="h-8 text-xs border-stone-200 bg-white text-stone-700 hover:bg-stone-100 hover:text-stone-900 cursor-pointer font-semibold shrink-0"
                       >
                         <Plus className="w-3.5 h-3.5 mr-1" />
-                        Nova Coluna
+                        Adicionar Opção
                       </Button>
                     </div>
 
+                    {/* Campo de Personalização do Título do Seletor */}
+                    <div className="space-y-1">
+                      <Label htmlFor="variation_title" className="text-xs font-semibold text-stone-800">
+                        Título do Seletor no Cardápio
+                      </Label>
+                      <Input
+                        id="variation_title"
+                        value={categoryForm.variation_title || ""}
+                        onChange={(e) =>
+                          setCategoryForm({ ...categoryForm, variation_title: e.target.value })
+                        }
+                        placeholder="Escolha a opção"
+                        className="h-9 text-xs bg-white border-stone-200 focus:border-[#047857] font-medium"
+                      />
+                      <p className="text-[11px] text-stone-500">
+                        Texto exibido no cabeçalho do seletor para o cliente (padrão: <strong>Escolha a opção</strong>).
+                      </p>
+                    </div>
+
                     {/* Presets Rápidos em 1 clique */}
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 pt-1">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block">
                         Modelos prontos (1 clique):
                       </span>
@@ -650,7 +679,7 @@ export default function CategoriesPage() {
                             key={key}
                             type="button"
                             onClick={() => handleApplyGridPreset(key)}
-                            className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-blue-50 text-stone-700 hover:text-blue-700 border border-stone-200 hover:border-blue-200 transition-colors cursor-pointer"
+                            className="text-[11px] font-medium px-2.5 py-1 rounded-lg bg-white hover:bg-stone-100 text-stone-700 border border-stone-200 hover:border-stone-300 transition-colors cursor-pointer"
                           >
                             {preset.label}
                           </button>
@@ -662,11 +691,11 @@ export default function CategoriesPage() {
                       {(categoryForm.pizza_sizes || []).map((size, idx) => (
                         <div
                           key={size.id || idx}
-                          className="flex items-center gap-2.5 bg-stone-50/70 p-2.5 rounded-xl border border-stone-200 text-xs"
+                          className="flex items-center gap-2.5 bg-white p-2.5 rounded-xl border border-stone-200 text-xs shadow-2xs"
                         >
                           <div className="flex-1 min-w-0">
                             <Label className="text-[10px] text-stone-500 font-semibold uppercase">
-                              Nome da Embalagem / Tamanho *
+                              Nome da Opção / Embalagem *
                             </Label>
                             <Input
                               value={size.name}

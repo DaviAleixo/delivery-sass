@@ -329,9 +329,12 @@ export function buildCategoryVariationComplementGroup(product, category) {
 
   if (activeVariations.length === 0) return null;
 
+  const customTitle = category?.variation_title || (categorySizes.length > 0 && categorySizes[0]?.group_title);
+  const groupName = customTitle && customTitle.trim() !== "" ? customTitle.trim() : "Escolha a opção";
+
   return {
     id: "__category_variation_grid__",
-    name: isVariationGridCategory(category) ? "Opções / Embalagem" : "Escolha o tamanho",
+    name: groupName,
     description: "",
     min_quantity: 1,
     max_quantity: 1,
