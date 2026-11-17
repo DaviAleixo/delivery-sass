@@ -16,7 +16,24 @@ import {
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Edit, Trash2, ChevronUp, ChevronDown, Flame, Pizza, UtensilsCrossed, LayoutGrid } from "lucide-react";
+import {
+  Plus,
+  Edit,
+  Trash2,
+  ChevronUp,
+  ChevronDown,
+  Flame,
+  Pizza,
+  UtensilsCrossed,
+  LayoutGrid,
+  Sparkles,
+  Beer,
+  CupSoda,
+  GlassWater,
+  Layers,
+  Check,
+  ArrowRight,
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { appConfirm } from "@/components/ui/ConfirmDialogHost";
@@ -145,8 +162,7 @@ export default function CategoriesPage() {
         });
 
       const payload = {
-        ...categoryForm,
-        variation_title: categoryForm.variation_title?.trim() || "Escolha a opção",
+        name: categoryForm.name.trim(),
         is_combo: false,
         sector_id: categoryForm.sector_id || null,
         order_index: nextOrder,
@@ -275,14 +291,22 @@ export default function CategoriesPage() {
     }));
   };
 
+  const isPresetActive = (preset) => {
+    const currentSizes = categoryForm.pizza_sizes || [];
+    if (!currentSizes.length || currentSizes.length !== preset.sizes.length) return false;
+    return preset.sizes.every((s, i) => currentSizes[i]?.name?.trim()?.toLowerCase() === s.name?.trim()?.toLowerCase());
+  };
+
   const handleApplyGridPreset = (presetKey) => {
     const preset = VARIATION_GRID_PRESETS[presetKey];
     if (!preset) return;
     setCategoryForm((prev) => ({
       ...prev,
       pizza_sizes: preset.sizes.map((s) => ({ ...s, default_price: 0 })),
+      variation_title: prev.variation_title?.trim() || "Escolha a opção",
+      name: prev.name?.trim() ? prev.name : preset.title,
     }));
-    toast.success(`Grade preenchida com o modelo: ${preset.label}`);
+    toast.success(`Modelo de ${preset.title} aplicado!`);
   };
 
   return (
@@ -408,8 +432,8 @@ export default function CategoriesPage() {
 
                       {isGrid && (
                         <span className="inline-flex items-center gap-1 bg-stone-100 text-stone-700 border border-stone-200 text-[11px] font-medium px-2 py-0.5 rounded-md">
-                          <LayoutGrid className="w-3 h-3 text-stone-500" />
-                          Grade de Variações
+                          <Layers className="w-3 h-3 text-stone-500" />
+                          Vários Tamanhos
                         </span>
                       )}
 
@@ -436,8 +460,8 @@ export default function CategoriesPage() {
                       ) : isGrid ? (
                         <div className="space-y-0.5">
                           <span className="inline-flex items-center gap-1.5 font-medium text-stone-700 bg-stone-50 border border-stone-200/80 px-2.5 py-1 rounded-lg">
-                            <LayoutGrid className="w-3.5 h-3.5 text-stone-500" />
-                            {category.pizza_sizes?.length || 0} variações na grade
+                            <Layers className="w-3.5 h-3.5 text-stone-500" />
+                            {category.pizza_sizes?.length || 0} tamanhos cadastrados
                           </span>
                           {sizesPreview && (
                             <p className="text-[10px] text-stone-500 truncate pl-1">
@@ -532,7 +556,7 @@ export default function CategoriesPage() {
                     />
                   </div>
 
-                  {/* Seletor do Tipo de Categoria: Padrão vs Grade de Variações vs Pizza */}
+                  {/* Seletor do Tipo de Categoria: Padrão vs Vários Tamanhos vs Pizza */}
                   <div>
                     <Label className="text-xs font-semibold text-stone-700 block mb-2">
                       Modelo da Categoria *
@@ -556,10 +580,10 @@ export default function CategoriesPage() {
                           <UtensilsCrossed className="w-3.5 h-3.5 text-stone-700" />
                         </div>
                         <p className="font-bold text-xs text-stone-900 leading-tight">
-                          Produtos Padrão
+                          Preço Único (Padrão)
                         </p>
                         <p className="text-[11px] text-stone-500 mt-1 leading-snug font-normal">
-                          Preço único por item (lanches, porções, sobremesas).
+                          O item tem um preço fixo (lanches, porções, pratos e sobremesas).
                         </p>
                       </button>
 
@@ -582,13 +606,13 @@ export default function CategoriesPage() {
                         }`}
                       >
                         <div className="w-7 h-7 rounded-lg bg-stone-100 border border-stone-200/80 flex items-center justify-center mb-2">
-                          <LayoutGrid className="w-3.5 h-3.5 text-stone-700" />
+                          <Layers className="w-3.5 h-3.5 text-stone-700" />
                         </div>
                         <p className="font-bold text-xs text-stone-900 leading-tight">
-                          Grade de Variações
+                          Vários Tamanhos ou Doses
                         </p>
                         <p className="text-[11px] text-stone-500 mt-1 leading-snug font-normal">
-                          Cervejas (Latão, Long Neck), Açaí (300ml, 500ml) ou P/M/G.
+                          O mesmo item é vendido em tamanhos diferentes (Lata, 600ml, P, M, G).
                         </p>
                       </button>
 
@@ -614,27 +638,27 @@ export default function CategoriesPage() {
                           <Pizza className="w-3.5 h-3.5 text-stone-700" />
                         </div>
                         <p className="font-bold text-xs text-stone-900 leading-tight">
-                          Pizzas & Fracionados
+                          Pizzas (Permite Metades)
                         </p>
                         <p className="text-[11px] text-stone-500 mt-1 leading-snug font-normal">
-                          Permite metades (1/2 e 1/2), fatias e bordas recheadas.
+                          Permite escolher tamanhos, dividir em até 4 sabores e adicionar bordas.
                         </p>
                       </button>
                     </div>
                   </div>
                 </div>
 
-                {/* Seção Condicional: Grade de Variações (Cervejas, Bebidas, Açaí, Marmitas) */}
+                {/* Seção Condicional: Tamanhos e Embalagens */}
                 {categoryForm.type === CATEGORY_TYPES.VARIATION_GRID && (
                   <div className="bg-stone-50/60 border border-stone-200 rounded-2xl p-4 sm:p-5 space-y-4">
                     <div className="flex items-start justify-between gap-3 pb-3 border-b border-stone-200/80">
                       <div>
                         <h4 className="font-bold text-xs text-stone-900 flex items-center gap-1.5">
-                          <LayoutGrid className="w-3.5 h-3.5 text-[#047857]" />
-                          Variações da Categoria (Embalagens / Tamanhos)
+                          <Layers className="w-3.5 h-3.5 text-[#047857]" />
+                          Tamanhos & Embalagens desta Categoria
                         </h4>
                         <p className="text-[11px] text-stone-500 mt-0.5 leading-relaxed">
-                          Cadastre as opções desta categoria. No cadastro de cada produto, você preencherá o preço apenas nas opções disponíveis.
+                          Cadastre abaixo as opções que existem nesta categoria.
                         </p>
                       </div>
                       <Button
@@ -645,14 +669,140 @@ export default function CategoriesPage() {
                         className="h-8 text-xs border-stone-200 bg-white text-stone-700 hover:bg-stone-100 hover:text-stone-900 cursor-pointer font-semibold shrink-0"
                       >
                         <Plus className="w-3.5 h-3.5 mr-1" />
-                        Adicionar Opção
+                        Adicionar Tamanho
                       </Button>
+                    </div>
+
+                    {/* Explicação Cristalina em 2 Passos Simples */}
+                    <div className="bg-white border border-stone-200/90 rounded-xl p-3.5 space-y-2.5 shadow-2xs">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-stone-900">
+                        <Sparkles className="w-3.5 h-3.5 text-[#047857]" />
+                        Como funciona em 2 passos simples:
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-[11px]">
+                        <div className="p-3 rounded-lg bg-stone-50/80 border border-stone-200/60 flex flex-col justify-between">
+                          <div>
+                            <p className="font-bold text-stone-900 mb-1 flex items-center gap-1.5">
+                              <span className="w-4 h-4 rounded-full bg-[#047857] text-white text-[10px] inline-flex items-center justify-center font-bold shrink-0">1</span>
+                              Cadastre os tamanhos aqui
+                            </p>
+                            <p className="text-stone-500 leading-snug">
+                              Você cadastra uma única vez os tamanhos que existem nesta categoria (ex: <strong>Latão</strong> e <strong>600ml</strong>).
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="p-3 rounded-lg bg-stone-50/80 border border-stone-200/60 flex flex-col justify-between">
+                          <div>
+                            <p className="font-bold text-stone-900 mb-1 flex items-center gap-1.5">
+                              <span className="w-4 h-4 rounded-full bg-[#047857] text-white text-[10px] inline-flex items-center justify-center font-bold shrink-0">2</span>
+                              No produto, coloque o preço do que vende
+                            </p>
+                            <p className="text-stone-500 leading-snug">
+                              Ao cadastrar a cerveja (ex: Heineken), digite o preço apenas nos tamanhos disponíveis. <strong>O que ficar sem preço não aparece para o cliente.</strong>
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Componente Executivo de Modelos Prontos */}
+                    <div className="bg-white border border-stone-200/90 rounded-xl p-3.5 space-y-3 shadow-2xs">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-[#047857]" />
+                          <span className="text-xs font-bold text-stone-900">
+                            Modelos Prontos Sugeridos
+                          </span>
+                          <span className="text-[10px] text-stone-400 font-medium hidden sm:inline">
+                            (preenche os tamanhos em 1 toque)
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                        {Object.entries(VARIATION_GRID_PRESETS).map(([key, preset]) => {
+                          const isActive = isPresetActive(preset);
+                          const IconComponent =
+                            preset.iconName === "Beer"
+                              ? Beer
+                              : preset.iconName === "CupSoda"
+                              ? CupSoda
+                              : preset.iconName === "GlassWater"
+                              ? GlassWater
+                              : Layers;
+
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              onClick={() => handleApplyGridPreset(key)}
+                              className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between group ${
+                                isActive
+                                  ? "border-[#047857] bg-emerald-50/30 ring-1 ring-[#047857] shadow-2xs"
+                                  : "border-stone-200 bg-stone-50/40 hover:bg-white hover:border-stone-300 hover:shadow-2xs"
+                              }`}
+                            >
+                              <div>
+                                <div className="flex items-center justify-between gap-1 mb-2">
+                                  <div
+                                    className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+                                      isActive
+                                        ? "bg-emerald-100 text-[#047857]"
+                                        : "bg-stone-100 text-stone-600 group-hover:text-stone-900"
+                                    }`}
+                                  >
+                                    <IconComponent className="w-3.5 h-3.5" />
+                                  </div>
+                                  {isActive ? (
+                                    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded-md">
+                                      <Check className="w-2.5 h-2.5 stroke-[3]" /> Em uso
+                                    </span>
+                                  ) : (
+                                    <span className="text-[9px] font-medium text-stone-500 bg-stone-200/70 px-1.5 py-0.5 rounded-md">
+                                      {preset.badge}
+                                    </span>
+                                  )}
+                                </div>
+
+                                <p className="font-bold text-xs text-stone-900 group-hover:text-[#047857] transition-colors leading-tight">
+                                  {preset.title}
+                                </p>
+
+                                <div className="flex flex-wrap gap-1 mt-2">
+                                  {(preset.tags || []).map((tag, tIdx) => (
+                                    <span
+                                      key={tIdx}
+                                      className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-white border border-stone-200/80 text-stone-600"
+                                    >
+                                      {tag}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <div className="mt-3 pt-2 border-t border-stone-200/60 flex items-center justify-between">
+                                <span
+                                  className={`text-[10px] font-bold flex items-center gap-1 transition-colors ${
+                                    isActive ? "text-[#047857]" : "text-stone-500 group-hover:text-[#047857]"
+                                  }`}
+                                >
+                                  {isActive ? "Modelo aplicado" : "Usar este modelo"}
+                                  {!isActive && (
+                                    <ArrowRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                                  )}
+                                </span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
 
                     {/* Campo de Personalização do Título do Seletor */}
                     <div className="space-y-1">
                       <Label htmlFor="variation_title" className="text-xs font-semibold text-stone-800">
-                        Título do Seletor no Cardápio
+                        Texto do Seletor no Cardápio do Cliente
                       </Label>
                       <Input
                         id="variation_title"
@@ -664,27 +814,8 @@ export default function CategoriesPage() {
                         className="h-9 text-xs bg-white border-stone-200 focus:border-[#047857] font-medium"
                       />
                       <p className="text-[11px] text-stone-500">
-                        Texto exibido no cabeçalho do seletor para o cliente (padrão: <strong>Escolha a opção</strong>).
+                        Texto exibido acima das opções de tamanho para o cliente (padrão: <strong>Escolha a opção</strong>).
                       </p>
-                    </div>
-
-                    {/* Presets Rápidos em 1 clique */}
-                    <div className="space-y-1.5 pt-1">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block">
-                        Modelos prontos (1 clique):
-                      </span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {Object.entries(VARIATION_GRID_PRESETS).map(([key, preset]) => (
-                          <button
-                            key={key}
-                            type="button"
-                            onClick={() => handleApplyGridPreset(key)}
-                            className="text-[11px] font-medium px-2.5 py-1 rounded-lg bg-white hover:bg-stone-100 text-stone-700 border border-stone-200 hover:border-stone-300 transition-colors cursor-pointer"
-                          >
-                            {preset.label}
-                          </button>
-                        ))}
-                      </div>
                     </div>
 
                     <div className="space-y-2 max-h-60 overflow-y-auto pr-1">

@@ -716,7 +716,7 @@ export default function ProductsPage() {
 
                     const formatCategoryOptionLabel = (cat) => {
                       if (isPizzaCategory(cat)) return `${cat.name} (Pizza)`;
-                      if (isVariationGridCategory(cat)) return `${cat.name} (Grade de Variações)`;
+                      if (isVariationGridCategory(cat)) return `${cat.name} (Vários Tamanhos)`;
                       return cat.name;
                     };
 
@@ -876,21 +876,21 @@ export default function ProductsPage() {
                   }).length;
 
                   return (
-                    <div className="bg-white border border-blue-200/90 rounded-xl p-4 space-y-3.5 shadow-2xs">
+                    <div className="bg-white border border-stone-200 rounded-xl p-4 space-y-3.5 shadow-2xs">
                       <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-stone-100">
                         <div>
                           <div className="flex items-center gap-2 flex-wrap">
                             <p className="text-xs font-bold text-stone-900">
-                              {isPizza ? "Preços por Tamanho da Pizza" : `Grade de Preços — ${selectedCatObj?.name || "Categoria"}`}
+                              {isPizza ? "Preços por Tamanho da Pizza" : `Tamanhos & Preços — ${selectedCatObj?.name || "Categoria"}`}
                             </p>
                             <span className="text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-full">
-                              {activeSizesCount} de {sizes.length} opções ativas neste produto
+                              {activeSizesCount} de {sizes.length} tamanhos com preço
                             </span>
                           </div>
                           <p className="text-[11px] text-stone-500 mt-0.5">
                             {isPizza
                               ? "Defina o valor deste sabor para cada tamanho disponível."
-                              : "Preencha apenas as opções que este produto possui. As opções deixadas em branco (---) ficarão ocultas automaticamente para este item."}
+                              : "Digite o preço apenas nos tamanhos que este produto tiver à venda. Os tamanhos deixados em branco (---) não aparecerão para o cliente."}
                           </p>
                         </div>
                         {hasCategoryDefaults && (

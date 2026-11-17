@@ -13,7 +13,12 @@ export const DEFAULT_PIZZA_SIZES = [
 
 export const VARIATION_GRID_PRESETS = {
   cervejas: {
-    label: "Cervejas (Latão, Long Neck, Mega Latão, 600ml, Lata)",
+    key: "cervejas",
+    title: "Cervejas",
+    iconName: "Beer",
+    tags: ["Latão", "Long Neck", "600ml", "Lata", "Mega Latão"],
+    badge: "5 tamanhos",
+    description: "Latão, Long Neck, Mega Latão, 600ml e Lata",
     sizes: [
       { id: "latao", name: "Latão" },
       { id: "long_neck", name: "Long Neck" },
@@ -23,7 +28,12 @@ export const VARIATION_GRID_PRESETS = {
     ],
   },
   refrigerantes: {
-    label: "Refrigerantes (Lata, 600ml, 1L, 2L)",
+    key: "refrigerantes",
+    title: "Refrigerantes & Sucos",
+    iconName: "CupSoda",
+    tags: ["Lata 350ml", "600ml", "1 Litro", "2 Litros"],
+    badge: "4 tamanhos",
+    description: "Lata 350ml, 600ml, 1 Litro e 2 Litros",
     sizes: [
       { id: "lata_350ml", name: "Lata 350ml" },
       { id: "600ml", name: "600ml" },
@@ -32,7 +42,12 @@ export const VARIATION_GRID_PRESETS = {
     ],
   },
   copos_acai: {
-    label: "Copos / Açaí (300ml, 500ml, 700ml, 1L)",
+    key: "copos_acai",
+    title: "Açaí & Copos",
+    iconName: "GlassWater",
+    tags: ["300ml", "500ml", "700ml", "1 Litro"],
+    badge: "4 tamanhos",
+    description: "300ml, 500ml, 700ml e 1 Litro",
     sizes: [
       { id: "300ml", name: "300ml" },
       { id: "500ml", name: "500ml" },
@@ -41,7 +56,12 @@ export const VARIATION_GRID_PRESETS = {
     ],
   },
   porcoes_marmitas: {
-    label: "Tamanhos (P, M, G)",
+    key: "porcoes_marmitas",
+    title: "Porções & Marmitas",
+    iconName: "Layers",
+    tags: ["Pequeno (P)", "Médio (M)", "Grande (G)"],
+    badge: "3 tamanhos",
+    description: "Pequeno (P), Médio (M) e Grande (G)",
     sizes: [
       { id: "p", name: "Pequeno (P)" },
       { id: "m", name: "Médio (M)" },
