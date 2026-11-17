@@ -14,6 +14,11 @@
   - [x] Execução direta e validação via conexão PostgreSQL oficial do script DDL/DML consolidado `PRODUCAO_SYNC_TOTAL.sql` e do hotfix `PROD_HOTFIX_ORDERS_CASH_RPC.sql` (`orders.cash_session_id`, `cash_sessions`, `cash_movements` e RPC `get_store_admin_users`).
   - [x] Catálogo instantâneo de bairros embutido para Conselheiro Lafaiete e região no serviço de entregas (`cityNeighborhoods.js`).
 
+- [ ] 🍧 **Motor Avançado de Complementos & Adicionais (Padrão iFood / Açaí / Zé Delivery - [[02 - 💡 Ideias & Brainstorm#🍺 11. Arquitetura Executiva de Cardápio para Distribuidoras de Bebidas & Conveniência Padrão Zé Delivery vs Aiqfome|Ideias & Brainstorm]])**:
+  - [ ] **Adição em 1-Toque na Vitrine (`+`)**: Itens de conveniência/bebidas sem complementos obrigatórios caem direto no carrinho sem abrir modal, maximizando a velocidade de compra.
+  - [ ] **Regra de Cortesia com Cobrança de Excedentes (`free_quantity`)**: Suporte nativo para Açaí e Combos (ex: *"Escolha até 4 adicionais gratuitos; a partir do 5º cobra +R$ 1,50 cada"*).
+  - [ ] **Grupos de Tamanho com Preço Base Substituto vs Adicionais Cumulativos**: Clareza total no cadastro entre trocar o tamanho do item (300ml, 500ml, 700ml) e adicionar ingredientes extras.
+
 - [x] 🌐 **Infraestrutura de Domínio & Roteamento SPA no Cloudflare Pages (`pedemuleke.com`, `homolog.pedemuleke.com`)**:
   - [x] Configuração de CNAME no Cloudflare apontando para `delivery-sass.pages.dev` (substituindo IP antigo da Hostinger).
   - [x] Ativação de domínios customizados no Cloudflare Pages com certificado SSL.

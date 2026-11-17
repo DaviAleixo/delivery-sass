@@ -58,6 +58,17 @@
 * **Métricas & Indicadores de Alto Valor Sugeridos**:
   1. **Ticket Médio do Dia**: Substituir a métrica estática de 'Total de Pedidos Acumulado' por Ticket Médio do expediente de hoje (ex: R$ 42,50). Ajuda o lojista a saber na hora se os clientes estão consumindo combos/adicionais.
   2. **Divisão por Canal Operacional ao Vivo**: Mini-gráfico ou contadores de pedidos de hoje divididos por canal: `Delivery` vs `Retirada Balcão` vs `Mesas/Salão`.
+
+### 🍺 11. Arquitetura Executiva de Cardápio para Distribuidoras de Bebidas & Conveniência (Padrão Zé Delivery vs Aiqfome)
+* **Problema Encontrado na Migração (Vício do Aiqfome)**:
+  - Lojas cadastradas em marketplaces antigos como o Aiqfome costumam cadastrar o produto com preço zerado ou genérico e criam um grupo de complemento obrigatório "Escolha um tamanho: Latão R$ 6,00", mesmo quando o produto só existe em um único tamanho!
+  - *Consequência negativa*: O cliente é forçado a abrir um modal em cada cerveja e marcar a única opção óbvia antes de conseguir colocar no carrinho. Isso gera abandono de compra, lentidão e impressão de amadorismo.
+* **Padrão Ouro de Conveniência (PedeMuleke / Zé Delivery / Ambev)**:
+  1. **Adição Rápida em 1-Clique (+)**: Produtos sem complementos obrigatórios devem ir para o carrinho com um único toque no botão `+` na vitrine. Compra rápida por impulso.
+  2. **Produtos Separados por Embalagem Real**: Em vez de agrupar em tamanhos abstratos, cadastra-se `Heineken Long Neck 330ml (R$ 8,50)` e `Heineken Latão 473ml (R$ 9,50)` com fotos individuais da embalagem física. A foto da lata/garrafa vende mais.
+  3. **O que Realmente deve ser Complemento em Bebidas**:
+     - Temperatura (`Gelada - Padrão` / `Temperatura Ambiente`).
+     - Acessórios reais (`Saco de Gelo 5kg`, `Copos Descartáveis`, `Limão Fatiado`).
   3. **Funil da Cozinha / Operação em Tempo Real**:
      - *Na Cozinha (Preparando)*: X pedidos.
      - *Em Rota (Com Motoboy)*: Y entregas a caminho.
