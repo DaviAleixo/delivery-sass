@@ -956,10 +956,8 @@ export default function MenuPage() {
     </Dialog>
   );
 
-  // Despacho de Template VIP Personalizado (Modo A)
-  const isVrummStore = isVruumRoute || tenant?.slug === "vrumm" || tenant?.slug === "vruum-burguer";
-  const effectiveTemplateKey = tenant?.custom_template || (isVrummStore ? "vrumm" : null);
-  const CustomMenuTemplate = getCustomMenuTemplate(effectiveTemplateKey);
+  // Despacho de Template Customizado (caso configurado na loja)
+  const CustomMenuTemplate = getCustomMenuTemplate(tenant?.custom_template);
 
   const getDeliveryFeeDisplay = () => {
     const acceptsDelivery = (settings?.accepts_delivery !== false) && (tenant?.accepts_delivery !== false);

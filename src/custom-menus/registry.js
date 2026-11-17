@@ -40,7 +40,6 @@
  */
 
 import React from "react";
-import VrummMenu from "./vrumm/VrummMenu";
 
 /**
  * Catálogo de templates registrados no sistema.
@@ -53,13 +52,6 @@ export const AVAILABLE_TEMPLATES = [
     description: "Design moderno, clean e de alta conversão para qualquer nicho de restaurante.",
     badge: "Oficial",
     component: null, // null aciona o Menu.jsx genérico nativo
-  },
-  {
-    id: "vrumm",
-    name: "Vrumm Burguer VIP (Clean & Pro)",
-    description: "Design moderno, clean e profissional com carrossel dinâmico e paleta institucional elegante.",
-    badge: "Exclusivo Vrumm",
-    component: VrummMenu,
   },
 ];
 
