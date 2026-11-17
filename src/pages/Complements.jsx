@@ -756,45 +756,10 @@ export default function ComplementsPage() {
               {/* Seletor Executivo de Tipo de Grupo */}
               <div className="space-y-2">
                 <Label className="text-xs font-bold uppercase text-gray-600 block">
-                  Tipo de Complemento *
+                  Modelo de Escolha do Cliente *
                 </Label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                  {/* Tipo 1: Adicionais & Ingredientes */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setGroupForm((prev) => ({
-                        ...prev,
-                        is_size_selector: false,
-                        is_pizza_crust: false,
-                        min_quantity: prev.is_size_selector ? 0 : prev.min_quantity,
-                        max_quantity: prev.is_size_selector ? 5 : Math.max(1, prev.max_quantity),
-                        required: prev.is_size_selector ? false : prev.required,
-                      }));
-                    }}
-                    className={`flex flex-col items-start p-3.5 rounded-xl border text-left transition-all ${
-                      !groupForm.is_size_selector && !groupForm.is_pizza_crust
-                        ? "border-[#047857] bg-emerald-50/80 shadow-sm ring-2 ring-[#047857]/30"
-                        : "border-stone-200 bg-white hover:border-stone-300"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between w-full mb-1">
-                      <div className="flex items-center gap-2">
-                        <span className="p-1 rounded-md bg-emerald-100 text-emerald-800 text-xs font-black">
-                          ➕
-                        </span>
-                        <span className="text-sm font-bold text-gray-900">Adicionais</span>
-                      </div>
-                      {!groupForm.is_size_selector && !groupForm.is_pizza_crust && (
-                        <Check className="w-4 h-4 text-[#047857]" />
-                      )}
-                    </div>
-                    <span className="text-[11px] text-gray-500 leading-tight">
-                      Extras, acompanhamentos, molhos e cortesias grátis.
-                    </span>
-                  </button>
-
-                  {/* Tipo 2: Tamanhos & Medidas */}
+                  {/* Tipo 1: Escolha Única */}
                   <button
                     type="button"
                     onClick={() => {
@@ -809,7 +774,7 @@ export default function ComplementsPage() {
                         required: true,
                       }));
                     }}
-                    className={`flex flex-col items-start p-3.5 rounded-xl border text-left transition-all ${
+                    className={`flex flex-col items-start p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
                       groupForm.is_size_selector
                         ? "border-blue-600 bg-blue-50/80 shadow-sm ring-2 ring-blue-600/30"
                         : "border-stone-200 bg-white hover:border-stone-300"
@@ -818,16 +783,51 @@ export default function ComplementsPage() {
                     <div className="flex items-center justify-between w-full mb-1">
                       <div className="flex items-center gap-2">
                         <span className="p-1 rounded-md bg-blue-100 text-blue-800 text-xs font-black">
-                          📏
+                          🔘
                         </span>
-                        <span className="text-sm font-bold text-gray-900">Tamanhos</span>
+                        <span className="text-sm font-bold text-gray-900">Escolha Única</span>
                       </div>
                       {groupForm.is_size_selector && (
                         <Check className="w-4 h-4 text-blue-600" />
                       )}
                     </div>
                     <span className="text-[11px] text-gray-500 leading-tight">
-                      Define o preço base do produto (300ml, 500ml, Lata, 600ml).
+                      Apenas 1 opção (ex: Ponto da carne, Coca Normal ou Zero, ou Tamanho).
+                    </span>
+                  </button>
+
+                  {/* Tipo 2: Múltipla Escolha */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGroupForm((prev) => ({
+                        ...prev,
+                        is_size_selector: false,
+                        is_pizza_crust: false,
+                        min_quantity: prev.is_size_selector ? 0 : prev.min_quantity,
+                        max_quantity: prev.is_size_selector ? 5 : Math.max(1, prev.max_quantity),
+                        required: prev.is_size_selector ? false : prev.required,
+                      }));
+                    }}
+                    className={`flex flex-col items-start p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+                      !groupForm.is_size_selector && !groupForm.is_pizza_crust
+                        ? "border-[#047857] bg-emerald-50/80 shadow-sm ring-2 ring-[#047857]/30"
+                        : "border-stone-200 bg-white hover:border-stone-300"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full mb-1">
+                      <div className="flex items-center gap-2">
+                        <span className="p-1 rounded-md bg-emerald-100 text-emerald-800 text-xs font-black">
+                          ➕
+                        </span>
+                        <span className="text-sm font-bold text-gray-900">Múltipla Escolha</span>
+                      </div>
+                      {!groupForm.is_size_selector && !groupForm.is_pizza_crust && (
+                        <Check className="w-4 h-4 text-[#047857]" />
+                      )}
+                    </div>
+                    <span className="text-[11px] text-gray-500 leading-tight">
+                      Extras e adicionais com + e - (bacon, molhos, frutas do açaí).
                     </span>
                   </button>
 
@@ -843,7 +843,7 @@ export default function ComplementsPage() {
                         has_free_complements: false,
                       }));
                     }}
-                    className={`flex flex-col items-start p-3.5 rounded-xl border text-left transition-all ${
+                    className={`flex flex-col items-start p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
                       groupForm.is_pizza_crust
                         ? "border-amber-600 bg-amber-50/80 shadow-sm ring-2 ring-amber-600/30"
                         : "border-stone-200 bg-white hover:border-stone-300"
@@ -869,37 +869,42 @@ export default function ComplementsPage() {
 
               {/* RENDERIZAÇÃO CONDICIONAL POR TIPO DE GRUPO */}
 
-              {/* CASO 1: SE FOR SELETOR DE TAMANHO */}
+              {/* CASO 1: SE FOR ESCOLHA ÚNICA */}
               {groupForm.is_size_selector ? (
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50/60 border border-blue-200 rounded-xl p-4 space-y-3">
                   <div className="flex items-start gap-3">
                     <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-sm font-bold">
-                      <Ruler className="w-5 h-5" />
+                      <CheckCircle2 className="w-5 h-5" />
                     </div>
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         <h4 className="text-sm font-bold text-blue-950">
-                          Preço Principal por Tamanho
+                          Escolha Única Obrigatória (1 Opção)
                         </h4>
                         <span className="text-[10px] uppercase font-extrabold bg-blue-200 text-blue-800 px-2 py-0.5 rounded-full">
                           1 Obrigatório
                         </span>
                       </div>
                       <p className="text-xs text-blue-900/80 leading-relaxed">
-                        Neste modo, o cliente é <strong>obrigado a escolher exatamente 1 tamanho</strong> (ex: Lata R$ 6,00, Latão R$ 7,00 ou 300ml, 500ml).
+                        Neste modo, o cliente é <strong>obrigado a escolher exatamente 1 opção</strong> para adicionar o produto à sacola.
                       </p>
                     </div>
                   </div>
 
-                  <div className="bg-white/80 rounded-lg p-3 border border-blue-100 text-xs text-blue-900 space-y-1.5">
+                  <div className="bg-white/90 rounded-lg p-3 border border-blue-100 text-xs text-blue-900 space-y-2">
                     <p className="font-semibold flex items-center gap-1.5 text-blue-950">
-                      <span>💡</span> Como funciona o valor de venda:
+                      <span>💡</span> Como cadastrar os valores das opções:
                     </p>
-                    <p className="text-gray-600 leading-relaxed">
-                      O valor cadastrado em cada item deste grupo substitui o preço inicial do produto. Por exemplo: se o produto tiver valor R$ 0,00 e o cliente escolher <em>"Latão (R$ 7,00)"</em>, o preço final do item será R$ 7,00.
-                    </p>
-                    <p className="text-blue-700 font-medium pt-0.5 text-[11px]">
-                      ✓ Regras de Mínimo (1), Máximo (1) e Escolha Obrigatória são travadas automaticamente.
+                    <ul className="space-y-1.5 text-gray-600 text-[11px] leading-relaxed pl-1">
+                      <li>
+                        • <strong className="text-gray-900">Opções sem custo (R$ 0,00):</strong> Se você cadastrar valor R$ 0,00 (ex: <em>"Tradicional"</em> e <em>"Zero"</em>, ou <em>"Ao ponto"</em>), o cliente escolhe a versão que quer sem alterar o preço do produto.
+                      </li>
+                      <li>
+                        • <strong className="text-gray-900">Opções com valores (Lata R$ 6,00 vs Garrafa R$ 12,00):</strong> A opção escolhida pelo cliente define automaticamente o valor final de venda do produto.
+                      </li>
+                    </ul>
+                    <p className="text-blue-700 font-medium pt-1 text-[11px] border-t border-blue-100">
+                      ✓ Regras de Mínimo (1) e Máximo (1) são travadas automaticamente para garantir a seleção do cliente.
                     </p>
                   </div>
                 </div>

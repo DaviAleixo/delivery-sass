@@ -534,12 +534,26 @@ export default function ProductDetailModal({
                                     className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer select-none"
                                     onClick={() => handleToggleItem(group, item)}
                                   >
-                                    <div className={`w-5 h-5 rounded-md border-2 transition-all flex items-center justify-center shrink-0 ${
-                                      isSelected 
-                                        ? 'border-[#046c4e] bg-[#046c4e] text-white shadow-2xs' 
-                                        : 'border-gray-300 bg-white'
+                                    <div className={`w-5 h-5 transition-all flex items-center justify-center shrink-0 ${
+                                      group.is_size_selector || group.max_quantity === 1
+                                        ? `rounded-full border-2 ${
+                                            isSelected
+                                              ? 'border-[#046c4e] bg-white'
+                                              : 'border-gray-300 bg-white'
+                                          }`
+                                        : `rounded-md border-2 ${
+                                            isSelected 
+                                              ? 'border-[#046c4e] bg-[#046c4e] text-white shadow-2xs' 
+                                              : 'border-gray-300 bg-white'
+                                          }`
                                     }`}>
-                                      {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                                      {isSelected && (
+                                        group.is_size_selector || group.max_quantity === 1 ? (
+                                          <div className="w-2.5 h-2.5 rounded-full bg-[#046c4e]" />
+                                        ) : (
+                                          <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                        )
+                                      )}
                                     </div>
                                     <div className="min-w-0">
                                       <p className="font-bold text-xs sm:text-sm text-gray-900 leading-tight">
@@ -547,9 +561,13 @@ export default function ProductDetailModal({
                                       </p>
                                       <p className="text-xs text-gray-500 font-medium mt-0.5">
                                         {group.is_size_selector ? (
-                                          <span className="font-bold text-stone-900">
-                                            R$ {Number(item.price || 0).toFixed(2).replace('.', ',')}
-                                          </span>
+                                          Number(item.price) > 0 ? (
+                                            <span className="font-bold text-stone-900">
+                                              R$ {Number(item.price || 0).toFixed(2).replace('.', ',')}
+                                            </span>
+                                          ) : (
+                                            <span className="text-emerald-700 font-semibold text-[11px]">Incluso</span>
+                                          )
                                         ) : Number(group.free_quantity) > 0 ? (
                                           isSelected ? (
                                             chargedUnitsForItem === 0 ? (

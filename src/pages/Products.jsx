@@ -248,9 +248,11 @@ export default function ProductsPage() {
       }
 
       let finalPrice = 0;
-      const hasSizeGroupSelected = selectedGroupIds.some((gid) => {
+      const hasPriceDefiningGroupSelected = selectedGroupIds.some((gid) => {
         const grp = complementGroups.find((g) => g.id === gid);
-        return Boolean(grp?.is_size_selector);
+        if (!grp?.is_size_selector) return false;
+        const itemsForGrp = complementItems.filter((i) => i.group_id === gid);
+        return itemsForGrp.some((i) => Number(i.price) > 0);
       });
 
       if (isPizzaCat) {
@@ -262,10 +264,13 @@ export default function ProductsPage() {
         }
         // Preço base de referência para o catálogo (menor preço dos tamanhos cadastrados)
         finalPrice = Math.min(...sizePricesList);
-      } else if (hasSizeGroupSelected) {
-        // Se tiver grupo de tamanho selecionado, o preço é opcional (o preço base é definido pelas opções de tamanho)
+      } else if (hasPriceDefiningGroupSelected) {
+        // Se tiver grupo de escolha única com valores cadastrados (ex: Lata R$ 6 / Garrafa R$ 12), o preço base é dispensado
         const enteredPrice = parseBRLToNumber(productForm.price);
-        const selectedSizeGroup = complementGroups.find((g) => selectedGroupIds.includes(g.id) && g.is_size_selector);
+        const selectedSizeGroup = complementGroups.find((g) => {
+          if (!selectedGroupIds.includes(g.id) || !g.is_size_selector) return false;
+          return complementItems.some((i) => i.group_id === g.id && Number(i.price) > 0);
+        });
         const sizeItems = selectedSizeGroup ? complementItems.filter((i) => i.group_id === selectedSizeGroup.id && Number(i.price) > 0) : [];
         const minSizePrice = sizeItems.length > 0 ? Math.min(...sizeItems.map((i) => Number(i.price))) : 0;
 
@@ -737,17 +742,19 @@ export default function ProductsPage() {
                       );
                     }
 
-                    const hasSizeGroupSelected = selectedGroupIds.some((gid) => {
+                    const hasPriceDefiningGroupSelected = selectedGroupIds.some((gid) => {
                       const grp = complementGroups.find((g) => g.id === gid);
-                      return Boolean(grp?.is_size_selector);
+                      if (!grp?.is_size_selector) return false;
+                      const itemsForGrp = complementItems.filter((i) => i.group_id === gid);
+                      return itemsForGrp.some((i) => Number(i.price) > 0);
                     });
 
                     return (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                         <div>
                           <Label htmlFor="price" className="text-xs font-semibold text-stone-700">
-                            Preço (R$) {hasSizeGroupSelected ? (
-                              <span className="text-blue-700 font-normal text-[11px]">(Opcional · Definido nos tamanhos)</span>
+                            Preço (R$) {hasPriceDefiningGroupSelected ? (
+                              <span className="text-blue-700 font-normal text-[11px]">(Opcional · Definido nas opções)</span>
                             ) : (
                               <span className="text-red-500">*</span>
                             )}
@@ -756,15 +763,15 @@ export default function ProductsPage() {
                             id="price"
                             value={productForm.price}
                             onChange={(e) => setProductForm({...productForm, price: e.target.value})}
-                            placeholder={hasSizeGroupSelected ? "R$ 0,00" : "R$ 32,90"}
+                            placeholder={hasPriceDefiningGroupSelected ? "R$ 0,00" : "R$ 32,90"}
                             className={`mt-1 border-stone-200 font-mono ${
-                              hasSizeGroupSelected ? "bg-blue-50/40 border-blue-200 focus:bg-white" : "bg-stone-50/50 focus:bg-white"
+                              hasPriceDefiningGroupSelected ? "bg-blue-50/40 border-blue-200 focus:bg-white" : "bg-stone-50/50 focus:bg-white"
                             }`}
-                            required={!hasSizeGroupSelected}
+                            required={!hasPriceDefiningGroupSelected}
                           />
-                          {hasSizeGroupSelected && (
+                          {hasPriceDefiningGroupSelected && (
                             <span className="text-[10px] text-blue-700/80 mt-1 block">
-                              ✓ Preço dispensado: o valor de venda será definido pelo tamanho que o cliente escolher.
+                              ✓ Preço dispensado: o valor de venda será definido pela opção que o cliente escolher.
                             </span>
                           )}
                         </div>
@@ -1032,9 +1039,13 @@ export default function ProductsPage() {
                             <div className="min-w-0 flex-1 text-xs space-y-1">
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="font-bold text-stone-900 block truncate">{grp.name}</span>
-                                {grp.is_size_selector && (
+                                {grp.is_size_selector ? (
                                   <span className="text-[9px] font-extrabold uppercase bg-blue-100 text-blue-800 px-1.5 py-0.2 rounded">
-                                    Tamanhos
+                                    🔘 Escolha Única
+                                  </span>
+                                ) : (
+                                  <span className="text-[9px] font-extrabold uppercase bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded">
+                                    ➕ Múltipla Escolha
                                   </span>
                                 )}
                               </div>
