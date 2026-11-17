@@ -333,7 +333,7 @@ export default function DashboardPage() {
                             {product.image_url ? (
                               <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
                             ) : (
-                              <UtensilsCrossed className="w-4 h-4 text-stone-400" />
+                              <Package className="w-5 h-5 text-stone-300 stroke-[1.5]" />
                             )}
                             <span className="absolute top-0.5 left-0.5 bg-black/75 text-[9px] text-white font-bold px-1 rounded">
                               #{idx + 1}

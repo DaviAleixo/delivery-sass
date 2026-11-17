@@ -4,7 +4,7 @@ import { BannerImage } from "@/entities/BannerImage";
 import { Product } from "@/entities/Product";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Star, Clock, MapPin, Phone, Instagram, ChevronRight, Utensils, Heart, Award } from "lucide-react";
+import { Star, Clock, MapPin, Phone, Instagram, ChevronRight, Utensils, Heart, Award, Package } from "lucide-react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 export default function HomePage() {
@@ -200,7 +200,9 @@ export default function HomePage() {
                   {product.image_url ? (
                     <img src={product.image_url} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
                   ) : (
-                    <div className="w-full h-full bg-gray-200 flex items-center justify-center text-4xl">📦</div>
+                    <div className="w-full h-full bg-stone-50 border border-stone-100 flex items-center justify-center">
+                      <Package className="w-10 h-10 text-stone-300 stroke-[1.5]" />
+                    </div>
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
                     <div className="text-white">

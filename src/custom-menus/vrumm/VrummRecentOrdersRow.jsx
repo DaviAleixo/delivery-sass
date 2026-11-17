@@ -1,6 +1,6 @@
 import React, { useRef, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { History, RotateCcw, X, ShoppingBag, ArrowRight, Check } from "lucide-react";
+import { History, RotateCcw, X, ShoppingBag, ArrowRight, Check, Package } from "lucide-react";
 import { formatBRLValue } from "@/utils/pizzaPricing";
 
 function RecentOrderCard({
@@ -52,8 +52,8 @@ function RecentOrderCard({
               draggable={false}
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-3xl bg-stone-100">
-              🍽️
+            <div className="w-full h-full flex items-center justify-center bg-stone-50 border border-stone-100">
+              <Package className="w-7 h-7 text-stone-300 stroke-[1.5]" />
             </div>
           )}
 

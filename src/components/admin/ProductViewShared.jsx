@@ -1,6 +1,6 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { Edit, Trash2, UtensilsCrossed } from "lucide-react";
+import { Edit, Trash2, Package } from "lucide-react";
 import {
   formatBRLValue,
   getMinPizzaPrice,
@@ -24,9 +24,9 @@ export function ProductThumbnail({ product, isVisible, className = "", iconSize 
 
   return (
     <div
-      className={`w-full h-full flex items-center justify-center bg-stone-100 text-stone-400 ${className}`}
+      className={`w-full h-full flex items-center justify-center bg-stone-50 border border-stone-100 ${className}`}
     >
-      <UtensilsCrossed className={iconSize} />
+      <Package className={`${iconSize} text-stone-300 stroke-[1.5]`} />
     </div>
   );
 }

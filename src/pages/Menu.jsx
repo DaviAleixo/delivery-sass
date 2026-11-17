@@ -41,7 +41,9 @@ import {
   Instagram,
   CheckCircle2,
   Info,
-  Ticket
+  Ticket,
+  Package,
+  Utensils
 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -1259,7 +1261,9 @@ export default function MenuPage() {
         <div className="mt-3 container mx-auto px-4 max-w-6xl">
           <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-2xl p-3.5 flex items-center justify-between shadow-xs">
             <div className="flex items-center gap-2.5">
-              <span className="text-xl">🍽️</span>
+              <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
+                <Utensils className="w-5 h-5 text-emerald-800" />
+              </div>
               <div>
                 <p className="text-[11px] font-black uppercase text-emerald-700">Atendimento no Salão</p>
                 <p className="text-sm font-bold text-stone-900">Você está na Mesa {urlMesa}</p>
@@ -1277,7 +1281,9 @@ export default function MenuPage() {
         <div className="mt-3 container mx-auto px-4 max-w-6xl">
           <div className="bg-stone-100 border border-stone-200 text-stone-900 rounded-2xl p-3.5 flex items-center justify-between shadow-xs">
             <div className="flex items-center gap-2.5">
-              <span className="text-xl">🍽️</span>
+              <div className="w-9 h-9 rounded-xl bg-stone-200/80 flex items-center justify-center shrink-0">
+                <Utensils className="w-5 h-5 text-stone-700" />
+              </div>
               <div>
                 <p className="text-[11px] font-black uppercase text-stone-600">Autoatendimento nas Mesas</p>
                 <p className="text-xs sm:text-sm font-medium text-stone-700">Aponte a câmera para o QR Code da sua mesa para enviar seu pedido direto para a cozinha</p>
@@ -1562,7 +1568,9 @@ export default function MenuPage() {
 
         {filteredProducts.length === 0 && (
           <div className="text-center py-16 bg-white rounded-3xl border border-[#E5EAE7] p-8 space-y-3 shadow-xs">
-            <div className="text-5xl">🍽️</div>
+            <div className="w-16 h-16 mx-auto rounded-2xl bg-stone-50 border border-stone-200/80 flex items-center justify-center">
+              <Package className="w-8 h-8 text-stone-300 stroke-[1.5]" />
+            </div>
             <h3 className="text-lg font-bold text-[#171717]">Nenhum produto encontrado</h3>
             <p className="text-xs text-stone-500 max-w-sm mx-auto">
               {searchQuery ? `Não encontramos itens para "${searchQuery}". Tente outro termo.` : "Não há produtos disponíveis nesta categoria no momento."}

@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { Plus, Minus, Trash2, ShoppingBag, X, ArrowRight, Sparkles } from "lucide-react";
+import { Plus, Minus, Trash2, ShoppingBag, X, ArrowRight, Sparkles, Package } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { formatBRLValue } from "@/utils/pizzaPricing";
@@ -272,7 +272,9 @@ export default function VrummCart({
                       {item.image_url ? (
                         <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center text-xl bg-stone-100">🍽️</div>
+                        <div className="w-full h-full flex items-center justify-center bg-stone-50">
+                          <Package className="w-5 h-5 text-stone-300 stroke-[1.5]" />
+                        </div>
                       )}
                     </div>
 
@@ -367,7 +369,9 @@ export default function VrummCart({
                               loading="lazy"
                             />
                           ) : (
-                            <span className="text-3xl select-none">{p.upsellIcon || "✨"}</span>
+                            <div className="w-full h-full flex items-center justify-center bg-stone-50">
+                              <Package className="w-6 h-6 text-stone-300 stroke-[1.5]" />
+                            </div>
                           )}
 
                           <span className="absolute top-1 right-1 bg-white/95 border border-stone-200 text-[9px] font-bold text-stone-700 px-1.5 py-0.5 rounded-md shadow-xs">

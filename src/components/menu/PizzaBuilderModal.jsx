@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { ArrowLeft, X, ChevronDown, Check, Plus, Minus, Search, Sparkles } from 'lucide-react';
+import { ArrowLeft, X, ChevronDown, Check, Plus, Minus, Search, Sparkles, Package } from 'lucide-react';
 
 export default function PizzaBuilderModal({
   isOpen,
@@ -674,8 +674,8 @@ export default function PizzaBuilderModal({
                               className="w-12 h-12 rounded-full object-cover shrink-0 border border-gray-100 shadow-2xs"
                             />
                           ) : (
-                            <div className="w-12 h-12 rounded-full bg-emerald-50 text-[#047857] flex items-center justify-center font-bold text-lg shrink-0 border border-emerald-100">
-                              🍕
+                            <div className="w-12 h-12 rounded-2xl bg-stone-50 flex items-center justify-center shrink-0 border border-stone-100">
+                              <Package className="w-5 h-5 text-stone-300 stroke-[1.5]" />
                             </div>
                           )}
                           <div className="min-w-0">
@@ -939,8 +939,8 @@ export default function PizzaBuilderModal({
                       {p.image_url ? (
                         <img src={p.image_url} alt={p.name} className="w-12 h-12 rounded-full object-cover shrink-0 border border-gray-100 shadow-2xs" />
                       ) : (
-                        <div className="w-12 h-12 rounded-full bg-emerald-50 text-[#047857] flex items-center justify-center text-xl shrink-0 border border-emerald-100">
-                          🍕
+                        <div className="w-12 h-12 rounded-2xl bg-stone-50 flex items-center justify-center shrink-0 border border-stone-100">
+                          <Package className="w-5 h-5 text-stone-300 stroke-[1.5]" />
                         </div>
                       )}
                       <div className="min-w-0">

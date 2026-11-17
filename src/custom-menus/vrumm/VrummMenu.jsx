@@ -9,7 +9,9 @@ import {
   MapPin, 
   Phone, 
   Instagram,
-  Ticket
+  Ticket,
+  Package,
+  Utensils
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createPageUrl } from "@/utils";
@@ -167,7 +169,9 @@ export default function VrummMenu({
         <div className="pt-20 container mx-auto px-4 max-w-6xl">
           <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-2xl p-3.5 flex items-center justify-between shadow-xs">
             <div className="flex items-center gap-2.5">
-              <span className="text-xl">🍽️</span>
+              <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
+                <Utensils className="w-5 h-5 text-emerald-800" />
+              </div>
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">Atendimento no Salão</p>
                 <p className="text-sm font-bold text-stone-900">Você está na Mesa {urlMesa}</p>
@@ -185,7 +189,9 @@ export default function VrummMenu({
         <div className="pt-20 container mx-auto px-4 max-w-6xl">
           <div className="bg-blue-50 border border-blue-200 text-blue-900 rounded-2xl p-3.5 flex items-center justify-between shadow-xs">
             <div className="flex items-center gap-2.5">
-              <span className="text-xl">🍽️</span>
+              <div className="w-9 h-9 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">
+                <Utensils className="w-5 h-5 text-blue-800" />
+              </div>
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-wider text-blue-800">Autoatendimento nas Mesas</p>
                 <p className="text-xs sm:text-sm font-medium text-stone-700">Aponte a câmera para o QR Code da sua mesa para enviar seu pedido direto para a cozinha</p>
@@ -421,7 +427,9 @@ export default function VrummMenu({
 
         {filteredProducts.length === 0 && (
           <div className="text-center py-14 bg-white rounded-3xl border border-stone-200/80 p-8 space-y-2.5 shadow-xs">
-            <div className="text-4xl">🍽️</div>
+            <div className="w-14 h-14 mx-auto rounded-2xl bg-stone-50 border border-stone-200/80 flex items-center justify-center">
+              <Package className="w-7 h-7 text-stone-300 stroke-[1.5]" />
+            </div>
             <h3 className="text-base font-bold text-stone-900">Nenhum produto encontrado</h3>
             <p className="text-xs text-stone-500 max-w-sm mx-auto">
               {searchQuery ? `Não encontramos itens para "${searchQuery}". Tente outro termo.` : "Não há produtos disponíveis nesta categoria no momento."}
