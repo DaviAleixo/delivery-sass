@@ -52,17 +52,11 @@ function PopularProductCard({ product, index, hasMoved, onProductClick, isVisual
         
         <div className="mt-2 flex items-center justify-between">
           <span className="font-black text-xs sm:text-sm text-gray-950">
-            {hasPizzaPrices(product) ? (
-              <span className="text-[10px] sm:text-xs">
-                A partir de {formatBRLValue(getMinPizzaPrice(product))}
-              </span>
-            ) : product.min_size_price && Number(product.min_size_price) > 0 ? (
-              <span className="text-[10px] sm:text-xs">
-                A partir de {formatBRLValue(product.min_size_price)}
-              </span>
-            ) : (
-              formatBRLValue(product.price)
-            )}
+            {hasPizzaPrices(product)
+              ? formatBRLValue(getMinPizzaPrice(product))
+              : product.min_size_price && Number(product.min_size_price) > 0
+              ? formatBRLValue(product.min_size_price)
+              : formatBRLValue(product.price)}
           </span>
 
           {!isVisualOnly && (
