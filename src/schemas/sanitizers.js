@@ -177,6 +177,20 @@ export function sanitizeProductUpdateData(rawUpdate = {}) {
   if (rawUpdate.sector_id !== undefined) {
     sanitized.sector_id = rawUpdate.sector_id ? String(rawUpdate.sector_id) : null;
   }
+  if (rawUpdate.pizza_prices !== undefined) {
+    let cleanPizzaPrices = {};
+    if (typeof rawUpdate.pizza_prices === "object" && rawUpdate.pizza_prices !== null && !Array.isArray(rawUpdate.pizza_prices)) {
+      cleanPizzaPrices = rawUpdate.pizza_prices;
+    } else if (typeof rawUpdate.pizza_prices === "string") {
+      try {
+        const parsed = JSON.parse(rawUpdate.pizza_prices);
+        if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+          cleanPizzaPrices = parsed;
+        }
+      } catch {}
+    }
+    sanitized.pizza_prices = cleanPizzaPrices;
+  }
 
   delete sanitized.updated_at;
   sanitized.updated_date = new Date().toISOString();
@@ -193,6 +207,20 @@ export function sanitizeProductData(rawProduct = {}) {
     return fallback;
   };
 
+  let cleanPizzaPrices = {};
+  if (rawProduct.pizza_prices) {
+    if (typeof rawProduct.pizza_prices === "object" && rawProduct.pizza_prices !== null && !Array.isArray(rawProduct.pizza_prices)) {
+      cleanPizzaPrices = rawProduct.pizza_prices;
+    } else if (typeof rawProduct.pizza_prices === "string") {
+      try {
+        const parsed = JSON.parse(rawProduct.pizza_prices);
+        if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+          cleanPizzaPrices = parsed;
+        }
+      } catch {}
+    }
+  }
+
   const sanitized = {
     ...rawProduct,
     name: String(rawProduct.name || "").trim(),
@@ -204,6 +232,7 @@ export function sanitizeProductData(rawProduct = {}) {
     image_url: rawProduct.image_url ? String(rawProduct.image_url).trim() : "",
     available: rawProduct.available !== false,
     popular: Boolean(rawProduct.popular),
+    pizza_prices: cleanPizzaPrices,
   };
   delete sanitized.updated_at;
   return sanitized;

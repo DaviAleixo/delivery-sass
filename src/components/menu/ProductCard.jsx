@@ -15,9 +15,11 @@ const ProductCard = forwardRef(function ProductCard(
 ) {
   const [imageError, setImageError] = useState(false);
   const hasValidImage = Boolean(product?.image_url && !imageError);
-  const variationList = hasPizzaPrices(product) ? getPizzaSizePriceList(product, categorySizes) : [];
+  const hasSpecificPrices = hasPizzaPrices(product);
+  const hasCatSizes = Array.isArray(categorySizes) && categorySizes.length > 0;
+  const variationList = (hasSpecificPrices || hasCatSizes) ? getPizzaSizePriceList(product, categorySizes) : [];
   const variationNamesSummary = variationList.map((v) => v.shortName).join(" · ");
-  const hasMultipleDistinct = hasPizzaPrices(product) && hasMultipleDistinctVariationPrices(product, categorySizes);
+  const hasMultipleDistinct = (hasSpecificPrices || hasCatSizes) && hasMultipleDistinctVariationPrices(product, categorySizes);
 
   return (
     <motion.div
@@ -76,7 +78,7 @@ const ProductCard = forwardRef(function ProductCard(
               className="font-bold text-xs sm:text-sm text-stone-950 tracking-tight"
               style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
             >
-              {hasPizzaPrices(product) ? (
+              {variationList.length > 0 ? (
                 <>
                   {hasMultipleDistinct && (
                     <span className="text-[11px] font-normal text-stone-500 mr-1">A partir de</span>

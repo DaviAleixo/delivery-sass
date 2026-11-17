@@ -50,6 +50,87 @@ export const VARIATION_GRID_PRESETS = {
   },
 };
 
+export function parsePizzaPrices(raw) {
+  if (!raw) return {};
+  if (typeof raw === "object" && !Array.isArray(raw)) return raw;
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+export function parseCategorySizes(raw) {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+/**
+ * Localiza com máxima resiliência a categoria correspondente a um produto,
+ * tolerando diferenças de ID vs Nome, acentuação, maiúsculas/minúsculas e emojis (ex: 'cerveja 🍻' vs 'cerveja').
+ */
+export function findMatchingCategory(product, categories = []) {
+  if (!product || !Array.isArray(categories) || categories.length === 0) return null;
+
+  const normalize = (str) =>
+    String(str || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^\w\s]/gi, "")
+      .trim();
+
+  const prodCatId = String(product.category_id || "").trim();
+  const prodCatName = String(product.category || "").trim();
+  const normProdCatName = normalize(prodCatName);
+  const normProdCatId = normalize(prodCatId);
+
+  // 1. Correspondência exata por ID
+  let found = categories.find((c) => {
+    const cId = String(c.id || "").trim();
+    return cId && (cId === prodCatId || cId === prodCatName);
+  });
+  if (found) return found;
+
+  // 2. Correspondência exata por Nome (case-insensitive)
+  found = categories.find((c) => {
+    const cName = String(c.name || "").trim().toLowerCase();
+    return cName && (cName === prodCatName.toLowerCase() || cName === prodCatId.toLowerCase());
+  });
+  if (found) return found;
+
+  // 3. Correspondência normalizada (sem acentos, pontuações ou emojis)
+  found = categories.find((c) => {
+    const normCName = normalize(c.name);
+    return normCName && (normCName === normProdCatName || normCName === normProdCatId);
+  });
+  if (found) return found;
+
+  // 4. Inclusão de substring (ex: 'cerveja' dentro de 'cerveja 🍻' ou 'cervejas')
+  found = categories.find((c) => {
+    const normCName = normalize(c.name);
+    if (!normCName) return false;
+    if (normProdCatName && (normCName.includes(normProdCatName) || normProdCatName.includes(normCName))) return true;
+    if (normProdCatId && (normCName.includes(normProdCatId) || normProdCatId.includes(normCName))) return true;
+    return false;
+  });
+
+  return found || null;
+}
+
 export function normalizeVariationId(name, fallbackIndex = 0) {
   const cleaned = String(name || "")
     .normalize("NFD")
@@ -65,12 +146,13 @@ export function isPizzaCategory(category) {
 }
 
 export function isVariationGridCategory(category) {
+  if (!category) return false;
+  const sizes = parseCategorySizes(category.pizza_sizes);
   return (
-    category?.type === CATEGORY_TYPES.VARIATION_GRID ||
-    category?.type === "grid" ||
-    (category?.type !== CATEGORY_TYPES.PIZZA &&
-      Array.isArray(category?.pizza_sizes) &&
-      category.pizza_sizes.length > 0)
+    category.type === CATEGORY_TYPES.VARIATION_GRID ||
+    category.type === "grid" ||
+    category.type === "variation_grid" ||
+    (category.type !== CATEGORY_TYPES.PIZZA && sizes.length > 0)
   );
 }
 
@@ -80,11 +162,15 @@ export function hasCategorySizeMatrix(category) {
 
 export function getCategoryMatrixSizes(category) {
   if (!category) return [];
-  if (Array.isArray(category.pizza_sizes) && category.pizza_sizes.length > 0) {
-    return category.pizza_sizes;
+  const sizes = parseCategorySizes(category.pizza_sizes);
+  if (sizes.length > 0) {
+    return sizes;
   }
   if (isPizzaCategory(category)) {
     return DEFAULT_PIZZA_SIZES;
+  }
+  if (isVariationGridCategory(category)) {
+    return VARIATION_GRID_PRESETS.cervejas.sizes;
   }
   return [];
 }
@@ -94,10 +180,11 @@ export function formatBRLValue(val) {
 }
 
 export function hasPizzaPrices(product) {
+  const map = parsePizzaPrices(product?.pizza_prices);
   return Boolean(
-    product?.pizza_prices &&
-      typeof product.pizza_prices === "object" &&
-      Object.values(product.pizza_prices).some((v) => Number(v) > 0)
+    map &&
+      typeof map === "object" &&
+      Object.values(map).some((v) => Number(v) > 0)
   );
 }
 
@@ -105,29 +192,34 @@ export function hasPizzaPrices(product) {
  * Retorna o menor preço positivo entre os tamanhos/variações configurados do produto.
  */
 export function getMinPizzaPrice(product, categorySizes = []) {
-  const map = product?.pizza_prices;
-  if (!map || typeof map !== "object") {
-    return Number(product?.price || 0);
+  const map = parsePizzaPrices(product?.pizza_prices);
+  const parsedSizes = parseCategorySizes(categorySizes);
+
+  if (map && typeof map === "object") {
+    const sizeIds = parsedSizes.map((s) => s.id).filter(Boolean);
+    const matchedPrices = sizeIds
+      .map((id) => Number(map[id]))
+      .filter((v) => Number.isFinite(v) && v > 0);
+
+    if (matchedPrices.length > 0) {
+      return Math.min(...matchedPrices);
+    }
+
+    const allPositive = Object.values(map)
+      .map((v) => Number(v))
+      .filter((v) => Number.isFinite(v) && v > 0);
+
+    if (allPositive.length > 0) {
+      return Math.min(...allPositive);
+    }
   }
 
-  const sizeIds = Array.isArray(categorySizes)
-    ? categorySizes.map((s) => s.id).filter(Boolean)
-    : [];
-
-  const matchedPrices = sizeIds
-    .map((id) => Number(map[id]))
+  // Se a categoria tem tamanhos com default_price
+  const defaultPrices = parsedSizes
+    .map((s) => Number(s.default_price))
     .filter((v) => Number.isFinite(v) && v > 0);
-
-  if (matchedPrices.length > 0) {
-    return Math.min(...matchedPrices);
-  }
-
-  const allPositive = Object.values(map)
-    .map((v) => Number(v))
-    .filter((v) => Number.isFinite(v) && v > 0);
-
-  if (allPositive.length > 0) {
-    return Math.min(...allPositive);
+  if (defaultPrices.length > 0) {
+    return Math.min(...defaultPrices);
   }
 
   return Number(product?.price || 0);
@@ -147,17 +239,18 @@ export function hasMultipleDistinctVariationPrices(product, categorySizes = []) 
  * Retorna a lista ordenada de tamanhos/variações com preço positivo para exibição no admin e cardápio.
  */
 export function getPizzaSizePriceList(product, categorySizes = []) {
-  const map = product?.pizza_prices;
-  if (!map || typeof map !== "object") return [];
+  const map = parsePizzaPrices(product?.pizza_prices);
+  const parsedSizes = parseCategorySizes(categorySizes);
 
   const shortenName = (name) =>
     String(name || "")
       .replace(/\s*\([^)]*\)\s*/g, "")
       .trim();
 
-  if (Array.isArray(categorySizes) && categorySizes.length > 0) {
+  // 1. Se houver categorySizes e o produto tiver mapa de preços
+  if (parsedSizes.length > 0 && map && typeof map === "object" && Object.keys(map).length > 0) {
     const ordered = [];
-    for (const size of categorySizes) {
+    for (const size of parsedSizes) {
       const price = Number(map[size.id]);
       if (Number.isFinite(price) && price > 0) {
         ordered.push({
@@ -171,6 +264,7 @@ export function getPizzaSizePriceList(product, categorySizes = []) {
     if (ordered.length > 0) return ordered;
   }
 
+  // 2. Mapeamento por chaves do produto usando fallbackNames
   const fallbackNames = {
     latao: "Latão",
     long_neck: "Long Neck",
@@ -187,27 +281,48 @@ export function getPizzaSizePriceList(product, categorySizes = []) {
     familia: "Família",
   };
 
-  return Object.entries(map)
-    .map(([id, raw]) => {
-      const resolvedName = fallbackNames[id] || id.charAt(0).toUpperCase() + id.slice(1).replace(/_/g, " ");
+  if (map && typeof map === "object" && Object.keys(map).length > 0) {
+    const fromMap = Object.entries(map)
+      .map(([id, raw]) => {
+        const matchingCatSize = parsedSizes.find((s) => s.id === id);
+        const resolvedName = matchingCatSize?.name || fallbackNames[id] || id.charAt(0).toUpperCase() + id.slice(1).replace(/_/g, " ");
+        return {
+          id,
+          name: resolvedName,
+          shortName: shortenName(resolvedName),
+          price: Number(raw),
+        };
+      })
+      .filter((item) => Number.isFinite(item.price) && item.price > 0);
+
+    if (fromMap.length > 0) return fromMap;
+  }
+
+  // 3. Fallback: Se o produto não possui pizza_prices preenchidos individualmente,
+  // mas os tamanhos da categoria possuem default_price ou o produto possui preço base
+  if (parsedSizes.length > 0) {
+    const basePrice = Number(product?.price || 0);
+    return parsedSizes.map((size) => {
+      const itemPrice = Number(size.default_price) > 0 ? Number(size.default_price) : basePrice;
       return {
-        id,
-        name: resolvedName,
-        shortName: resolvedName,
-        price: Number(raw),
+        id: size.id,
+        name: size.name,
+        shortName: shortenName(size.name) || size.id,
+        price: itemPrice,
       };
-    })
-    .filter((item) => Number.isFinite(item.price) && item.price > 0);
+    }).filter((item) => Number.isFinite(item.price) && item.price > 0);
+  }
+
+  return [];
 }
 
 /**
  * Constrói um grupo de complemento virtual de Escolha Única para produtos de categorias com Grade de Variações
  * (ex: Cervejas com Latão, Long Neck, Mega Latão, 600ml, Lata).
- * Oculta automaticamente variações não preenchidas (---).
+ * Oculta automaticamente variações não preenchidas (---) quando houver preços específicos.
  */
 export function buildCategoryVariationComplementGroup(product, category) {
   if (!product || isPizzaCategory(category)) return null;
-  if (!hasPizzaPrices(product)) return null;
 
   const categorySizes = getCategoryMatrixSizes(category);
   const activeVariations = getPizzaSizePriceList(product, categorySizes);
@@ -216,7 +331,7 @@ export function buildCategoryVariationComplementGroup(product, category) {
 
   return {
     id: "__category_variation_grid__",
-    name: "Escolha a opção",
+    name: isVariationGridCategory(category) ? "Opções / Embalagem" : "Escolha o tamanho",
     description: "",
     min_quantity: 1,
     max_quantity: 1,

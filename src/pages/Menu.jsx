@@ -30,6 +30,10 @@ import PizzaBuilderModal from "../components/menu/PizzaBuilderModal";
 import {
   buildCategoryVariationComplementGroup,
   getCategoryMatrixSizes,
+  findMatchingCategory,
+  hasPizzaPrices,
+  getMinPizzaPrice,
+  isVariationGridCategory,
 } from "@/utils/pizzaPricing";
 import { 
   ShoppingBag, 
@@ -448,39 +452,55 @@ export default function MenuPage() {
     }
   };
 
-  // Enriquecer produtos com o menor valor de tamanho (quando houver seletor de tamanho)
+  // Enriquecer produtos com o menor valor de tamanho / variações da grade
   const enrichedProducts = React.useMemo(() => {
     if (!products || products.length === 0) return [];
-    if (!complementGroups || complementGroups.length === 0 || !productComplementGroups || productComplementGroups.length === 0) {
-      return products;
-    }
 
-    const sizeGroups = complementGroups.filter(g => g.active && g.is_size_selector);
-    if (sizeGroups.length === 0) return products;
-
+    const sizeGroups = (complementGroups || []).filter(g => g.active !== false && g.is_size_selector);
     const sizeGroupIds = new Set(sizeGroups.map(g => g.id));
 
     return products.map(prod => {
-      const linkedSizeGroupLinks = productComplementGroups.filter(
-        pcg => pcg.product_id === prod.id && sizeGroupIds.has(pcg.group_id)
-      );
-      if (linkedSizeGroupLinks.length === 0) return prod;
+      // 1. Grade de variações de categoria / pizza_prices
+      const matchedCat = findMatchingCategory(prod, categories);
+      const catSizes = getCategoryMatrixSizes(matchedCat);
+      const hasSpecificPrices = hasPizzaPrices(prod);
+      const isGridCat = isVariationGridCategory(matchedCat);
 
-      const sizeGroupIdsForProd = new Set(linkedSizeGroupLinks.map(l => l.group_id));
-      const relevantItems = complementItems.filter(
-        i => i.active && sizeGroupIdsForProd.has(i.group_id) && Number(i.price || 0) > 0
-      );
+      if (hasSpecificPrices || (isGridCat && catSizes.length > 0)) {
+        const minVarPrice = getMinPizzaPrice(prod, catSizes);
+        if (Number.isFinite(minVarPrice) && minVarPrice > 0) {
+          return {
+            ...prod,
+            price: minVarPrice,
+            min_size_price: minVarPrice,
+          };
+        }
+      }
 
-      if (relevantItems.length === 0) return prod;
+      // 2. Grupos de complementos de escolha única tradicionais (is_size_selector)
+      if (productComplementGroups && productComplementGroups.length > 0 && sizeGroupIds.size > 0) {
+        const linkedSizeGroupLinks = productComplementGroups.filter(
+          pcg => pcg.product_id === prod.id && sizeGroupIds.has(pcg.group_id)
+        );
+        if (linkedSizeGroupLinks.length > 0) {
+          const sizeGroupIdsForProd = new Set(linkedSizeGroupLinks.map(l => l.group_id));
+          const relevantItems = (complementItems || []).filter(
+            i => i.active !== false && sizeGroupIdsForProd.has(i.group_id) && Number(i.price || 0) > 0
+          );
+          if (relevantItems.length > 0) {
+            const minPrice = Math.min(...relevantItems.map(i => Number(i.price)));
+            return {
+              ...prod,
+              price: minPrice,
+              min_size_price: minPrice,
+            };
+          }
+        }
+      }
 
-      const minPrice = Math.min(...relevantItems.map(i => Number(i.price)));
-      return {
-        ...prod,
-        price: minPrice,
-        min_size_price: minPrice,
-      };
+      return prod;
     });
-  }, [products, complementGroups, productComplementGroups, complementItems]);
+  }, [products, categories, complementGroups, productComplementGroups, complementItems]);
 
   const popularRankedProducts = React.useMemo(() => {
     if (!enrichedProducts || enrichedProducts.length === 0) return [];
@@ -546,12 +566,7 @@ export default function MenuPage() {
   };
 
   const handleProductClick = (product) => {
-    const matchedCat = categories.find(
-      c => c.id === product.category_id || 
-           c.id === product.category ||
-           (product.category && typeof product.category === 'string' && c.name?.toLowerCase() === product.category.toLowerCase()) ||
-           (product.category_id && typeof product.category_id === 'string' && c.name?.toLowerCase() === product.category_id.toLowerCase())
-    );
+    const matchedCat = findMatchingCategory(product, categories);
 
     if (matchedCat?.type === 'pizza') {
       setSelectedPizzaProduct(product);
@@ -1543,9 +1558,7 @@ export default function MenuPage() {
             <div className="bg-white rounded-2xl sm:rounded-3xl border border-[#E5EAE7] shadow-xs overflow-hidden divide-y divide-[#E5EAE7]">
               <AnimatePresence>
                 {section.products.map((product, idx) => {
-                  const matchedCat = categories.find(
-                    c => c.id === product.category_id || c.id === product.category
-                  );
+                  const matchedCat = findMatchingCategory(product, categories);
                   return (
                     <ProductCard
                       key={product.id}
@@ -1734,14 +1747,7 @@ export default function MenuPage() {
         <ProductDetailModal
           product={selectedProduct}
           complementGroups={(() => {
-            const matchedCategory = categories.find(
-              c =>
-                c.id === selectedProduct.category_id ||
-                c.id === selectedProduct.category ||
-                (selectedProduct.category &&
-                  typeof selectedProduct.category === "string" &&
-                  c.name?.toLowerCase() === selectedProduct.category.toLowerCase())
-            );
+            const matchedCategory = findMatchingCategory(selectedProduct, categories);
             const virtualVariationGroup = buildCategoryVariationComplementGroup(
               selectedProduct,
               matchedCategory
@@ -1752,12 +1758,12 @@ export default function MenuPage() {
               .map(pcg => pcg.group_id);
 
             const dbGroups = complementGroups
-              .filter(g => g.active && linkedGroupIds.includes(g.id))
+              .filter(g => g.active !== false && linkedGroupIds.includes(g.id))
               .sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
               .map(g => ({
                 ...g,
                 items: complementItems
-                  .filter(i => i.group_id === g.id && i.active)
+                  .filter(i => i.group_id === g.id && i.active !== false)
                   .sort((a, b) => (a.order_index || 0) - (b.order_index || 0))
               }));
 
@@ -1772,12 +1778,7 @@ export default function MenuPage() {
       )}
 
       {selectedPizzaProduct && (() => {
-        const matchedPizzaCategory = categories.find(c => 
-          c.id === selectedPizzaProduct.category_id || 
-          c.id === selectedPizzaProduct.category ||
-          (selectedPizzaProduct.category && typeof selectedPizzaProduct.category === 'string' && c.name?.toLowerCase() === selectedPizzaProduct.category.toLowerCase()) ||
-          (selectedPizzaProduct.category_id && typeof selectedPizzaProduct.category_id === 'string' && c.name?.toLowerCase() === selectedPizzaProduct.category_id.toLowerCase())
-        );
+        const matchedPizzaCategory = findMatchingCategory(selectedPizzaProduct, categories);
 
         const categoryFlavors = products.filter(p => {
           if (!matchedPizzaCategory) {

@@ -41,6 +41,8 @@ import {
   hasCategorySizeMatrix,
   isPizzaCategory,
   isVariationGridCategory,
+  parsePizzaPrices,
+  findMatchingCategory,
 } from "@/utils/pizzaPricing";
 import { Link, useParams, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -238,7 +240,7 @@ export default function ProductsPage() {
     setIsSubmitting(true);
 
     try {
-      const selectedCatObj = categories.find(c => c.id === productForm.category || c.name === productForm.category);
+      const selectedCatObj = findMatchingCategory({ category: productForm.category, category_id: productForm.category }, categories);
       const isPizzaCat = isPizzaCategory(selectedCatObj);
       const usesSizeMatrix = hasCategorySizeMatrix(selectedCatObj);
 
@@ -413,7 +415,7 @@ export default function ProductsPage() {
       sector_id: product.sector_id || null,
       image_url: product.image_url || "",
       available: product.available !== false,
-      pizza_prices: product.pizza_prices || {},
+      pizza_prices: parsePizzaPrices(product.pizza_prices),
     });
     const linked = productComplementGroups.filter(pcg => pcg.product_id === product.id).map(pcg => pcg.group_id);
     setSelectedGroupIds(linked);
@@ -709,7 +711,7 @@ export default function ProductsPage() {
 
                   {/* Preço e Categoria */}
                   {(() => {
-                    const selectedCatObj = categories.find(c => c.id === productForm.category || c.name === productForm.category);
+                    const selectedCatObj = findMatchingCategory({ category: productForm.category, category_id: productForm.category }, categories);
                     const usesMatrix = hasCategorySizeMatrix(selectedCatObj);
 
                     const formatCategoryOptionLabel = (cat) => {
@@ -719,7 +721,7 @@ export default function ProductsPage() {
                     };
 
                     const handleCategoryChange = (value) => {
-                      const cat = categories.find(c => c.id === value || c.name === value);
+                      const cat = findMatchingCategory({ category: value, category_id: value }, categories);
                       const catUsesMatrix = hasCategorySizeMatrix(cat);
                       const hasExisting = productForm.pizza_prices && Object.keys(productForm.pizza_prices).length > 0;
                       if (catUsesMatrix && !editingProduct && !hasExisting) {
@@ -819,7 +821,7 @@ export default function ProductsPage() {
 
                   {/* Setor de Produção */}
                   {productionSectors.length > 0 && (() => {
-                    const selectedCatObj = categories.find(c => c.id === productForm.category || c.name === productForm.category);
+                    const selectedCatObj = findMatchingCategory({ category: productForm.category, category_id: productForm.category }, categories);
                     const inheritedSector = selectedCatObj?.sector_id
                       ? productionSectors.find(s => String(s.id) === String(selectedCatObj.sector_id))
                       : null;
@@ -857,7 +859,7 @@ export default function ProductsPage() {
 
                 {/* Bloco 2: Grade de Preços por Tamanho / Embalagem da Categoria */}
                 {(() => {
-                  const selectedCatObj = categories.find(c => c.id === productForm.category || c.name === productForm.category);
+                  const selectedCatObj = findMatchingCategory({ category: productForm.category, category_id: productForm.category }, categories);
                   if (!hasCategorySizeMatrix(selectedCatObj)) return null;
 
                   const isPizza = isPizzaCategory(selectedCatObj);
