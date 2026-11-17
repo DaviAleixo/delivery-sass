@@ -50,6 +50,7 @@ export default function ComplementsPage() {
     min_quantity: 0,
     max_quantity: 1,
     free_quantity: 0,
+    has_free_complements: false,
     is_size_selector: false,
     required: false,
     active: true,
@@ -137,6 +138,7 @@ export default function ComplementsPage() {
       min_quantity: 0,
       max_quantity: 1,
       free_quantity: 0,
+      has_free_complements: false,
       is_size_selector: false,
       required: false,
       active: true,
@@ -153,6 +155,7 @@ export default function ComplementsPage() {
       min_quantity: group.min_quantity || 0,
       max_quantity: group.max_quantity || 1,
       free_quantity: group.free_quantity || 0,
+      has_free_complements: (group.free_quantity || 0) > 0,
       is_size_selector: Boolean(group.is_size_selector),
       required: Boolean(group.required || group.min_quantity > 0),
       active: group.active !== false,
@@ -173,7 +176,9 @@ export default function ComplementsPage() {
         description: groupForm.description.trim(),
         min_quantity: isSize ? 1 : Math.max(0, parseInt(groupForm.min_quantity) || 0),
         max_quantity: isSize ? 1 : Math.max(1, parseInt(groupForm.max_quantity) || 1),
-        free_quantity: isSize ? 0 : Math.max(0, parseInt(groupForm.free_quantity) || 0),
+        free_quantity: isSize || !groupForm.has_free_complements
+          ? 0
+          : Math.max(1, parseInt(groupForm.free_quantity) || 1),
         is_size_selector: isSize,
         required: isSize ? true : Boolean(groupForm.required || parseInt(groupForm.min_quantity) > 0),
         active: groupForm.active,
@@ -761,6 +766,7 @@ export default function ComplementsPage() {
                         min_quantity: 1,
                         max_quantity: 1,
                         free_quantity: 0,
+                        has_free_complements: false,
                         required: true,
                       }));
                     }}
@@ -795,6 +801,7 @@ export default function ComplementsPage() {
                         is_size_selector: false,
                         is_pizza_crust: true,
                         free_quantity: 0,
+                        has_free_complements: false,
                       }));
                     }}
                     className={`flex flex-col items-start p-3.5 rounded-xl border text-left transition-all ${
@@ -872,15 +879,26 @@ export default function ComplementsPage() {
                           type="number"
                           min="0"
                           max="20"
-                          value={groupForm.min_quantity}
+                          value={groupForm.min_quantity === "" ? "" : groupForm.min_quantity}
                           onChange={(e) => {
-                            const min = Math.max(0, parseInt(e.target.value) || 0);
-                            setGroupForm({
-                              ...groupForm,
-                              min_quantity: min,
-                              required: min > 0,
-                              max_quantity: Math.max(min, groupForm.max_quantity),
-                            });
+                            const val = e.target.value;
+                            if (val === "") {
+                              setGroupForm((prev) => ({ ...prev, min_quantity: "" }));
+                            } else {
+                              const min = Math.max(0, parseInt(val) || 0);
+                              setGroupForm((prev) => ({
+                                ...prev,
+                                min_quantity: min,
+                                required: min > 0,
+                                max_quantity: Math.max(min, typeof prev.max_quantity === "number" ? prev.max_quantity : 1),
+                              }));
+                            }
+                          }}
+                          onBlur={() => {
+                            setGroupForm((prev) => ({
+                              ...prev,
+                              min_quantity: prev.min_quantity === "" ? 0 : prev.min_quantity,
+                            }));
                           }}
                           className="mt-1.5"
                         />
@@ -898,13 +916,21 @@ export default function ComplementsPage() {
                           type="number"
                           min="1"
                           max="50"
-                          value={groupForm.max_quantity}
-                          onChange={(e) =>
-                            setGroupForm({
-                              ...groupForm,
-                              max_quantity: Math.max(1, parseInt(e.target.value) || 1),
-                            })
-                          }
+                          value={groupForm.max_quantity === "" ? "" : groupForm.max_quantity}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setGroupForm((prev) => ({
+                              ...prev,
+                              max_quantity: val === "" ? "" : Math.max(1, parseInt(val) || 1),
+                            }));
+                          }}
+                          onBlur={() => {
+                            setGroupForm((prev) => {
+                              const minVal = typeof prev.min_quantity === "number" ? prev.min_quantity : 0;
+                              const maxVal = prev.max_quantity === "" ? Math.max(1, minVal) : Math.max(minVal, parseInt(prev.max_quantity) || 1);
+                              return { ...prev, max_quantity: maxVal };
+                            });
+                          }}
                           className="mt-1.5"
                         />
                         <span className="text-[11px] text-gray-500 mt-1 block">
@@ -921,13 +947,13 @@ export default function ComplementsPage() {
                         </p>
                       </div>
                       <Switch
-                        checked={groupForm.required || groupForm.min_quantity > 0}
+                        checked={Boolean(groupForm.required || (typeof groupForm.min_quantity === "number" && groupForm.min_quantity > 0))}
                         onCheckedChange={(checked) =>
-                          setGroupForm({
-                            ...groupForm,
+                          setGroupForm((prev) => ({
+                            ...prev,
                             required: checked,
-                            min_quantity: checked ? Math.max(1, groupForm.min_quantity) : 0,
-                          })
+                            min_quantity: checked ? Math.max(1, parseInt(prev.min_quantity) || 0) : 0,
+                          }))
                         }
                       />
                     </div>
@@ -937,7 +963,7 @@ export default function ComplementsPage() {
                   {!groupForm.is_pizza_crust && (
                     <div
                       className={`p-4 rounded-xl border transition-all ${
-                        groupForm.free_quantity > 0
+                        groupForm.has_free_complements
                           ? "bg-emerald-50/70 border-emerald-300 ring-1 ring-emerald-400"
                           : "bg-white border-stone-200"
                       }`}
@@ -957,17 +983,18 @@ export default function ComplementsPage() {
                           </div>
                         </div>
                         <Switch
-                          checked={groupForm.free_quantity > 0}
+                          checked={Boolean(groupForm.has_free_complements)}
                           onCheckedChange={(checked) =>
                             setGroupForm((prev) => ({
                               ...prev,
-                              free_quantity: checked ? Math.max(1, prev.free_quantity || 1) : 0,
+                              has_free_complements: checked,
+                              free_quantity: checked ? (parseInt(prev.free_quantity) > 0 ? prev.free_quantity : 1) : 0,
                             }))
                           }
                         />
                       </div>
 
-                      {groupForm.free_quantity > 0 && (
+                      {Boolean(groupForm.has_free_complements) && (
                         <div className="pt-3 border-t border-emerald-200/80 space-y-2">
                           <div className="flex items-center gap-3">
                             <div className="w-36">
@@ -978,19 +1005,26 @@ export default function ComplementsPage() {
                                 id="grp-free"
                                 type="number"
                                 min="1"
-                                max={groupForm.max_quantity}
-                                value={groupForm.free_quantity}
-                                onChange={(e) =>
-                                  setGroupForm({
-                                    ...groupForm,
-                                    free_quantity: Math.max(0, parseInt(e.target.value) || 0),
-                                  })
-                                }
+                                max={groupForm.max_quantity || 50}
+                                value={groupForm.free_quantity === "" ? "" : groupForm.free_quantity}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setGroupForm((prev) => ({
+                                    ...prev,
+                                    free_quantity: val === "" ? "" : Math.max(0, parseInt(val) || 0),
+                                  }));
+                                }}
+                                onBlur={() => {
+                                  setGroupForm((prev) => ({
+                                    ...prev,
+                                    free_quantity: !prev.free_quantity || parseInt(prev.free_quantity) < 1 ? 1 : Math.max(1, parseInt(prev.free_quantity)),
+                                  }));
+                                }}
                                 className="mt-1 bg-white border-emerald-300 font-bold text-emerald-900"
                               />
                             </div>
                             <div className="flex-1 text-xs text-emerald-800 pt-5">
-                              O cliente escolhe até <strong>{groupForm.free_quantity} {groupForm.free_quantity === 1 ? "item gratuito" : "itens gratuitos"}</strong>. Itens excedentes serão cobrados pelo valor cadastrado.
+                              O cliente escolhe até <strong>{groupForm.free_quantity || 1} {Number(groupForm.free_quantity || 1) === 1 ? "item gratuito" : "itens gratuitos"}</strong>. Itens excedentes serão cobrados pelo valor cadastrado.
                             </div>
                           </div>
                         </div>
