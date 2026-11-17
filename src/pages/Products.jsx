@@ -48,6 +48,7 @@ import { Link, useParams, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { toast } from "sonner";
 import { useTenant } from "@/lib/TenantContext";
+import QuickComplementModal from "@/components/admin/QuickComplementModal";
 
 // New AdditionalsManager component
 function AdditionalsManager({ productId, initialAdditionals = [] }) {
@@ -152,6 +153,7 @@ export default function ProductsPage() {
   const [selectedGroupIds, setSelectedGroupIds] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showQuickComplementModal, setShowQuickComplementModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
@@ -167,6 +169,16 @@ export default function ProductsPage() {
     image_url: "",
     available: true
   });
+
+  const handleQuickComplementSuccess = async (newGroup, newItems) => {
+    if (!newGroup?.id) return;
+    setComplementGroups((prev) => [...prev, newGroup]);
+    if (Array.isArray(newItems) && newItems.length > 0) {
+      setComplementItems((prev) => [...prev, ...newItems]);
+    }
+    // Vincula automaticamente o novo grupo a este produto sendo cadastrado/editado
+    setSelectedGroupIds((prev) => (prev.includes(newGroup.id) ? prev : [...prev, newGroup.id]));
+  };
 
   const { slug } = useParams();
   const location = useLocation();
@@ -1058,24 +1070,50 @@ export default function ProductsPage() {
 
                 {/* Bloco 4: Grupos de Complementos */}
                 <div className="bg-white border border-stone-200/90 rounded-xl p-4 space-y-3 shadow-2xs">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div>
                       <h4 className="font-bold text-xs text-stone-900 flex items-center gap-1.5">
                         <Layers className="w-3.5 h-3.5 text-[#047857]" /> Adicionais & Complementos
                       </h4>
                       <p className="text-[11px] text-stone-500">Selecione os grupos vinculados a este produto</p>
                     </div>
-                    <Link 
-                      to={createPageUrl("Complements")} 
-                      className="text-[11px] text-[#047857] hover:underline font-semibold flex items-center gap-1"
-                    >
-                      Gerenciar <ExternalLink className="w-3 h-3" />
-                    </Link>
+
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setShowQuickComplementModal(true)}
+                        className="h-7 px-2.5 text-xs font-semibold border-emerald-600/30 text-[#047857] bg-emerald-50/50 hover:bg-emerald-100/60 cursor-pointer shadow-2xs"
+                      >
+                        <Plus className="w-3.5 h-3.5 mr-1 stroke-[2.5]" />
+                        Criar Complemento
+                      </Button>
+
+                      <Link 
+                        to={createPageUrl("Complements")} 
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] text-stone-500 hover:text-[#047857] hover:underline font-medium flex items-center gap-1"
+                        title="Abrir gerenciador completo em nova aba"
+                      >
+                        Gerenciar <ExternalLink className="w-3 h-3" />
+                      </Link>
+                    </div>
                   </div>
 
                   {complementGroups.length === 0 ? (
-                    <div className="p-3 bg-stone-50 rounded-lg border border-stone-200 text-xs text-stone-600">
-                      Nenhum grupo cadastrado. <Link to={createPageUrl("Complements")} className="underline font-semibold text-[#047857]">Criar grupos</Link>.
+                    <div className="p-3.5 bg-stone-50 rounded-xl border border-stone-200 text-xs text-stone-600 flex items-center justify-between gap-2 flex-wrap">
+                      <span>Nenhum grupo cadastrado ainda.</span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => setShowQuickComplementModal(true)}
+                        className="h-7 px-3 text-xs bg-[#047857] hover:bg-[#065f46] text-white font-bold cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5 mr-1" />
+                        Criar Grupo Agora
+                      </Button>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-72 overflow-y-auto pr-1">
@@ -1179,6 +1217,12 @@ export default function ProductsPage() {
             </form>
           </DialogContent>
         </Dialog>
+        <QuickComplementModal
+          open={showQuickComplementModal}
+          onOpenChange={setShowQuickComplementModal}
+          onSuccess={handleQuickComplementSuccess}
+          existingGroupsCount={complementGroups.length}
+        />
       </div>
     </div>
   );
