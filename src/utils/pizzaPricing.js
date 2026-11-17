@@ -201,17 +201,19 @@ export function formatBRLValue(val) {
 
 export function hasPizzaPrices(product) {
   const map = parsePizzaPrices(product?.pizza_prices);
-  return Boolean(
-    map &&
-      typeof map === "object" &&
-      Object.values(map).some((v) => Number(v) > 0)
-  );
+  if (!map || typeof map !== "object") return false;
+  return Object.entries(map).some(([k, v]) => !k.startsWith("__") && Number(v) > 0);
 }
 
 /**
  * Retorna o menor preço positivo entre os tamanhos/variações configurados do produto.
  */
 export function getMinPizzaPrice(product, categorySizes = []) {
+  const activeVariations = getPizzaSizePriceList(product, categorySizes);
+  if (activeVariations.length > 0) {
+    return Math.min(...activeVariations.map((v) => v.price));
+  }
+
   const map = parsePizzaPrices(product?.pizza_prices);
   const parsedSizes = parseCategorySizes(categorySizes);
 
@@ -225,8 +227,9 @@ export function getMinPizzaPrice(product, categorySizes = []) {
       return Math.min(...matchedPrices);
     }
 
-    const allPositive = Object.values(map)
-      .map((v) => Number(v))
+    const allPositive = Object.entries(map)
+      .filter(([k]) => !k.startsWith("__"))
+      .map(([, v]) => Number(v))
       .filter((v) => Number.isFinite(v) && v > 0);
 
     if (allPositive.length > 0) {
@@ -261,6 +264,10 @@ export function hasMultipleDistinctVariationPrices(product, categorySizes = []) 
 export function getPizzaSizePriceList(product, categorySizes = []) {
   const map = parsePizzaPrices(product?.pizza_prices);
   const parsedSizes = parseCategorySizes(categorySizes);
+  const customNames =
+    map && typeof map.__custom_names__ === "object" && map.__custom_names__
+      ? map.__custom_names__
+      : {};
 
   const shortenName = (name) =>
     String(name || "")
@@ -281,6 +288,21 @@ export function getPizzaSizePriceList(product, categorySizes = []) {
         });
       }
     }
+
+    // Incluir medidas exclusivas/personalizadas configuradas diretamente neste produto
+    for (const [customId, customName] of Object.entries(customNames)) {
+      const price = Number(map[customId]);
+      if (Number.isFinite(price) && price > 0 && !ordered.some((item) => item.id === customId)) {
+        ordered.push({
+          id: customId,
+          name: customName,
+          shortName: shortenName(customName) || customId,
+          price,
+          isCustom: true,
+        });
+      }
+    }
+
     if (ordered.length > 0) return ordered;
   }
 
@@ -303,14 +325,20 @@ export function getPizzaSizePriceList(product, categorySizes = []) {
 
   if (map && typeof map === "object" && Object.keys(map).length > 0) {
     const fromMap = Object.entries(map)
+      .filter(([id]) => !id.startsWith("__"))
       .map(([id, raw]) => {
         const matchingCatSize = parsedSizes.find((s) => s.id === id);
-        const resolvedName = matchingCatSize?.name || fallbackNames[id] || id.charAt(0).toUpperCase() + id.slice(1).replace(/_/g, " ");
+        const resolvedName =
+          matchingCatSize?.name ||
+          customNames[id] ||
+          fallbackNames[id] ||
+          id.charAt(0).toUpperCase() + id.slice(1).replace(/_/g, " ");
         return {
           id,
           name: resolvedName,
           shortName: shortenName(resolvedName),
           price: Number(raw),
+          isCustom: Boolean(customNames[id]),
         };
       })
       .filter((item) => Number.isFinite(item.price) && item.price > 0);

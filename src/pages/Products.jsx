@@ -180,6 +180,56 @@ export default function ProductsPage() {
     setSelectedGroupIds((prev) => (prev.includes(newGroup.id) ? prev : [...prev, newGroup.id]));
   };
 
+  const handleAddCustomProductSize = () => {
+    const customId = `custom_${Date.now()}`;
+    setProductForm((prev) => {
+      const currentPrices = { ...(prev.pizza_prices || {}) };
+      const currentCustomNames = { ...(currentPrices.__custom_names__ || {}) };
+      currentCustomNames[customId] = "";
+      return {
+        ...prev,
+        pizza_prices: {
+          ...currentPrices,
+          __custom_names__: currentCustomNames,
+          [customId]: "",
+        },
+      };
+    });
+  };
+
+  const handleUpdateCustomProductSizeName = (customId, newName) => {
+    setProductForm((prev) => {
+      const currentPrices = { ...(prev.pizza_prices || {}) };
+      const currentCustomNames = { ...(currentPrices.__custom_names__ || {}) };
+      currentCustomNames[customId] = newName;
+      return {
+        ...prev,
+        pizza_prices: {
+          ...currentPrices,
+          __custom_names__: currentCustomNames,
+        },
+      };
+    });
+  };
+
+  const handleRemoveCustomProductSize = (customId) => {
+    setProductForm((prev) => {
+      const currentPrices = { ...(prev.pizza_prices || {}) };
+      delete currentPrices[customId];
+      const currentCustomNames = { ...(currentPrices.__custom_names__ || {}) };
+      delete currentCustomNames[customId];
+      if (Object.keys(currentCustomNames).length > 0) {
+        currentPrices.__custom_names__ = currentCustomNames;
+      } else {
+        delete currentPrices.__custom_names__;
+      }
+      return {
+        ...prev,
+        pizza_prices: currentPrices,
+      };
+    });
+  };
+
   const { slug } = useParams();
   const location = useLocation();
   const { tenant } = useTenant();
@@ -259,6 +309,7 @@ export default function ProductsPage() {
       const cleanPizzaPrices = {};
       if (productForm.pizza_prices && typeof productForm.pizza_prices === "object") {
         Object.entries(productForm.pizza_prices).forEach(([sizeId, val]) => {
+          if (sizeId.startsWith("__")) return;
           if (val !== undefined && val !== null && val !== "") {
             const parsed = typeof val === "number" ? val : parseBRLToNumber(String(val));
             if (!isNaN(parsed) && parsed > 0) {
@@ -266,6 +317,20 @@ export default function ProductsPage() {
             }
           }
         });
+
+        // Preservar nomes de medidas personalizadas exclusivas deste item
+        const rawCustomNames = productForm.pizza_prices.__custom_names__;
+        if (rawCustomNames && typeof rawCustomNames === "object") {
+          const validCustomNames = {};
+          Object.entries(rawCustomNames).forEach(([cId, cName]) => {
+            if (cName && String(cName).trim() !== "") {
+              validCustomNames[cId] = String(cName).trim();
+            }
+          });
+          if (Object.keys(validCustomNames).length > 0) {
+            cleanPizzaPrices.__custom_names__ = validCustomNames;
+          }
+        }
       }
 
       let finalPrice = 0;
@@ -277,7 +342,10 @@ export default function ProductsPage() {
       });
 
       if (usesSizeMatrix) {
-        const sizePricesList = Object.values(cleanPizzaPrices);
+        const sizePricesList = Object.entries(cleanPizzaPrices)
+          .filter(([k]) => !k.startsWith("__"))
+          .map(([, v]) => Number(v))
+          .filter((v) => Number.isFinite(v) && v > 0);
         if (sizePricesList.length === 0) {
           toast.error(
             isPizzaCat
@@ -877,10 +945,25 @@ export default function ProductsPage() {
                   const isPizza = isPizzaCategory(selectedCatObj);
                   const sizes = getCategoryMatrixSizes(selectedCatObj);
 
+                  const customNamesMap =
+                    productForm.pizza_prices &&
+                    typeof productForm.pizza_prices.__custom_names__ === "object" &&
+                    productForm.pizza_prices.__custom_names__
+                      ? productForm.pizza_prices.__custom_names__
+                      : {};
+
+                  const customSizes = Object.entries(customNamesMap).map(([cId, cName]) => ({
+                    id: cId,
+                    name: cName,
+                    isCustom: true,
+                  }));
+
+                  const allProductSizes = [...sizes, ...customSizes];
+
                   const defaultPricesMap = buildDefaultPizzaPrices(sizes);
                   const hasCategoryDefaults = Object.keys(defaultPricesMap).length > 0;
 
-                  const activeSizesCount = sizes.filter((s) => {
+                  const activeSizesCount = allProductSizes.filter((s) => {
                     const rawVal = productForm.pizza_prices?.[s.id];
                     if (rawVal === undefined || rawVal === null || rawVal === "") return false;
                     const parsed = typeof rawVal === "number" ? rawVal : parseBRLToNumber(String(rawVal));
@@ -889,41 +972,60 @@ export default function ProductsPage() {
 
                   return (
                     <div className="bg-white border border-stone-200 rounded-xl p-4 space-y-3.5 shadow-2xs">
-                      <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-stone-100">
+                      <div className="flex items-start justify-between gap-2 pb-2.5 border-b border-stone-100 flex-wrap">
                         <div>
                           <div className="flex items-center gap-2 flex-wrap">
                             <p className="text-xs font-bold text-stone-900">
                               {isPizza ? "Preços por Tamanho da Pizza" : `Tamanhos & Preços — ${selectedCatObj?.name || "Categoria"}`}
                             </p>
                             <span className="text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-full">
-                              {activeSizesCount} de {sizes.length} tamanhos com preço
+                              {activeSizesCount} de {allProductSizes.length} tamanhos com preço
                             </span>
                           </div>
                           <p className="text-[11px] text-stone-500 mt-0.5">
                             {isPizza
                               ? "Defina o valor deste sabor para cada tamanho disponível."
-                              : "Digite o preço apenas nos tamanhos que este produto tiver à venda. Os tamanhos deixados em branco (---) não aparecerão para o cliente."}
+                              : "Digite o preço nos tamanhos disponíveis. Opções deixadas em branco (---) não aparecerão para o cliente."}
                           </p>
                         </div>
-                        {hasCategoryDefaults && (
+
+                        <div className="flex items-center gap-2 flex-wrap">
                           <Button
                             type="button"
                             variant="outline"
                             size="sm"
-                            onClick={() =>
-                              setProductForm((prev) => ({
-                                ...prev,
-                                pizza_prices: { ...defaultPricesMap },
-                              }))
-                            }
-                            className="h-7 px-2.5 text-[11px] bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100 shrink-0 cursor-pointer"
+                            onClick={handleAddCustomProductSize}
+                            className="h-7 px-2.5 text-[11px] font-semibold bg-emerald-50/50 border-emerald-600/30 text-[#047857] hover:bg-emerald-100/60 shrink-0 cursor-pointer shadow-2xs"
+                            title="Criar uma medida de tamanho exclusiva apenas para este produto"
                           >
-                            Usar padrão
+                            <Plus className="w-3.5 h-3.5 mr-1 stroke-[2.5]" />
+                            + Medida deste Produto
                           </Button>
-                        )}
+
+                          {hasCategoryDefaults && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                setProductForm((prev) => ({
+                                  ...prev,
+                                  pizza_prices: {
+                                    ...(prev.pizza_prices || {}),
+                                    ...defaultPricesMap,
+                                  },
+                                }))
+                              }
+                              className="h-7 px-2.5 text-[11px] bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100 shrink-0 cursor-pointer"
+                            >
+                              Usar padrão
+                            </Button>
+                          )}
+                        </div>
                       </div>
+
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                        {sizes.map((size) => {
+                        {allProductSizes.map((size) => {
                           const rawVal = productForm.pizza_prices?.[size.id];
                           const numVal =
                             rawVal !== undefined && rawVal !== null && rawVal !== ""
@@ -938,24 +1040,54 @@ export default function ProductsPage() {
                               key={size.id}
                               className={`p-2.5 rounded-xl border transition-all ${
                                 isFilled
-                                  ? "bg-emerald-50/40 border-emerald-300"
+                                  ? "bg-emerald-50/40 border-emerald-300 ring-1 ring-emerald-300/30"
+                                  : size.isCustom
+                                  ? "bg-stone-50/80 border-dashed border-stone-300"
                                   : "bg-stone-50/60 border-stone-200"
                               }`}
                             >
                               <div className="flex items-center justify-between gap-1 mb-1">
-                                <Label className="text-[11px] font-bold text-stone-800 truncate">
-                                  {size.name}
-                                </Label>
-                                <span
-                                  className={`text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded ${
-                                    isFilled
-                                      ? "bg-emerald-100 text-emerald-800"
-                                      : "bg-stone-200/70 text-stone-500"
-                                  }`}
-                                >
-                                  {isFilled ? "Ativo" : "---"}
-                                </span>
+                                {size.isCustom ? (
+                                  <div className="flex-1 min-w-0 mr-1">
+                                    <Input
+                                      value={size.name || ""}
+                                      onChange={(e) =>
+                                        handleUpdateCustomProductSizeName(size.id, e.target.value)
+                                      }
+                                      placeholder="Ex: 200ml, Caixinha..."
+                                      className="h-6 text-[11px] font-bold text-stone-900 bg-white border-stone-200 focus:border-[#047857] px-1.5 py-0"
+                                    />
+                                  </div>
+                                ) : (
+                                  <Label className="text-[11px] font-bold text-stone-800 truncate">
+                                    {size.name}
+                                  </Label>
+                                )}
+
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <span
+                                    className={`text-[9px] font-extrabold uppercase px-1.5 py-0.2 rounded ${
+                                      isFilled
+                                        ? "bg-emerald-100 text-emerald-800"
+                                        : "bg-stone-200/70 text-stone-500"
+                                    }`}
+                                  >
+                                    {isFilled ? "Ativo" : "---"}
+                                  </span>
+
+                                  {size.isCustom && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveCustomProductSize(size.id)}
+                                      className="text-stone-400 hover:text-rose-600 p-0.5 cursor-pointer rounded"
+                                      title="Remover esta medida exclusiva"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
                               </div>
+
                               <CurrencyInput
                                 value={
                                   rawVal !== undefined
@@ -978,6 +1110,12 @@ export default function ProductsPage() {
                                 placeholder="--- (Não vende)"
                                 className="h-8 text-xs bg-white border-stone-200 focus:border-[#047857] font-mono"
                               />
+
+                              {size.isCustom && (
+                                <span className="text-[9px] font-semibold text-emerald-800/80 mt-1 block">
+                                  ★ Exclusivo deste produto
+                                </span>
+                              )}
                             </div>
                           );
                         })}
