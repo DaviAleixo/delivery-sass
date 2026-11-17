@@ -254,47 +254,17 @@ export default function AdminLoginPage() {
         try {
           let prof = null;
 
-          try {
-            const { data: fnData, error: fnError } = await supabase.functions.invoke("admin-login", {
-              body: {
-                action: "login",
-                storeIdentifier: cleanStore,
-                username: cleanUser,
-                password: cleanPassword,
-              },
-            });
+          // 1. Tentar autenticação nativa e direta no Supabase Auth primeiro (sem CORS/preflight issues)
+          const emailToTry = cleanUser.includes("@")
+            ? cleanUser
+            : `${cleanUser.toLowerCase()}@${cleanStore}.delivery.internal`;
 
-            if (!fnError && fnData?.success && fnData?.session && fnData?.profile) {
-              const { error: sessionErr } = await supabase.auth.setSession({
-                access_token: fnData.session.access_token,
-                refresh_token: fnData.session.refresh_token,
-              });
+          const { data: authResult, error: directAuthErr } = await supabase.auth.signInWithPassword({
+            email: emailToTry,
+            password: cleanPassword,
+          });
 
-              if (!sessionErr) {
-                prof = fnData.profile;
-              }
-            }
-          } catch (_fnEx) {
-            // Se a edge function falhar ou não estiver deployada no ambiente, executa fallback direto
-          }
-
-          // Fallback resiliente: autenticação direta no Supabase Auth caso a Edge Function não esteja disponível
-          if (!prof) {
-            const emailToTry = cleanUser.includes("@")
-              ? cleanUser
-              : `${cleanUser.toLowerCase()}@${cleanStore}.delivery.internal`;
-
-            const { data: authResult, error: directAuthErr } = await supabase.auth.signInWithPassword({
-              email: emailToTry,
-              password: cleanPassword,
-            });
-
-            if (directAuthErr || !authResult?.user) {
-              setError("Identificador da loja, usuário ou senha incorretos.");
-              setIsLoading(false);
-              return;
-            }
-
+          if (!directAuthErr && authResult?.user) {
             const { data: memberProfile } = await supabase
               .from("tenant_admins")
               .select("id, user_id, tenant_id, role, username, is_active")
@@ -302,33 +272,62 @@ export default function AdminLoginPage() {
               .eq("is_active", true)
               .maybeSingle();
 
-            if (!memberProfile) {
-              setError("Usuário autenticado, mas nenhum perfil administrativo ativo foi encontrado.");
-              setIsLoading(false);
-              return;
-            }
+            if (memberProfile) {
+              prof = {
+                id: memberProfile.id,
+                user_id: memberProfile.user_id,
+                username: memberProfile.username,
+                role: memberProfile.role,
+                tenant_id: memberProfile.tenant_id,
+              };
 
-            prof = {
-              id: memberProfile.id,
-              user_id: memberProfile.user_id,
-              username: memberProfile.username,
-              role: memberProfile.role,
-              tenant_id: memberProfile.tenant_id,
-            };
-
-            if (memberProfile.tenant_id) {
-              const { data: tenantData } = await supabase
-                .from("tenants")
-                .select("id, slug, name, plan, salon_mode")
-                .eq("id", memberProfile.tenant_id)
-                .maybeSingle();
-              if (tenantData) {
-                prof.tenant_slug = tenantData.slug;
-                prof.tenant_name = tenantData.name;
-                prof.tenant_plan = tenantData.plan;
-                prof.tenant_salon_mode = tenantData.salon_mode;
+              if (memberProfile.tenant_id) {
+                const { data: tenantData } = await supabase
+                  .from("tenants")
+                  .select("id, slug, name, plan, salon_mode")
+                  .eq("id", memberProfile.tenant_id)
+                  .maybeSingle();
+                if (tenantData) {
+                  prof.tenant_slug = tenantData.slug;
+                  prof.tenant_name = tenantData.name;
+                  prof.tenant_plan = tenantData.plan;
+                  prof.tenant_salon_mode = tenantData.salon_mode;
+                }
               }
             }
+          }
+
+          // 2. Se a autenticação direta não resolveu e não for superadmin, tenta Edge Function (se implantada)
+          if (!prof && cleanStore !== "superadmin" && cleanStore !== "master") {
+            try {
+              const { data: fnData, error: fnError } = await supabase.functions.invoke("admin-login", {
+                body: {
+                  action: "login",
+                  storeIdentifier: cleanStore,
+                  username: cleanUser,
+                  password: cleanPassword,
+                },
+              });
+
+              if (!fnError && fnData?.success && fnData?.session && fnData?.profile) {
+                const { error: sessionErr } = await supabase.auth.setSession({
+                  access_token: fnData.session.access_token,
+                  refresh_token: fnData.session.refresh_token,
+                });
+
+                if (!sessionErr) {
+                  prof = fnData.profile;
+                }
+              }
+            } catch (_fnEx) {
+              // Edge function indisponível
+            }
+          }
+
+          if (!prof) {
+            setError("Identificador da loja, usuário ou senha incorretos.");
+            setIsLoading(false);
+            return;
           }
 
           if (cleanStore === "superadmin" || cleanStore === "master" || prof.role === "super_admin") {
