@@ -168,26 +168,157 @@ export default function ProductDetailModal({
   const validation = validateGroups();
 
   const calculateTotal = () => {
-    const complementsTotal = Object.values(selectedComplements).reduce(
-      (sum, item) => sum + (item.price * (item.quantity || 1)),
-      0
-    );
-    return (Number(product.price || 0) + complementsTotal) * quantity;
+    // 1. Identificar se algum grupo selecionado é seletor de tamanho (is_size_selector)
+    let effectiveBasePrice = Number(product.price || 0);
+
+    if (complementGroups && complementGroups.length > 0) {
+      for (const grp of complementGroups) {
+        if (grp.is_size_selector) {
+          const sizeItem = Object.values(selectedComplements).find(c => c.group_id === grp.id);
+          if (sizeItem && Number(sizeItem.price) > 0) {
+            effectiveBasePrice = Number(sizeItem.price);
+          }
+        }
+      }
+    }
+
+    // 2. Calcular o valor dos complementos respeitando free_quantity por grupo
+    let complementsTotal = 0;
+
+    if (complementGroups && complementGroups.length > 0) {
+      complementGroups.forEach(grp => {
+        if (grp.is_size_selector) return;
+
+        const groupItems = Object.values(selectedComplements).filter(c => c.group_id === grp.id);
+        const freeLimit = Number(grp.free_quantity || 0);
+
+        if (freeLimit <= 0) {
+          groupItems.forEach(item => {
+            complementsTotal += (Number(item.price || 0) * (item.quantity || 1));
+          });
+        } else {
+          const unitPrices = [];
+          groupItems.forEach(item => {
+            const qty = item.quantity || 1;
+            for (let i = 0; i < qty; i++) {
+              unitPrices.push(Number(item.price || 0));
+            }
+          });
+          unitPrices.sort((a, b) => a - b);
+          const billableUnits = unitPrices.slice(freeLimit);
+          billableUnits.forEach(p => {
+            complementsTotal += p;
+          });
+        }
+      });
+    }
+
+    // Complementos legados (se houver)
+    const legacyItems = Object.values(selectedComplements).filter(c => c.group_id === "legacy");
+    legacyItems.forEach(item => {
+      complementsTotal += (Number(item.price || 0) * (item.quantity || 1));
+    });
+
+    return (effectiveBasePrice + complementsTotal) * quantity;
   };
 
   const handleAddToCart = () => {
     if (!validation.isValid) return;
 
-    const additionalsList = Object.values(selectedComplements).map(item => ({
-      id: item.id,
-      name: item.quantity > 1 ? `${item.quantity}x ${item.name}` : item.name,
-      price: item.price * (item.quantity || 1),
-      unit_price: item.price,
-      group_name: item.group_name,
-      quantity: item.quantity,
-    }));
+    let effectiveBasePrice = Number(product.price || 0);
+    const additionalsList = [];
 
-    onAddToCart(product, additionalsList, quantity, notes.trim());
+    if (complementGroups && complementGroups.length > 0) {
+      complementGroups.forEach(grp => {
+        const groupItems = Object.values(selectedComplements).filter(c => c.group_id === grp.id);
+
+        if (grp.is_size_selector) {
+          groupItems.forEach(item => {
+            if (Number(item.price) > 0) {
+              effectiveBasePrice = Number(item.price);
+            }
+            additionalsList.push({
+              id: item.id,
+              name: `Tamanho: ${item.name}`,
+              price: 0,
+              unit_price: 0,
+              group_name: grp.name,
+              quantity: 1,
+              is_size: true
+            });
+          });
+          return;
+        }
+
+        const freeLimit = Number(grp.free_quantity || 0);
+        if (freeLimit <= 0) {
+          groupItems.forEach(item => {
+            additionalsList.push({
+              id: item.id,
+              name: item.quantity > 1 ? `${item.quantity}x ${item.name}` : item.name,
+              price: Number(item.price || 0) * (item.quantity || 1),
+              unit_price: Number(item.price || 0),
+              group_name: item.group_name,
+              quantity: item.quantity,
+            });
+          });
+        } else {
+          const expanded = [];
+          groupItems.forEach(item => {
+            const qty = item.quantity || 1;
+            for (let i = 0; i < qty; i++) {
+              expanded.push({ ...item, singlePrice: Number(item.price || 0) });
+            }
+          });
+          expanded.sort((a, b) => a.singlePrice - b.singlePrice);
+
+          let freeRemaining = freeLimit;
+          const itemChargedMap = {};
+
+          expanded.forEach(u => {
+            if (!itemChargedMap[u.id]) {
+              itemChargedMap[u.id] = { item: u, totalCharged: 0, totalQty: 0 };
+            }
+            itemChargedMap[u.id].totalQty += 1;
+            if (freeRemaining > 0) {
+              freeRemaining -= 1;
+            } else {
+              itemChargedMap[u.id].totalCharged += u.singlePrice;
+            }
+          });
+
+          Object.values(itemChargedMap).forEach(({ item, totalCharged, totalQty }) => {
+            additionalsList.push({
+              id: item.id,
+              name: totalQty > 1 ? `${totalQty}x ${item.name}` : item.name,
+              price: totalCharged,
+              unit_price: totalQty > 0 ? (totalCharged / totalQty) : 0,
+              group_name: item.group_name,
+              quantity: totalQty,
+            });
+          });
+        }
+      });
+    }
+
+    const legacyItems = Object.values(selectedComplements).filter(c => c.group_id === "legacy");
+    legacyItems.forEach(item => {
+      additionalsList.push({
+        id: item.id,
+        name: item.quantity > 1 ? `${item.quantity}x ${item.name}` : item.name,
+        price: Number(item.price || 0) * (item.quantity || 1),
+        unit_price: Number(item.price || 0),
+        group_name: item.group_name,
+        quantity: item.quantity,
+      });
+    });
+
+    const productToSend = {
+      ...product,
+      price: effectiveBasePrice,
+    };
+
+    onAddToCart(productToSend, additionalsList, quantity, notes.trim());
     onClose();
   };
 
@@ -292,10 +423,29 @@ export default function ProductDetailModal({
                       onClick={() => toggleGroupExpanded(group.id)}
                       className="p-3.5 sm:p-4 flex items-center justify-between cursor-pointer select-none bg-white hover:bg-gray-50/50 transition-colors"
                     >
-                      <h4 className="font-bold text-sm sm:text-base text-gray-950">
-                        {group.name}
-                      </h4>
-                      <div className="flex items-center gap-2">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-bold text-sm sm:text-base text-gray-950">
+                            {group.name}
+                          </h4>
+                          {group.is_size_selector && (
+                            <span className="bg-blue-50 text-blue-800 font-bold text-[10px] px-2 py-0.5 rounded-full border border-blue-200">
+                              📏 Tamanho
+                            </span>
+                          )}
+                          {Number(group.free_quantity) > 0 && (
+                            <span className="bg-emerald-50 text-[#046c4e] font-bold text-[10px] px-2 py-0.5 rounded-full border border-emerald-200">
+                              {selectedCount < group.free_quantity
+                                ? `🎁 ${group.free_quantity - selectedCount} de ${group.free_quantity} grátis`
+                                : `✓ Limite de ${group.free_quantity} grátis atingido`}
+                            </span>
+                          )}
+                        </div>
+                        {group.description && (
+                          <p className="text-xs text-gray-500 leading-snug">{group.description}</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
                         <span className="bg-emerald-50 text-[#046c4e] font-bold text-xs px-2.5 py-0.5 rounded-full border border-emerald-200/60">
                           {selectedCount}/{group.max_quantity}
                         </span>
@@ -343,7 +493,17 @@ export default function ProductDetailModal({
                                         {item.name}
                                       </p>
                                       <p className="text-xs text-gray-500 font-medium mt-0.5">
-                                        {item.price > 0 ? `+ R$ ${Number(item.price).toFixed(2).replace('.', ',')}` : 'Grátis'}
+                                        {group.is_size_selector ? (
+                                          <span className="font-bold text-stone-900">
+                                            R$ {Number(item.price || 0).toFixed(2).replace('.', ',')}
+                                          </span>
+                                        ) : Number(group.free_quantity) > 0 && selectedCount < group.free_quantity && itemQty === 0 ? (
+                                          <span className="text-emerald-700 font-bold">Grátis</span>
+                                        ) : Number(item.price) > 0 ? (
+                                          `+ R$ ${Number(item.price).toFixed(2).replace('.', ',')}`
+                                        ) : (
+                                          <span className="text-emerald-700 font-semibold">Grátis</span>
+                                        )}
                                       </p>
                                     </div>
                                   </div>

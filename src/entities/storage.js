@@ -21,7 +21,7 @@ const TABLE_COLUMNS = {
   categories: "id,tenant_id,name,order_index,is_combo,created_date,type,pizza_sizes,sector_id",
   products: "id,tenant_id,name,description,price,category,category_id,image_url,available,popular,created_date,pizza_prices,sector_id",
   product_additionals: "id,tenant_id,product_id,name,price,required,max_quantity,active",
-  complement_groups: "id,tenant_id,name,description,min_quantity,max_quantity,required,active,order_index,is_pizza_crust",
+  complement_groups: "id,tenant_id,name,description,min_quantity,max_quantity,free_quantity,is_size_selector,required,active,order_index,is_pizza_crust",
   complement_items: "id,tenant_id,group_id,name,description,price,max_quantity,image_url,active,order_index",
   product_complement_groups: "id,tenant_id,product_id,group_id,order_index",
   banner_images: "id,tenant_id,title,image_url,order_index,active",

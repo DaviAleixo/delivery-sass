@@ -127,7 +127,7 @@ export default function Cart({
   const handleAddUpsell = (product) => {
     const linkedGroups = (productComplementGroups || []).filter(pcg => pcg.product_id === product.id);
     const hasRequiredComplements = (complementGroups || []).some(g =>
-      linkedGroups.some(lg => lg.group_id === g.id) && (Number(g.min_quantity) > 0 || g.is_required)
+      linkedGroups.some(lg => lg.group_id === g.id) && (Number(g.min_quantity) > 0 || g.required || g.is_required || g.is_size_selector)
     );
 
     if (hasRequiredComplements && onSelectProduct) {

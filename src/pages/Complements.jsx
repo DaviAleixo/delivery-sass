@@ -45,6 +45,8 @@ export default function ComplementsPage() {
     description: "",
     min_quantity: 0,
     max_quantity: 1,
+    free_quantity: 0,
+    is_size_selector: false,
     required: false,
     active: true,
     is_pizza_crust: false,
@@ -130,6 +132,8 @@ export default function ComplementsPage() {
       description: "",
       min_quantity: 0,
       max_quantity: 1,
+      free_quantity: 0,
+      is_size_selector: false,
       required: false,
       active: true,
       is_pizza_crust: false,
@@ -144,6 +148,8 @@ export default function ComplementsPage() {
       description: group.description || "",
       min_quantity: group.min_quantity || 0,
       max_quantity: group.max_quantity || 1,
+      free_quantity: group.free_quantity || 0,
+      is_size_selector: Boolean(group.is_size_selector),
       required: Boolean(group.required || group.min_quantity > 0),
       active: group.active !== false,
       is_pizza_crust: Boolean(group.is_pizza_crust),
@@ -162,6 +168,8 @@ export default function ComplementsPage() {
         description: groupForm.description.trim(),
         min_quantity: parseInt(groupForm.min_quantity) || 0,
         max_quantity: Math.max(1, parseInt(groupForm.max_quantity) || 1),
+        free_quantity: Math.max(0, parseInt(groupForm.free_quantity) || 0),
+        is_size_selector: Boolean(groupForm.is_size_selector),
         required: Boolean(groupForm.required || parseInt(groupForm.min_quantity) > 0),
         active: groupForm.active,
         is_pizza_crust: Boolean(groupForm.is_pizza_crust),
@@ -194,6 +202,8 @@ export default function ComplementsPage() {
         description: group.description || "",
         min_quantity: group.min_quantity ?? 0,
         max_quantity: group.max_quantity ?? 1,
+        free_quantity: group.free_quantity ?? 0,
+        is_size_selector: Boolean(group.is_size_selector),
         required: Boolean(group.required),
         active: Boolean(group.active),
         is_pizza_crust: Boolean(group.is_pizza_crust),
@@ -692,11 +702,11 @@ export default function ComplementsPage() {
               </div>
 
               {/* Regras de Seleção */}
-              <div className="bg-white p-4 rounded-xl border border-stone-200 space-y-3">
-                <div className="grid grid-cols-2 gap-3">
+              <div className="bg-white p-4 rounded-xl border border-stone-200 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <Label htmlFor="grp-min" className="text-xs font-bold uppercase text-gray-600">
-                      Mínimo de Escolhas
+                      Mínimo
                     </Label>
                     <Input
                       id="grp-min"
@@ -720,7 +730,7 @@ export default function ComplementsPage() {
 
                   <div>
                     <Label htmlFor="grp-max" className="text-xs font-bold uppercase text-gray-600">
-                      Máximo de Escolhas
+                      Máximo
                     </Label>
                     <Input
                       id="grp-max"
@@ -731,7 +741,23 @@ export default function ComplementsPage() {
                       onChange={(e) => setGroupForm({ ...groupForm, max_quantity: parseInt(e.target.value) || 1 })}
                       className="mt-1.5"
                     />
-                    <span className="text-[11px] text-gray-500 mt-1 block">Limite total no grupo</span>
+                    <span className="text-[11px] text-gray-500 mt-1 block">Limite total de escolhas</span>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="grp-free" className="text-xs font-bold uppercase text-emerald-800 flex items-center gap-1">
+                      <span>Cortesias Grátis</span>
+                    </Label>
+                    <Input
+                      id="grp-free"
+                      type="number"
+                      min="0"
+                      max="50"
+                      value={groupForm.free_quantity}
+                      onChange={(e) => setGroupForm({ ...groupForm, free_quantity: parseInt(e.target.value) || 0 })}
+                      className="mt-1.5 border-emerald-300 focus-visible:ring-emerald-500 bg-emerald-50/30"
+                    />
+                    <span className="text-[11px] text-emerald-700 font-medium mt-1 block">0 = Tudo pago, 1+ = Grátis até X</span>
                   </div>
                 </div>
 
@@ -753,6 +779,37 @@ export default function ComplementsPage() {
                     }
                   />
                 </div>
+              </div>
+
+              {/* Flag: Grupo de Tamanho / Preço Base do Produto */}
+              <div
+                className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
+                  groupForm.is_size_selector
+                    ? "border-blue-600 bg-blue-50/60"
+                    : "border-stone-200 bg-white"
+                }`}
+              >
+                <div className="space-y-0.5 pr-3">
+                  <p className="font-bold text-sm text-gray-900 flex items-center gap-1.5">
+                    <span className="text-blue-600 font-black">📏</span>
+                    Grupo de Tamanho / Preço Principal (ex: 300ml, 500ml, 700ml)
+                  </p>
+                  <p className="text-xs text-gray-500 leading-snug">
+                    Quando ativado, a opção escolhida pelo cliente define o preço base do produto (substitui o valor inicial do item).
+                  </p>
+                </div>
+                <Switch
+                  checked={groupForm.is_size_selector}
+                  onCheckedChange={(checked) =>
+                    setGroupForm((prev) => ({
+                      ...prev,
+                      is_size_selector: checked,
+                      min_quantity: checked ? 1 : prev.min_quantity,
+                      max_quantity: checked ? 1 : prev.max_quantity,
+                      required: checked ? true : prev.required,
+                    }))
+                  }
+                />
               </div>
 
               {/* Flag: Borda / Complemento da Pizza Inteira */}

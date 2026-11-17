@@ -22,6 +22,22 @@ export function ComplementRuleBadges({ group }) {
 
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
+      {group.is_size_selector && (
+        <Badge
+          variant="outline"
+          className="bg-blue-50 text-blue-800 border-blue-200 text-[10px] font-semibold inline-flex items-center gap-1"
+        >
+          📏 Seletor de Tamanho
+        </Badge>
+      )}
+      {group.free_quantity > 0 && (
+        <Badge
+          variant="outline"
+          className="bg-emerald-50 text-emerald-800 border-emerald-200 text-[10px] font-semibold inline-flex items-center gap-1"
+        >
+          🎁 Até {group.free_quantity} Grátis
+        </Badge>
+      )}
       {group.is_pizza_crust && (
         <Badge
           variant="outline"
