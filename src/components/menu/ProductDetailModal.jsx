@@ -467,9 +467,6 @@ export default function ProductDetailModal({
                             </span>
                           )}
                         </div>
-                        {group.description && (
-                          <p className="text-xs text-gray-500 leading-snug">{group.description}</p>
-                        )}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <span className="bg-emerald-50 text-[#046c4e] font-bold text-xs px-2.5 py-0.5 rounded-full border border-emerald-200/60">

@@ -470,6 +470,7 @@ export default function MenuPage() {
       const minPrice = Math.min(...relevantItems.map(i => Number(i.price)));
       return {
         ...prod,
+        price: minPrice,
         min_size_price: minPrice,
       };
     });

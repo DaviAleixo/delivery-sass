@@ -694,15 +694,18 @@ export default function ComplementsPage() {
 
                 <div>
                   <Label htmlFor="grp-desc" className="text-xs font-bold uppercase text-gray-600">
-                    Descrição / Instrução (Opcional)
+                    Anotação Interna / Descrição (Visível apenas para o lojista)
                   </Label>
                   <Input
                     id="grp-desc"
                     value={groupForm.description}
                     onChange={(e) => setGroupForm({ ...groupForm, description: e.target.value })}
-                    placeholder="Ex: Escolha o tamanho desejado ou selecione seus complementos"
+                    placeholder="Ex: Grupo de tamanhos para cervejas - uso interno"
                     className="mt-1.5"
                   />
+                  <span className="text-[11px] text-gray-400 mt-1 block">
+                    Uso interno da sua loja (não é exibido para o cliente no cardápio)
+                  </span>
                 </div>
               </div>
 
