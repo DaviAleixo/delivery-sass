@@ -103,7 +103,7 @@ function AdditionalsManager({ productId, initialAdditionals = [] }) {
             id="additional-name"
             value={newAdditional.name}
             onChange={e => setNewAdditional({...newAdditional, name: e.target.value})}
-            placeholder="Ex: Bacon"
+            placeholder="Ex: Queijo Extra, Gelo e Limão..."
           />
         </div>
         <div className="w-32">
@@ -687,7 +687,7 @@ export default function ProductsPage() {
                       id="name"
                       value={productForm.name}
                       onChange={(e) => setProductForm({...productForm, name: e.target.value})}
-                      placeholder="Ex: Vrum Bacon Especial"
+                      placeholder="Ex: Heineken 600ml, X-Salada, Coca-Cola 2L..."
                       className="mt-1 bg-stone-50/50 border-stone-200 focus:bg-white"
                       required
                     />
@@ -701,7 +701,7 @@ export default function ProductsPage() {
                       id="description"
                       value={productForm.description}
                       onChange={(e) => setProductForm({...productForm, description: e.target.value})}
-                      placeholder="Descreva os ingredientes, pão, molho..."
+                      placeholder="Descreva detalhes, ingredientes ou características do produto..."
                       rows={2}
                       className="mt-1 bg-stone-50/50 border-stone-200 focus:bg-white resize-none"
                     />

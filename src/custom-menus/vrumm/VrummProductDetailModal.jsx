@@ -421,7 +421,7 @@ export default function VrummProductDetailModal({
               </label>
               <Textarea
                 id="modal-notes"
-                placeholder="Ex: Ponto da carne, sem cebola, maionese à parte..."
+                placeholder="Ex: Sem gelo, ponto da carne, sem cebola, talher descartável..."
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={2}
