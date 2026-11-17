@@ -135,9 +135,11 @@ function useFifoPrintQueueInternal({
     }
 
     checkSpooler();
-    const interval = setInterval(checkSpooler, 10000); // Checagem rápida a cada 10s
+    // Se o spooler local não estiver em execução, espaça a checagem (60s) para evitar ruído de rede no loopback
+    const intervalMs = isSpoolerOnline ? 10000 : 60000;
+    const interval = setInterval(checkSpooler, intervalMs);
     return () => clearInterval(interval);
-  }, [isQueueActive, checkSpooler]);
+  }, [isQueueActive, isSpoolerOnline, checkSpooler]);
 
   const testSpoolerPrint = useCallback(async () => {
     try {
