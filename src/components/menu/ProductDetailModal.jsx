@@ -31,13 +31,18 @@ export default function ProductDetailModal({
         complementGroups.forEach(grp => {
           expandedState[grp.id] = true; // Aberto por padrão
           if (grp.min_quantity === 1 && grp.max_quantity === 1 && grp.items && grp.items.length > 0) {
-            const firstItem = grp.items[0];
-            initial[firstItem.id] = {
-              id: firstItem.id,
+            let defaultItem = grp.items[0];
+            // Se for seletor de tamanho, pré-seleciona a opção de menor preço por padrão
+            if (grp.is_size_selector) {
+              const sortedByPrice = [...grp.items].sort((a, b) => Number(a.price || 0) - Number(b.price || 0));
+              defaultItem = sortedByPrice[0] || grp.items[0];
+            }
+            initial[defaultItem.id] = {
+              id: defaultItem.id,
               group_id: grp.id,
               group_name: grp.name,
-              name: firstItem.name,
-              price: Number(firstItem.price) || 0,
+              name: defaultItem.name,
+              price: Number(defaultItem.price) || 0,
               quantity: 1,
             };
           }
@@ -222,6 +227,25 @@ export default function ProductDetailModal({
     return (effectiveBasePrice + complementsTotal) * quantity;
   };
 
+  // Preço unitário base dinâmico (acompanha em tempo real o tamanho selecionado)
+  const currentBasePrice = (() => {
+    if (complementGroups && complementGroups.length > 0) {
+      for (const grp of complementGroups) {
+        if (grp.is_size_selector) {
+          const sizeItem = Object.values(selectedComplements).find(c => c.group_id === grp.id);
+          if (sizeItem && Number(sizeItem.price) > 0) {
+            return Number(sizeItem.price);
+          }
+          if (grp.items && grp.items.length > 0) {
+            const validPrices = grp.items.map(i => Number(i.price || 0)).filter(p => p > 0);
+            if (validPrices.length > 0) return Math.min(...validPrices);
+          }
+        }
+      }
+    }
+    return Number(product.price || 0);
+  })();
+
   const handleAddToCart = () => {
     if (!validation.isValid) return;
 
@@ -374,7 +398,7 @@ export default function ProductDetailModal({
                 {product.name}
               </h2>
               <p className="text-lg sm:text-xl font-bold text-gray-900 mt-0.5">
-                R$ {Number(product.price || 0).toFixed(2).replace('.', ',')}
+                R$ {currentBasePrice.toFixed(2).replace('.', ',')}
               </p>
             </div>
 

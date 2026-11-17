@@ -56,6 +56,10 @@ function PopularProductCard({ product, index, hasMoved, onProductClick, isVisual
               <span className="text-[10px] sm:text-xs">
                 A partir de {formatBRLValue(getMinPizzaPrice(product))}
               </span>
+            ) : product.min_size_price && Number(product.min_size_price) > 0 ? (
+              <span className="text-[10px] sm:text-xs">
+                A partir de {formatBRLValue(product.min_size_price)}
+              </span>
             ) : (
               formatBRLValue(product.price)
             )}

@@ -442,10 +442,43 @@ export default function MenuPage() {
     }
   };
 
-  const popularRankedProducts = React.useMemo(() => {
+  // Enriquecer produtos com o menor valor de tamanho (quando houver seletor de tamanho)
+  const enrichedProducts = React.useMemo(() => {
     if (!products || products.length === 0) return [];
+    if (!complementGroups || complementGroups.length === 0 || !productComplementGroups || productComplementGroups.length === 0) {
+      return products;
+    }
 
-    return [...products]
+    const sizeGroups = complementGroups.filter(g => g.active && g.is_size_selector);
+    if (sizeGroups.length === 0) return products;
+
+    const sizeGroupIds = new Set(sizeGroups.map(g => g.id));
+
+    return products.map(prod => {
+      const linkedSizeGroupLinks = productComplementGroups.filter(
+        pcg => pcg.product_id === prod.id && sizeGroupIds.has(pcg.group_id)
+      );
+      if (linkedSizeGroupLinks.length === 0) return prod;
+
+      const sizeGroupIdsForProd = new Set(linkedSizeGroupLinks.map(l => l.group_id));
+      const relevantItems = complementItems.filter(
+        i => i.active && sizeGroupIdsForProd.has(i.group_id) && Number(i.price || 0) > 0
+      );
+
+      if (relevantItems.length === 0) return prod;
+
+      const minPrice = Math.min(...relevantItems.map(i => Number(i.price)));
+      return {
+        ...prod,
+        min_size_price: minPrice,
+      };
+    });
+  }, [products, complementGroups, productComplementGroups, complementItems]);
+
+  const popularRankedProducts = React.useMemo(() => {
+    if (!enrichedProducts || enrichedProducts.length === 0) return [];
+
+    return [...enrichedProducts]
       .filter(p => p.available !== false)
       .sort((a, b) => {
         if (b.popular && !a.popular) return 1;
@@ -453,7 +486,7 @@ export default function MenuPage() {
         return (Number(b.price) || 0) - (Number(a.price) || 0);
       })
       .slice(0, 7);
-  }, [products]);
+  }, [enrichedProducts]);
 
   const addToCart = (product, selectedAdditionals = [], quantity = 1, notes = "") => {
     const matchedCategory = categories.find(
@@ -528,7 +561,7 @@ export default function MenuPage() {
   };
 
   const isSearching = Boolean(searchQuery.trim());
-  const filteredProducts = products.filter(product => {
+  const filteredProducts = enrichedProducts.filter(product => {
     const matchesCategory = isSearching || !activeCategory || activeCategory === "all" || product.category === activeCategory || product.category_id === activeCategory;
     const matchesSearch = !isSearching || 
       product.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -565,7 +598,7 @@ export default function MenuPage() {
     const usedProductIds = new Set();
 
     realCategories.forEach(cat => {
-      const catProducts = products.filter(p => 
+      const catProducts = enrichedProducts.filter(p => 
         p.available !== false && (p.category === cat.id || p.category_id === cat.id)
       );
       if (catProducts.length > 0) {
@@ -579,7 +612,7 @@ export default function MenuPage() {
       }
     });
 
-    const uncategorized = products.filter(p => p.available !== false && !usedProductIds.has(p.id));
+    const uncategorized = enrichedProducts.filter(p => p.available !== false && !usedProductIds.has(p.id));
     if (uncategorized.length > 0) {
       sections.push({
         id: "uncategorized",

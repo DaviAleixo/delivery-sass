@@ -70,6 +70,11 @@ const ProductCard = forwardRef(function ProductCard(
                   <span className="text-[11px] font-normal text-stone-500 mr-1">A partir de</span>
                   {formatBRLValue(getMinPizzaPrice(product))}
                 </>
+              ) : product.min_size_price && Number(product.min_size_price) > 0 ? (
+                <>
+                  <span className="text-[11px] font-normal text-stone-500 mr-1">A partir de</span>
+                  {formatBRLValue(product.min_size_price)}
+                </>
               ) : (
                 formatBRLValue(product.price)
               )}
