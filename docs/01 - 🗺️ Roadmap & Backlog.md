@@ -6,6 +6,11 @@
 
 ## 🚀 Em Andamento / Foco Atual
 
+- [x] 🌐 **Infraestrutura de Domínio & Roteamento SPA no Cloudflare Pages (`pedemuleke.com`, `homolog.pedemuleke.com`)**:
+  - [x] Configuração de CNAME no Cloudflare apontando para `delivery-sass.pages.dev` (substituindo IP antigo da Hostinger).
+  - [x] Ativação de domínios customizados no Cloudflare Pages com certificado SSL.
+  - [x] **Blindagem da Rota de Login (`App.jsx`, `public/_redirects`)**: import direto de `AdminLoginPage` sem condicionais frágeis e guards de rota em `StoreRootRedirect` e `StoreMenuRoute` para impedir que a rota `/login` seja tratada como slug multi-tenant e redirecionada para `/login/menu`. Regra de SPA rewrite com flag `200!`.
+
 - [ ] 📱 **Autenticação & OTP via WhatsApp Cloud API Oficial da Meta (`whatsapp-otp`, `Supabase Edge Functions`)**:
   - [ ] **Configuração e Registro da WABA no Meta Developers (Status: Aguardando Aprovação da Meta)**:
     - [x] Criação e identificação da WABA comercial `1126913376908908` (App ID `1133124069684887`, Phone Number ID `1496118243581329`, número comercial `+55 31 98660-6935`).
