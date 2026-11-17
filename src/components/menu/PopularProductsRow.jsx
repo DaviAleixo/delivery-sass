@@ -1,6 +1,11 @@
 import React, { useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Plus, ChevronRight } from "lucide-react";
+import {
+  formatBRLValue,
+  getMinPizzaPrice,
+  hasPizzaPrices,
+} from "@/utils/pizzaPricing";
 
 function PopularProductCard({ product, index, hasMoved, onProductClick, isVisualOnly = false }) {
   const [imageError, setImageError] = useState(false);
@@ -47,12 +52,12 @@ function PopularProductCard({ product, index, hasMoved, onProductClick, isVisual
         
         <div className="mt-2 flex items-center justify-between">
           <span className="font-black text-xs sm:text-sm text-gray-950">
-            {product.pizza_prices && Object.keys(product.pizza_prices).length > 0 ? (
+            {hasPizzaPrices(product) ? (
               <span className="text-[10px] sm:text-xs">
-                A partir de R$ {Number(product.price || 0).toFixed(2).replace(".", ",")}
+                A partir de {formatBRLValue(getMinPizzaPrice(product))}
               </span>
             ) : (
-              `R$ ${Number(product.price || 0).toFixed(2).replace(".", ",")}`
+              formatBRLValue(product.price)
             )}
           </span>
 

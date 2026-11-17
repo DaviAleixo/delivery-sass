@@ -7,24 +7,31 @@
  * - Mapeamento e detecção de horários de pico (00h às 23h BRT)
  */
 
-import { getBrasiliaParts } from "./dateTime";
+import { getBrasiliaParts, getBusinessDayParts } from "./dateTime";
 
 /**
- * Agrupa vendas dia a dia no período selecionado (Fuso Brasília)
+ * Agrupa vendas dia a dia no período selecionado (Fuso Brasília e Virada do Dia Comercial)
  * @param {Array} orders Lista de pedidos
  * @param {Date} startDate Data inicial
  * @param {Date} endDate Data final
+ * @param {string} cutoffTime Horário de corte do dia comercial (ex: "04:00")
  * @returns {Array} Array de métricas diárias ordenado cronologicamente
  */
-export function aggregateDailySales(orders = [], startDate = null, endDate = null) {
+export function aggregateDailySales(
+  orders = [],
+  startDate = null,
+  endDate = null,
+  cutoffTime = "04:00"
+) {
   const dailyMap = new Map();
 
-  // Processa pedidos válidos
+  // Processa pedidos válidos considerando o horário de virada do dia comercial
   orders.forEach((order) => {
     if (!order.created_date) return;
-    const parts = getBrasiliaParts(order.created_date);
-    const dateKey = parts.dateKey; // YYYY-MM-DD
-    const displayDate = `${parts.day}/${parts.month}`;
+    const parts = getBusinessDayParts(order.created_date, cutoffTime);
+    const dateKey = parts.businessDateKey; // YYYY-MM-DD ajustado pelo corte
+    const [bYear, bMonth, bDay] = dateKey.split("-");
+    const displayDate = `${bDay}/${bMonth}`;
 
     if (!dailyMap.has(dateKey)) {
       dailyMap.set(dateKey, {
@@ -633,5 +640,358 @@ export function aggregatePaymentMethodsDistribution(orders = []) {
     overallAverageTicket,
     topMethodByRevenue,
     topMethodByVolume,
+  };
+}
+
+/**
+ * 6. Agregação por Canais de Venda / Origem dos Pedidos (Delivery vs Balcão vs Salão/Mesas)
+ * Crucial para restaurantes entenderem a dependência de entrega vs atendimento local.
+ *
+ * @param {Array} orders Lista de pedidos do período
+ * @returns {Object} { channels: Array, totalRevenue: number, totalOrders: number, topChannelByRevenue: Object }
+ */
+export function aggregateSalesChannels(orders = []) {
+  const channelMap = {
+    delivery: {
+      id: "delivery",
+      label: "Delivery (Entrega)",
+      count: 0,
+      revenue: 0,
+      color: "#059669",
+      icon: "bike",
+      badgeClass: "bg-emerald-50 text-emerald-800 border-emerald-200",
+    },
+    takeaway: {
+      id: "takeaway",
+      label: "Balcão (Retirada)",
+      count: 0,
+      revenue: 0,
+      color: "#2563eb",
+      icon: "store",
+      badgeClass: "bg-blue-50 text-blue-800 border-blue-200",
+    },
+    table: {
+      id: "table",
+      label: "Salão (Mesas / Comandas)",
+      count: 0,
+      revenue: 0,
+      color: "#d97706",
+      icon: "utensils",
+      badgeClass: "bg-amber-50 text-amber-900 border-amber-200",
+    },
+  };
+
+  let grandRevenue = 0;
+  let grandOrders = 0;
+
+  orders.forEach((o) => {
+    if (o.status === "cancelado") return;
+    const amt = Number(o.total_amount ?? o.total ?? 0) || 0;
+    if (amt < 0) return;
+
+    const isMesa = Boolean(
+      o.table_number ||
+      o.table_session_id ||
+      o.order_type === "table" ||
+      o.order_type === "mesa" ||
+      o.delivery_type === "table" ||
+      o.delivery_type === "mesa"
+    );
+
+    const isRetirada = Boolean(
+      o.order_type === "takeaway" ||
+      o.order_type === "retirada" ||
+      o.order_type === "pickup" ||
+      o.delivery_type === "takeaway" ||
+      o.delivery_type === "retirada" ||
+      o.delivery_type === "pickup"
+    );
+
+    let channelKey = "delivery";
+    if (isMesa) {
+      channelKey = "table";
+    } else if (isRetirada) {
+      channelKey = "takeaway";
+    }
+
+    channelMap[channelKey].revenue += amt;
+    channelMap[channelKey].count += 1;
+    grandRevenue += amt;
+    grandOrders += 1;
+  });
+
+  grandRevenue = Number(grandRevenue.toFixed(2));
+
+  const channelsList = Object.values(channelMap)
+    .filter((c) => c.revenue > 0 || c.count > 0)
+    .map((c) => {
+      const revenue = Number(c.revenue.toFixed(2));
+      const percentage = grandRevenue > 0 ? Number(((revenue / grandRevenue) * 100).toFixed(1)) : 0;
+      const ordersPercentage = grandOrders > 0 ? Number(((c.count / grandOrders) * 100).toFixed(1)) : 0;
+      const averageTicket = c.count > 0 ? Number((revenue / c.count).toFixed(2)) : 0;
+
+      return {
+        ...c,
+        revenue,
+        percentage,
+        ordersPercentage,
+        averageTicket,
+      };
+    })
+    .sort((a, b) => b.revenue - a.revenue);
+
+  const topChannelByRevenue = channelsList[0] || null;
+
+  return {
+    channels: channelsList,
+    totalRevenue: grandRevenue,
+    totalOrders: grandOrders,
+    topChannelByRevenue,
+  };
+}
+
+/**
+ * 7. Ranking dos Top Produtos Mais Vendidos & Curva ABC
+ * Agrega itens comercializados com classificação de representatividade acumulada (A = até 80%, B = 80-95%, C = 95-100%).
+ *
+ * @param {Array} orders Lista de pedidos do período
+ * @param {number} limit Quantidade máxima a retornar (padrão 10)
+ * @returns {Object} { topProducts: Array, totalItemsSold: number, totalProductsRevenue: number }
+ */
+export function aggregateTopProducts(orders = [], limit = 10) {
+  const productMap = new Map();
+  let totalItemsSold = 0;
+  let totalProductsRevenue = 0;
+
+  orders.forEach((o) => {
+    if (o.status === "cancelado") return;
+    const items = Array.isArray(o.items) ? o.items : [];
+
+    items.forEach((it) => {
+      if (!it) return;
+      const rawName = it.product_name || it.name || "Item sem nome";
+      const name = String(rawName).trim();
+      const category = String(it.category_name || it.category || "Geral").trim();
+      const qty = Math.max(1, Number(it.quantity || it.qty || 1));
+      const unitPrice = Number(it.product_price ?? it.price ?? 0);
+      const subtotal = Number(it.subtotal ?? (unitPrice * qty));
+
+      totalItemsSold += qty;
+      totalProductsRevenue += subtotal;
+
+      const key = String(it.product_id || name).trim().toLowerCase();
+
+      if (productMap.has(key)) {
+        const prev = productMap.get(key);
+        prev.quantity += qty;
+        prev.revenue += subtotal;
+        prev.ordersCount += 1;
+      } else {
+        productMap.set(key, {
+          id: key,
+          name,
+          category,
+          quantity: qty,
+          revenue: subtotal,
+          ordersCount: 1,
+        });
+      }
+    });
+  });
+
+  totalProductsRevenue = Number(totalProductsRevenue.toFixed(2));
+
+  // Ordena por maior faturamento inicial para cálculo da Curva ABC
+  const sortedByRevenue = Array.from(productMap.values()).sort((a, b) => b.revenue - a.revenue);
+
+  let cumulativeRevenue = 0;
+  const enrichedList = sortedByRevenue.map((p) => {
+    const revenue = Number(p.revenue.toFixed(2));
+    const percentage = totalProductsRevenue > 0 ? Number(((revenue / totalProductsRevenue) * 100).toFixed(1)) : 0;
+    const averageUnitPrice = p.quantity > 0 ? Number((revenue / p.quantity).toFixed(2)) : 0;
+
+    cumulativeRevenue += revenue;
+    const cumulativePercentage = totalProductsRevenue > 0 ? (cumulativeRevenue / totalProductsRevenue) * 100 : 0;
+
+    let abcClass = "C";
+    if (cumulativePercentage <= 80 || (cumulativePercentage > 80 && cumulativeRevenue - revenue < totalProductsRevenue * 0.8)) {
+      abcClass = "A";
+    } else if (cumulativePercentage <= 95) {
+      abcClass = "B";
+    }
+
+    return {
+      ...p,
+      revenue,
+      percentage,
+      averageUnitPrice,
+      abcClass,
+    };
+  });
+
+  return {
+    topProducts: enrichedList.slice(0, limit),
+    allProductsCount: enrichedList.length,
+    totalItemsSold,
+    totalProductsRevenue,
+  };
+}
+
+/**
+ * 8. Performance por Dia da Semana (Segunda a Domingo - Fuso Brasília)
+ * Identifica o dia campeão de faturamento e o dia com menor volume para planejamento de equipes e promoções.
+ *
+ * @param {Array} orders Lista de pedidos do período
+ * @returns {Object} { days: Array, bestDay: Object, slowestDay: Object, totalRevenue: number }
+ */
+export function aggregateDayOfWeekSales(orders = [], cutoffTime = "04:00") {
+  const DAY_LABELS = [
+    { index: 1, name: "Segunda-feira", short: "Seg" },
+    { index: 2, name: "Terça-feira", short: "Ter" },
+    { index: 3, name: "Quarta-feira", short: "Qua" },
+    { index: 4, name: "Quinta-feira", short: "Qui" },
+    { index: 5, name: "Sexta-feira", short: "Sex" },
+    { index: 6, name: "Sábado", short: "Sáb" },
+    { index: 0, name: "Domingo", short: "Dom" },
+  ];
+
+  const daysMap = new Map();
+  DAY_LABELS.forEach((d) => {
+    daysMap.set(d.index, {
+      index: d.index,
+      name: d.name,
+      short: d.short,
+      ordersCount: 0,
+      revenue: 0,
+    });
+  });
+
+  let totalRevenue = 0;
+  let totalOrders = 0;
+
+  orders.forEach((o) => {
+    if (o.status === "cancelado") return;
+    if (!o.created_date) return;
+
+    // Considera a virada do dia comercial (pedidos da madrugada vinculados ao turno anterior)
+    const parts = getBusinessDayParts(o.created_date, cutoffTime);
+    const dayOfWeek = parts.businessDayOfWeek; // 0=Dom, 1=Seg, ... 6=Sáb
+    const amt = Number(o.total_amount ?? o.total ?? 0) || 0;
+
+    if (daysMap.has(dayOfWeek)) {
+      const rec = daysMap.get(dayOfWeek);
+      rec.ordersCount += 1;
+      rec.revenue += amt;
+      totalRevenue += amt;
+      totalOrders += 1;
+    }
+  });
+
+  totalRevenue = Number(totalRevenue.toFixed(2));
+
+  // Converte na ordem de apresentação (Segunda a Domingo)
+  const daysList = DAY_LABELS.map((labelInfo) => {
+    const raw = daysMap.get(labelInfo.index);
+    const revenue = Number(raw.revenue.toFixed(2));
+    const percentage = totalRevenue > 0 ? Number(((revenue / totalRevenue) * 100).toFixed(1)) : 0;
+    const averageTicket = raw.ordersCount > 0 ? Number((revenue / raw.ordersCount).toFixed(2)) : 0;
+
+    return {
+      ...raw,
+      revenue,
+      percentage,
+      averageTicket,
+    };
+  });
+
+  // Dias com vendas para calcular o melhor e o pior dia
+  const activeDays = daysList.filter((d) => d.ordersCount > 0);
+  const bestDay = activeDays.length > 0
+    ? [...activeDays].sort((a, b) => b.revenue - a.revenue)[0]
+    : null;
+
+  const slowestDay = activeDays.length > 1
+    ? [...activeDays].sort((a, b) => a.revenue - b.revenue)[0]
+    : null;
+
+  return {
+    days: daysList,
+    bestDay,
+    slowestDay,
+    totalRevenue,
+    totalOrders,
+  };
+}
+
+/**
+ * 9. DRE Simplificada / Composição Financeira de Vendas
+ * Desmembra o faturamento entre produtos brutos, fretes, serviço e deduções (cupons e cashback).
+ *
+ * @param {Array} orders Lista de pedidos do período
+ * @param {Array} sessions Lista de sessões de mesa
+ * @returns {Object}
+ */
+export function aggregateFinancialBreakdown(orders = [], sessions = []) {
+  let grossProducts = 0;
+  let deliveryFees = 0;
+  let serviceFees = 0;
+  let discounts = 0;
+  let cashbacks = 0;
+  let netRevenue = 0;
+  let canceledRevenue = 0;
+
+  orders.forEach((o) => {
+    const total = Number(o.total_amount ?? o.total ?? 0) || 0;
+    if (o.status === "cancelado") {
+      canceledRevenue += total;
+      return;
+    }
+
+    netRevenue += total;
+
+    // Frete
+    deliveryFees += Number(o.delivery_fee || 0);
+
+    // Serviço (pedido)
+    serviceFees += Number(o.service_fee || 0);
+
+    // Descontos
+    discounts += Number(o.discount_amount || o.discount || 0);
+
+    // Cashback utilizado
+    cashbacks += Number(o.cashback_used || o.cashback_discount || 0);
+
+    // Produtos brutos
+    if (Array.isArray(o.items) && o.items.length > 0) {
+      o.items.forEach((it) => {
+        const qty = Math.max(1, Number(it.quantity || it.qty || 1));
+        const price = Number(it.product_price ?? it.price ?? 0);
+        grossProducts += Number(it.subtotal ?? (price * qty));
+      });
+    } else {
+      // Fallback se não houver itens detalhados
+      const fee = Number(o.delivery_fee || 0) + Number(o.service_fee || 0);
+      grossProducts += Math.max(0, total - fee);
+    }
+  });
+
+  // Se houver sessões com taxa de serviço de mesa que não estiverem em orders
+  if (Array.isArray(sessions)) {
+    const orderSessionIds = new Set(orders.map((o) => o.table_session_id).filter(Boolean));
+    sessions.forEach((s) => {
+      if (s.id && !orderSessionIds.has(s.id)) {
+        serviceFees += Number(s.service_fee || 0);
+      }
+    });
+  }
+
+  return {
+    grossProducts: Number(grossProducts.toFixed(2)),
+    deliveryFees: Number(deliveryFees.toFixed(2)),
+    serviceFees: Number(serviceFees.toFixed(2)),
+    discounts: Number(discounts.toFixed(2)),
+    cashbacks: Number(cashbacks.toFixed(2)),
+    netRevenue: Number(netRevenue.toFixed(2)),
+    canceledRevenue: Number(canceledRevenue.toFixed(2)),
   };
 }

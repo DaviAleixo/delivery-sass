@@ -3,7 +3,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { 
   CreditCard, 
@@ -12,7 +11,6 @@ import {
   ExternalLink, 
   AlertCircle,
   Save,
-  Zap,
   Sparkles,
   UtensilsCrossed,
   Info
@@ -236,36 +234,38 @@ export default function PaymentMethodsTab({ tenantData, onUpdateTenant }) {
   return (
     <div className="space-y-6">
       {/* Bloco 1: Pagamento na Entrega & Balcão (Maquininha e Dinheiro) */}
-      <Card className="border-0 shadow-md bg-white">
-        <CardHeader className="pb-3">
-          <div className="flex items-center gap-2">
-            <span className="p-2 rounded-xl bg-amber-50 text-amber-600">
-              <Banknote className="w-5 h-5" />
-            </span>
-            <div>
-              <CardTitle className="text-lg font-bold text-stone-900">
-                Pagamento na Entrega / Balcão
-              </CardTitle>
-              <p className="text-xs text-stone-500 mt-0.5">
-                Formas onde o cliente paga diretamente ao motoboy ou no balcão da loja. Se desativar uma opção, ela desaparece imediatamente do checkout do cliente.
-              </p>
+      <Card className="border border-stone-200/80 shadow-xs bg-white rounded-2xl overflow-hidden">
+        <CardHeader className="p-5 sm:p-6 border-b border-stone-150 bg-stone-50/40">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="w-10 h-10 rounded-xl bg-white border border-stone-200 flex items-center justify-center text-stone-700 shadow-2xs shrink-0">
+                <Banknote className="w-5 h-5 text-stone-800" />
+              </span>
+              <div>
+                <CardTitle className="text-base sm:text-lg font-bold text-stone-900 tracking-tight">
+                  Pagamento na Entrega / Balcão
+                </CardTitle>
+                <p className="text-xs text-stone-500 mt-0.5">
+                  Métodos onde o cliente acerta diretamente na maquininha do entregador ou no caixa. As opções ativas aparecem imediatamente no checkout.
+                </p>
+              </div>
             </div>
           </div>
         </CardHeader>
 
-        <CardContent className="space-y-3">
+        <CardContent className="p-0 divide-y divide-stone-150">
           {/* Opção Dinheiro */}
-          <div className="flex items-center justify-between p-3.5 rounded-xl border border-stone-200 bg-stone-50/50 hover:bg-stone-50 transition-colors">
-            <div className="flex items-center gap-3">
-              <span className="p-2 rounded-lg bg-emerald-100 text-emerald-700">
-                <Banknote className="w-4 h-4" />
+          <div className="p-5 sm:p-6 flex items-center justify-between gap-4 hover:bg-stone-50/50 transition-colors">
+            <div className="flex items-center gap-3.5">
+              <span className="w-9 h-9 rounded-lg bg-stone-100 border border-stone-200/80 flex items-center justify-center text-stone-700 shrink-0">
+                <Banknote className="w-4 h-4 text-emerald-700" />
               </span>
               <div>
-                <span className="text-sm font-bold text-stone-900 block">
+                <span className="text-sm font-semibold text-stone-900 block">
                   Dinheiro em Espécie
                 </span>
-                <span className="text-xs text-stone-500">
-                  Permite o cliente informar no pedido se precisa de troco e para quanto.
+                <span className="text-xs text-stone-500 block mt-0.5">
+                  Permite ao cliente informar no pedido se precisa de troco e para quanto.
                 </span>
               </div>
             </div>
@@ -276,17 +276,17 @@ export default function PaymentMethodsTab({ tenantData, onUpdateTenant }) {
           </div>
 
           {/* Opção Cartão de Crédito na Maquininha */}
-          <div className="flex items-center justify-between p-3.5 rounded-xl border border-stone-200 bg-stone-50/50 hover:bg-stone-50 transition-colors">
-            <div className="flex items-center gap-3">
-              <span className="p-2 rounded-lg bg-blue-100 text-blue-700">
-                <CreditCard className="w-4 h-4" />
+          <div className="p-5 sm:p-6 flex items-center justify-between gap-4 hover:bg-stone-50/50 transition-colors">
+            <div className="flex items-center gap-3.5">
+              <span className="w-9 h-9 rounded-lg bg-stone-100 border border-stone-200/80 flex items-center justify-center text-stone-700 shrink-0">
+                <CreditCard className="w-4 h-4 text-stone-800" />
               </span>
               <div>
-                <span className="text-sm font-bold text-stone-900 block">
+                <span className="text-sm font-semibold text-stone-900 block">
                   Cartão de Crédito (na Maquininha)
                 </span>
-                <span className="text-xs text-stone-500">
-                  O entregador leva a máquina do restaurante para passar o cartão no Crédito.
+                <span className="text-xs text-stone-500 block mt-0.5">
+                  O entregador leva a maquininha do restaurante para passar no Crédito.
                 </span>
               </div>
             </div>
@@ -297,17 +297,17 @@ export default function PaymentMethodsTab({ tenantData, onUpdateTenant }) {
           </div>
 
           {/* Opção Cartão de Débito na Maquininha */}
-          <div className="flex items-center justify-between p-3.5 rounded-xl border border-stone-200 bg-stone-50/50 hover:bg-stone-50 transition-colors">
-            <div className="flex items-center gap-3">
-              <span className="p-2 rounded-lg bg-indigo-100 text-indigo-700">
-                <CreditCard className="w-4 h-4" />
+          <div className="p-5 sm:p-6 flex items-center justify-between gap-4 hover:bg-stone-50/50 transition-colors">
+            <div className="flex items-center gap-3.5">
+              <span className="w-9 h-9 rounded-lg bg-stone-100 border border-stone-200/80 flex items-center justify-center text-stone-700 shrink-0">
+                <CreditCard className="w-4 h-4 text-stone-800" />
               </span>
               <div>
-                <span className="text-sm font-bold text-stone-900 block">
+                <span className="text-sm font-semibold text-stone-900 block">
                   Cartão de Débito (na Maquininha)
                 </span>
-                <span className="text-xs text-stone-500">
-                  O entregador leva a máquina do restaurante para passar o cartão no Débito.
+                <span className="text-xs text-stone-500 block mt-0.5">
+                  O entregador leva a maquininha do restaurante para passar no Débito.
                 </span>
               </div>
             </div>
@@ -317,35 +317,38 @@ export default function PaymentMethodsTab({ tenantData, onUpdateTenant }) {
             />
           </div>
 
-          {/* Bandeiras de Cartão de Crédito / Débito Aceitas */}
+          {/* Grade Executiva de Bandeiras de Cartão (Crédito & Débito) */}
           {(config.accept_card_credit || config.accept_card_debit) && (
-            <div className="p-4 rounded-xl border border-blue-200 bg-blue-50/40 space-y-3 animate-in fade-in duration-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <CreditCard className="w-4 h-4 text-blue-700" />
-                  <span className="text-xs font-bold text-blue-950 uppercase tracking-wider">
-                    Bandeiras de Cartão Aceitas na Maquininha
-                  </span>
+            <div className="p-5 sm:p-6 bg-stone-50/40 space-y-3.5 animate-in fade-in duration-150">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h4 className="text-xs font-bold text-stone-900 uppercase tracking-wider">
+                    Bandeiras de Cartão Aceitas
+                  </h4>
+                  <p className="text-[11px] text-stone-500 mt-0.5">
+                    Selecione as bandeiras que suas máquinas de cartão aceitam ({config.accepted_card_brands?.length || 0} de {CARD_BRANDS.length} ativas).
+                  </p>
                 </div>
                 <div className="flex items-center gap-2 text-xs">
                   <button
                     type="button"
                     onClick={() => toggleAllCardBrands(true)}
-                    className="text-blue-700 hover:underline font-bold"
+                    className="text-emerald-700 hover:text-emerald-800 font-bold hover:underline cursor-pointer"
                   >
-                    Marcar Todas
+                    Marcar todas
                   </button>
-                  <span className="text-blue-300">|</span>
+                  <span className="text-stone-300">•</span>
                   <button
                     type="button"
                     onClick={() => toggleAllCardBrands(false)}
-                    className="text-stone-500 hover:underline"
+                    className="text-stone-500 hover:text-stone-700 font-medium hover:underline cursor-pointer"
                   >
-                    Limpar
+                    Desmarcar
                   </button>
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2">
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5">
                 {CARD_BRANDS.map((brand) => {
                   const isSelected = (config.accepted_card_brands || []).includes(brand.id);
                   return (
@@ -353,40 +356,55 @@ export default function PaymentMethodsTab({ tenantData, onUpdateTenant }) {
                       key={brand.id}
                       type="button"
                       onClick={() => toggleCardBrand(brand.id)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-1.5 cursor-pointer select-none active:scale-95 ${
+                      className={`relative p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between h-20 select-none ${
                         isSelected
-                          ? `${brand.bgClass} shadow-sm ring-2 ring-offset-1 ring-blue-500/50`
-                          : "bg-white text-stone-400 border-stone-200 hover:border-stone-300 hover:text-stone-600 opacity-60"
+                          ? "bg-white border-stone-300 shadow-2xs ring-1 ring-emerald-600/30"
+                          : "bg-stone-50/70 border-stone-200/80 hover:border-stone-300 hover:bg-white opacity-60"
                       }`}
                     >
-                      <span>{brand.name}</span>
-                      {isSelected ? (
-                        <CheckCircle2 className="w-3.5 h-3.5 ml-0.5" />
-                      ) : (
-                        <span className="w-3.5 h-3.5 rounded-full border border-stone-300" />
-                      )}
+                      <div className="flex items-center justify-between w-full">
+                        <div className="h-6 max-w-[85px] flex items-center justify-start">
+                          {brand.image ? (
+                            <img
+                              src={brand.image}
+                              alt={brand.name}
+                              className={`max-h-5 max-w-full object-contain ${isSelected ? "" : "grayscale opacity-50"}`}
+                              loading="lazy"
+                            />
+                          ) : (
+                            <span className="text-[10px] font-black text-stone-800">{brand.tag}</span>
+                          )}
+                        </div>
+                        {isSelected ? (
+                          <span className="w-4 h-4 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                          </span>
+                        ) : (
+                          <span className="w-4 h-4 rounded-full border border-stone-300 bg-white shrink-0" />
+                        )}
+                      </div>
+                      <span className={`text-xs font-semibold truncate ${isSelected ? "text-stone-900" : "text-stone-500"}`}>
+                        {brand.name}
+                      </span>
                     </button>
                   );
                 })}
               </div>
-              <p className="text-[11px] text-blue-900/80">
-                O cliente poderá informar a bandeira do cartão dele ao fechar o pedido para o entregador levar a máquina compatível.
-              </p>
             </div>
           )}
 
           {/* Opção Vale Alimentação / Refeição */}
-          <div className="flex items-center justify-between p-3.5 rounded-xl border border-stone-200 bg-stone-50/50 hover:bg-stone-50 transition-colors">
-            <div className="flex items-center gap-3">
-              <span className="p-2 rounded-lg bg-amber-100 text-amber-700">
-                <UtensilsCrossed className="w-4 h-4" />
+          <div className="p-5 sm:p-6 flex items-center justify-between gap-4 hover:bg-stone-50/50 transition-colors">
+            <div className="flex items-center gap-3.5">
+              <span className="w-9 h-9 rounded-lg bg-stone-100 border border-stone-200/80 flex items-center justify-center text-stone-700 shrink-0">
+                <UtensilsCrossed className="w-4 h-4 text-stone-800" />
               </span>
               <div>
-                <span className="text-sm font-bold text-stone-900 block">
-                  Vale Refeição / Alimentação (VR, VA, Alelo, Sodexo, Ticket)
+                <span className="text-sm font-semibold text-stone-900 block">
+                  Vale Refeição & Alimentação (VR, VA, Vales Corporativos)
                 </span>
-                <span className="text-xs text-stone-500">
-                  Permite o cliente pagar com cartões de benefício refeição na maquininha.
+                <span className="text-xs text-stone-500 block mt-0.5">
+                  Permite ao cliente pagar com cartões de benefício corporativo na maquininha.
                 </span>
               </div>
             </div>
@@ -396,35 +414,38 @@ export default function PaymentMethodsTab({ tenantData, onUpdateTenant }) {
             />
           </div>
 
-          {/* Bandeiras de Vales e Benefícios Aceitas */}
+          {/* Grade Executiva de Bandeiras de Vales & Benefícios */}
           {config.accept_card_meal && (
-            <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/40 space-y-3 animate-in fade-in duration-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <UtensilsCrossed className="w-4 h-4 text-amber-700" />
-                  <span className="text-xs font-bold text-amber-950 uppercase tracking-wider">
-                    Bandeiras de Vales & Benefícios Aceitas na Maquininha
-                  </span>
+            <div className="p-5 sm:p-6 bg-stone-50/40 space-y-3.5 animate-in fade-in duration-150">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h4 className="text-xs font-bold text-stone-900 uppercase tracking-wider">
+                    Bandeiras de Vales Aceitas
+                  </h4>
+                  <p className="text-[11px] text-stone-500 mt-0.5">
+                    Habilite apenas os cartões que suas máquinas passam na entrega ({config.accepted_meal_brands?.length || 0} de {MEAL_VOUCHER_BRANDS.length} ativas).
+                  </p>
                 </div>
                 <div className="flex items-center gap-2 text-xs">
                   <button
                     type="button"
                     onClick={() => toggleAllMealBrands(true)}
-                    className="text-amber-800 hover:underline font-bold"
+                    className="text-emerald-700 hover:text-emerald-800 font-bold hover:underline cursor-pointer"
                   >
-                    Marcar Todas
+                    Marcar todas
                   </button>
-                  <span className="text-amber-300">|</span>
+                  <span className="text-stone-300">•</span>
                   <button
                     type="button"
                     onClick={() => toggleAllMealBrands(false)}
-                    className="text-stone-500 hover:underline"
+                    className="text-stone-500 hover:text-stone-700 font-medium hover:underline cursor-pointer"
                   >
-                    Limpar
+                    Desmarcar
                   </button>
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2">
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-2.5">
                 {MEAL_VOUCHER_BRANDS.map((brand) => {
                   const isSelected = (config.accepted_meal_brands || []).includes(brand.id);
                   return (
@@ -432,49 +453,59 @@ export default function PaymentMethodsTab({ tenantData, onUpdateTenant }) {
                       key={brand.id}
                       type="button"
                       onClick={() => toggleMealBrand(brand.id)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all flex items-center gap-1.5 cursor-pointer select-none active:scale-95 ${
+                      className={`relative p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between h-20 select-none ${
                         isSelected
-                          ? `${brand.bgClass} shadow-sm ring-2 ring-offset-1 ring-amber-500/50`
-                          : "bg-white text-stone-400 border-stone-200 hover:border-stone-300 hover:text-stone-600 opacity-60"
+                          ? "bg-white border-stone-300 shadow-2xs ring-1 ring-emerald-600/30"
+                          : "bg-stone-50/70 border-stone-200/80 hover:border-stone-300 hover:bg-white opacity-60"
                       }`}
                     >
-                      <span>{brand.name}</span>
-                      {isSelected ? (
-                        <CheckCircle2 className="w-3.5 h-3.5 ml-0.5" />
-                      ) : (
-                        <span className="w-3.5 h-3.5 rounded-full border border-stone-300" />
-                      )}
+                      <div className="flex items-center justify-between w-full">
+                        <div className="h-6 max-w-[70px] flex items-center justify-start">
+                          {brand.image ? (
+                            <img
+                              src={brand.image}
+                              alt={brand.name}
+                              className={`max-h-5 max-w-full object-contain ${isSelected ? "" : "grayscale opacity-50"}`}
+                              loading="lazy"
+                            />
+                          ) : (
+                            <span className="text-[10px] font-black text-stone-800">{brand.tag}</span>
+                          )}
+                        </div>
+                        {isSelected ? (
+                          <span className="w-4 h-4 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                          </span>
+                        ) : (
+                          <span className="w-4 h-4 rounded-full border border-stone-300 bg-white shrink-0" />
+                        )}
+                      </div>
+                      <span className={`text-xs font-semibold truncate ${isSelected ? "text-stone-900" : "text-stone-500"}`}>
+                        {brand.shortName || brand.name}
+                      </span>
                     </button>
                   );
                 })}
               </div>
-              <p className="text-[11px] text-amber-900/80">
-                Marque apenas as bandeiras que sua máquina realmente passa (ex: Alelo, Sodexo/Pluxee, Ticket, Caju) para evitar surpresas na entrega.
-              </p>
             </div>
           )}
         </CardContent>
       </Card>
 
       {/* Bloco 2: Pagamento Online Automático (Mercado Pago) */}
-      <Card className="border-0 shadow-md bg-white relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-48 h-48 bg-sky-500/5 rounded-full blur-2xl pointer-events-none" />
-
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="p-2 rounded-xl bg-sky-50 text-sky-600">
-                <Zap className="w-5 h-5" />
+      <Card className="border border-stone-200/80 shadow-xs bg-white rounded-2xl overflow-hidden">
+        <CardHeader className="p-5 sm:p-6 border-b border-stone-150 bg-stone-50/40">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="w-10 h-10 rounded-xl bg-white border border-stone-200 flex items-center justify-center p-2 shrink-0 shadow-2xs">
+                <img src="/bandeiras/pix.webp" alt="Pix" className="w-full h-full object-contain" />
               </span>
               <div>
-                <CardTitle className="text-lg font-bold text-stone-900 flex items-center gap-2">
-                  PIX Automático na Tela (Mercado Pago)
-                  <Badge className="bg-sky-100 text-sky-800 border-sky-300 text-[10px] uppercase font-bold tracking-wider">
-                    ⚡ Instantâneo
-                  </Badge>
+                <CardTitle className="text-base sm:text-lg font-bold text-stone-900 flex items-center gap-2">
+                  <span>PIX Online Automático</span>
                 </CardTitle>
                 <p className="text-xs text-stone-500 mt-0.5">
-                  Gera QR Code na tela com confirmação automática em 2 segundos sem precisar de comprovante. Se ativado, aparece no checkout do cliente.
+                  Gera QR Code dinâmico na tela do cliente via Mercado Pago e confirma o pagamento sozinho sem precisar conferir comprovante.
                 </p>
               </div>
             </div>
@@ -485,23 +516,23 @@ export default function PaymentMethodsTab({ tenantData, onUpdateTenant }) {
           </div>
         </CardHeader>
 
-        <CardContent className="space-y-4">
-          <div className="p-4 rounded-xl bg-sky-50/60 border border-sky-100 text-xs text-sky-950 space-y-2">
-            <p className="font-semibold flex items-center gap-1.5 text-sky-900">
-              <Sparkles className="w-4 h-4 text-sky-600" />
-              Como funciona o pagamento automatizado no seu restaurante:
+        <CardContent className="p-5 sm:p-6 space-y-4">
+          <div className="p-4 rounded-xl bg-stone-50 border border-stone-200/80 text-xs text-stone-700 space-y-2">
+            <p className="font-semibold text-stone-900 flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-emerald-700" />
+              Benefícios do PIX Automatizado:
             </p>
-            <ul className="list-disc list-inside space-y-1 text-sky-900/90 ml-1 text-[11px]">
-              <li>O cliente escaneia o QR Code ou usa o PIX Copia e Cola no checkout do cardápio.</li>
-              <li>O sistema detecta a aprovação em <strong>2 segundos</strong> e envia direto para a cozinha com alerta sonoro.</li>
-              <li>O dinheiro cai <strong>100% na conta do Mercado Pago da sua loja</strong> (taxa de apenas 0,99% por Pix).</li>
+            <ul className="list-disc list-inside space-y-1 text-stone-600 text-[11px] ml-1">
+              <li>O cliente faz o PIX direto no cardápio e a tela aprova sozinha em <strong>2 segundos</strong>.</li>
+              <li>O pedido é enviado imediatamente para a esteira e cozinha sem risco de golpe do falso comprovante.</li>
+              <li>O valor cai <strong>direto na sua conta do Mercado Pago</strong> com taxa padrão reduzida de 0,99%.</li>
             </ul>
           </div>
 
           {config.accept_online_mp && (
-            <div className="p-4 rounded-xl bg-stone-50 border border-stone-200/80 space-y-4 animate-in fade-in">
+            <div className="p-4.5 rounded-xl bg-white border border-stone-200 space-y-4 animate-in fade-in duration-150">
               <div>
-                <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center justify-between mb-1.5">
                   <Label className="text-xs font-semibold text-stone-800">
                     Access Token do Mercado Pago *
                   </Label>
@@ -509,9 +540,9 @@ export default function PaymentMethodsTab({ tenantData, onUpdateTenant }) {
                     href="https://www.mercadopago.com.br/developers/panel/app"
                     target="_blank"
                     rel="noreferrer"
-                    className="text-[11px] text-sky-600 hover:text-sky-800 font-bold flex items-center gap-1 underline"
+                    className="text-[11px] text-emerald-700 hover:text-emerald-800 font-bold flex items-center gap-1 hover:underline"
                   >
-                    <span>Onde pegar meu Access Token?</span>
+                    <span>Onde encontrar meu Access Token?</span>
                     <ExternalLink className="w-3 h-3" />
                   </a>
                 </div>
@@ -527,14 +558,14 @@ export default function PaymentMethodsTab({ tenantData, onUpdateTenant }) {
                       setMpAccountName(null);
                       setMpError(null);
                     }}
-                    className="font-mono text-xs bg-white flex-1"
+                    className="font-mono text-xs bg-stone-50/50 border-stone-200 flex-1 focus:bg-white"
                   />
                   <Button
                     type="button"
                     variant="outline"
                     onClick={handleTestMP}
                     disabled={isTestingMP || !config.mp_access_token}
-                    className="text-xs font-bold border-stone-300 hover:bg-stone-100 whitespace-nowrap cursor-pointer"
+                    className="text-xs font-bold border-stone-200 hover:bg-stone-100 whitespace-nowrap cursor-pointer text-stone-800"
                   >
                     {isTestingMP ? "Testando..." : "Testar Conexão"}
                   </Button>
@@ -556,19 +587,15 @@ export default function PaymentMethodsTab({ tenantData, onUpdateTenant }) {
               </div>
 
               {/* Guia Rápido: Como Testar se Funciona */}
-              <div className="p-3.5 rounded-xl bg-amber-50/80 border border-amber-200/80 text-xs text-amber-950 space-y-2">
-                <span className="font-bold flex items-center gap-1.5 text-amber-900">
-                  <Info className="w-4 h-4 text-amber-600" />
-                  Como testar se o Mercado Pago está funcionando na prática:
+              <div className="p-3.5 rounded-xl bg-stone-50 border border-stone-200/70 text-xs text-stone-700 space-y-1.5">
+                <span className="font-semibold text-stone-900 flex items-center gap-1.5">
+                  <Info className="w-3.5 h-3.5 text-stone-500" />
+                  Passo a passo rápido para validar:
                 </span>
-                <ol className="list-decimal list-inside space-y-1 text-amber-900/90 text-[11px]">
-                  <li>Cole o seu <strong>Access Token</strong> acima e clique no botão <strong>"Testar Conexão"</strong> (ele deve confirmar o nome da sua conta).</li>
-                  <li>Clique em <strong>"Salvar Formas de Pagamento"</strong> abaixo.</li>
-                  <li>Abra o cardápio público da sua loja em outra aba.</li>
-                  <li>Adicione um item qualquer ou faça um pedido teste de <strong>R$ 1,00</strong>.</li>
-                  <li>No checkout, selecione <strong>"PIX Online ⚡ Instantâneo"</strong> e confirme o pedido.</li>
-                  <li>O QR Code e o código Copia e Cola aparecerão na hora na tela. Pague pelo app de qualquer banco (Nubank, Inter, Itaú, etc.).</li>
-                  <li>Assim que pagar, a tela do cardápio <strong>aprovará sozinha em 2 segundos</strong> e o pedido chegará confirmado no painel da cozinha!</li>
+                <ol className="list-decimal list-inside space-y-1 text-stone-600 text-[11px]">
+                  <li>Cole o seu <strong>Access Token</strong> acima e clique em <strong>"Testar Conexão"</strong> para validar sua conta.</li>
+                  <li>Clique em <strong>"Salvar Formas de Pagamento"</strong> logo abaixo.</li>
+                  <li>Faça um pedido de teste no cardápio selecionando <strong>"PIX Online"</strong> para ver a aprovação automática de 2 segundos ao vivo.</li>
                 </ol>
               </div>
             </div>
@@ -582,12 +609,12 @@ export default function PaymentMethodsTab({ tenantData, onUpdateTenant }) {
           type="button"
           onClick={handleSave}
           disabled={isSaving}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm h-11 px-8 rounded-xl shadow-md flex items-center gap-2 cursor-pointer"
+          className="bg-[#047857] hover:bg-[#036348] text-white font-bold text-sm h-11 px-8 rounded-xl shadow-xs flex items-center gap-2 cursor-pointer"
         >
           {isSaving ? (
             <>
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
-              <span>Salvando Formas de Pagamento...</span>
+              <span>Salvando...</span>
             </>
           ) : (
             <>

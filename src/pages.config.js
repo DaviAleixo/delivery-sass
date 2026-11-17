@@ -51,6 +51,7 @@ import AdminLogin from './pages/AdminLogin';
 import PDV from './pages/PDV';
 import PDVOrders from './pages/PDVOrders';
 import CashManagement from './pages/CashManagement';
+import Financial from './pages/Financial';
 import Banners from './pages/Banners';
 import Categories from './pages/Categories';
 import Clients from './pages/Clients';
@@ -79,6 +80,7 @@ export const PAGES = {
     "PDV": PDV,
     "PDVOrders": PDVOrders,
     "CashManagement": CashManagement,
+    "Financial": Financial,
     "Tables": Tables,
     "KDS": KDS,
     "DeliveryDrivers": DeliveryDrivers,

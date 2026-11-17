@@ -40,9 +40,14 @@ export const settingsSchema = z.object({
   accepts_delivery: z.boolean().optional().default(true),
   accepts_takeaway: z.boolean().optional().default(true),
   auto_accept_delivery: z.boolean().optional().default(false),
+  blind_cash_closing: z.boolean().optional().default(false),
   pizza_pricing_rule: z.enum(["highest_price", "average"]).optional().default("highest_price"),
   salon_mode: z.string().optional().default("full"),
   table_service_fee_enabled: z.boolean().optional().default(false),
-  table_service_fee_rate: z.coerce.number().min(0).max(100).optional().default(10)
+  table_service_fee_rate: z.coerce.number().min(0).max(100).optional().default(10),
+  business_day_cutoff_time: z.string().optional().default("04:00"),
+  kanban_show_dine_in: z.boolean().optional().default(false),
+  kanban_show_pos: z.boolean().optional().default(false),
+  kds_show_dine_in: z.boolean().optional().default(true)
 });
 

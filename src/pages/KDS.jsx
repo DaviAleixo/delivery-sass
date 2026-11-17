@@ -12,20 +12,17 @@ import {
   VolumeX,
   Maximize2,
   Minimize2,
-  Flame,
+  Play,
+  MessageSquare,
+  Inbox,
   CheckCircle2,
   AlertTriangle,
   RotateCcw,
-  Wifi,
-  WifiOff,
   UtensilsCrossed,
   Bike,
   Store,
   Undo2,
   Check,
-  Send,
-  Tv,
-  ArrowLeft,
   LogOut,
   Copy,
   ExternalLink,
@@ -35,6 +32,9 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { useLocation, useNavigate, useParams, Link } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
+import { useTenant } from "@/lib/TenantContext";
+import { invalidateCache } from "@/entities/storage";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { createPageUrl } from "@/utils";
 import { useOrdersRealtime } from "@/hooks/useOrdersRealtime";
 import { isRealtimeChannelActive } from "@/lib/realtimeHub";
@@ -43,6 +43,10 @@ import {
   findSectorByParam,
   filterOrderItemsForSector,
   buildSectorKdsLinks,
+  getDefaultKdsFallbackSector,
+  normalizeOrderChannel,
+  parseOrderItems,
+  resolveItemSector,
 } from "@/utils/sectorUtils";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -102,8 +106,8 @@ function KDSTimer({ createdAt, isReady = false }) {
 
   if (isReady) {
     return (
-      <div className="px-2.5 py-1 rounded-lg border font-mono font-bold text-xs flex items-center gap-1.5 bg-emerald-50 text-emerald-800 border-emerald-300 shadow-2xs">
-        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+      <div className="px-2.5 py-1 rounded-lg border font-mono font-bold text-xs tabular-nums flex items-center gap-1.5 bg-emerald-50 text-emerald-800 border-emerald-200/90">
+        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
         <span>Pronto há {minutes}m</span>
       </div>
     );
@@ -113,16 +117,20 @@ function KDSTimer({ createdAt, isReady = false }) {
   // Normal (<15 min) | Atenção (15 a 25 min) | Crítico (>25 min)
   let badgeStyle = "bg-stone-100 text-stone-700 border-stone-200";
   if (minutes >= 25) {
-    badgeStyle = "bg-rose-50 text-rose-900 border-rose-300 animate-pulse";
+    badgeStyle = "bg-rose-600 text-white border-rose-600 shadow-xs";
   } else if (minutes >= 15) {
-    badgeStyle = "bg-amber-50 text-amber-900 border-amber-300";
+    badgeStyle = "bg-amber-50 text-amber-800 border-amber-300";
   }
 
   return (
-    <div className={`px-2.5 py-1 rounded-lg border font-mono font-bold text-xs flex items-center gap-1.5 shadow-2xs ${badgeStyle}`}>
+    <div className={`px-2.5 py-1 rounded-lg border font-mono font-bold text-xs tabular-nums flex items-center gap-1.5 ${badgeStyle}`}>
       <Clock className="w-3.5 h-3.5 shrink-0" />
       <span>{formatted}</span>
-      {minutes >= 25 && <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />}
+      {minutes >= 25 && (
+        <span className="text-[10px] font-sans font-extrabold uppercase tracking-wide bg-white/20 px-1.5 py-0.2 rounded">
+          Atraso
+        </span>
+      )}
     </div>
   );
 }
@@ -143,6 +151,7 @@ export default function KDSPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const { logout } = useAuth();
+  const { tenant } = useTenant();
   const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const isKioskParam = searchParams.get("kiosk") === "true" || searchParams.get("mode") === "kiosk";
   const sectorParam = searchParams.get("sector") || "";
@@ -153,13 +162,23 @@ export default function KDSPage() {
       .sort((a, b) => (Number(a.order_index) || 0) - (Number(b.order_index) || 0));
   }, [productionSectors]);
 
+  const defaultKdsFallbackSector = useMemo(
+    () => getDefaultKdsFallbackSector(productionSectors),
+    [productionSectors]
+  );
+
   const selectedSector = useMemo(() => {
     return findSectorByParam(productionSectors, sectorParam);
   }, [productionSectors, sectorParam]);
 
   const sectorLookup = useMemo(
-    () => ({ sectors: productionSectors, products, categories }),
-    [productionSectors, products, categories]
+    () => ({
+      sectors: productionSectors,
+      products,
+      categories,
+      fallbackSectorId: defaultKdsFallbackSector?.id || null,
+    }),
+    [productionSectors, products, categories, defaultKdsFallbackSector]
   );
   const selectedSectorRef = useRef(null);
   const sectorLookupRef = useRef(sectorLookup);
@@ -212,8 +231,10 @@ export default function KDSPage() {
   );
 
   const isKiosk = isKioskParam || isKitchenOnly;
+  const isLockedSectorView = isKiosk && Boolean(sectorParam);
+  const hasInvalidSectorParam = Boolean(sectorParam) && (!selectedSector || selectedSector.is_active === false);
 
-  // Relógio digital em tempo real para a cozinha
+  // Relógio digital em tempo real
   const [currentTime, setCurrentTime] = useState(() => new Date());
 
   useEffect(() => {
@@ -231,21 +252,6 @@ export default function KDSPage() {
     return currentTime.toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "short" });
   }, [currentTime]);
 
-  const handleOpenTVMode = () => {
-    const params = new URLSearchParams(location.search);
-    params.set("kiosk", "true");
-    const url = `${window.location.pathname}?${params.toString()}`;
-    window.open(url, "_blank");
-  };
-
-  const handleExitTVMode = () => {
-    if (window.opener) {
-      window.close();
-    } else {
-      navigate(window.location.pathname, { replace: true });
-    }
-  };
-
   const handleLogout = async () => {
     try {
       if (logout) await logout();
@@ -260,7 +266,6 @@ export default function KDSPage() {
   // Fila Sequencial de Impressão FIFO tolerante a quedas de internet
   const {
     queue: printQueue,
-    isOnline,
     autoPrintEnabled,
     setAutoPrintEnabled,
     enqueueOrders,
@@ -269,11 +274,17 @@ export default function KDSPage() {
 
   // WebSocket Realtime Instantâneo com Reconciliação Automática
   useOrdersRealtime({
+    tenantId: tenant?.id || undefined,
     onInsert: (newOrder) => {
       setOrders((prev) => {
         if (prev.some((o) => o.id === newOrder.id)) return prev;
         return [newOrder, ...prev];
       });
+
+      const statusNorm = String(newOrder?.status || "").toLowerCase().trim();
+      if (!["pendente", "confirmado", "preparando"].includes(statusNorm)) {
+        return;
+      }
 
       enqueueOrders([newOrder]);
 
@@ -281,7 +292,7 @@ export default function KDSPage() {
       const relevantItems =
         activeSector && activeSector.content_mode !== "full_ticket"
           ? filterOrderItemsForSector(newOrder, activeSector, sectorLookupRef.current)
-          : newOrder.items || [];
+          : parseOrderItems(newOrder);
 
       if (activeSector && activeSector.content_mode !== "full_ticket" && relevantItems.length === 0) {
         return;
@@ -303,9 +314,35 @@ export default function KDSPage() {
       );
     },
     onUpdate: (updatedOrder) => {
-      setOrders((prev) =>
-        prev.map((o) => (o.id === updatedOrder.id ? { ...o, ...updatedOrder } : o))
-      );
+      let becameActiveFromPayment = false;
+      setOrders((prev) => {
+        const existing = prev.find((o) => o.id === updatedOrder.id);
+        if (
+          existing?.status === "aguardando_pagamento" &&
+          ["pendente", "confirmado", "preparando"].includes(String(updatedOrder.status || "").toLowerCase().trim())
+        ) {
+          becameActiveFromPayment = true;
+        }
+        if (!existing) {
+          return [updatedOrder, ...prev];
+        }
+        return prev.map((o) => (o.id === updatedOrder.id ? { ...o, ...updatedOrder } : o));
+      });
+      if (becameActiveFromPayment) {
+        const activeSector = selectedSectorRef.current;
+        const relevantItems =
+          activeSector && activeSector.content_mode !== "full_ticket"
+            ? filterOrderItemsForSector(updatedOrder, activeSector, sectorLookupRef.current)
+            : parseOrderItems(updatedOrder);
+        if (!(activeSector && activeSector.content_mode !== "full_ticket" && relevantItems.length === 0)) {
+          if (soundEnabled) playKitchenChime();
+          const num = String(updatedOrder.id).slice(-4).toUpperCase();
+          toast.success(
+            activeSector ? `💰 Pedido #${num} liberado — ${activeSector.name}` : `💰 Pedido #${num} liberado na cozinha!`,
+            { duration: 5000 }
+          );
+        }
+      }
       if (
         updatedOrder &&
         updatedOrder.print_status !== "printed" &&
@@ -324,7 +361,7 @@ export default function KDSPage() {
 
   useEffect(() => {
     loadOrders();
-    const activeTenantId = typeof window !== "undefined" ? localStorage.getItem("current_tenant_id") : null;
+    const activeTenantId = tenant?.id || (typeof window !== "undefined" ? localStorage.getItem("current_tenant_id") : null);
     const rtFilter = activeTenantId ? `tenant_id=eq.${activeTenantId}` : null;
     let tickCount = 0;
 
@@ -355,7 +392,15 @@ export default function KDSPage() {
       window.removeEventListener("focus", loadOrders);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, []);
+  }, [tenant?.id]);
+
+  const handleManualRefresh = () => {
+    invalidateCache("orders");
+    invalidateCache("production_sectors");
+    invalidateCache("products");
+    invalidateCache("categories");
+    loadOrders();
+  };
 
   const loadOrders = async () => {
     try {
@@ -379,13 +424,36 @@ export default function KDSPage() {
   };
 
   const handleUpdateStatus = async (orderId, newStatus) => {
+    const updatePayload = { status: newStatus };
+    if (newStatus === "entregue") {
+      updatePayload.delivered_at = new Date().toISOString();
+    }
+
     setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
+      prev.map((o) => (o.id === orderId ? { ...o, ...updatePayload } : o))
     );
 
     try {
-      await Order.update(orderId, { status: newStatus });
-      toast.success(`Pedido #${String(orderId).slice(-4).toUpperCase()} atualizado para "${newStatus}"`);
+      await Order.update(orderId, updatePayload);
+      const num = String(orderId).slice(-4).toUpperCase();
+      if (newStatus === "entregue") {
+        toast.success(`Pedido #${num} finalizado como entregue!`);
+        try {
+          if (isSupabaseConfigured() && supabase) {
+            const { data: cbResult } = await supabase.rpc("process_order_cashback", {
+              p_order_id: String(orderId),
+              p_action: "credit_only",
+            });
+            if (cbResult && Number(cbResult.credited_now || 0) > 0) {
+              toast.info(`🎁 R$ ${Number(cbResult.credited_now).toFixed(2).replace(".", ",")} de cashback liberado para o cliente!`);
+            }
+          }
+        } catch (cbErr) {
+          console.warn("Erro ao processar cashback do pedido entregue no KDS:", cbErr);
+        }
+      } else {
+        toast.success(`Pedido #${num} atualizado para "${newStatus}"`);
+      }
     } catch (_err) {
       toast.error("Erro ao atualizar status");
       loadOrders();
@@ -401,9 +469,16 @@ export default function KDSPage() {
   };
 
   // Filtragem de pedidos ativos na cozinha (por status, setor e canal)
+  // Todos os canais fluem para o KDS, respeitando kds_show_dine_in e separados por setor.
+  const kdsShowDineIn = useMemo(() => {
+    if (tenant?.kds_show_dine_in !== undefined) return tenant.kds_show_dine_in !== false;
+    return tenant?.payment_methods?.kds_show_dine_in !== false;
+  }, [tenant]);
+
   const activeOrders = useMemo(() => {
     return orders.filter((o) => {
-      const isKitchenRelevant = ["pendente", "confirmado", "preparando", "pronto"].includes(o.status);
+      const normalizedStatus = String(o.status || "").trim().toLowerCase();
+      const isKitchenRelevant = ["pendente", "confirmado", "preparando", "pronto"].includes(normalizedStatus);
       if (!isKitchenRelevant) return false;
 
       if (selectedSector && selectedSector.content_mode !== "full_ticket") {
@@ -411,52 +486,63 @@ export default function KDSPage() {
         if (sectorItems.length === 0) return false;
       }
 
+      const channel = normalizeOrderChannel(o);
+      if (channel === "dine_in" && !kdsShowDineIn) {
+        return false;
+      }
       if (channelFilter === "mesa") {
-        return o.order_type === "dine_in" || o.order_type === "mesa" || (o.table_number && o.table_number.toLowerCase().includes("mesa"));
+        return channel === "dine_in";
       }
       if (channelFilter === "delivery") {
-        return o.order_type === "delivery";
+        return channel === "delivery";
       }
       if (channelFilter === "balcao") {
-        return o.order_type === "pickup" || o.order_type === "balcao" || o.order_type === "takeaway";
+        return channel === "pickup";
       }
       return true;
     });
-  }, [orders, channelFilter, selectedSector, sectorLookup]);
+  }, [orders, channelFilter, selectedSector, sectorLookup, kdsShowDineIn]);
 
   // Coluna 1: A Preparar (Novos / Confirmados) - Ordenado por FIFO (mais antigo primeiro)
   const todoOrders = useMemo(() => {
     return activeOrders
-      .filter((o) => o.status === "pendente" || o.status === "confirmado")
+      .filter((o) => {
+        const st = String(o.status || "").trim().toLowerCase();
+        return st === "pendente" || st === "confirmado";
+      })
       .sort((a, b) => new Date(a.created_date || 0).getTime() - new Date(b.created_date || 0).getTime());
   }, [activeOrders]);
 
-  // Coluna 2: Em Preparo & Prontos na Cozinha
-  // Regra solicitada: os pedidos "prontos" continuam aparecendo junto para a cozinha acompanhar, com indicação clara!
-  const preparingAndReadyOrders = useMemo(() => {
+  // Coluna 2: Em Preparo (somente status "preparando"; ao marcar pronto vai exclusivamente para a Coluna 3)
+  const preparingOrders = useMemo(() => {
     return activeOrders
-      .filter((o) => o.status === "preparando" || o.status === "pronto")
-      .sort((a, b) => {
-        // Preparando primeiro, prontos logo em seguida
-        if (a.status === "preparando" && b.status === "pronto") return -1;
-        if (a.status === "pronto" && b.status === "preparando") return 1;
-        return new Date(a.created_date || 0).getTime() - new Date(b.created_date || 0).getTime();
-      });
+      .filter((o) => String(o.status || "").trim().toLowerCase() === "preparando")
+      .sort((a, b) => new Date(a.created_date || 0).getTime() - new Date(b.created_date || 0).getTime());
   }, [activeOrders]);
 
-  // Coluna 3: Expedição & Retirada (Pedidos Prontos aguardando saída ou despachados recentemente)
+  // Coluna 3: Expedição & Retirada (Pedidos Prontos aguardando motoboy, garçom ou retirada no balcão)
   const expeditionOrders = useMemo(() => {
     return activeOrders
-      .filter((o) => o.status === "pronto")
-      .sort((a, b) => new Date(b.created_date || 0).getTime() - new Date(a.created_date || 0).getTime());
+      .filter((o) => String(o.status || "").trim().toLowerCase() === "pronto")
+      .sort((a, b) => new Date(a.created_date || 0).getTime() - new Date(b.created_date || 0).getTime());
   }, [activeOrders]);
 
   // Renderizador do Card de Pedido no KDS (Design Claro Executivo)
-  const renderOrderCard = (order, isColumnPreparing = false) => {
-    const isMesa = order.order_type === "dine_in" || order.order_type === "mesa" || (order.table_number && String(order.table_number).toLowerCase().includes("mesa"));
-    const isDelivery = order.order_type === "delivery";
-    const isReady = order.status === "pronto";
+  const renderOrderCard = (order) => {
+    const channel = normalizeOrderChannel(order);
+    const isMesa = channel === "dine_in";
+    const isDelivery = channel === "delivery";
+    const normalizedStatus = String(order.status || "").trim().toLowerCase();
+    const isPreparing = normalizedStatus === "preparando";
+    const isReady = normalizedStatus === "pronto";
     const num = String(order.id).slice(-4).toUpperCase();
+
+    const rawTable = String(order.table_number || "").trim();
+    const mesaLabel = rawTable
+      ? /^mesa\b/i.test(rawTable)
+        ? rawTable
+        : `Mesa ${rawTable}`
+      : "Mesa";
 
     const orderCreatedAt = order.created_date ? new Date(order.created_date).getTime() : Date.now();
     const minutesDelayed = Math.floor((Date.now() - orderCreatedAt) / 60000);
@@ -465,187 +551,202 @@ export default function KDSPage() {
     const visibleItems =
       selectedSector && selectedSector.content_mode !== "full_ticket"
         ? filterOrderItemsForSector(order, selectedSector, sectorLookup)
-        : (order.items || []);
+        : parseOrderItems(order);
 
     return (
       <motion.div
         key={order.id}
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95 }}
+        exit={{ opacity: 0, scale: 0.96 }}
         className={cn(
-          "bg-white rounded-xl border transition-all duration-150 p-4 shadow-2xs hover:shadow-xs flex flex-col justify-between space-y-3.5 select-none relative overflow-hidden",
+          "bg-white rounded-2xl border transition-all duration-150 shadow-sm hover:shadow-md flex flex-col justify-between select-none relative overflow-hidden",
           isReady
-            ? "border-emerald-300 bg-emerald-50/20 ring-1 ring-emerald-400/40"
+            ? "border-emerald-300/90 ring-1 ring-emerald-500/15"
             : isUrgent
-            ? "border-rose-300 bg-rose-50/15 ring-1 ring-rose-400/50"
+            ? "border-stone-200 border-l-4 border-l-rose-500"
             : isWarning
-            ? "border-amber-300 bg-amber-50/15"
-            : "border-stone-200"
+            ? "border-stone-200 border-l-4 border-l-amber-400"
+            : isPreparing
+            ? "border-stone-200 border-l-4 border-l-blue-500"
+            : "border-stone-200 border-l-4 border-l-amber-500"
         )}
       >
-        {/* Banner Superior Específico se o Pedido já estiver PRONTO na Cozinha */}
-        {isReady && isColumnPreparing && (
-          <div className="bg-[#047857] text-white px-3 py-1.5 -mx-4 -mt-4 mb-2 flex items-center justify-between text-xs font-black uppercase tracking-wider">
+        {/* Banner Superior Exclusivo da Coluna de Prontos */}
+        {isReady && (
+          <div className="bg-[#047857] text-white px-4 py-2 flex items-center justify-between text-[11px] font-bold uppercase tracking-wider">
             <span className="flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-200" />
-              Pronto na Cozinha
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-200" />
+              {selectedSector ? `Pronto • ${selectedSector.name}` : "Pedido Pronto"}
             </span>
-            <span className="text-[10px] font-semibold text-emerald-100 bg-[#036348] px-2 py-0.5 rounded">
-              Aguardando Retirada
+            <span className="text-[10px] font-bold text-emerald-50 bg-[#036348] px-2 py-0.5 rounded-md">
+              {isDelivery ? "Aguardando Motoboy" : isMesa ? "Pronto p/ Servir" : "Aguardando Retirada"}
             </span>
           </div>
         )}
 
-        {/* Topo do Card: Número do Pedido, Canal/Mesa e Cronômetro */}
-        <div>
-          <div className="flex items-start justify-between pb-3 border-b border-stone-150 gap-2">
-            <div>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-xl font-black font-mono tracking-tight text-stone-900">
-                  #{num}
-                </span>
+        <div className="p-4 flex-1 flex flex-col justify-between space-y-3.5">
+          <div>
+            {/* Topo do Card: Número do Pedido, Canal e Cronômetro */}
+            <div className="pb-3 border-b border-stone-100">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                  <span className="text-lg font-black font-mono tracking-tight text-stone-900 tabular-nums">
+                    #{num}
+                  </span>
 
-                {isUrgent && (
-                  <Badge className="bg-rose-100 text-rose-800 border-rose-300 text-[10px] font-black uppercase tracking-wide">
-                    ⚠️ Urgente ({minutesDelayed}m)
-                  </Badge>
-                )}
-
-                {isMesa ? (
-                  <Badge className="bg-emerald-50 text-emerald-800 border-emerald-200 text-xs font-bold gap-1">
-                    <UtensilsCrossed className="w-3 h-3 text-emerald-600" />
-                    <span>{order.table_number || "Mesa"}</span>
-                  </Badge>
-                ) : isDelivery ? (
-                  <Badge className="bg-blue-50 text-blue-800 border-blue-200 text-xs font-bold gap-1">
-                    <Bike className="w-3 h-3 text-blue-600" />
-                    <span>Delivery</span>
-                  </Badge>
-                ) : (
-                  <Badge className="bg-stone-100 text-stone-800 border-stone-200 text-xs font-bold gap-1">
-                    <Store className="w-3 h-3 text-stone-600" />
-                    <span>Balcão</span>
-                  </Badge>
-                )}
-              </div>
-
-              <p className="text-xs font-bold text-stone-700 mt-1 truncate max-w-[190px]">
-                {order.customer_name || "Cliente Balcão"}
-                {order.customer_phone && <span className="font-normal text-stone-400 text-[11px] ml-1">• {order.customer_phone}</span>}
-              </p>
-            </div>
-
-            <KDSTimer createdAt={order.created_date} isReady={isReady} />
-          </div>
-
-          {/* Lista de Itens do Pedido */}
-          <div className="py-3 space-y-2.5 max-h-64 overflow-y-auto pr-1 scrollbar-thin">
-            {visibleItems.map((item, idx) => (
-              <div key={idx} className="border-b border-stone-100 pb-2 last:border-0 last:pb-0">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-start gap-2">
-                    <span className="font-mono font-black text-sm bg-stone-100 text-stone-900 px-1.5 py-0.2 rounded border border-stone-200 shrink-0 mt-0.5">
-                      {item.quantity}x
-                    </span>
-                    <span className="font-bold text-sm text-stone-900 leading-snug">
-                      {item.product_name || item.name}
-                    </span>
-                  </div>
-                  {!selectedSector && item.sector_name && (
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-50 text-sky-800 border border-sky-200 shrink-0">
-                      {item.sector_name}
-                    </span>
+                  {isMesa ? (
+                    <Badge className="bg-emerald-50 text-emerald-800 border border-emerald-200/80 text-[11px] font-bold px-2 py-0.5 gap-1 rounded-md shadow-none">
+                      <UtensilsCrossed className="w-3 h-3 text-emerald-600" />
+                      <span>{mesaLabel}</span>
+                    </Badge>
+                  ) : isDelivery ? (
+                    <Badge className="bg-sky-50 text-sky-800 border border-sky-200/80 text-[11px] font-bold px-2 py-0.5 gap-1 rounded-md shadow-none">
+                      <Bike className="w-3 h-3 text-sky-600" />
+                      <span>Delivery</span>
+                    </Badge>
+                  ) : (
+                    <Badge className="bg-stone-100 text-stone-700 border border-stone-200/90 text-[11px] font-bold px-2 py-0.5 gap-1 rounded-md shadow-none">
+                      <Store className="w-3 h-3 text-stone-500" />
+                      <span>Balcão</span>
+                    </Badge>
                   )}
                 </div>
 
-                {/* Adicionais / Complementos */}
-                {item.additionals && item.additionals.length > 0 && (
-                  <div className="pl-8 text-xs text-stone-600 space-y-0.5 mt-1 font-medium">
-                    {item.additionals.map((ad, i) => (
-                      <div key={i} className="flex items-center gap-1">
-                        <span className="text-emerald-700 font-bold">+</span>
-                        <span>{ad.name || ad.title}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Observação por Item (Chamativo em Caixa Âmbar) */}
-                {item.notes && (
-                  <div className="ml-8 mt-1.5 p-1.5 bg-amber-50 border border-amber-200 rounded-md text-xs text-amber-950 font-semibold flex items-start gap-1">
-                    <AlertTriangle className="w-3.5 h-3.5 text-amber-700 shrink-0 mt-0.5" />
-                    <span>Obs: {item.notes}</span>
-                  </div>
-                )}
+                <KDSTimer createdAt={order.created_date} isReady={isReady} />
               </div>
-            ))}
+
+              <p className="text-xs font-semibold text-stone-700 mt-1.5 truncate">
+                {order.customer_name || "Cliente Balcão"}
+                {order.customer_phone && (
+                  <span className="font-normal text-stone-400 text-[11px] ml-1.5">
+                    • {order.customer_phone}
+                  </span>
+                )}
+              </p>
+            </div>
+
+            {/* Lista de Itens do Pedido */}
+            <div className="py-3 space-y-2.5 max-h-64 overflow-y-auto pr-1 scrollbar-thin">
+              {visibleItems.map((item, idx) => (
+                <div key={idx} className="border-b border-stone-100/90 pb-2.5 last:border-0 last:pb-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start gap-2.5">
+                      <span className="min-w-[28px] h-6 px-1.5 inline-flex items-center justify-center font-mono font-bold text-xs tabular-nums bg-stone-900 text-white rounded-md shrink-0">
+                        {item.quantity}x
+                      </span>
+                      <span className="font-bold text-sm text-stone-900 leading-snug pt-0.5">
+                        {item.product_name || item.name}
+                      </span>
+                    </div>
+                    {!selectedSector && (() => {
+                      const resolvedName = item.sector_name || resolveItemSector(item, sectorLookup).sectorName;
+                      return resolvedName ? (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-sky-50 text-sky-800 border border-sky-200 shrink-0">
+                          {resolvedName}
+                        </span>
+                      ) : null;
+                    })()}
+                  </div>
+
+                  {/* Adicionais / Complementos */}
+                  {item.additionals && item.additionals.length > 0 && (
+                    <div className="pl-9 text-xs text-stone-600 space-y-0.5 mt-1 font-medium border-l-2 border-stone-100 ml-3">
+                      {item.additionals.map((ad, i) => (
+                        <div key={i} className="flex items-center gap-1.5">
+                          <span className="text-emerald-700 font-bold">+</span>
+                          <span>{ad.name || ad.title}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Observação por Item */}
+                  {item.notes && (
+                    <div className="ml-9 mt-1.5 px-2.5 py-1.5 bg-amber-50/90 border border-amber-200/80 rounded-lg text-xs text-amber-950 font-semibold flex items-start gap-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-700 shrink-0 mt-0.5" />
+                      <span>Obs: {item.notes}</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Observação Geral do Pedido */}
+            {order.notes && (
+              <div className="mt-1 px-3 py-2 bg-amber-50/90 border border-amber-200/90 rounded-xl text-xs text-amber-950 font-medium flex items-start gap-2">
+                <MessageSquare className="w-3.5 h-3.5 text-amber-700 shrink-0 mt-0.5" />
+                <span>
+                  <strong className="font-bold text-amber-900">Obs Geral:</strong> {order.notes}
+                </span>
+              </div>
+            )}
           </div>
 
-          {/* Observação Geral do Pedido */}
-          {order.notes && (
-            <div className="mt-2 p-2 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-950 font-bold flex items-start gap-1.5">
-              <AlertTriangle className="w-3.5 h-3.5 text-rose-700 shrink-0 mt-0.5" />
-              <span>Obs Geral: {order.notes}</span>
-            </div>
-          )}
-        </div>
-
-        {/* Rodapé do Card com Ações Operacionais */}
-        <div className="pt-2.5 border-t border-stone-150 flex items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            onClick={() => manualPrintOrder(order, selectedSector ? { sectorId: selectedSector.id } : undefined)}
-            className="h-10 w-10 border-stone-200 bg-white hover:bg-stone-50 text-stone-700 rounded-xl shrink-0 cursor-pointer shadow-2xs"
-            title={selectedSector ? `Reimprimir comanda (${selectedSector.name})` : "Reimprimir comanda"}
-          >
-            <Printer className="w-4 h-4 text-stone-600" />
-          </Button>
-
-          {/* Botão de Transição de Status */}
-          {order.status === "pendente" || order.status === "confirmado" ? (
+          {/* Rodapé do Card com Ações Operacionais */}
+          <div className="pt-3 border-t border-stone-100 flex items-center gap-2">
             <Button
               type="button"
-              onClick={() => handleUpdateStatus(order.id, "preparando")}
-              className="flex-1 bg-stone-900 hover:bg-black text-white font-bold text-xs h-10 rounded-xl shadow-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider"
+              variant="outline"
+              size="icon"
+              onClick={() => manualPrintOrder(order, selectedSector ? { sectorId: selectedSector.id } : undefined)}
+              className="h-10 w-10 border-stone-200 bg-stone-50/70 hover:bg-stone-100 text-stone-600 hover:text-stone-900 rounded-xl shrink-0 cursor-pointer"
+              title={selectedSector ? `Reimprimir comanda (${selectedSector.name})` : "Reimprimir comanda"}
             >
-              <Flame className="w-4 h-4 text-amber-400" />
-              <span>Iniciar Preparo</span>
+              <Printer className="w-4 h-4" />
             </Button>
-          ) : order.status === "preparando" ? (
-            <Button
-              type="button"
-              onClick={() => handleUpdateStatus(order.id, "pronto")}
-              className="flex-1 bg-[#047857] hover:bg-[#036348] text-white font-bold text-xs h-10 rounded-xl shadow-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider"
-            >
-              <Check className="w-4 h-4 text-white" />
-              <span>Marcar Pronto</span>
-            </Button>
-          ) : (
-            <div className="flex-1 flex items-center gap-1.5">
-              {/* Botão para retornar ao preparo se necessário */}
+
+            {/* Botão de Transição de Status */}
+            {normalizedStatus === "pendente" || normalizedStatus === "confirmado" ? (
               <Button
                 type="button"
-                variant="outline"
                 onClick={() => handleUpdateStatus(order.id, "preparando")}
-                className="h-10 px-2.5 rounded-xl border-stone-200 text-stone-600 hover:text-stone-900 text-xs font-semibold cursor-pointer"
-                title="Voltar pedido para a etapa de preparo"
+                className="flex-1 bg-stone-900 hover:bg-stone-800 text-white font-bold text-xs h-10 rounded-xl shadow-xs flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider transition-colors"
               >
-                <Undo2 className="w-3.5 h-3.5" />
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span>Iniciar Preparo</span>
               </Button>
-
+            ) : normalizedStatus === "preparando" ? (
               <Button
                 type="button"
-                onClick={() => handleUpdateStatus(order.id, isDelivery ? "enviado" : "entregue")}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs h-10 rounded-xl shadow-xs flex items-center justify-center gap-1.5 cursor-pointer uppercase tracking-wider"
+                onClick={() => handleUpdateStatus(order.id, "pronto")}
+                className="flex-1 bg-[#047857] hover:bg-[#036348] text-white font-bold text-xs h-10 rounded-xl shadow-xs flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider transition-colors"
               >
-                <Send className="w-3.5 h-3.5" />
-                <span>{isDelivery ? "Despachar" : "Concluir"}</span>
+                <Check className="w-4 h-4 text-white" />
+                <span>Marcar Pronto</span>
               </Button>
-            </div>
-          )}
+            ) : (
+              <div className="flex-1 flex items-center gap-1.5 min-w-0">
+                {/* Botão para retornar ao preparo se o cozinheiro clicou por engano */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => handleUpdateStatus(order.id, "preparando")}
+                  className="h-10 px-2.5 rounded-xl border-stone-200 text-stone-600 hover:text-stone-900 hover:bg-stone-50 text-xs font-semibold cursor-pointer shrink-0"
+                  title="Voltar pedido para a etapa de preparo"
+                >
+                  <Undo2 className="w-3.5 h-3.5" />
+                </Button>
+
+                {isDelivery ? (
+                  <div className="flex-1 min-w-0 h-10 px-3 rounded-xl bg-emerald-50 border border-emerald-200/90 text-[#047857] text-xs font-bold flex items-center justify-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span className="truncate">Aguardando Motoboy</span>
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    onClick={() => handleUpdateStatus(order.id, "entregue")}
+                    className="flex-1 min-w-0 bg-stone-900 hover:bg-stone-800 text-white font-bold text-xs h-10 px-3 rounded-xl shadow-xs flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider transition-colors"
+                    title={isMesa ? `Finalizar entrega na ${mesaLabel}` : "Finalizar retirada no balcão"}
+                  >
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span className="truncate">Finalizar Entrega</span>
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </motion.div>
     );
@@ -656,7 +757,32 @@ export default function KDSPage() {
       <div className="min-h-screen bg-[#F7F9F8] text-stone-900 flex items-center justify-center p-8">
         <div className="text-center space-y-3">
           <div className="w-10 h-10 rounded-full border-2 border-[#047857] border-t-transparent animate-spin mx-auto" />
-          <p className="text-stone-600 font-bold text-sm">Carregando monitor KDS da cozinha...</p>
+          <p className="text-stone-600 font-bold text-sm">Carregando monitor KDS...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (hasInvalidSectorParam) {
+    return (
+      <div className="min-h-screen bg-[#F7F9F8] text-stone-900 flex items-center justify-center p-8">
+        <div className="bg-white border border-stone-200 rounded-2xl p-6 max-w-md w-full text-center space-y-3 shadow-2xs">
+          <div className="w-11 h-11 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center mx-auto">
+            <AlertTriangle className="w-5 h-5" />
+          </div>
+          <h2 className="text-base font-black text-stone-900">Setor KDS não encontrado ou inativo</h2>
+          <p className="text-xs text-stone-500">
+            O setor solicitado (<code className="bg-stone-100 px-1.5 py-0.5 rounded">{sectorParam}</code>) não existe ou está desativado nas configurações.
+          </p>
+          {!isKiosk && (
+            <Button
+              type="button"
+              onClick={() => selectSectorFilter(null)}
+              className="bg-stone-900 hover:bg-black text-white text-xs font-bold h-9 px-4 rounded-xl cursor-pointer"
+            >
+              Ver Todos os Setores
+            </Button>
+          )}
         </div>
       </div>
     );
@@ -667,53 +793,24 @@ export default function KDSPage() {
       "min-h-screen bg-[#F7F9F8] text-stone-900 flex flex-col space-y-4",
       isKiosk ? "p-3 sm:p-5" : "p-4 sm:p-6"
     )}>
-      {/* Barra Superior do KDS (Fundo Claro Executivo / Modo TV) */}
+      {/* Barra Superior do KDS */}
       <div className="bg-white rounded-xl p-3.5 sm:p-4 border border-stone-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-stone-900 text-amber-400 border border-stone-800 flex items-center justify-center shrink-0 shadow-2xs">
-            <Flame className="w-5 h-5 text-amber-400" />
+          <div className="w-11 h-11 rounded-xl bg-emerald-50/70 border border-emerald-200/80 p-1 flex items-center justify-center shrink-0 shadow-2xs overflow-hidden">
+            <img
+              src="/imgs/mascote.png"
+              alt="Mascote PedeMuleke"
+              className="w-full h-full object-contain"
+            />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-base sm:text-lg font-black tracking-tight text-stone-900 flex items-center gap-2 flex-wrap">
-                {selectedSector ? `KDS — ${selectedSector.name}` : "Monitor de Cozinha (KDS)"}
-                {selectedSector && (
-                  <span className="text-[10px] bg-sky-100 text-sky-900 border border-sky-300 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
-                    Seção Filtrada
-                  </span>
-                )}
-                {isKiosk && (
-                  <span className="text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
-                    Modo TV
-                  </span>
-                )}
-              </h1>
-              {isOnline ? (
-                <span
-                  className="text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-md font-semibold flex items-center gap-1"
-                  title="WebSocket Conectado (Tempo Real Ativo)"
-                >
-                  <Wifi className="w-3 h-3 text-emerald-600" />
-                  Online
-                </span>
-              ) : (
-                <span
-                  className="text-[10px] bg-rose-50 text-rose-800 border border-rose-200 px-2 py-0.5 rounded-md font-bold flex items-center gap-1 animate-pulse"
-                  title="Sem conexão de rede"
-                >
-                  <WifiOff className="w-3 h-3 text-rose-600" />
-                  Offline
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-stone-500 font-medium">
-              {activeOrders.length} pedido(s) em fluxo na cozinha • Fila ordenada por tempo de espera (FIFO)
-            </p>
+            <h1 className="text-base sm:text-lg font-black tracking-tight text-stone-900">
+              {selectedSector ? `KDS — ${selectedSector.name}` : "Monitor de Cozinha (KDS)"}
+            </h1>
           </div>
         </div>
 
-        {/* Relógio Digital Central (Visível no Modo TV / Kiosk) */}
+        {/* Relógio Digital Central (Visível nos links de tela dedicada) */}
         {isKiosk && (
           <div className="hidden md:flex items-center gap-2 px-3.5 py-1.5 bg-stone-50 rounded-xl border border-stone-200 shadow-2xs">
             <Clock className="w-4 h-4 text-stone-500" />
@@ -726,20 +823,8 @@ export default function KDSPage() {
           </div>
         )}
 
-        {/* Controles de Cozinha */}
+        {/* Controles do KDS */}
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Botão de Abrir Modo TV (quando está no painel com barra lateral) */}
-          {!isKiosk && (
-            <Button
-              type="button"
-              onClick={handleOpenTVMode}
-              className="h-9 px-3 bg-stone-900 hover:bg-black text-white font-bold text-xs rounded-lg shadow-xs flex items-center gap-1.5 cursor-pointer"
-              title="Abrir KDS em Modo TV sem barra lateral (Ideal para TV ou Tablet na Cozinha)"
-            >
-              <Tv className="w-4 h-4 text-amber-400" />
-              <span>Modo TV Cozinha</span>
-            </Button>
-          )}
       
           {/* Botão de Auto-Impressão com Badge de Fila FIFO */}
           <Button
@@ -782,7 +867,7 @@ export default function KDSPage() {
                 channelFilter === "mesa" ? "bg-white text-stone-900 shadow-2xs" : "text-stone-600 hover:text-stone-900"
               )}
             >
-              Salão
+              Mesa
             </button>
             <button
               onClick={() => setChannelFilter("delivery")}
@@ -830,27 +915,12 @@ export default function KDSPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={loadOrders}
+            onClick={handleManualRefresh}
             className="border-stone-200 bg-white text-stone-700 hover:bg-stone-50 text-xs h-9 px-2.5 rounded-lg shadow-2xs cursor-pointer"
             title="Atualizar pedidos"
           >
             <RotateCcw className="w-4 h-4" />
           </Button>
-
-          {/* Sair do Modo TV (se aberto via ?kiosk=true por admin) */}
-          {isKioskParam && !isKitchenOnly && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleExitTVMode}
-              className="border-stone-200 bg-white hover:bg-stone-50 text-stone-700 text-xs h-9 px-2.5 rounded-lg shadow-2xs cursor-pointer"
-              title="Voltar ao Painel com Barra Lateral"
-            >
-              <ArrowLeft className="w-3.5 h-3.5 mr-1 text-stone-500" />
-              <span className="hidden sm:inline">Sair do Modo TV</span>
-            </Button>
-          )}
 
           {/* Logout para usuário exclusivo de cozinha */}
           {isKitchenOnly && (
@@ -869,8 +939,8 @@ export default function KDSPage() {
         </div>
       </div>
 
-      {/* Barra Dinâmica de Seções / Setores & Links Diretos do KDS */}
-      {(kdsSectors.length > 0 || !isKiosk) && (
+      {/* Barra Dinâmica de Seções / Setores (oculta nos links exclusivos de setor) */}
+      {!isLockedSectorView && (kdsSectors.length > 0 || !isKiosk) && (
         <div className="bg-white rounded-xl px-3.5 py-2.5 border border-stone-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-[11px] font-bold uppercase tracking-wider text-stone-400 mr-1 flex items-center gap-1">
@@ -974,18 +1044,18 @@ export default function KDSPage() {
         </div>
       )}
 
-      {/* Grid de 3 Colunas Kanban do KDS (Fundo Claro ERP) */}
+      {/* Grid de 3 Colunas Kanban do KDS (Fundo Claro Executivo) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 flex-1 min-h-0">
         {/* Coluna 1: A Preparar (Fila de Entrada) */}
-        <div className="bg-stone-100/60 border border-stone-200/90 rounded-2xl p-4 flex flex-col space-y-3.5 shadow-2xs">
-          <div className="flex items-center justify-between pb-3 border-b border-stone-200">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+        <div className="bg-stone-100/70 border border-stone-200/80 rounded-2xl p-4 flex flex-col space-y-3.5 shadow-2xs">
+          <div className="flex items-center justify-between pb-3 border-b border-stone-200/90">
+            <div className="flex items-center gap-2.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500 ring-4 ring-amber-500/15" />
               <h2 className="font-bold text-xs uppercase tracking-wider text-stone-800">
-                A Preparar (Entrada)
+                A Preparar
               </h2>
             </div>
-            <span className="text-xs font-mono font-bold bg-white text-stone-800 px-2 py-0.5 rounded-md border border-stone-200 shadow-2xs">
+            <span className="text-xs font-mono font-bold tabular-nums bg-white text-stone-800 px-2.5 py-0.5 rounded-lg border border-stone-200 shadow-2xs">
               {todoOrders.length}
             </span>
           </div>
@@ -993,55 +1063,63 @@ export default function KDSPage() {
           <div className="flex-1 overflow-y-auto space-y-3.5 pr-1 scrollbar-thin">
             <AnimatePresence>
               {todoOrders.length === 0 ? (
-                <div className="py-24 text-center text-xs text-stone-400 font-medium">
-                  Nenhum pedido aguardando preparo
+                <div className="py-20 flex flex-col items-center justify-center text-center gap-2.5 text-stone-400">
+                  <div className="w-10 h-10 rounded-xl bg-white/80 border border-stone-200/80 flex items-center justify-center shadow-2xs">
+                    <Inbox className="w-4 h-4 text-stone-400" />
+                  </div>
+                  <p className="text-xs font-medium text-stone-500">
+                    Nenhum pedido aguardando preparo
+                  </p>
                 </div>
               ) : (
-                todoOrders.map((o) => renderOrderCard(o, false))
+                todoOrders.map((o) => renderOrderCard(o))
               )}
             </AnimatePresence>
           </div>
         </div>
 
-        {/* Coluna 2: Na Cozinha (Em Preparo & Prontos) */}
-        <div className="bg-stone-100/60 border border-stone-200/90 rounded-2xl p-4 flex flex-col space-y-3.5 shadow-2xs">
-          <div className="flex items-center justify-between pb-3 border-b border-stone-200">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
+        {/* Coluna 2: Em Preparo */}
+        <div className="bg-stone-100/70 border border-stone-200/80 rounded-2xl p-4 flex flex-col space-y-3.5 shadow-2xs">
+          <div className="flex items-center justify-between pb-3 border-b border-stone-200/90">
+            <div className="flex items-center gap-2.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-600 ring-4 ring-blue-600/15" />
               <h2 className="font-bold text-xs uppercase tracking-wider text-stone-800">
-                Na Cozinha (Preparando & Prontos)
+                {selectedSector ? `${selectedSector.name} • Em Preparo` : "Em Preparo"}
               </h2>
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs font-mono font-bold bg-white text-stone-800 px-2 py-0.5 rounded-md border border-stone-200 shadow-2xs">
-                {preparingAndReadyOrders.length}
-              </span>
-            </div>
+            <span className="text-xs font-mono font-bold tabular-nums bg-white text-stone-800 px-2.5 py-0.5 rounded-lg border border-stone-200 shadow-2xs">
+              {preparingOrders.length}
+            </span>
           </div>
 
           <div className="flex-1 overflow-y-auto space-y-3.5 pr-1 scrollbar-thin">
             <AnimatePresence>
-              {preparingAndReadyOrders.length === 0 ? (
-                <div className="py-24 text-center text-xs text-stone-400 font-medium">
-                  Nenhum pedido em preparo no momento
+              {preparingOrders.length === 0 ? (
+                <div className="py-20 flex flex-col items-center justify-center text-center gap-2.5 text-stone-400">
+                  <div className="w-10 h-10 rounded-xl bg-white/80 border border-stone-200/80 flex items-center justify-center shadow-2xs">
+                    <Clock className="w-4 h-4 text-stone-400" />
+                  </div>
+                  <p className="text-xs font-medium text-stone-500">
+                    Nenhum pedido em preparo no momento
+                  </p>
                 </div>
               ) : (
-                preparingAndReadyOrders.map((o) => renderOrderCard(o, true))
+                preparingOrders.map((o) => renderOrderCard(o))
               )}
             </AnimatePresence>
           </div>
         </div>
 
-        {/* Coluna 3: Expedição & Retirada */}
-        <div className="bg-stone-100/60 border border-stone-200/90 rounded-2xl p-4 flex flex-col space-y-3.5 shadow-2xs">
-          <div className="flex items-center justify-between pb-3 border-b border-stone-200">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-600" />
+        {/* Coluna 3: Prontos (Expedição & Retirada) */}
+        <div className="bg-stone-100/70 border border-stone-200/80 rounded-2xl p-4 flex flex-col space-y-3.5 shadow-2xs">
+          <div className="flex items-center justify-between pb-3 border-b border-stone-200/90">
+            <div className="flex items-center gap-2.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-600 ring-4 ring-emerald-600/15" />
               <h2 className="font-bold text-xs uppercase tracking-wider text-stone-800">
-                Expedição & Retirada (Prontos)
+                Prontos • Expedição &amp; Retirada
               </h2>
             </div>
-            <span className="text-xs font-mono font-bold bg-white text-stone-800 px-2 py-0.5 rounded-md border border-stone-200 shadow-2xs">
+            <span className="text-xs font-mono font-bold tabular-nums bg-white text-stone-800 px-2.5 py-0.5 rounded-lg border border-stone-200 shadow-2xs">
               {expeditionOrders.length}
             </span>
           </div>
@@ -1049,11 +1127,16 @@ export default function KDSPage() {
           <div className="flex-1 overflow-y-auto space-y-3.5 pr-1 scrollbar-thin">
             <AnimatePresence>
               {expeditionOrders.length === 0 ? (
-                <div className="py-24 text-center text-xs text-stone-400 font-medium">
-                  Nenhum pedido pronto aguardando retirada
+                <div className="py-20 flex flex-col items-center justify-center text-center gap-2.5 text-stone-400">
+                  <div className="w-10 h-10 rounded-xl bg-white/80 border border-stone-200/80 flex items-center justify-center shadow-2xs">
+                    <CheckCircle2 className="w-4 h-4 text-stone-400" />
+                  </div>
+                  <p className="text-xs font-medium text-stone-500">
+                    Nenhum pedido pronto aguardando saída
+                  </p>
                 </div>
               ) : (
-                expeditionOrders.map((o) => renderOrderCard(o, false))
+                expeditionOrders.map((o) => renderOrderCard(o))
               )}
             </AnimatePresence>
           </div>

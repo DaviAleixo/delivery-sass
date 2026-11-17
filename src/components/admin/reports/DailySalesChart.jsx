@@ -23,7 +23,7 @@ export default function DailySalesChart({ data = [] }) {
       return (
         <div className="bg-stone-900 text-white p-3 rounded-2xl shadow-xl text-xs space-y-1.5 border border-stone-800">
           <div className="font-bold flex items-center gap-1.5 text-stone-300 border-b border-stone-800 pb-1">
-            <Calendar className="w-3.5 h-3.5 text-rose-400" />
+            <Calendar className="w-3.5 h-3.5 text-emerald-400" />
             <span>{item.dateKey ? item.dateKey.split("-").reverse().join("/") : label}</span>
           </div>
           <div className="flex justify-between gap-4 text-emerald-400 font-extrabold text-sm">
@@ -60,8 +60,8 @@ export default function DailySalesChart({ data = [] }) {
             >
               <defs>
                 <linearGradient id="dailyBarGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#dc2626" stopOpacity={0.95} />
-                  <stop offset="100%" stopColor="#ea580c" stopOpacity={0.8} />
+                  <stop offset="0%" stopColor="#047857" stopOpacity={0.95} />
+                  <stop offset="100%" stopColor="#10b981" stopOpacity={0.8} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />

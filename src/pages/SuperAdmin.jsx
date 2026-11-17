@@ -94,6 +94,7 @@ export default function SuperAdminPage() {
     custom_template: "default",
     accepts_delivery: true,
     accepts_takeaway: true,
+    business_day_cutoff_time: "04:00",
     logo_url: "",
     email: "",
     phone: "",
@@ -529,6 +530,7 @@ export default function SuperAdminPage() {
       custom_template: tenant.custom_template || "default",
       accepts_delivery: tenant.accepts_delivery !== false,
       accepts_takeaway: tenant.accepts_takeaway !== false,
+      business_day_cutoff_time: tenant.business_day_cutoff_time || "04:00",
       logo_url: tenant.logo_url || "",
       email: resolvedEmail,
       phone: tenant.phone || tenant.whatsapp || "",
@@ -588,6 +590,7 @@ export default function SuperAdminPage() {
             salon_mode: computedSalonMode,
             accepts_delivery: computedDelivery,
             accepts_takeaway: computedTakeaway,
+            business_day_cutoff_time: editForm.business_day_cutoff_time || "04:00",
             monthly_price: !isNaN(parsedEditPrice) ? parsedEditPrice : 89.00,
             email: editForm.email.trim() || null,
             phone: editForm.phone.trim() || null,
@@ -1824,6 +1827,25 @@ export default function SuperAdminPage() {
                       <p className="text-[10px] text-stone-500">Busca no balcão</p>
                     </div>
                   </label>
+                </div>
+
+                <div className="mt-3 pt-3 border-t border-stone-200">
+                  <Label className="text-stone-700 text-xs font-semibold block mb-1">
+                    Virada do Dia Comercial (Corte da Madrugada)
+                  </Label>
+                  <select
+                    value={editForm.business_day_cutoff_time || "04:00"}
+                    onChange={(e) => setEditForm({ ...editForm, business_day_cutoff_time: e.target.value })}
+                    className="w-full h-9 px-3 bg-white border border-stone-300 rounded-md text-stone-900 text-xs focus:outline-hidden focus:border-emerald-500 cursor-pointer"
+                  >
+                    <option value="04:00">04:00 (Padrão Recomendado - Bares e Deliveries)</option>
+                    <option value="05:00">05:00 (Madrugada Estendida)</option>
+                    <option value="06:00">06:00 (Casas Noturnas e Baladas)</option>
+                    <option value="00:00">00:00 (Meia-noite - Lojas Diurnas)</option>
+                  </select>
+                  <p className="text-[10px] text-stone-500 mt-1">
+                    Pedidos antes desse horário na madrugada pertencem ao dia anterior nos relatórios.
+                  </p>
                 </div>
               </div>
 

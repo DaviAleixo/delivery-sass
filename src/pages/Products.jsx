@@ -7,8 +7,6 @@ import { ComplementGroup } from "@/entities/ComplementGroup";
 import { ProductComplementGroup } from "@/entities/ProductComplementGroup";
 import { UploadFile } from "@/integrations/Core";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import { parseBRLToNumber, formatToBRL } from "@/utils/moneyMask";
@@ -17,11 +15,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { appConfirm } from "@/components/ui/ConfirmDialogHost";
 import { Switch } from "@/components/ui/switch";
 import { validateSchema, productSchema } from "@/schemas";
 import { 
   Plus, 
-  Edit, 
   Trash2, 
   Search, 
   Layers, 
@@ -30,11 +28,15 @@ import {
   EyeOff, 
   CheckCircle2, 
   Package, 
-  X
+  X,
+  LayoutGrid,
+  List
 } from "lucide-react";
+import ProductCardGrid from "@/components/admin/ProductCardGrid";
+import ProductListTable from "@/components/admin/ProductListTable";
+import { buildDefaultPizzaPrices } from "@/utils/pizzaPricing";
 import { Link, useParams, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useTenant } from "@/lib/TenantContext";
 
@@ -115,6 +117,23 @@ function AdditionalsManager({ productId, initialAdditionals = [] }) {
 
 export default function ProductsPage() {
   const [products, setProducts] = useState([]);
+  const [viewMode, setViewMode] = useState(() => {
+    try {
+      return localStorage.getItem("pedemuleke_products_view_mode") === "cards"
+        ? "cards"
+        : "list";
+    } catch {
+      return "list";
+    }
+  });
+  const handleViewModeChange = (mode) => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem("pedemuleke_products_view_mode", mode);
+    } catch {
+      // ignore storage errors
+    }
+  };
   const [allAdditionals, setAllAdditionals] = useState([]);
   const [categories, setCategories] = useState([]);
   const [productionSectors, setProductionSectors] = useState([]);
@@ -303,7 +322,13 @@ export default function ProductsPage() {
   };
 
   const handleDelete = async (productId) => {
-    if (confirm("Tem certeza que deseja excluir este produto?")) {
+    const ok = await appConfirm({
+      title: "Excluir produto?",
+      description: "Tem certeza que deseja excluir este produto?",
+      confirmText: "Excluir Produto",
+      variant: "danger",
+    });
+    if (ok) {
       try {
         await Product.delete(productId);
         toast.success("Produto excluído com sucesso!");
@@ -381,14 +406,19 @@ export default function ProductsPage() {
     return categories.find(c => c.id === categoryId)?.name || 'Sem Categoria';
   };
 
+  const getCategorySizesById = (categoryId) => {
+    const cat = categories.find(c => c.id === categoryId || c.name === categoryId);
+    return Array.isArray(cat?.pizza_sizes) ? cat.pizza_sizes : [];
+  };
+
   return (
     <div className="p-4 sm:p-8 bg-gray-50 min-h-screen">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header Superior */}
         <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight flex items-center gap-2">
-              📦 Produtos & Cardápio
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight">
+              Produtos & Cardápio
             </h1>
             <p className="text-sm text-gray-600 mt-1">
               Gerencie os itens do cardápio, valores, complementos e oculte produtos indisponíveis
@@ -406,57 +436,60 @@ export default function ProductsPage() {
           </Button>
         </div>
 
-        {/* Métricas Rápidas / Atalhos de Filtro de Visibilidade */}
-        <div className="grid grid-cols-3 gap-3 sm:gap-4">
+        {/* Métricas Compactas / Atalhos de Filtro de Visibilidade */}
+        <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
           <button
             type="button"
             onClick={() => setFilterStatus("all")}
-            className={`p-3 sm:p-4 rounded-xl border text-left transition-all ${
+            className={`px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl border text-left transition-all flex items-center justify-between gap-2 cursor-pointer ${
               filterStatus === "all" 
-                ? "bg-white border-[#047857] ring-2 ring-[#047857]/20 shadow-sm" 
+                ? "bg-white border-[#047857] ring-2 ring-[#047857]/15 shadow-xs" 
                 : "bg-white border-gray-200 hover:border-gray-300"
             }`}
           >
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Total</span>
-              <Package className="w-4 h-4 text-gray-400" />
+            <div className="flex items-center gap-2 min-w-0">
+              <Package className="w-4 h-4 text-gray-400 shrink-0" />
+              <span className="text-xs font-semibold text-gray-600 truncate">Total</span>
             </div>
-            <p className="text-xl sm:text-2xl font-black text-gray-900 mt-1">{products.length}</p>
-            <p className="text-[11px] text-gray-500 mt-0.5">Todos os itens</p>
+            <span className="text-base sm:text-lg font-black font-mono tabular-nums text-gray-900">
+              {products.length}
+            </span>
           </button>
 
           <button
             type="button"
             onClick={() => setFilterStatus("visible")}
-            className={`p-3 sm:p-4 rounded-xl border text-left transition-all ${
+            className={`px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl border text-left transition-all flex items-center justify-between gap-2 cursor-pointer ${
               filterStatus === "visible" 
-                ? "bg-emerald-50/60 border-emerald-500 ring-2 ring-emerald-500/20 shadow-sm" 
+                ? "bg-emerald-50/70 border-emerald-500 ring-2 ring-emerald-500/15 shadow-xs" 
                 : "bg-white border-gray-200 hover:border-emerald-200"
             }`}
           >
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Visíveis</span>
-              <Eye className="w-4 h-4 text-emerald-600" />
+            <div className="flex items-center gap-2 min-w-0">
+              <Eye className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span className="text-xs font-semibold text-emerald-700 truncate">Visíveis</span>
             </div>
-            <p className="text-xl sm:text-2xl font-black text-emerald-700 mt-1">{visibleCount}</p>
-            <p className="text-[11px] text-emerald-600 mt-0.5">Exibidos no cardápio</p>
+            <span className="text-base sm:text-lg font-black font-mono tabular-nums text-emerald-700">
+              {visibleCount}
+            </span>
           </button>
 
           <button
             type="button"
             onClick={() => setFilterStatus("hidden")}
-            className={`p-3 sm:p-4 rounded-xl border text-left transition-all ${
+            className={`px-3 py-2 sm:px-4 sm:py-2.5 rounded-xl border text-left transition-all flex items-center justify-between gap-2 cursor-pointer ${
               filterStatus === "hidden" 
-                ? "bg-amber-50/60 border-amber-500 ring-2 ring-amber-500/20 shadow-sm" 
+                ? "bg-amber-50/70 border-amber-500 ring-2 ring-amber-500/15 shadow-xs" 
                 : "bg-white border-gray-200 hover:border-amber-200"
             }`}
           >
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-amber-700 uppercase tracking-wider">Ocultos</span>
-              <EyeOff className="w-4 h-4 text-amber-600" />
+            <div className="flex items-center gap-2 min-w-0">
+              <EyeOff className="w-4 h-4 text-amber-600 shrink-0" />
+              <span className="text-xs font-semibold text-amber-700 truncate">Ocultos</span>
             </div>
-            <p className="text-xl sm:text-2xl font-black text-amber-700 mt-1">{hiddenCount}</p>
-            <p className="text-[11px] text-amber-600 mt-0.5">Invisíveis aos clientes</p>
+            <span className="text-base sm:text-lg font-black font-mono tabular-nums text-amber-700">
+              {hiddenCount}
+            </span>
           </button>
         </div>
 
@@ -495,179 +528,77 @@ export default function ProductsPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos os status</SelectItem>
-                <SelectItem value="visible">👁️ Apenas Visíveis ({visibleCount})</SelectItem>
-                <SelectItem value="hidden">🚫 Apenas Ocultos ({hiddenCount})</SelectItem>
+                <SelectItem value="visible">Apenas Visíveis ({visibleCount})</SelectItem>
+                <SelectItem value="hidden">Apenas Ocultos ({hiddenCount})</SelectItem>
               </SelectContent>
             </Select>
+
+            {/* Alternador de Visualização (Lista / Cards) */}
+            <div
+              className="inline-flex items-center bg-gray-100 p-1 rounded-lg border border-gray-200 shrink-0"
+              role="group"
+              aria-label="Modo de visualização"
+            >
+              <button
+                type="button"
+                onClick={() => handleViewModeChange("list")}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                  viewMode === "list"
+                    ? "bg-white text-stone-900 shadow-2xs"
+                    : "text-stone-500 hover:text-stone-800"
+                }`}
+                title="Visualizar em lista"
+              >
+                <List className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Lista</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleViewModeChange("cards")}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+                  viewMode === "cards"
+                    ? "bg-white text-stone-900 shadow-2xs"
+                    : "text-stone-500 hover:text-stone-800"
+                }`}
+                title="Visualizar em cards"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Cards</span>
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Grid de Cards de Produtos */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
-          <AnimatePresence>
-            {filteredProducts.map((product) => {
-              const isVisible = product.available !== false;
-              const isUpdatingThis = updatingVisibilityId === product.id;
-
-              return (
-                <motion.div
-                  key={product.id}
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <Card className={`overflow-hidden transition-all duration-200 flex flex-col justify-between h-full border ${
-                    isVisible 
-                      ? "bg-white border-gray-200 hover:shadow-md hover:border-gray-300" 
-                      : "bg-stone-50/90 border-amber-300/80 shadow-xs"
-                  }`}>
-                    {/* Imagem do Produto com Badge de Visibilidade Flutuante */}
-                    <div className="relative aspect-video sm:aspect-4/3 overflow-hidden bg-gray-100">
-                      {product.image_url ? (
-                        <img
-                          src={product.image_url}
-                          alt={product.name}
-                          className={`w-full h-full object-cover transition-all ${
-                            isVisible ? "" : "grayscale-40 opacity-75"
-                          }`}
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-4xl bg-stone-100 text-gray-400">
-                          🍽️
-                        </div>
-                      )}
-
-                      {/* Badge de Status / Flag */}
-                      <div className="absolute top-2.5 right-2.5 z-10 flex items-center gap-1.5">
-                        <Badge 
-                          variant="outline"
-                          className={`shadow-sm text-xs font-bold px-2.5 py-1 backdrop-blur-md flex items-center gap-1.5 ${
-                            isVisible 
-                              ? "bg-emerald-500/90 text-white border-emerald-400" 
-                              : "bg-amber-500/95 text-white border-amber-400"
-                          }`}
-                        >
-                          {isVisible ? (
-                            <>
-                              <Eye className="w-3.5 h-3.5" />
-                              Visível
-                            </>
-                          ) : (
-                            <>
-                              <EyeOff className="w-3.5 h-3.5" />
-                              Oculto
-                            </>
-                          )}
-                        </Badge>
-                      </div>
-
-                      {/* Categoria pill */}
-                      <div className="absolute bottom-2 left-2 z-10">
-                        <span className="bg-black/70 backdrop-blur-md text-white text-[11px] font-semibold px-2 py-0.5 rounded-md">
-                          {getCategoryNameById(product.category)}
-                        </span>
-                      </div>
-                    </div>
-                    
-                    {/* Conteúdo do Card */}
-                    <CardContent className="p-4 flex-1 flex flex-col justify-between gap-3">
-                      <div>
-                        <div className="flex items-start justify-between gap-2">
-                          <h3 className={`font-bold text-base line-clamp-1 ${
-                            isVisible ? "text-gray-900" : "text-stone-700"
-                          }`}>
-                            {product.name}
-                          </h3>
-                        </div>
-                        
-                        {product.description ? (
-                          <p className="text-xs text-gray-500 mt-1 line-clamp-2 leading-relaxed">
-                            {product.description}
-                          </p>
-                        ) : (
-                          <p className="text-xs text-gray-400 italic mt-1">Sem descrição cadastrada</p>
-                        )}
-                      </div>
-
-                      <div className="space-y-3 pt-2 border-t border-gray-100">
-                        {/* Preço e Ações Principais */}
-                        <div className="flex items-center justify-between">
-                          <span className="text-lg font-black text-[#171717]">
-                            {product.pizza_prices && Object.keys(product.pizza_prices).length > 0 ? (
-                              <span className="text-xs font-semibold text-gray-500">
-                                A partir de <span className="text-lg font-black text-[#171717]">R$ {Number(product.price || 0).toFixed(2).replace('.', ',')}</span>
-                              </span>
-                            ) : (
-                              `R$ ${Number(product.price || 0).toFixed(2).replace('.', ',')}`
-                            )}
-                          </span>
-
-                          <div className="flex gap-1.5">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => openEditModal(product)}
-                              className="h-8 px-2.5 text-xs text-gray-700 hover:bg-gray-100 border-gray-300"
-                              title="Editar produto"
-                            >
-                              <Edit className="w-3.5 h-3.5 mr-1" />
-                              Editar
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleDelete(product.id)}
-                              className="h-8 w-8 text-rose-600 hover:text-rose-700 hover:bg-rose-50 cursor-pointer"
-                              title="Excluir produto"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          </div>
-                        </div>
-
-                        {/* Switch Rápido de Ocultar / Exibir (Flag) */}
-                        <div className={`flex items-center justify-between p-2 rounded-lg border transition-colors ${
-                          isVisible 
-                            ? "bg-emerald-50/50 border-emerald-200/80" 
-                            : "bg-amber-50/70 border-amber-200"
-                        }`}>
-                          <div className="flex items-center gap-2">
-                            {isVisible ? (
-                              <Eye className="w-4 h-4 text-emerald-600" />
-                            ) : (
-                              <EyeOff className="w-4 h-4 text-amber-600" />
-                            )}
-                            <Label 
-                              htmlFor={`switch-vis-${product.id}`}
-                              className="text-xs font-semibold cursor-pointer select-none"
-                            >
-                              {isVisible ? "Visível no cardápio" : "Oculto no cardápio"}
-                            </Label>
-                          </div>
-
-                          <Switch
-                            id={`switch-vis-${product.id}`}
-                            checked={isVisible}
-                            disabled={isUpdatingThis}
-                            onCheckedChange={() => handleToggleVisibility(product)}
-                            className="data-[state=checked]:bg-emerald-600"
-                          />
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>
-        </div>
+        {/* Lista ou Grid de Produtos */}
+        {filteredProducts.length > 0 && (
+          viewMode === "list" ? (
+            <ProductListTable
+              products={filteredProducts}
+              getCategoryNameById={getCategoryNameById}
+              getCategorySizesById={getCategorySizesById}
+              updatingVisibilityId={updatingVisibilityId}
+              onToggleVisibility={handleToggleVisibility}
+              onEdit={openEditModal}
+              onDelete={handleDelete}
+            />
+          ) : (
+            <ProductCardGrid
+              products={filteredProducts}
+              getCategoryNameById={getCategoryNameById}
+              getCategorySizesById={getCategorySizesById}
+              updatingVisibilityId={updatingVisibilityId}
+              onToggleVisibility={handleToggleVisibility}
+              onEdit={openEditModal}
+              onDelete={handleDelete}
+            />
+          )
+        )}
 
         {/* Estado Vazio */}
         {filteredProducts.length === 0 && !isLoading && (
           <div className="text-center py-16 bg-white rounded-2xl border border-gray-200">
-            <div className="w-16 h-16 rounded-full bg-stone-100 flex items-center justify-center text-3xl mx-auto mb-3">
-              📦
+            <div className="w-16 h-16 rounded-full bg-stone-100 flex items-center justify-center mx-auto mb-3">
+              <Package className="w-7 h-7 text-stone-400" />
             </div>
             <h3 className="text-lg font-bold text-gray-900 mb-1">
               Nenhum produto encontrado
@@ -700,206 +631,273 @@ export default function ProductsPage() {
           }
           setShowModal(open);
         }}>
-          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-bold">
+          <DialogContent className="sm:max-w-2xl max-h-[90vh] p-0 flex flex-col overflow-hidden bg-[#F7F9F8] border-stone-200">
+            <DialogHeader className="px-6 py-4 bg-white border-b border-stone-200 text-left shrink-0">
+              <DialogTitle className="text-lg font-bold text-stone-900">
                 {editingProduct ? "Editar Produto" : "Novo Produto"}
               </DialogTitle>
+              <p className="text-xs text-stone-500 mt-0.5">
+                Configure informações, preços, foto e visibilidade no cardápio
+              </p>
             </DialogHeader>
 
-            <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-              <div>
-                <Label htmlFor="name">Nome do produto *</Label>
-                <Input
-                  id="name"
-                  value={productForm.name}
-                  onChange={(e) => setProductForm({...productForm, name: e.target.value})}
-                  placeholder="Ex: Vrum Bacon Especial"
-                  required
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="description">Descrição</Label>
-                <Textarea
-                  id="description"
-                  value={productForm.description}
-                  onChange={(e) => setProductForm({...productForm, description: e.target.value})}
-                  placeholder="Descreva os ingredientes, pão, molho..."
-                  rows={3}
-                />
-              </div>
-
-              {/* Preço e Categoria (Se for pizza, oculta o preço geral e exibe a categoria em largura total) */}
-              {(() => {
-                const selectedCatObj = categories.find(c => c.id === productForm.category || c.name === productForm.category);
-                const isPizzaCategory = selectedCatObj?.type === "pizza";
-
-                if (isPizzaCategory) {
-                  return (
-                    <div>
-                      <Label htmlFor="category">Categoria *</Label>
-                      <Select
-                        value={productForm.category}
-                        onValueChange={(value) => setProductForm({...productForm, category: value})}
-                      >
-                        <SelectTrigger id="category" className="w-full">
-                          <SelectValue placeholder="Selecione" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {categories.map(cat => (
-                             <SelectItem key={cat.id} value={cat.id}>
-                               {cat.type === 'pizza' ? `🍕 ${cat.name}` : cat.name}
-                             </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label htmlFor="price">Preço (R$) *</Label>
-                      <CurrencyInput
-                        id="price"
-                        value={productForm.price}
-                        onChange={(e) => setProductForm({...productForm, price: e.target.value})}
-                        placeholder="R$ 32,90"
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <Label htmlFor="category">Categoria *</Label>
-                      <Select
-                        value={productForm.category}
-                        onValueChange={(value) => setProductForm({...productForm, category: value})}
-                      >
-                        <SelectTrigger id="category">
-                          <SelectValue placeholder="Selecione" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {categories.map(cat => (
-                             <SelectItem key={cat.id} value={cat.id}>
-                               {cat.type === 'pizza' ? `🍕 ${cat.name}` : cat.name}
-                             </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Setor de Produção (Opcional - sobrescreve o setor da categoria) */}
-              {productionSectors.length > 0 && (() => {
-                const selectedCatObj = categories.find(c => c.id === productForm.category || c.name === productForm.category);
-                const inheritedSector = selectedCatObj?.sector_id
-                  ? productionSectors.find(s => String(s.id) === String(selectedCatObj.sector_id))
-                  : null;
-                return (
+            <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+              <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+                {/* Bloco 1: Dados Principais */}
+                <div className="bg-white border border-stone-200/90 rounded-xl p-4 space-y-3.5 shadow-2xs">
                   <div>
-                    <Label htmlFor="product-sector" className="text-xs font-bold text-gray-700">
-                      Setor de Preparo / Impressão (Opcional)
+                    <Label htmlFor="name" className="text-xs font-semibold text-stone-700">
+                      Nome do produto *
                     </Label>
-                    <Select
-                      value={productForm.sector_id || "__inherit__"}
-                      onValueChange={(value) =>
-                        setProductForm({ ...productForm, sector_id: value === "__inherit__" ? null : value })
-                      }
-                    >
-                      <SelectTrigger id="product-sector" className="mt-1">
-                        <SelectValue placeholder="Herdar da categoria" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__inherit__">
-                          {inheritedSector
-                            ? `Herdar da categoria (${inheritedSector.name})`
-                            : "Herdar da categoria (sem setor específico)"}
-                        </SelectItem>
-                        {productionSectors.map((sec) => (
-                          <SelectItem key={sec.id} value={String(sec.id)}>
-                            {sec.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Input
+                      id="name"
+                      value={productForm.name}
+                      onChange={(e) => setProductForm({...productForm, name: e.target.value})}
+                      placeholder="Ex: Vrum Bacon Especial"
+                      className="mt-1 bg-stone-50/50 border-stone-200 focus:bg-white"
+                      required
+                    />
                   </div>
-                );
-              })()}
 
-              {/* Seção Condicional de Preços por Tamanho para Pizzas */}
-              {(() => {
-                const selectedCatObj = categories.find(c => c.id === productForm.category || c.name === productForm.category);
-                if (selectedCatObj?.type !== "pizza") return null;
+                  <div>
+                    <Label htmlFor="description" className="text-xs font-semibold text-stone-700">
+                      Descrição
+                    </Label>
+                    <Textarea
+                      id="description"
+                      value={productForm.description}
+                      onChange={(e) => setProductForm({...productForm, description: e.target.value})}
+                      placeholder="Descreva os ingredientes, pão, molho..."
+                      rows={2}
+                      className="mt-1 bg-stone-50/50 border-stone-200 focus:bg-white resize-none"
+                    />
+                  </div>
 
-                const sizes = selectedCatObj.pizza_sizes?.length ? selectedCatObj.pizza_sizes : [
-                  { id: "broto", name: "Broto (4 fatias)" },
-                  { id: "media", name: "Média (6 fatias)" },
-                  { id: "grande", name: "Grande (8 fatias)" },
-                  { id: "familia", name: "Família (12 fatias)" },
-                ];
+                  {/* Preço e Categoria */}
+                  {(() => {
+                    const selectedCatObj = categories.find(c => c.id === productForm.category || c.name === productForm.category);
+                    const isPizzaCategory = selectedCatObj?.type === "pizza";
 
-                return (
-                  <div className="p-3.5 bg-amber-50/80 border border-amber-200 rounded-xl space-y-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">🍕</span>
-                      <div>
-                        <p className="text-xs font-bold text-amber-950">Preços deste Sabor por Tamanho</p>
-                        <p className="text-[11px] text-amber-800">
-                          Defina o valor deste sabor para cada tamanho disponível (Broto, Média, Grande, Família).
-                        </p>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2.5">
-                      {sizes.map((size) => (
-                        <div key={size.id}>
-                          <Label className="text-[11px] font-semibold text-gray-700">{size.name}</Label>
+                    const handleCategoryChange = (value) => {
+                      const cat = categories.find(c => c.id === value || c.name === value);
+                      const isPizza = cat?.type === "pizza";
+                      const hasExisting = productForm.pizza_prices && Object.keys(productForm.pizza_prices).length > 0;
+                      if (isPizza && !editingProduct && !hasExisting) {
+                        const defaults = buildDefaultPizzaPrices(cat.pizza_sizes || []);
+                        setProductForm({
+                          ...productForm,
+                          category: value,
+                          pizza_prices: defaults,
+                        });
+                      } else {
+                        setProductForm({ ...productForm, category: value });
+                      }
+                    };
+
+                    if (isPizzaCategory) {
+                      return (
+                        <div>
+                          <Label htmlFor="category" className="text-xs font-semibold text-stone-700">
+                            Categoria *
+                          </Label>
+                          <Select
+                            value={productForm.category}
+                            onValueChange={handleCategoryChange}
+                          >
+                            <SelectTrigger id="category" className="w-full mt-1 bg-stone-50/50 border-stone-200">
+                              <SelectValue placeholder="Selecione" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {categories.map(cat => (
+                                <SelectItem key={cat.id} value={cat.id}>
+                                  {cat.type === 'pizza' ? `${cat.name} (Pizza)` : cat.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                        <div>
+                          <Label htmlFor="price" className="text-xs font-semibold text-stone-700">
+                            Preço (R$) *
+                          </Label>
                           <CurrencyInput
-                            value={productForm.pizza_prices?.[size.id] !== undefined 
-                              ? (typeof productForm.pizza_prices[size.id] === 'number' 
-                                  ? formatToBRL(productForm.pizza_prices[size.id]) 
-                                  : productForm.pizza_prices[size.id])
-                              : ""}
-                            onChange={(e) => {
-                              setProductForm(prev => ({
-                                ...prev,
-                                pizza_prices: {
-                                  ...(prev.pizza_prices || {}),
-                                  [size.id]: e.target.value
-                                }
-                              }));
-                            }}
-                            placeholder="R$ 0,00"
-                            className="h-8 text-xs bg-white mt-0.5"
+                            id="price"
+                            value={productForm.price}
+                            onChange={(e) => setProductForm({...productForm, price: e.target.value})}
+                            placeholder="R$ 32,90"
+                            className="mt-1 bg-stone-50/50 border-stone-200 focus:bg-white font-mono"
+                            required
                           />
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
 
-              <div>
-                <Label htmlFor="image">Imagem do produto</Label>
-                <Input
-                  id="image"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  className="cursor-pointer"
-                />
-                {productForm.image_url && (
-                  <div className="mt-2.5 flex items-center justify-between p-2.5 bg-stone-50 rounded-xl border border-stone-200">
-                    <div className="flex items-center gap-3">
-                      <div className="relative group w-16 h-16 rounded-lg overflow-hidden border border-stone-200 bg-white flex-shrink-0 shadow-xs">
-                        <img
-                          src={productForm.image_url}
-                          alt="Preview"
-                          className="w-full h-full object-cover"
-                        />
+                        <div>
+                          <Label htmlFor="category" className="text-xs font-semibold text-stone-700">
+                            Categoria *
+                          </Label>
+                          <Select
+                            value={productForm.category}
+                            onValueChange={handleCategoryChange}
+                          >
+                            <SelectTrigger id="category" className="mt-1 bg-stone-50/50 border-stone-200">
+                              <SelectValue placeholder="Selecione" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {categories.map(cat => (
+                                <SelectItem key={cat.id} value={cat.id}>
+                                  {cat.type === 'pizza' ? `${cat.name} (Pizza)` : cat.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Setor de Produção */}
+                  {productionSectors.length > 0 && (() => {
+                    const selectedCatObj = categories.find(c => c.id === productForm.category || c.name === productForm.category);
+                    const inheritedSector = selectedCatObj?.sector_id
+                      ? productionSectors.find(s => String(s.id) === String(selectedCatObj.sector_id))
+                      : null;
+                    return (
+                      <div>
+                        <Label htmlFor="product-sector" className="text-xs font-semibold text-stone-700">
+                          Setor de Preparo / Impressão (Opcional)
+                        </Label>
+                        <Select
+                          value={productForm.sector_id || "__inherit__"}
+                          onValueChange={(value) =>
+                            setProductForm({ ...productForm, sector_id: value === "__inherit__" ? null : value })
+                          }
+                        >
+                          <SelectTrigger id="product-sector" className="mt-1 bg-stone-50/50 border-stone-200">
+                            <SelectValue placeholder="Herdar da categoria" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__inherit__">
+                              {inheritedSector
+                                ? `Herdar da categoria (${inheritedSector.name})`
+                                : "Herdar da categoria (sem setor específico)"}
+                            </SelectItem>
+                            {productionSectors.map((sec) => (
+                              <SelectItem key={sec.id} value={String(sec.id)}>
+                                {sec.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* Bloco 2: Preços por Tamanho para Pizzas */}
+                {(() => {
+                  const selectedCatObj = categories.find(c => c.id === productForm.category || c.name === productForm.category);
+                  if (selectedCatObj?.type !== "pizza") return null;
+
+                  const sizes = selectedCatObj.pizza_sizes?.length ? selectedCatObj.pizza_sizes : [
+                    { id: "broto", name: "Broto (4 fatias)" },
+                    { id: "media", name: "Média (6 fatias)" },
+                    { id: "grande", name: "Grande (8 fatias)" },
+                    { id: "familia", name: "Família (12 fatias)" },
+                  ];
+
+                  const defaultPricesMap = buildDefaultPizzaPrices(sizes);
+                  const hasCategoryDefaults = Object.keys(defaultPricesMap).length > 0;
+
+                  return (
+                    <div className="bg-white border border-stone-200/90 rounded-xl p-4 space-y-3 shadow-2xs">
+                      <div className="flex items-start justify-between gap-2 pb-2 border-b border-stone-100">
+                        <div>
+                          <p className="text-xs font-bold text-stone-900">Preços por Tamanho</p>
+                          <p className="text-[11px] text-stone-500">
+                            Defina o valor deste sabor para cada tamanho disponível.
+                          </p>
+                        </div>
+                        {hasCategoryDefaults && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              setProductForm((prev) => ({
+                                ...prev,
+                                pizza_prices: { ...defaultPricesMap },
+                              }))
+                            }
+                            className="h-7 px-2.5 text-[11px] bg-stone-50 border-stone-200 text-stone-700 hover:bg-stone-100 shrink-0 cursor-pointer"
+                          >
+                            Usar padrão
+                          </Button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        {sizes.map((size) => (
+                          <div key={size.id}>
+                            <Label className="text-[11px] font-semibold text-stone-600">{size.name}</Label>
+                            <CurrencyInput
+                              value={productForm.pizza_prices?.[size.id] !== undefined 
+                                ? (typeof productForm.pizza_prices[size.id] === 'number' 
+                                    ? formatToBRL(productForm.pizza_prices[size.id]) 
+                                    : productForm.pizza_prices[size.id])
+                                : ""}
+                              onChange={(e) => {
+                                setProductForm(prev => ({
+                                  ...prev,
+                                  pizza_prices: {
+                                    ...(prev.pizza_prices || {}),
+                                    [size.id]: e.target.value
+                                  }
+                                }));
+                              }}
+                              placeholder="R$ 0,00"
+                              className="h-9 text-xs bg-stone-50/50 border-stone-200 focus:bg-white font-mono mt-1"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Bloco 3: Imagem & Visibilidade */}
+                <div className="bg-white border border-stone-200/90 rounded-xl p-4 space-y-3.5 shadow-2xs">
+                  <div>
+                    <Label htmlFor="image" className="text-xs font-semibold text-stone-700">
+                      Imagem do produto
+                    </Label>
+                    <Input
+                      id="image"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="mt-1 cursor-pointer bg-stone-50/50 border-stone-200 text-xs"
+                    />
+                    {productForm.image_url && (
+                      <div className="mt-2.5 flex items-center justify-between p-2.5 bg-stone-50 rounded-xl border border-stone-200">
+                        <div className="flex items-center gap-3">
+                          <div className="relative group w-14 h-14 rounded-lg overflow-hidden border border-stone-200 bg-white flex-shrink-0 shadow-2xs">
+                            <img
+                              src={productForm.image_url}
+                              alt="Preview"
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-xs text-emerald-700 font-semibold flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Imagem carregada
+                            </span>
+                            <p className="text-[11px] text-stone-500 mt-0.5">Pronta para exibição no cardápio</p>
+                          </div>
+                        </div>
+
                         <button
                           type="button"
                           onClick={() => {
@@ -908,146 +906,127 @@ export default function ProductsPage() {
                             if (fileInput) fileInput.value = "";
                             toast.info("Foto removida.");
                           }}
-                          className="absolute top-1 right-1 w-5 h-5 bg-red-600 hover:bg-red-700 text-white rounded-full flex items-center justify-center shadow-md transition-transform hover:scale-110"
-                          title="Remover foto (X)"
+                          className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-rose-600 hover:text-white hover:bg-rose-600 border border-rose-200 hover:border-rose-600 transition-colors flex items-center gap-1 cursor-pointer"
                         >
-                          <X className="w-3.5 h-3.5" />
+                          <X className="w-3.5 h-3.5" /> Remover
                         </button>
                       </div>
-                      <div>
-                        <span className="text-xs text-emerald-700 font-bold flex items-center gap-1">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Imagem carregada
-                        </span>
-                        <p className="text-[11px] text-stone-500 mt-0.5">Clique no X para excluir a foto</p>
+                    )}
+                  </div>
+
+                  {/* Flag de Visibilidade */}
+                  <div className={`p-3 rounded-xl border transition-all ${
+                    productForm.available 
+                      ? "bg-emerald-50/60 border-emerald-200" 
+                      : "bg-amber-50/80 border-amber-200"
+                  }`}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-1.5">
+                          {productForm.available ? (
+                            <Eye className="w-4 h-4 text-emerald-700" />
+                          ) : (
+                            <EyeOff className="w-4 h-4 text-amber-700" />
+                          )}
+                          <Label htmlFor="form-available" className="font-semibold text-xs text-stone-900 cursor-pointer">
+                            {productForm.available ? "Produto visível no cardápio" : "Produto oculto (indisponível)"}
+                          </Label>
+                        </div>
+                        <p className="text-[11px] text-stone-600">
+                          {productForm.available 
+                            ? "Aparece normalmente para os clientes comprarem."
+                            : "Oculto no cardápio online até ser reativado."}
+                        </p>
                       </div>
-                    </div>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setProductForm(prev => ({ ...prev, image_url: "" }));
-                        const fileInput = document.getElementById("image");
-                        if (fileInput) fileInput.value = "";
-                        toast.info("Foto removida.");
-                      }}
-                      className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-red-600 hover:text-white hover:bg-red-600 border border-red-200 hover:border-red-600 transition-colors flex items-center gap-1"
+                      <Switch
+                        id="form-available"
+                        checked={productForm.available}
+                        onCheckedChange={(checked) => setProductForm({...productForm, available: checked})}
+                        className="data-[state=checked]:bg-emerald-600"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bloco 4: Grupos de Complementos */}
+                <div className="bg-white border border-stone-200/90 rounded-xl p-4 space-y-3 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-bold text-xs text-stone-900 flex items-center gap-1.5">
+                        <Layers className="w-3.5 h-3.5 text-[#047857]" /> Adicionais & Complementos
+                      </h4>
+                      <p className="text-[11px] text-stone-500">Selecione os grupos vinculados a este produto</p>
+                    </div>
+                    <Link 
+                      to={createPageUrl("Complements")} 
+                      className="text-[11px] text-[#047857] hover:underline font-semibold flex items-center gap-1"
                     >
-                      <X className="w-3.5 h-3.5" /> Remover
-                    </button>
+                      Gerenciar <ExternalLink className="w-3 h-3" />
+                    </Link>
                   </div>
-                )}
-              </div>
 
-              {/* Seção Destacada de Flag de Visibilidade / Ocultar Produto */}
-              <div className={`p-4 rounded-xl border transition-all ${
-                productForm.available 
-                  ? "bg-emerald-50/60 border-emerald-200" 
-                  : "bg-amber-50/80 border-amber-200"
-              }`}>
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5 pr-2">
-                    <div className="flex items-center gap-1.5">
-                      {productForm.available ? (
-                        <Eye className="w-4 h-4 text-emerald-700" />
-                      ) : (
-                        <EyeOff className="w-4 h-4 text-amber-700" />
-                      )}
-                      <Label htmlFor="form-available" className="font-bold text-sm text-gray-900 cursor-pointer">
-                        {productForm.available ? "Produto Visível no Cardápio" : "Produto Oculto (Indisponível)"}
-                      </Label>
+                  {complementGroups.length === 0 ? (
+                    <div className="p-3 bg-stone-50 rounded-lg border border-stone-200 text-xs text-stone-600">
+                      Nenhum grupo cadastrado. <Link to={createPageUrl("Complements")} className="underline font-semibold text-[#047857]">Criar grupos</Link>.
                     </div>
-                    <p className="text-xs text-gray-600">
-                      {productForm.available 
-                        ? "O produto aparecerá normalmente no cardápio online para todos os clientes comprarem."
-                        : "O produto ficará oculto no cardápio online dos clientes até que seja reativado."}
-                    </p>
-                  </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1">
+                      {complementGroups.map(grp => {
+                        const isSelected = selectedGroupIds.includes(grp.id);
+                        return (
+                          <label 
+                            key={grp.id} 
+                            className={`flex items-start gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-all ${
+                              isSelected ? 'bg-[#D1E9DF]/40 border-[#047857] shadow-2xs' : 'bg-stone-50/50 border-stone-200 hover:border-stone-300'
+                            }`}
+                          >
+                            <Checkbox 
+                              checked={isSelected}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setSelectedGroupIds([...selectedGroupIds, grp.id]);
+                                } else {
+                                  setSelectedGroupIds(selectedGroupIds.filter(id => id !== grp.id));
+                                }
+                              }}
+                              className="mt-0.5 data-[state=checked]:bg-[#047857] data-[state=checked]:border-[#047857]"
+                            />
+                            <div className="min-w-0 flex-1 text-xs">
+                              <span className="font-semibold text-stone-800 block truncate">{grp.name}</span>
+                              <span className="text-stone-500 text-[10px]">
+                                {grp.required || grp.min_quantity > 0 ? 'Obrigatório' : 'Opcional'} · Máx: {grp.max_quantity}
+                              </span>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
 
-                  <Switch
-                    id="form-available"
-                    checked={productForm.available}
-                    onCheckedChange={(checked) => setProductForm({...productForm, available: checked})}
-                    className="data-[state=checked]:bg-emerald-600"
+                {editingProduct && allAdditionals.some(a => a.product_id === editingProduct.id) && (
+                  <AdditionalsManager 
+                    productId={editingProduct.id}
+                    initialAdditionals={allAdditionals.filter(a => a.product_id === editingProduct.id)}
                   />
-                </div>
-              </div>
-
-              {/* Grupos de Complementos e Adicionais Globais */}
-              <div className="space-y-3 pt-2 border-t">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="font-bold text-sm text-gray-900 flex items-center gap-1.5">
-                      <Layers className="w-4 h-4 text-[#047857]" /> Grupos de Adicionais & Complementos
-                    </h4>
-                    <p className="text-xs text-gray-500">Selecione quais grupos de opções este produto possui</p>
-                  </div>
-                  <Link 
-                    to={createPageUrl("Complements")} 
-                    className="text-xs text-[#047857] hover:underline font-semibold flex items-center gap-1"
-                  >
-                    Gerenciar Grupos <ExternalLink className="w-3 h-3" />
-                  </Link>
-                </div>
-
-                {complementGroups.length === 0 ? (
-                  <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-800">
-                    Nenhum grupo global cadastrado. <Link to={createPageUrl("Complements")} className="underline font-bold">Criar grupos de complementos</Link>.
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-44 overflow-y-auto p-2 bg-stone-50 rounded-xl border border-stone-200">
-                    {complementGroups.map(grp => {
-                      const isSelected = selectedGroupIds.includes(grp.id);
-                      return (
-                        <label 
-                          key={grp.id} 
-                          className={`flex items-start gap-2.5 p-2.5 rounded-lg border cursor-pointer transition-all ${
-                            isSelected ? 'bg-[#D1E9DF]/40 border-[#047857] shadow-xs' : 'bg-white border-gray-200 hover:border-gray-300'
-                          }`}
-                        >
-                          <Checkbox 
-                            checked={isSelected}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
-                                setSelectedGroupIds([...selectedGroupIds, grp.id]);
-                              } else {
-                                setSelectedGroupIds(selectedGroupIds.filter(id => id !== grp.id));
-                              }
-                            }}
-                            className="mt-0.5 data-[state=checked]:bg-[#047857] data-[state=checked]:border-[#047857]"
-                          />
-                          <div className="min-w-0 flex-1 text-xs">
-                            <span className="font-semibold text-gray-800 block truncate">{grp.name}</span>
-                            <span className="text-gray-500 text-[11px]">
-                              {grp.required || grp.min_quantity > 0 ? 'Obrigatório' : 'Opcional'} • Máx: {grp.max_quantity}
-                            </span>
-                          </div>
-                        </label>
-                      );
-                    })}
-                  </div>
                 )}
               </div>
 
-              {editingProduct && allAdditionals.some(a => a.product_id === editingProduct.id) && (
-                <AdditionalsManager 
-                  productId={editingProduct.id}
-                  initialAdditionals={allAdditionals.filter(a => a.product_id === editingProduct.id)}
-                />
-              )}
-
-              <div className="flex gap-3 pt-2">
+              {/* Rodapé Fixo */}
+              <div className="px-6 py-3.5 bg-white border-t border-stone-200 flex items-center justify-end gap-2.5 shrink-0">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => {setShowModal(false); resetForm();}}
-                  className="flex-1"
+                  className="h-9 px-4 text-xs border-stone-300 text-stone-700 cursor-pointer"
                 >
                   Cancelar
                 </Button>
                 <Button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex-1 bg-[#047857] hover:bg-[#065f46] text-white font-bold cursor-pointer"
+                  className="h-9 px-5 text-xs bg-[#047857] hover:bg-[#065f46] text-white font-bold cursor-pointer"
                 >
                   {isSubmitting ? "Salvando..." : "Salvar Produto"}
                 </Button>

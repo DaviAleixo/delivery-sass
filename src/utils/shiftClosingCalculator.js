@@ -10,6 +10,9 @@
 
 import { getBrasiliaParts, formatInBrasilia } from "./dateTime";
 
+// Feature flag temporária para ocultar seções de entregadores/motoboys no fechamento de caixa
+export const SHOW_DRIVER_CLOSING_SECTIONS = false;
+
 /**
  * Normaliza string de método de pagamento para chaves padronizadas
  */
@@ -136,6 +139,26 @@ export function resolveShiftBounds(tenantSettings, periodMode = "today", customR
 }
 
 /**
+ * Localiza pedidos órfãos (criados enquanto o caixa estava fechado) dentro da
+ * janela operacional recente (desde o último fechamento ou últimas 36h).
+ */
+export function findOrphanShiftOrders(orders = [], lastClosedAt = null, nowMs = Date.now()) {
+  const defaultFloorMs = nowMs - 36 * 60 * 60 * 1000;
+  const closedFloorMs = lastClosedAt ? new Date(lastClosedAt).getTime() : NaN;
+  const floorMs = !isNaN(closedFloorMs) ? Math.max(defaultFloorMs, closedFloorMs) : defaultFloorMs;
+
+  return (Array.isArray(orders) ? orders : [])
+    .filter((order) => {
+      if (!order || order.cash_session_id) return false;
+      if (String(order.status || "").toLowerCase() === "cancelado") return false;
+      const t = new Date(order.created_date).getTime();
+      if (isNaN(t)) return false;
+      return t >= floorMs;
+    })
+    .sort((a, b) => new Date(a.created_date).getTime() - new Date(b.created_date).getTime());
+}
+
+/**
  * Função principal de cálculo do Fechamento de Caixa
  */
 export function calculateShiftClosing({
@@ -144,16 +167,25 @@ export function calculateShiftClosing({
   tenantSettings = null,
   periodMode = "today",
   customRange = null,
+  activeCashSessionId = null,
 }) {
   const bounds = resolveShiftBounds(tenantSettings, periodMode, customRange);
   const startTime = bounds.start.getTime();
   const endTime = bounds.end.getTime();
 
-  // Filtra pedidos pertencentes ao período
+  // Filtra pedidos pertencentes ao período ou sessão de caixa vinculada
   const shiftOrders = orders.filter((order) => {
     if (!order?.created_date) return false;
     const orderTime = new Date(order.created_date).getTime();
     if (isNaN(orderTime)) return false;
+
+    if (activeCashSessionId && (bounds.mode === "custom" || periodMode === "today")) {
+      if (order.cash_session_id) {
+        return String(order.cash_session_id) === String(activeCashSessionId);
+      }
+      // Fallback para pedidos sem vínculo criados após a abertura (ex: modo offline)
+      return orderTime >= startTime && orderTime <= endTime;
+    }
 
     // Se for hoje ou turno atual, pedidos ativos (pendente, preparando, enviado)
     // são sempre mantidos para conferência

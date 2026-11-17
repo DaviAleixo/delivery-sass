@@ -1,6 +1,11 @@
 import React, { forwardRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Plus } from "lucide-react";
+import {
+  formatBRLValue,
+  getMinPizzaPrice,
+  hasPizzaPrices,
+} from "@/utils/pizzaPricing";
 
 const ProductCard = forwardRef(function ProductCard(
   { product, onProductClick, _isStoreOpen = true, _isPopular = false, isVisualOnly = false, cashbackRate = 0 },
@@ -60,13 +65,13 @@ const ProductCard = forwardRef(function ProductCard(
               className="font-bold text-xs sm:text-sm text-stone-950 tracking-tight"
               style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
             >
-              {product.pizza_prices && Object.keys(product.pizza_prices).length > 0 ? (
+              {hasPizzaPrices(product) ? (
                 <>
                   <span className="text-[11px] font-normal text-stone-500 mr-1">A partir de</span>
-                  R$ {Number(product.price || 0).toFixed(2).replace('.', ',')}
+                  {formatBRLValue(getMinPizzaPrice(product))}
                 </>
               ) : (
-                <>R$ {Number(product.price || 0).toFixed(2).replace('.', ',')}</>
+                formatBRLValue(product.price)
               )}
             </span>
 

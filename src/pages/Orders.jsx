@@ -1,29 +1,25 @@
-import React, { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
-import { createPageUrl } from "@/utils";
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { Order } from "@/entities/Order";
+import { Product } from "@/entities/Product";
 import { Settings } from "@/entities/Settings";
-import { Button } from "@/components/ui/button";
-import { 
+import {
   Clock, X, Check,
-  Search, ChefHat, Bike, ShoppingBag, SlidersHorizontal, ChevronRight, Pencil, QrCode, Banknote,
-  Volume2, VolumeX, Calendar, ChevronDown, ChevronUp, Layers, CheckCircle, MapPin, RefreshCw
+  ChefHat, Bike, ShoppingBag, Pencil,
+  Volume2, VolumeX, RefreshCw, Star
 } from "lucide-react";
-import { AnimatePresence } from "framer-motion";
 import { soundAlert } from "@/utils/soundAlert";
-import TableQRCodeModal from "@/components/admin/TableQRCodeModal";
-import OrderCard from "@/components/admin/orders/OrderCard";
-import DispatchOrderModal from "@/components/admin/orders/DispatchOrderModal";
-import ShiftClosingModal from "@/components/admin/orders/ShiftClosingModal";
+import OrderDetailPanel, { ChannelIcon } from "@/components/admin/orders/OrderDetailPanel";
+import {
+  getOrderChannelMeta,
+  getOrderStatusMeta,
+  getTotalItemsCount,
+} from "@/components/admin/orders/orderDisplayHelpers";
 import CancelOrderModal from "@/components/admin/orders/CancelOrderModal";
 import EmptyOrdersIllustration from "@/components/admin/orders/EmptyOrdersIllustration";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { useFifoPrintQueue } from "@/hooks/useFifoPrintQueue";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { getBrasiliaParts } from "@/utils/dateTime";
 import { useOrdersRealtime } from "@/hooks/useOrdersRealtime";
 import { isRealtimeChannelActive } from "@/lib/realtimeHub";
@@ -31,6 +27,9 @@ import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { toast } from "sonner";
 import { refundPixPayment } from "@/services/mercadoPagoService";
 import { useTenant } from "@/lib/TenantContext";
+import { useCashSession } from "@/hooks/useCashSession";
+import CashSessionBanner from "@/components/admin/cash/CashSessionBanner";
+import OpenCashModal from "@/components/admin/cash/OpenCashModal";
 
 /**
  * Determina se o pedido pertence ao turno de trabalho atual da hamburgueria.
@@ -68,58 +67,27 @@ function isOrderInCurrentShift(order, settings) {
   return d.getTime() >= shiftStart.getTime();
 }
 
-function isDateToday(dateStr) {
-  if (!dateStr) return false;
-  const orderParts = getBrasiliaParts(dateStr);
-  const nowParts = getBrasiliaParts(new Date());
-  return orderParts.dateKey === nowParts.dateKey;
-}
-
-function isDateYesterday(dateStr) {
-  if (!dateStr) return false;
-  const orderParts = getBrasiliaParts(dateStr);
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yParts = getBrasiliaParts(yesterday);
-  return orderParts.dateKey === yParts.dateKey;
-}
-
-function isDateWithinDays(dateStr, days = 7) {
-  if (!dateStr) return false;
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return false;
-  const cutoff = Date.now() - (days * 24 * 60 * 60 * 1000);
-  return d.getTime() >= cutoff;
-}
-
 export default function OrdersPage() {
-  const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
+  const [products, setProducts] = useState([]);
   const [settings, setSettings] = useState(null);
   const [deliveryTime, setDeliveryTime] = useState("60–80 min");
   const [isEditingTime, setIsEditingTime] = useState(false);
   const [customTimeInput, setCustomTimeInput] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("pendente");
-  const [timeFilter, setTimeFilter] = useState("shift"); // "shift" | "today" | "yesterday" | "week" | "all"
-  const [channelFilter, setChannelFilter] = useState("all"); // "all" | "delivery" | "pickup" | "dine_in"
-  const [searchQuery, setSearchQuery] = useState("");
-  const [expandedOrders, setExpandedOrders] = useState(new Set());
-  
-  const [orderLimit, setOrderLimit] = useState(35);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState(null);
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const detailDismissedRef = useRef(false);
 
-  // Estados para Gestão de Entregadores e Despacho
-  const [drivers, setDrivers] = useState([]);
-  const [dispatchModalOpen, setDispatchModalOpen] = useState(false);
-  const [orderToDispatch, setOrderToDispatch] = useState(null);
-
-  // Estado para Fechamento de Caixa do Turno
-  const [shiftClosingOpen, setShiftClosingOpen] = useState(false);
+  // Estados para Gestão de Entregadores
+  const [_drivers, setDrivers] = useState([]);
 
   // Estado para Cancelamento Profissional de Pedido
   const [cancellingOrder, setCancellingOrder] = useState(null);
   const { tenant } = useTenant();
+  const [showOpenCashModal, setShowOpenCashModal] = useState(false);
+  const cashSession = useCashSession(tenant?.id);
 
   // Alarme Sonoro de Pedidos Pendentes
   const [soundEnabled, setSoundEnabled] = useState(() => soundAlert.isEnabled());
@@ -183,6 +151,13 @@ export default function OrdersPage() {
             description: `Total: R$ ${(updatedOrder.total_amount || updatedOrder.total || 0).toFixed(2).replace(".", ",")}`,
             duration: 8000,
           });
+        } else if (existing && existing.status !== "pronto" && updatedOrder.status === "pronto") {
+          const client = updatedOrder.customer_name || "Cliente";
+          const num = String(updatedOrder.id).slice(-4).toUpperCase();
+          toast.success(`🍳 Pedido #${num} pronto na cozinha!`, {
+            description: `${client} • Já pode despachar ou entregar`,
+            duration: 6000,
+          });
         }
         return prev.map((o) => (o.id === updatedOrder.id ? { ...o, ...updatedOrder } : o));
       });
@@ -218,8 +193,7 @@ export default function OrdersPage() {
       soundAlert.stopContinuousAlert();
       soundAlert.setPendingCount(0);
     };
-
-  }, [orderLimit]);
+  }, []);
 
   // Sincroniza ativamente o alarme sonoro com pedidos pendentes
   // Se houver qualquer pedido pendente (mesmo antigo) e o som estiver ativado, toca a campainha!
@@ -230,7 +204,15 @@ export default function OrdersPage() {
       return;
     }
 
-    const currentPending = orders.filter((o) => o.status === "pendente");
+    const showDineIn = settings?.kanban_show_dine_in !== undefined
+      ? Boolean(settings.kanban_show_dine_in)
+      : Boolean(settings?.payment_methods?.kanban_show_dine_in);
+    const currentPending = orders.filter((o) => {
+      if (o.status !== "pendente") return false;
+      const ch = getOrderChannelMeta(o);
+      if (ch.kind === "dine_in" && !showDineIn) return false;
+      return true;
+    });
     soundAlert.setPendingCount(currentPending.length);
 
     if (currentPending.length > 0) {
@@ -238,7 +220,7 @@ export default function OrdersPage() {
     } else {
       soundAlert.stopContinuousAlert();
     }
-  }, [orders, soundEnabled]);
+  }, [orders, soundEnabled, settings]);
 
   const loadData = async () => {
     try {
@@ -253,12 +235,14 @@ export default function OrdersPage() {
         } catch (_errAuto) {}
       }
 
-      const [ordersData, settingsData] = await Promise.all([
-        Order.list("-created_date", orderLimit),
-        Settings.list()
+      const [ordersData, settingsData, productsData] = await Promise.all([
+        Order.list("-created_date", 250),
+        Settings.list(),
+        Product.list().catch(() => [])
       ]);
       const safeOrders = Array.isArray(ordersData) ? ordersData : [];
       setOrders(safeOrders);
+      setProducts(Array.isArray(productsData) ? productsData : []);
 
       if (settingsData && settingsData.length > 0) {
         setSettings(settingsData[0]);
@@ -319,7 +303,7 @@ export default function OrdersPage() {
     if (isFetchingRef.current) return;
     isFetchingRef.current = true;
     try {
-      const ordersData = await Order.list("-created_date", orderLimit);
+      const ordersData = await Order.list("-created_date", 250);
       const safeOrders = Array.isArray(ordersData) ? ordersData : [];
       setOrders(safeOrders);
 
@@ -332,12 +316,6 @@ export default function OrdersPage() {
     } finally {
       isFetchingRef.current = false;
     }
-  };
-
-  const handleLoadMore = () => {
-    setIsLoadingMore(true);
-    setOrderLimit(prev => prev + 25);
-    setIsLoadingMore(false);
   };
 
   const handleSetDeliveryTime = async (newTime) => {
@@ -376,6 +354,13 @@ export default function OrdersPage() {
         newStatus === "entregue" ? "entregue" : newStatus;
       toast.success(`Pedido #${String(orderId).slice(-4).toUpperCase()} marcado como ${statusLabel}!`);
 
+      if (
+        !cashSession.isCashDrawerOpen &&
+        ["confirmado", "preparando", "enviado", "entregue"].includes(newStatus)
+      ) {
+        toast.info("Caixa fechado: o pedido ficará aguardando abertura do turno para entrar na gaveta.");
+      }
+
       // O cashback ganho pelo cliente SOMENTE é liberado na carteira quando o pedido for concluído ("entregue")
       if (newStatus === "entregue") {
         try {
@@ -392,7 +377,8 @@ export default function OrdersPage() {
           console.warn("Erro ao processar cashback do pedido entregue:", cbErr);
         }
       }
-      loadOrdersOnly();
+      await loadOrdersOnly();
+      cashSession.refreshCashSession();
     } catch (err) {
       console.error("Erro ao atualizar status do pedido:", err);
       toast.error(err?.message || "Erro ao atualizar status do pedido. Tente novamente.");
@@ -408,16 +394,6 @@ export default function OrdersPage() {
         return;
       }
     }
-    if (newStatus === "enviado") {
-      const target = orders.find((o) => o.id === orderId);
-      const activeDrivers = (drivers || []).filter((d) => d.active !== false);
-      // Se for pedido do tipo delivery E houver entregadores cadastrados na equipe, abre o modal de despacho
-      if (target && target.order_type === "delivery" && activeDrivers.length > 0) {
-        setOrderToDispatch(target);
-        setDispatchModalOpen(true);
-        return;
-      }
-    }
     updateOrderStatus(orderId, newStatus);
   };
 
@@ -427,7 +403,7 @@ export default function OrdersPage() {
     refundPix,
     refundPixAmount,
     revertCashback,
-    mpAccessToken
+    mpAccessToken: _mpAccessToken
   }) => {
     const targetOrder = orders.find((o) => o.id === orderId);
     if (!targetOrder) return;
@@ -511,72 +487,11 @@ export default function OrdersPage() {
     try {
       await Order.update(orderId, updatePayload);
       toast.success(`Pedido #${String(orderId).slice(-4).toUpperCase()} cancelado com sucesso.`);
-      loadOrdersOnly();
+      await loadOrdersOnly();
+      cashSession.refreshCashSession();
     } catch (err) {
       console.error("Erro ao salvar cancelamento:", err);
       toast.error("Erro ao persistir cancelamento do pedido.");
-    }
-  };
-
-  const handleConfirmDispatch = async ({ driver, orderIds, tripId, printDriverSlip }) => {
-    const nowIso = new Date().toISOString();
-    const driverName = driver?.name || null;
-    const driverId = driver?.id || null;
-
-    const dispatchedOrders = orders
-      .filter((o) => orderIds.includes(o.id))
-      .map((o) => ({
-        ...o,
-        status: "enviado",
-        driver_id: driverId,
-        driver_name: driverName,
-        trip_id: tripId,
-        dispatched_at: nowIso,
-      }));
-
-    setOrders((prev) =>
-      prev.map((o) => {
-        if (orderIds.includes(o.id)) {
-          return {
-            ...o,
-            status: "enviado",
-            driver_id: driverId,
-            driver_name: driverName,
-            trip_id: tripId,
-            dispatched_at: nowIso,
-          };
-        }
-        return o;
-      })
-    );
-
-    try {
-      await Promise.all(
-        orderIds.map((id) =>
-          Order.update(id, {
-            status: "enviado",
-            driver_id: driverId,
-            driver_name: driverName,
-            trip_id: tripId,
-            dispatched_at: nowIso,
-          })
-        )
-      );
-
-      toast.success(
-        `🚀 ${orderIds.length} ${orderIds.length === 1 ? "pedido despachado" : "pedidos despachados"} ${
-          driverName ? `com ${driverName}` : ""
-        }!`
-      );
-      if (printDriverSlip && dispatchedOrders.length > 0) {
-        dispatchedOrders.forEach((dispOrder) => {
-          manualPrintOrder(dispOrder, { deliverySlipOnly: true });
-        });
-      }
-      loadOrdersOnly();
-    } catch (err) {
-      console.error("Erro ao despachar pedidos:", err);
-      toast.error("Erro ao registrar saída de entrega.");
     }
   };
 
@@ -592,123 +507,105 @@ export default function OrdersPage() {
     return isNaN(d.getTime()) ? null : d;
   };
 
-  const getStatusColor = (status) => {
-    const colors = {
-      pendente: "bg-yellow-100 text-yellow-800 border-yellow-200",
-      confirmado: "bg-blue-100 text-blue-800 border-blue-200",
-      preparando: "bg-purple-100 text-purple-800 border-purple-200",
-      enviado: "bg-indigo-100 text-indigo-800 border-indigo-200",
-      entregue: "bg-green-100 text-green-800 border-green-200",
-      cancelado: "bg-red-100 text-red-800 border-red-200"
-    };
-    return colors[status] || "bg-gray-100 text-gray-800 border-gray-200";
-  };
+  const getStatusText = (status) => getOrderStatusMeta(status).label;
 
-  const getStatusText = (status) => {
-    const texts = {
-      pendente: "Pendente",
-      confirmado: "Confirmado",
-      preparando: "Preparando",
-      enviado: "Enviado",
-      entregue: "Entregue",
-      cancelado: "Cancelado"
-    };
-    return texts[status] || status;
-  };
-
-  const getStatusIcon = (status) => {
-    const icons = {
-      pendente: <Clock className="w-4 h-4" />,
-      confirmado: <CheckCircle className="w-4 h-4" />,
-      preparando: <Clock className="w-4 h-4" />,
-      enviado: <MapPin className="w-4 h-4" />,
-      entregue: <CheckCircle className="w-4 h-4" />,
-      cancelado: <X className="w-4 h-4" />
-    };
-    return icons[status];
-  };
-
-  const getPaymentMethodText = (method, cardBrand) => {
-    const methods = {
-      dinheiro: "Dinheiro",
-      pix: "PIX",
-      pix_online: "PIX Online (Mercado Pago)",
-      cartao: "Cartão",
-      cartao_credito: "Cartão de Crédito",
-      cartao_debito: "Cartão de Débito",
-      alimentacao: "Vale Alimentação / Refeição",
-      caixa: "Pagar no Caixa (Mesa)",
-      pagar_no_caixa: "Pagar no Caixa (Mesa)"
-    };
-    const base = methods[method] || method || "-";
-    if (cardBrand) {
-      return `${base} (${cardBrand})`;
+  // Mapa rápido de fotos de produtos (por ID e por nome) para exibir miniaturas nos itens
+  const productImageMap = useMemo(() => {
+    const byId = new Map();
+    const byName = new Map();
+    for (const p of products || []) {
+      if (!p?.image_url) continue;
+      if (p.id) byId.set(p.id, p.image_url);
+      if (p.name) byName.set(String(p.name).trim().toLowerCase(), p.image_url);
     }
-    return base;
-  };
+    return { byId, byName };
+  }, [products]);
 
-  // Filtro por período de tempo (Turno aberto, Hoje, Ontem, Semana, Todos)
+  // Regras configuráveis de roteamento na esteira de Pedidos (Kanban)
+  const showDineInInKanban = useMemo(() => {
+    if (settings?.kanban_show_dine_in !== undefined) return Boolean(settings.kanban_show_dine_in);
+    return Boolean(settings?.payment_methods?.kanban_show_dine_in);
+  }, [settings]);
+
+  const showPosInKanban = useMemo(() => {
+    if (settings?.kanban_show_pos !== undefined) return Boolean(settings.kanban_show_pos);
+    return Boolean(settings?.payment_methods?.kanban_show_pos);
+  }, [settings]);
+
+  // Mantém pedidos do turno aberto (e todos em andamento) respeitando a configuração de canais do Kanban
   const timeFilteredOrders = React.useMemo(() => {
-    let list = (orders || []).filter(o => o.status !== "aguardando_pagamento");
-
-    if (timeFilter === "shift") {
-      list = list.filter(o => isOrderInCurrentShift(o, settings));
-    } else if (timeFilter === "today") {
-      list = list.filter(o => isDateToday(o.created_date) || ['pendente', 'confirmado', 'preparando', 'enviado'].includes(o.status));
-    } else if (timeFilter === "yesterday") {
-      list = list.filter(o => isDateYesterday(o.created_date));
-    } else if (timeFilter === "week") {
-      list = list.filter(o => isDateWithinDays(o.created_date, 7));
-    }
-
-    // Filtro por canal de atendimento
-    if (channelFilter !== "all") {
-      list = list.filter(o => {
-        if (channelFilter === "delivery") return o.order_type === "delivery";
-        if (channelFilter === "pickup") return o.order_type === "pickup" || o.order_type === "balcao";
-        if (channelFilter === "dine_in") return o.order_type === "dine_in" || o.order_type === "mesa";
+    return (orders || [])
+      .filter((o) => o.status !== "aguardando_pagamento")
+      .filter((o) => isOrderInCurrentShift(o, settings))
+      .filter((o) => {
+        const ch = getOrderChannelMeta(o);
+        if (ch.kind === "dine_in" && !showDineInInKanban) {
+          return false;
+        }
+        const isPosSale = ch.kind === "pickup" && o.payment_status === "paid" && o.payment_method !== "pix_online";
+        if (isPosSale && !showPosInKanban) {
+          return false;
+        }
         return true;
       });
-    }
-
-    // Busca rápida por texto (Número do pedido, Nome, Mesa ou Telefone)
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      list = list.filter(o => 
-        String(o.id).toLowerCase().includes(q) ||
-        (o.customer_name && o.customer_name.toLowerCase().includes(q)) ||
-        (o.customer_phone && o.customer_phone.includes(q)) ||
-        (o.table_number && o.table_number.toLowerCase().includes(q))
-      );
-    }
-
-    return list;
-  }, [orders, timeFilter, channelFilter, settings, searchQuery]);
+  }, [orders, settings, showDineInInKanban, showPosInKanban]);
 
   const filteredOrders = React.useMemo(() => {
     if (activeTab === "all") return timeFilteredOrders;
+    if (activeTab === "preparando") {
+      return timeFilteredOrders
+        .filter((order) => order.status === "preparando" || order.status === "pronto")
+        .sort((a, b) => {
+          if (a.status === "pronto" && b.status !== "pronto") return -1;
+          if (b.status === "pronto" && a.status !== "pronto") return 1;
+          return 0;
+        });
+    }
     return timeFilteredOrders.filter(order => order.status === activeTab);
   }, [timeFilteredOrders, activeTab]);
+
+  const readyCount = timeFilteredOrders.filter((o) => o.status === "pronto").length;
 
   const statusCounts = {
     all: timeFilteredOrders.length,
     pendente: timeFilteredOrders.filter(o => o.status === "pendente").length,
     confirmado: timeFilteredOrders.filter(o => o.status === "confirmado").length,
-    preparando: timeFilteredOrders.filter(o => o.status === "preparando").length,
+    preparando: timeFilteredOrders.filter(o => o.status === "preparando" || o.status === "pronto").length,
     enviado: timeFilteredOrders.filter(o => o.status === "enviado").length,
     entregue: timeFilteredOrders.filter(o => o.status === "entregue").length,
+    cancelado: timeFilteredOrders.filter(o => o.status === "cancelado").length,
   };
 
-  const toggleOrderExpansion = (orderId) => {
-    setExpandedOrders(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(orderId)) {
-        newSet.delete(orderId);
-      } else {
-        newSet.add(orderId);
-      }
-      return newSet;
-    });
+  // Mantém um pedido selecionado automaticamente ao trocar aba ou atualizar lista
+  useEffect(() => {
+    if (filteredOrders.length === 0) {
+      setSelectedOrderId(null);
+      setMobileDetailOpen(false);
+      return;
+    }
+
+    const stillVisible = selectedOrderId && filteredOrders.some((o) => o.id === selectedOrderId);
+    if (!stillVisible && !detailDismissedRef.current) {
+      setSelectedOrderId(filteredOrders[0].id);
+    }
+  }, [filteredOrders, selectedOrderId]);
+
+  const selectedOrder = useMemo(
+    () => filteredOrders.find((o) => o.id === selectedOrderId) || null,
+    [filteredOrders, selectedOrderId]
+  );
+
+  const handleSelectOrder = (order) => {
+    detailDismissedRef.current = false;
+    setSelectedOrderId(order.id);
+    if (typeof window !== "undefined" && window.innerWidth < 1024) {
+      setMobileDetailOpen(true);
+    }
+  };
+
+  const handleTabChange = (tabId) => {
+    detailDismissedRef.current = false;
+    setActiveTab(tabId);
   };
 
   if (isLoading && orders.length === 0) {
@@ -723,23 +620,27 @@ export default function OrdersPage() {
   }
 
   return (
-    <div className="p-4 md:p-8 bg-[#F7F9F8] min-h-screen">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="p-3 md:p-4 lg:px-6 lg:py-4 bg-[#F7F9F8] min-h-screen">
+      <div className="max-w-[1400px] mx-auto space-y-3.5">
         {/* Cabeçalho da Página com Título e Cards de Ações Rápidas */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-black text-gray-950 tracking-tight">Pedidos</h1>
-            <p className="text-sm text-gray-500 mt-1">Gerencie e acompanhe todos os pedidos do seu restaurante.</p>
+            <h1 className="text-2xl font-black text-gray-950 tracking-tight leading-tight">Pedidos</h1>
+            <p className="text-xs sm:text-sm text-gray-500 mt-0.5">Gerencie e acompanhe todos os pedidos do seu restaurante.</p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
             {/* Card 1: Entrega média */}
-            <div className="bg-white border border-gray-200/90 rounded-xl px-4 py-2.5 flex items-center gap-3 shadow-2xs">
-              <Clock className="w-4 h-4 text-gray-600 shrink-0" />
-              <div>
-                <p className="text-[10px] text-gray-400 font-medium leading-none">Entrega média</p>
+            <div className="h-11 bg-white border border-stone-200 rounded-xl px-3 flex items-center gap-2.5 shadow-2xs">
+              <div className="w-7 h-7 rounded-lg bg-stone-100 flex items-center justify-center shrink-0">
+                <Clock className="w-3.5 h-3.5 text-stone-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] text-stone-400 font-medium leading-none">Entrega média</p>
                 {!isEditingTime ? (
-                  <p className="text-sm font-black text-gray-950 leading-tight mt-0.5">{deliveryTime}</p>
+                  <p className="text-xs font-bold text-stone-900 leading-tight mt-0.5 whitespace-nowrap">
+                    {deliveryTime}
+                  </p>
                 ) : (
                   <div className="flex items-center gap-1 mt-0.5">
                     <input
@@ -747,7 +648,7 @@ export default function OrdersPage() {
                       value={customTimeInput}
                       onChange={(e) => setCustomTimeInput(e.target.value)}
                       placeholder="60–80 min"
-                      className="bg-gray-100 text-xs px-2 py-0.5 rounded-md w-20 border border-gray-300 outline-none font-bold"
+                      className="bg-stone-100 text-xs px-2 py-0.5 rounded-md w-20 border border-stone-300 outline-none font-bold"
                       autoFocus
                     />
                     <button
@@ -763,7 +664,7 @@ export default function OrdersPage() {
                     <button
                       type="button"
                       onClick={() => setIsEditingTime(false)}
-                      className="bg-gray-200 text-gray-600 p-0.5 rounded text-xs cursor-pointer"
+                      className="bg-stone-200 text-stone-600 p-0.5 rounded text-xs cursor-pointer"
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -777,7 +678,7 @@ export default function OrdersPage() {
                     setCustomTimeInput(deliveryTime);
                     setIsEditingTime(true);
                   }}
-                  className="p-1 text-gray-400 hover:text-gray-700 transition-colors cursor-pointer"
+                  className="p-1 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-md transition-colors cursor-pointer"
                   title="Alterar tempo médio"
                 >
                   <Pencil className="w-3.5 h-3.5" />
@@ -785,61 +686,58 @@ export default function OrdersPage() {
               )}
             </div>
 
-            {/* Card 2: Fechamento de Caixa */}
-            <button
-              type="button"
-              onClick={() => navigate(createPageUrl("CashManagement") + "?tab=closing")}
-              className="bg-white border border-gray-200/90 hover:border-gray-300 rounded-xl px-4 py-2.5 flex items-center gap-3 shadow-2xs hover:bg-gray-50/70 transition-all cursor-pointer"
-            >
-              <Banknote className="w-4 h-4 text-gray-700 shrink-0" />
-              <span className="text-xs font-bold text-gray-900">Fechamento de Caixa</span>
-              <ChevronRight className="w-4 h-4 text-gray-400 shrink-0 ml-0.5" />
-            </button>
-
-            {/* Card 3: QR Code das Mesas */}
-            <TableQRCodeModal
-              settings={settings}
-              trigger={
-                <button
-                  type="button"
-                  className="bg-white border border-gray-200/90 hover:border-gray-300 rounded-xl px-4 py-2.5 flex items-center gap-3 shadow-2xs hover:bg-gray-50/70 transition-all cursor-pointer"
-                >
-                  <QrCode className="w-4 h-4 text-gray-700 shrink-0" />
-                  <span className="text-xs font-bold text-gray-900">QR Code das Mesas</span>
-                  <ChevronRight className="w-4 h-4 text-gray-400 shrink-0 ml-0.5" />
-                </button>
-              }
-            />
-
-            {/* Card 4: Alarme Sonoro (Ativar / Silenciar) */}
+            {/* Card 2: Alarme Sonoro (Ativar / Silenciar) */}
             <button
               type="button"
               onClick={handleToggleSound}
-              className={`border rounded-xl px-4 py-2.5 flex items-center gap-2.5 shadow-2xs transition-all cursor-pointer ${
-                soundEnabled 
-                  ? "bg-emerald-50/80 border-emerald-300 text-emerald-900 hover:bg-emerald-100/70" 
-                  : "bg-white border-gray-200 text-gray-500 hover:bg-gray-50"
+              className={`h-11 border rounded-xl px-3 flex items-center gap-2.5 shadow-2xs transition-all cursor-pointer text-left ${
+                soundEnabled
+                  ? "bg-emerald-50/90 border-emerald-200 text-emerald-950 hover:bg-emerald-100/80"
+                  : "bg-white border-stone-200 text-stone-600 hover:bg-stone-50"
               }`}
               title={soundEnabled ? "Alarme sonoro ativo (toque para silenciar)" : "Alarme silenciado (toque para ativar)"}
             >
-              {soundEnabled ? (
-                <>
-                  <Volume2 className="w-4 h-4 text-emerald-600 shrink-0 animate-pulse" />
-                  <span className="text-xs font-bold text-emerald-900">Som Ativo</span>
-                </>
-              ) : (
-                <>
-                  <VolumeX className="w-4 h-4 text-gray-400 shrink-0" />
-                  <span className="text-xs font-bold text-gray-600">Silenciado</span>
-                </>
-              )}
+              <div
+                className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                  soundEnabled ? "bg-emerald-100 text-emerald-700" : "bg-stone-100 text-stone-400"
+                }`}
+              >
+                {soundEnabled ? (
+                  <Volume2 className="w-3.5 h-3.5 animate-pulse" />
+                ) : (
+                  <VolumeX className="w-3.5 h-3.5" />
+                )}
+              </div>
+              <div>
+                <p className="text-[10px] text-stone-400 font-medium leading-none">Alarme</p>
+                <p
+                  className={`text-xs font-bold leading-tight mt-0.5 whitespace-nowrap ${
+                    soundEnabled ? "text-emerald-800" : "text-stone-600"
+                  }`}
+                >
+                  {soundEnabled ? "Som Ativo" : "Silenciado"}
+                </p>
+              </div>
             </button>
           </div>
         </div>
 
-        {/* Abas de Status dos Pedidos (Barra Segmentada Idêntica à Referência) */}
-        <div className="w-full bg-white border-y border-gray-200">
-          <div className="flex items-stretch overflow-x-auto scrollbar-hide">
+        {/* Status do Caixa e Alerta de Pedidos Online Aguardando Turno */}
+        {(!cashSession.isCashDrawerOpen || cashSession.orphanOrders.length > 0) && (
+          <CashSessionBanner
+            isLoading={cashSession.isLoadingSession}
+            isCashDrawerOpen={cashSession.isCashDrawerOpen}
+            cashDrawerInfo={cashSession.cashDrawerInfo}
+            orphanOrders={cashSession.orphanOrders}
+            onOpenCashClick={() => setShowOpenCashModal(true)}
+            onAttachOrphans={cashSession.attachOrphans}
+            compactWhenOpenWithoutOrphans={false}
+          />
+        )}
+
+        {/* Abas de Status dos Pedidos (Barra Segmentada Arredondada igual à Referência) */}
+        <div className="w-full bg-white border border-gray-200/90 rounded-2xl shadow-2xs overflow-hidden">
+          <div className="flex items-stretch overflow-x-auto scrollbar-hide divide-x divide-gray-200/70">
             {[
               { id: "pendente", label: "Pendentes", icon: Clock, count: statusCounts.pendente },
               { id: "confirmado", label: "Confirmados", icon: Check, count: statusCounts.confirmado },
@@ -854,25 +752,32 @@ export default function OrdersPage() {
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`px-5 py-3.5 flex items-center justify-center gap-2.5 text-xs transition-colors shrink-0 border-r border-gray-200 cursor-pointer select-none relative ${
+                  onClick={() => handleTabChange(tab.id)}
+                  className={`flex-1 min-w-[130px] px-4 py-2.5 flex items-center justify-center gap-2 text-xs transition-colors shrink-0 cursor-pointer select-none border-b-2 ${
                     isActive
-                      ? "bg-white font-bold text-gray-950 border-b-2 border-b-[#047857] -mb-[1px] border-l-2 border-l-[#047857]"
-                      : "bg-white font-medium text-gray-600 hover:text-gray-950 hover:bg-gray-50/70 border-b border-b-transparent"
+                      ? "bg-white font-bold text-gray-950 border-b-[#16a34a]"
+                      : "bg-white font-medium text-gray-600 hover:text-gray-950 hover:bg-gray-50/70 border-b-transparent"
                   }`}
                 >
-                  <Icon className={`w-4 h-4 ${isActive ? "text-[#047857]" : "text-gray-500"}`} />
+                  <Icon className={`w-4 h-4 ${isActive ? "text-[#16a34a]" : "text-gray-400"}`} />
                   <span>{tab.label}</span>
                   {tab.id !== "cancelado" && (
-                    <span
-                      className={`text-xs px-1.5 py-0.5 rounded-md min-w-[20px] text-center font-bold ${
-                        isActive
-                          ? "bg-[#E6F4EA] text-[#047857] border border-[#A7F3D0]"
-                          : "bg-gray-100 text-gray-600 font-semibold"
-                      }`}
-                    >
-                      {tab.count}
-                    </span>
+                    <>
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded-full min-w-[24px] text-center font-bold ${
+                          isActive
+                            ? "bg-[#DCFCE7] text-[#15803d] border border-[#86EFAC]/80"
+                            : "bg-gray-100 text-gray-600 font-semibold"
+                        }`}
+                      >
+                        {tab.count}
+                      </span>
+                      {tab.id === "preparando" && readyCount > 0 && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-amber-100 text-amber-800 border border-amber-300 whitespace-nowrap">
+                          {readyCount} {readyCount === 1 ? "pronto" : "prontos"}
+                        </span>
+                      )}
+                    </>
                   )}
                 </button>
               );
@@ -880,224 +785,194 @@ export default function OrdersPage() {
           </div>
         </div>
 
-        {/* Barra de Filtros e Busca */}
-        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 pt-1">
-          <div className="flex flex-wrap items-center gap-2.5">
-            {/* Dropdown de Data / Período */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="bg-white border border-gray-200/90 rounded-xl px-3.5 py-2.5 text-xs font-bold text-gray-800 shadow-2xs hover:bg-gray-50 flex items-center gap-2 cursor-pointer transition-colors"
-                >
-                  <Calendar className="w-4 h-4 text-gray-600" />
-                  <span>
-                    {timeFilter === "shift" && "Turno Aberto (Ao Vivo)"}
-                    {timeFilter === "today" && "Hoje"}
-                    {timeFilter === "yesterday" && "Ontem"}
-                    {timeFilter === "week" && "Últimos 7 dias"}
-                    {timeFilter === "all" && "Histórico Completo"}
-                  </span>
-                  <ChevronDown className="w-3.5 h-3.5 text-gray-400 ml-1" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-52 bg-white rounded-xl shadow-lg border border-gray-200 p-1">
-                <DropdownMenuItem onClick={() => setTimeFilter("shift")} className="cursor-pointer text-xs font-medium py-2 rounded-lg">
-                  🟢 Turno Aberto (Ao Vivo)
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTimeFilter("today")} className="cursor-pointer text-xs font-medium py-2 rounded-lg">
-                  📅 Hoje
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTimeFilter("yesterday")} className="cursor-pointer text-xs font-medium py-2 rounded-lg">
-                  ⏮️ Ontem
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTimeFilter("week")} className="cursor-pointer text-xs font-medium py-2 rounded-lg">
-                  🗓️ Últimos 7 dias
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTimeFilter("all")} className="cursor-pointer text-xs font-medium py-2 rounded-lg">
-                  📜 Histórico Completo
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+        {/* Layout Mestre-Detalhe (Lista à esquerda + Painel do Pedido à direita) */}
+        {filteredOrders.length > 0 ? (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+            {/* Lista Compacta em Tabela */}
+            <div className="lg:col-span-6 space-y-3">
+              <div className="bg-white border border-gray-200/90 rounded-2xl shadow-2xs overflow-hidden">
+                {/* Cabeçalho da Tabela */}
+                <div className="hidden sm:grid sm:grid-cols-12 gap-3 px-5 py-3 border-b border-gray-100 text-xs font-semibold text-gray-500 bg-white">
+                  <div className="col-span-5">Pedido / Cliente</div>
+                  <div className="col-span-2">Itens</div>
+                  <div className="col-span-3">Origem</div>
+                  <div className="col-span-2 text-right">Total</div>
+                </div>
 
-            {/* Botão de Status do Turno Aberto (Ao Vivo) */}
-            <button
-              type="button"
-              onClick={() => setTimeFilter(timeFilter === "shift" ? "today" : "shift")}
-              className="bg-white border border-emerald-300/80 rounded-xl px-3.5 py-2.5 text-xs font-bold text-emerald-900 shadow-2xs hover:bg-emerald-50/50 flex items-center gap-2 cursor-pointer transition-all"
-              title="Alternar filtro de Turno Aberto"
-            >
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-200 animate-pulse" />
-              <span>Turno Aberto (Ao Vivo)</span>
-              <ChevronUp className="w-3.5 h-3.5 text-emerald-700 ml-0.5" />
-            </button>
+                {/* Linhas de Pedidos */}
+                <div className="divide-y divide-gray-100">
+                  {filteredOrders.map((order) => {
+                    const isSelected = selectedOrderId === order.id;
+                    const isReady = order.status === "pronto";
+                    const d = safeDate(order.created_date);
+                    const total = Number(order.total_amount ?? order.total ?? 0);
+                    const channel = getOrderChannelMeta(order);
+                    const itemsCount = getTotalItemsCount(order.items);
+                    const cashbackEarned = Number(order.cashback_earned || 0);
 
-            {/* Dropdown de Canais */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="bg-white border border-gray-200/90 rounded-xl px-3.5 py-2.5 text-xs font-bold text-gray-800 shadow-2xs hover:bg-gray-50 flex items-center gap-2 cursor-pointer transition-colors"
-                >
-                  <Layers className="w-4 h-4 text-gray-600" />
-                  <span>
-                    {channelFilter === "all" && "Todos os canais"}
-                    {channelFilter === "delivery" && "🛵 Delivery"}
-                    {channelFilter === "pickup" && "🥡 Retirada"}
-                    {channelFilter === "dine_in" && "🍽️ Salão (Mesa)"}
-                  </span>
-                  <ChevronDown className="w-3.5 h-3.5 text-gray-400 ml-1" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-48 bg-white rounded-xl shadow-lg border border-gray-200 p-1">
-                <DropdownMenuItem onClick={() => setChannelFilter("all")} className="cursor-pointer text-xs font-medium py-2 rounded-lg">
-                  Todos os canais
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setChannelFilter("delivery")} className="cursor-pointer text-xs font-medium py-2 rounded-lg">
-                  🛵 Delivery
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setChannelFilter("pickup")} className="cursor-pointer text-xs font-medium py-2 rounded-lg">
-                  🥡 Retirada (Balcão)
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setChannelFilter("dine_in")} className="cursor-pointer text-xs font-medium py-2 rounded-lg">
-                  🍽️ Salão (Mesa)
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+                    return (
+                      <div
+                        key={order.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => handleSelectOrder(order)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            handleSelectOrder(order);
+                          }
+                        }}
+                        className={`px-5 py-3.5 transition-colors cursor-pointer select-none border-l-4 ${
+                          isSelected
+                            ? isReady
+                              ? "bg-emerald-50/90 border-l-[#16a34a]"
+                              : "bg-[#ECFDF5]/75 border-l-[#16a34a]"
+                            : isReady
+                            ? "bg-amber-50/75 hover:bg-amber-100/60 border-l-amber-500"
+                            : "bg-white hover:bg-gray-50/80 border-l-transparent"
+                        }`}
+                      >
+                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+                          {/* Col 1: Pedido / Cliente / Horário */}
+                          <div className="sm:col-span-5 flex items-center gap-3 min-w-0">
+                            <div
+                              className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 ${channel.iconBoxClass}`}
+                            >
+                              <ChannelIcon kind={channel.kind} className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <p className="text-sm font-bold text-gray-950 leading-tight truncate">
+                                  #{String(order.id).slice(-6).toUpperCase()}
+                                </p>
+                                {isReady && (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-[#15803d] text-white leading-none shrink-0">
+                                    ✓ Pronto
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-600 mt-0.5 truncate">
+                                {order.customer_name || "Cliente"}
+                              </p>
+                              <p className="text-[11px] text-gray-400 mt-0.5 tabular-nums">
+                                {d ? format(d, "dd/MM 'às' HH:mm", { locale: ptBR }) : "-"}
+                              </p>
+                            </div>
+                          </div>
 
-          {/* Busca e Botão Filtros */}
-          <div className="flex items-center gap-2.5">
-            <div className="relative flex-1 md:w-80">
-              <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar pedido, cliente, mesa..."
-                className="w-full bg-white border border-gray-200/90 rounded-xl pl-9 pr-8 py-2.5 text-xs text-gray-900 placeholder:text-gray-400 shadow-2xs outline-none focus:border-[#047857] focus:ring-1 focus:ring-[#047857] transition-all"
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 text-xs font-bold"
-                >
-                  ✕
-                </button>
-              )}
+                          {/* Col 2: Itens */}
+                          <div className="hidden sm:block sm:col-span-2 text-xs font-medium text-gray-700 whitespace-nowrap">
+                            {itemsCount} {itemsCount === 1 ? "item" : "itens"}
+                          </div>
+
+                          {/* Col 3: Origem + Cashback */}
+                          <div className="sm:col-span-3 flex sm:flex-col items-center sm:items-start justify-between sm:justify-center gap-1.5 min-w-0">
+                            <div className="flex flex-col items-start gap-1 min-w-0">
+                              <span
+                                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${channel.pillClass}`}
+                              >
+                                <ChannelIcon kind={channel.kind} className="w-3 h-3 shrink-0" />
+                                <span className="truncate max-w-[125px]">{channel.shortLabel}</span>
+                              </span>
+                              {cashbackEarned > 0 && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-lime-50 text-lime-800 border border-lime-200/80">
+                                  <Star className="w-2.5 h-2.5 fill-lime-500/30 text-lime-600 shrink-0" />
+                                  +R$ {safeMoney(cashbackEarned)} cashback
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="sm:hidden text-right shrink-0">
+                              <span className="block text-[11px] text-gray-500">
+                                {itemsCount} {itemsCount === 1 ? "item" : "itens"}
+                              </span>
+                              <span className="text-sm font-black text-gray-950 tabular-nums whitespace-nowrap">
+                                R$ {safeMoney(total)}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Col 4: Total */}
+                          <div className="hidden sm:block sm:col-span-2 text-right text-sm font-black text-gray-950 tabular-nums whitespace-nowrap">
+                            R$ {safeMoney(total)}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                setTimeFilter("shift");
-                setChannelFilter("all");
-                setSearchQuery("");
-                toast.info("Filtros redefinidos!");
+            {/* Painel Lateral Fixo de Detalhes (Desktop) */}
+            <div className="hidden lg:block lg:col-span-6 lg:sticky lg:top-3">
+              <OrderDetailPanel
+                order={selectedOrder}
+                deliveryTime={deliveryTime}
+                productImageMap={productImageMap}
+                safeDate={safeDate}
+                safeMoney={safeMoney}
+                onUpdateStatus={handleOrderStatusClick}
+                onRequestCancel={(ord) => setCancellingOrder(ord)}
+                onPrint={manualPrintOrder}
+                onClose={() => {
+                  detailDismissedRef.current = true;
+                  setSelectedOrderId(null);
+                }}
+              />
+            </div>
+          </div>
+        ) : (
+          !isLoading && (
+            <div className="text-center py-16 md:py-24 px-4">
+              <EmptyOrdersIllustration className="w-72 sm:w-80 h-44 sm:h-48 mx-auto" />
+
+              <h3 className="text-2xl font-black text-gray-950 mt-6 tracking-tight">
+                Nenhum pedido encontrado
+              </h3>
+              <p className="text-sm text-gray-500 mt-2 max-w-sm mx-auto font-normal">
+                {activeTab === "all"
+                  ? "Não há pedidos no período selecionado."
+                  : `Não há pedidos com o status "${getStatusText(activeTab)}" no período selecionado.`}
+              </p>
+
+              <button
+                type="button"
+                onClick={() => {
+                  loadOrdersOnly();
+                  toast.info("Atualizando pedidos...");
+                }}
+                className="bg-[#047857] hover:bg-[#065f46] text-white font-bold rounded-xl px-7 py-3 text-sm shadow-sm flex items-center gap-2 mx-auto mt-6 transition-all active:scale-95 cursor-pointer"
+              >
+                <RefreshCw className="w-4 h-4" />
+                <span>Atualizar pedidos</span>
+              </button>
+            </div>
+          )
+        )}
+
+        {/* Drawer de Detalhes no Mobile / Tablet */}
+        <Sheet open={mobileDetailOpen && Boolean(selectedOrder)} onOpenChange={setMobileDetailOpen}>
+          <SheetContent
+            side="right"
+            className="w-full sm:max-w-lg p-3 bg-[#F7F9F8] overflow-y-auto [&>button:first-child]:hidden"
+          >
+            <OrderDetailPanel
+              order={selectedOrder}
+              deliveryTime={deliveryTime}
+              productImageMap={productImageMap}
+              safeDate={safeDate}
+              safeMoney={safeMoney}
+              onUpdateStatus={handleOrderStatusClick}
+              onRequestCancel={(ord) => {
+                setMobileDetailOpen(false);
+                setCancellingOrder(ord);
               }}
-              className="bg-white border border-gray-200/90 rounded-xl px-4 py-2.5 text-xs font-bold text-gray-800 shadow-2xs hover:bg-gray-50 flex items-center gap-2 cursor-pointer transition-colors shrink-0"
-              title="Redefinir filtros"
-            >
-              <SlidersHorizontal className="w-4 h-4 text-gray-600" />
-              <span>Filtros</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Listagem de Pedidos ou Estado Vazio */}
-        <div className="space-y-4 pt-2">
-          <div className="grid gap-4">
-            <AnimatePresence>
-              {filteredOrders.map((order) => (
-                <OrderCard
-                  key={order.id}
-                  order={order}
-                  isExpanded={expandedOrders.has(order.id)}
-                  onToggleExpansion={() => toggleOrderExpansion(order.id)}
-                  onUpdateStatus={handleOrderStatusClick}
-                  onRequestCancel={(ord) => setCancellingOrder(ord)}
-                  deliveryTime={deliveryTime}
-                  safeDate={safeDate}
-                  safeMoney={safeMoney}
-                  getStatusColor={getStatusColor}
-                  getStatusIcon={getStatusIcon}
-                  getStatusText={getStatusText}
-                  getPaymentMethodText={getPaymentMethodText}
-                  onPrint={manualPrintOrder}
-                />
-              ))}
-            </AnimatePresence>
-
-            {orders.length >= orderLimit && (
-              <div className="flex justify-center pt-4 pb-2">
-                <Button
-                  onClick={handleLoadMore}
-                  variant="outline"
-                  disabled={isLoadingMore}
-                  className="border-gray-200 bg-white text-gray-700 hover:bg-gray-50 rounded-2xl text-xs font-bold"
-                >
-                  {isLoadingMore ? "Carregando..." : `Carregar Mais Pedidos (+25)`}
-                </Button>
-              </div>
-            )}
-
-            {filteredOrders.length === 0 && !isLoading && (
-              <div className="text-center py-16 md:py-24 px-4">
-                <EmptyOrdersIllustration className="w-72 sm:w-80 h-44 sm:h-48 mx-auto" />
-
-                <h3 className="text-2xl font-black text-gray-950 mt-6 tracking-tight">
-                  Nenhum pedido encontrado
-                </h3>
-                <p className="text-sm text-gray-500 mt-2 max-w-sm mx-auto font-normal">
-                  {activeTab === "all"
-                    ? "Não há pedidos no período selecionado."
-                    : `Não há pedidos com o status "${getStatusText(activeTab)}" no período selecionado.`}
-                </p>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    loadOrdersOnly();
-                    toast.info("Atualizando pedidos...");
-                  }}
-                  className="bg-[#047857] hover:bg-[#065f46] text-white font-bold rounded-xl px-7 py-3 text-sm shadow-sm flex items-center gap-2 mx-auto mt-6 transition-all active:scale-95 cursor-pointer"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                  <span>Atualizar pedidos</span>
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Modal Inteligente de Despacho com Entregador */}
-        <DispatchOrderModal
-          isOpen={dispatchModalOpen}
-          onClose={() => {
-            setDispatchModalOpen(false);
-            setOrderToDispatch(null);
-          }}
-          mainOrder={orderToDispatch}
-          otherReadyOrders={orders.filter(
-            (o) =>
-              o.id !== orderToDispatch?.id &&
-              o.order_type === "delivery" &&
-              ["preparando", "confirmado"].includes(o.status)
-          )}
-          drivers={drivers}
-          onConfirmDispatch={handleConfirmDispatch}
-        />
-
-        {/* Modal de Fechamento de Caixa do Turno */}
-        <ShiftClosingModal
-          isOpen={shiftClosingOpen}
-          onClose={() => setShiftClosingOpen(false)}
-          orders={orders}
-          drivers={drivers}
-          tenantSettings={settings}
-          storeName={settings?.restaurant_name || localStorage.getItem("current_tenant_name") || "Vruum Burguer"}
-        />
+              onPrint={manualPrintOrder}
+              onClose={() => setMobileDetailOpen(false)}
+            />
+          </SheetContent>
+        </Sheet>
 
         {/* Modal Profissional de Cancelamento de Pedido com Estorno Pix e Cashback */}
         <CancelOrderModal
@@ -1109,6 +984,19 @@ export default function OrdersPage() {
           tenant={tenant || settings}
           settings={settings}
           onConfirmCancel={handleConfirmCancelOrder}
+        />
+
+        {/* Modal de Abertura Rápida de Caixa em 1 Clique */}
+        <OpenCashModal
+          isOpen={showOpenCashModal}
+          onClose={() => setShowOpenCashModal(false)}
+          currentOperator={cashSession.cashDrawerInfo?.operator}
+          orphanOrders={cashSession.orphanOrders}
+          onConfirmOpen={async (payload) => {
+            const res = await cashSession.openCashSession(payload);
+            await loadOrdersOnly();
+            return res;
+          }}
         />
       </div>
     </div>

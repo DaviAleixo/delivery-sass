@@ -11,6 +11,7 @@ import { Product } from "@/entities/Product";
 import { Category } from "@/entities/Category";
 import { ProductionSector } from "@/entities/ProductionSector";
 import { stampOrderItemsWithSectors } from "@/utils/sectorUtils";
+import { appConfirm } from "@/components/ui/ConfirmDialogHost";
 import { 
   UtensilsCrossed, 
   Plus, 
@@ -42,6 +43,10 @@ import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import { QRCodeCanvas } from "qrcode.react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useCashSession } from "@/hooks/useCashSession";
+import { useFifoPrintQueue } from "@/hooks/useFifoPrintQueue";
+import CashSessionBanner from "@/components/admin/cash/CashSessionBanner";
+import OpenCashModal from "@/components/admin/cash/OpenCashModal";
 
 export const PAYMENT_METHODS = [
   { id: "dinheiro", label: "Dinheiro", icon: Banknote },
@@ -100,10 +105,27 @@ export default function TablesPage() {
   const [isOpenTableModalOpen, setIsOpenTableModalOpen] = useState(false);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [isAddTableModalOpen, setIsAddTableModalOpen] = useState(false);
-  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
+  const [addTableMode, setAddTableMode] = useState("single");
   const [isAddItemModalOpen, setIsAddItemModalOpen] = useState(false);
   const [isSettlementModalOpen, setIsSettlementModalOpen] = useState(false);
   const [isPrintPreBillOpen, setIsPrintPreBillOpen] = useState(false);
+  const [showOpenCashModal, setShowOpenCashModal] = useState(false);
+  const [pendingCashAction, setPendingCashAction] = useState(null);
+
+  const cashSession = useCashSession();
+  const { manualPrintOrder, enqueueOrders } = useFifoPrintQueue();
+
+  const handleReprintTableOrder = (ord, roundNumber) => {
+    if (!ord) return;
+    const roundLabel = roundNumber ? `Rodada #${roundNumber}` : `Pedido #${String(ord.id).slice(-4).toUpperCase()}`;
+    const reprintOrder = {
+      ...ord,
+      notes: ord.notes
+        ? `[2a VIA - ${roundLabel}] ${ord.notes}`
+        : `[2a VIA / REIMPRESSAO - ${roundLabel}]`,
+    };
+    manualPrintOrder(reprintOrder);
+  };
 
   // Open Table Form State
   const [openCustomerName, setOpenCustomerName] = useState("");
@@ -694,7 +716,7 @@ export default function TablesPage() {
       }
 
       toast.success(`${batchCount} mesas geradas com sucesso!`);
-      setIsBatchModalOpen(false);
+      setIsAddTableModalOpen(false);
       await loadAllData();
     } catch (err) {
       console.error("Erro ao gerar mesas em lote:", err);
@@ -707,7 +729,13 @@ export default function TablesPage() {
   // Delete an available table
   const handleDeleteTable = async (tableId, tableNum, e) => {
     e?.stopPropagation();
-    if (!window.confirm(`Tem certeza que deseja excluir a Mesa ${tableNum}?`)) return;
+    const ok = await appConfirm({
+      title: `Excluir Mesa ${tableNum}?`,
+      description: `Tem certeza que deseja excluir a Mesa ${tableNum}? Essa ação não pode ser desfeita.`,
+      confirmText: "Excluir Mesa",
+      variant: "danger",
+    });
+    if (!ok) return;
 
     try {
       await RestaurantTable.delete(tableId);
@@ -979,7 +1007,7 @@ export default function TablesPage() {
   };
 
   // Quick Release Table (1-click with safety validation)
-  const handleQuickReleaseTable = async (tableToRelease) => {
+  const handleQuickReleaseTable = async (tableToRelease, skipCashCheck = false) => {
     const tbl = tableToRelease || currentTable || selectedTable;
     if (!tbl) return;
 
@@ -989,12 +1017,27 @@ export default function TablesPage() {
       return;
     }
 
-    if (!window.confirm(`Deseja realmente liberar a Mesa ${tbl.table_number}? A conta será encerrada e a mesa voltará a ficar Livre.`)) {
+    if (!skipCashCheck && !cashSession.isCashDrawerOpen) {
+      const refreshed = await cashSession.refreshCashSession();
+      if (!refreshed?.isCashDrawerOpen) {
+        setPendingCashAction({ type: "release", table: tbl });
+        setShowOpenCashModal(true);
+        return;
+      }
+    }
+
+    const ok = await appConfirm({
+      title: `Liberar Mesa ${tbl.table_number}?`,
+      description: "A conta será encerrada e a mesa voltará a ficar Livre.",
+      confirmText: "Liberar Mesa",
+      variant: "success",
+    });
+    if (!ok) {
       return;
     }
 
     try {
-      const activeTenantId = getActiveTenantId() || "a0000000-0000-0000-0000-000000000001";
+      const activeTenantId = tbl.tenant_id || getActiveTenantId() || "a0000000-0000-0000-0000-000000000001";
       const cleanNum = (val) => String(val || "").replace(/^Mesa\s*/i, "").trim().toLowerCase();
       const thisNum = cleanNum(tbl.table_number);
       const targetSessionId = tbl.activeSession?.id;
@@ -1044,25 +1087,25 @@ export default function TablesPage() {
           }).eq("id", tbl.id));
         }
 
-        // Marca todos os pedidos da mesa como pagos e entregues
+        // Marca todos os pedidos em aberto da mesa como pagos e entregues (nunca toca em cancelados/já pagos)
         await safeExec(supabase.from("orders").update({
           payment_status: "paid",
           status: "entregue",
           payment_method: "liberacao_rapida"
-        }).match({ tenant_id: activeTenantId, table_number: String(tbl.table_number) }));
+        }).match({ tenant_id: activeTenantId, table_number: String(tbl.table_number) }).neq("status", "cancelado").neq("payment_status", "paid"));
 
         await safeExec(supabase.from("orders").update({
           payment_status: "paid",
           status: "entregue",
           payment_method: "liberacao_rapida"
-        }).match({ tenant_id: activeTenantId, table_number: `Mesa ${tbl.table_number}` }));
+        }).match({ tenant_id: activeTenantId, table_number: `Mesa ${tbl.table_number}` }).neq("status", "cancelado").neq("payment_status", "paid"));
 
         if (targetSessionId && !String(targetSessionId).startsWith("virtual_")) {
           await safeExec(supabase.from("orders").update({
             payment_status: "paid",
             status: "entregue",
             payment_method: "liberacao_rapida"
-          }).eq("table_session_id", targetSessionId));
+          }).eq("table_session_id", targetSessionId).neq("status", "cancelado").neq("payment_status", "paid"));
         }
       }
 
@@ -1097,10 +1140,7 @@ export default function TablesPage() {
     }
   };
 
-  // Abrir Modal de Recebimento com inicialização correta de saldo
-  const openSettlementModal = (table) => {
-    const current = table || currentTable || selectedTable;
-    if (!current) return;
+  const initializeSettlementModal = (current) => {
     setSelectedTable(current);
     setSelectedSession(current.activeSession || null);
     setIncludeServiceFee(isServiceFeeEnabled);
@@ -1121,6 +1161,23 @@ export default function TablesPage() {
     setCashGiven("");
     setPaymentMethod("dinheiro");
     setIsSettlementModalOpen(true);
+  };
+
+  // Abrir Modal de Recebimento com inicialização correta de saldo e trava de caixa fechado
+  const openSettlementModal = async (table) => {
+    const current = table || currentTable || selectedTable;
+    if (!current) return;
+
+    if (!cashSession.isCashDrawerOpen) {
+      const refreshed = await cashSession.refreshCashSession();
+      if (!refreshed?.isCashDrawerOpen) {
+        setPendingCashAction({ type: "settle", table: current });
+        setShowOpenCashModal(true);
+        return;
+      }
+    }
+
+    initializeSettlementModal(current);
   };
 
   // Registrar Pagamento Parcial / Amortização da Mesa (Mantém mesa aberta)
@@ -1427,7 +1484,6 @@ export default function TablesPage() {
         payment_status: "paid", 
         status: "entregue",
         payment_method: finalPaymentMethod,
-        payment_details: finalPaymentDetails,
       } : o));
 
       toast.success(`Mesa ${tbl.table_number} liquidada e liberada com sucesso! 🟢`);
@@ -1477,28 +1533,25 @@ export default function TablesPage() {
           }).eq("id", tbl.id));
         }
 
-        // Marca todos os pedidos da mesa como pagos e entregues
+        // Marca todos os pedidos em aberto da mesa como pagos e entregues (sem payment_details que não existe em orders e sem tocar em cancelados)
         await safeExecTbl(supabase.from("orders").update({
           payment_status: "paid",
           status: "entregue",
           payment_method: finalPaymentMethod,
-          payment_details: finalPaymentDetails,
-        }).match({ tenant_id: activeTenantId, table_number: String(tbl.table_number) }));
+        }).match({ tenant_id: activeTenantId, table_number: String(tbl.table_number) }).neq("status", "cancelado").neq("payment_status", "paid"));
 
         await safeExecTbl(supabase.from("orders").update({
           payment_status: "paid",
           status: "entregue",
           payment_method: finalPaymentMethod,
-          payment_details: finalPaymentDetails,
-        }).match({ tenant_id: activeTenantId, table_number: `Mesa ${tbl.table_number}` }));
+        }).match({ tenant_id: activeTenantId, table_number: `Mesa ${tbl.table_number}` }).neq("status", "cancelado").neq("payment_status", "paid"));
 
         if (targetSessionId && isRealSession) {
           await safeExecTbl(supabase.from("orders").update({
             payment_status: "paid",
             status: "entregue",
             payment_method: finalPaymentMethod,
-            payment_details: finalPaymentDetails,
-          }).eq("table_session_id", targetSessionId));
+          }).eq("table_session_id", targetSessionId).neq("status", "cancelado").neq("payment_status", "paid"));
         }
       }
 
@@ -1524,7 +1577,9 @@ export default function TablesPage() {
             status: "entregue",
             payment_status: "paid",
             payment_method: finalPaymentMethod,
-            payment_details: finalPaymentDetails,
+            ...(!ord.cash_session_id && cashSession.cashDrawerInfo?.sessionId
+              ? { cash_session_id: cashSession.cashDrawerInfo.sessionId }
+              : {}),
           }).catch(() => {});
         }
       }
@@ -1617,8 +1672,11 @@ export default function TablesPage() {
         ),
       };
 
-      await Order.create(orderData);
-      toast.success(`Pedido de ${personName} lançado na Mesa ${effectiveTable.table_number}! 🍻`);
+      const createdOrder = await Order.create(orderData);
+      if (createdOrder) {
+        enqueueOrders([createdOrder]);
+      }
+      toast.success(`Pedido de ${personName} lançado na Mesa ${effectiveTable.table_number}!`);
       setQuickCart([]);
       setQuickOrderPersonName("");
       setIsAddItemModalOpen(false);
@@ -1661,16 +1719,8 @@ export default function TablesPage() {
           </Button>
 
           <Button
-            onClick={() => setIsBatchModalOpen(true)}
-            variant="outline"
-            className="h-9 rounded-lg border-stone-300 font-semibold text-xs text-stone-700 hover:text-stone-900 hover:bg-stone-50 gap-1.5 cursor-pointer shadow-2xs"
-          >
-            <Layers className="w-3.5 h-3.5 text-stone-500" />
-            <span className="hidden md:inline">Gerar Lote</span>
-          </Button>
-
-          <Button
             onClick={() => {
+              setAddTableMode("single");
               setNewTableNumber(String(tables.length + 1));
               setIsAddTableModalOpen(true);
             }}
@@ -1682,75 +1732,24 @@ export default function TablesPage() {
         </div>
       </div>
 
-      {/* Cards de Métricas em Tempo Real */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
-        {/* Total */}
-        <div className="bg-white rounded-xl p-4 border border-stone-200 shadow-2xs flex items-center justify-between">
-          <div>
-            <p className="text-[11px] font-semibold text-stone-500 uppercase tracking-wide">Total de Mesas</p>
-            <p className="text-2xl font-bold font-mono text-stone-900 mt-0.5">{metrics.total}</p>
-          </div>
-          <div className="w-9 h-9 rounded-lg bg-stone-100 flex items-center justify-center text-stone-600">
-            <UtensilsCrossed className="w-4 h-4" />
-          </div>
-        </div>
+      {/* Banner de Status do Caixa (Abertura em 1 clique / Pedidos órfãos) */}
+      {(!cashSession.isCashDrawerOpen || cashSession.orphanOrders.length > 0) && (
+        <CashSessionBanner
+          isLoading={cashSession.isLoadingSession}
+          isCashDrawerOpen={cashSession.isCashDrawerOpen}
+          cashDrawerInfo={cashSession.cashDrawerInfo}
+          orphanOrders={cashSession.orphanOrders}
+          onOpenCashClick={() => {
+            setPendingCashAction(null);
+            setShowOpenCashModal(true);
+          }}
+          onAttachOrphans={cashSession.attachOrphans}
+          compactWhenOpenWithoutOrphans={false}
+        />
+      )}
 
-        {/* Livres */}
-        <div className="bg-white rounded-xl p-4 border border-stone-200 shadow-2xs flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              <p className="text-[11px] font-semibold text-stone-500 uppercase tracking-wide">Livres</p>
-            </div>
-            <p className="text-2xl font-bold font-mono text-emerald-700 mt-0.5">{metrics.available}</p>
-          </div>
-          <span className="text-xs font-semibold text-stone-400">
-            {metrics.total > 0 ? `${Math.round((metrics.available / metrics.total) * 100)}%` : "0%"}
-          </span>
-        </div>
-
-        {/* Ocupadas */}
-        <div className="bg-white rounded-xl p-4 border border-stone-200 shadow-2xs flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-amber-500" />
-              <p className="text-[11px] font-semibold text-stone-500 uppercase tracking-wide">Ocupadas</p>
-            </div>
-            <p className="text-2xl font-bold font-mono text-amber-800 mt-0.5">{metrics.occupied}</p>
-          </div>
-          <span className="text-xs font-semibold text-stone-400">
-            {metrics.total > 0 ? `${Math.round((metrics.occupied / metrics.total) * 100)}%` : "0%"}
-          </span>
-        </div>
-
-        {/* Pré-Conta */}
-        <div className="bg-white rounded-xl p-4 border border-stone-200 shadow-2xs flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-blue-500" />
-              <p className="text-[11px] font-semibold text-stone-500 uppercase tracking-wide">Pré-Conta</p>
-            </div>
-            <p className="text-2xl font-bold font-mono text-blue-800 mt-0.5">{metrics.billRequested}</p>
-          </div>
-          <span className="text-xs font-semibold text-stone-400">Aguardando</span>
-        </div>
-
-        {/* Consumo Aberto R$ */}
-        <div className="col-span-2 lg:col-span-1 bg-white rounded-xl p-4 border border-stone-200 shadow-2xs flex items-center justify-between">
-          <div>
-            <p className="text-[11px] font-semibold text-stone-500 uppercase tracking-wide">Consumo em Aberto</p>
-            <p className="text-xl font-bold font-mono text-stone-900 mt-0.5">
-              R$ {metrics.totalRevenueOpen.toFixed(2).replace(".", ",")}
-            </p>
-          </div>
-          <div className="w-9 h-9 rounded-lg bg-stone-100 flex items-center justify-center text-stone-600">
-            <Receipt className="w-4 h-4" />
-          </div>
-        </div>
-      </div>
-
-      {/* Barra de Filtros e Busca */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white p-3 rounded-xl border border-stone-200 shadow-2xs">
+      {/* Barra de Filtros, Consumo em Aberto e Busca */}
+      <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 bg-white p-3 rounded-xl border border-stone-200 shadow-2xs">
         {/* Tabs de Status */}
         <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
           <button
@@ -1805,23 +1804,55 @@ export default function TablesPage() {
           </button>
         </div>
 
-        {/* Input de Busca */}
-        <div className="relative w-full sm:w-64">
-          <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <Input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Buscar por mesa ou cliente..."
-            className="pl-9 h-9 rounded-lg border-stone-200 text-xs bg-stone-50/50 focus:bg-white"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+        {/* Consumo em Aberto + Input de Busca */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => setFilterStatus((prev) => (prev === "occupied" ? "all" : "occupied"))}
+            title="Clique para filtrar mesas ocupadas"
+            className={cn(
+              "h-9 px-3 rounded-lg border flex items-center justify-between sm:justify-start gap-2 text-xs transition-all cursor-pointer shrink-0",
+              metrics.totalRevenueOpen > 0
+                ? "bg-emerald-50/90 border-emerald-200 text-emerald-900 hover:bg-emerald-100/80"
+                : "bg-stone-50 border-stone-200 text-stone-500 hover:bg-stone-100"
+            )}
+          >
+            <span className="inline-flex items-center gap-1.5 font-medium">
+              <Receipt
+                className={cn(
+                  "w-3.5 h-3.5 shrink-0",
+                  metrics.totalRevenueOpen > 0 ? "text-emerald-700" : "text-stone-400"
+                )}
+              />
+              <span>Em aberto</span>
+            </span>
+            <span
+              className={cn(
+                "font-mono tabular-nums font-bold",
+                metrics.totalRevenueOpen > 0 ? "text-emerald-800" : "text-stone-600"
+              )}
             >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
+              R$ {metrics.totalRevenueOpen.toFixed(2).replace(".", ",")}
+            </span>
+          </button>
+
+          <div className="relative w-full sm:w-60">
+            <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar por mesa ou cliente..."
+              className="pl-9 h-9 rounded-lg border-stone-200 text-xs bg-stone-50/50 focus:bg-white"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1844,7 +1875,10 @@ export default function TablesPage() {
           </p>
           <div className="flex items-center justify-center gap-2">
             <Button
-              onClick={() => setIsBatchModalOpen(true)}
+              onClick={() => {
+                setAddTableMode("batch");
+                setIsAddTableModalOpen(true);
+              }}
               className="bg-stone-900 hover:bg-black text-white font-semibold text-xs h-9 px-4 rounded-lg gap-2 cursor-pointer shadow-xs"
             >
               <Layers className="w-4 h-4" />
@@ -2170,6 +2204,45 @@ export default function TablesPage() {
 
               {/* Corpo da Comanda */}
               <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4">
+                {currentTable.tableOrders.length > 0 && comandaViewMode !== "rounds" && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 px-3.5 rounded-2xl bg-stone-50 border border-stone-200/80">
+                    <div className="flex items-center gap-2 text-xs text-stone-700 font-semibold">
+                      <Printer className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                      <span>
+                        Último pedido: <strong>Rodada #{currentTable.tableOrders.length}</strong>
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          handleReprintTableOrder(
+                            currentTable.tableOrders[currentTable.tableOrders.length - 1],
+                            currentTable.tableOrders.length
+                          )
+                        }
+                        className="h-7 px-2.5 rounded-lg text-[11px] font-bold gap-1.5 bg-white border-emerald-200 text-emerald-800 hover:bg-emerald-50 cursor-pointer"
+                      >
+                        <Printer className="w-3 h-3" />
+                        Reimprimir Última Rodada
+                      </Button>
+                      {currentTable.tableOrders.length > 1 && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setComandaViewMode("rounds")}
+                          className="h-7 px-2 rounded-lg text-[11px] font-semibold text-stone-600 hover:text-stone-900 cursor-pointer"
+                        >
+                          Ver todas ({currentTable.tableOrders.length})
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {currentTable.tableOrders.length === 0 ? (
                   <div className="bg-gray-50 border border-dashed border-gray-200 rounded-3xl p-8 text-center">
                     <p className="text-xs text-gray-500 font-medium">Nenhum item lançado ainda nesta mesa.</p>
@@ -2323,28 +2396,50 @@ export default function TablesPage() {
                 ) : (
                   /* ABA 3: VISÃO POR RODADAS DE PEDIDO */
                   <div className="space-y-3">
-                    <p className="text-xs font-black uppercase tracking-wider text-gray-400 mb-2">
-                      Histórico Cronológico de Rodadas
-                    </p>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-black uppercase tracking-wider text-gray-400">
+                        Histórico Cronológico de Pedidos (Rodadas)
+                      </p>
+                      <span className="text-[11px] font-semibold text-stone-500">
+                        Reimprima qualquer pedido individualmente
+                      </span>
+                    </div>
                     {currentTable.tableOrders.map((ord, idx) => {
                       const items = Array.isArray(ord.items) ? ord.items : [];
                       const orderTime = ord.created_date ? new Date(ord.created_date).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
                       const personName = (ord.customer_name || "").trim() || `Mesa ${currentTable.table_number}`;
 
                       return (
-                        <div key={ord.id || idx} className="bg-white rounded-2xl p-4 border border-gray-200/90 shadow-2xs space-y-2">
-                          <div className="flex items-center justify-between text-xs font-bold text-gray-600 pb-2 border-b border-gray-100">
-                            <span className="flex items-center gap-2 text-gray-900">
+                        <div key={ord.id || idx} className="bg-white rounded-2xl p-4 border border-gray-200/90 shadow-2xs space-y-2 hover:border-emerald-200 transition-all">
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-gray-600 pb-2.5 border-b border-gray-100">
+                            <span className="flex items-center gap-2 text-gray-900 flex-wrap">
                               <span className="w-5 h-5 rounded-md bg-gray-100 text-gray-700 flex items-center justify-center text-[10px] font-black">
                                 #{idx + 1}
                               </span>
                               <span className="font-black">Rodada {idx + 1}</span>
-                              <span className="text-emerald-700 font-medium">👤 {personName}</span>
+                              <span className="inline-flex items-center gap-1 text-emerald-700 font-medium">
+                                <User className="w-3 h-3" />
+                                {personName}
+                              </span>
                               {orderTime && <span className="text-gray-400 font-normal">({orderTime})</span>}
                             </span>
-                            <span className="text-emerald-700 font-black text-sm">
-                              R$ {(Number(ord.total_amount || ord.total || 0)).toFixed(2).replace(".", ",")}
-                            </span>
+
+                            <div className="flex items-center gap-2.5">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleReprintTableOrder(ord, idx + 1)}
+                                className="h-7 px-2.5 rounded-lg text-[11px] font-bold gap-1.5 border-stone-200 text-stone-700 hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-200 cursor-pointer"
+                                title={`Reimprimir somente a Rodada #${idx + 1} na impressora (Bar/Cozinha)`}
+                              >
+                                <Printer className="w-3 h-3 text-emerald-700" />
+                                <span>Reimprimir Pedido</span>
+                              </Button>
+                              <span className="text-emerald-700 font-black text-sm">
+                                R$ {(Number(ord.total_amount || ord.total || 0)).toFixed(2).replace(".", ",")}
+                              </span>
+                            </div>
                           </div>
 
                           <div className="space-y-1.5 pt-1">
@@ -2790,7 +2885,7 @@ export default function TablesPage() {
             const isAccountFullyPaid = totalPaidSoFar >= totalAccount && totalAccount > 0;
 
             const enteredAmount = Number(partialPaymentAmount) || 0;
-            const isPartialLowerThanRemaining = enteredAmount > 0 && enteredAmount < (remainingToPay - 0.01);
+            const _isPartialLowerThanRemaining = enteredAmount > 0 && enteredAmount < (remainingToPay - 0.01);
 
             return (
               <div className="space-y-4 mt-1">
@@ -3338,178 +3433,232 @@ export default function TablesPage() {
           </div>
 
           {/* Grid de Displays para Recorte / Impressão */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 pt-4 print:grid-cols-2 print:gap-8">
-            {tablesWithSessions.map(table => {
-              const qrUrl = `${origin}/${storeSlug}/menu?mesa=${table.table_number}`;
+          {tablesWithSessions.length === 0 ? (
+            <div className="py-10 text-center space-y-2">
+              <p className="text-sm font-semibold text-gray-800">Nenhuma mesa cadastrada ainda</p>
+              <p className="text-xs text-gray-500">
+                Cadastre suas mesas em <strong>+ Nova Mesa</strong> para gerar os QR Codes automaticamente.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 pt-4 print:grid-cols-2 print:gap-8">
+              {tablesWithSessions.map(table => {
+                const qrUrl = `${origin}/${storeSlug}/menu?mesa=${table.table_number}`;
 
-              return (
-                <div
-                  key={table.id}
-                  className="rounded-3xl border-2 border-dashed border-gray-300 p-6 flex flex-col items-center text-center bg-white shadow-2xs print:border-solid print:border-gray-900"
-                >
-                  <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-[#047857] mb-2">
-                    <UtensilsCrossed className="w-4 h-4" />
+                return (
+                  <div
+                    key={table.id}
+                    className="rounded-3xl border-2 border-dashed border-gray-300 p-6 flex flex-col items-center text-center bg-white shadow-2xs print:border-solid print:border-gray-900"
+                  >
+                    <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-[#047857] mb-2">
+                      <UtensilsCrossed className="w-4 h-4" />
+                    </div>
+
+                    <p className="text-xs font-black uppercase tracking-wider text-gray-500">
+                      {settings?.restaurant_name || "PedeMuleke"}
+                    </p>
+
+                    <h3 className="text-3xl font-black text-gray-950 mt-1 mb-3">
+                      Mesa {table.table_number}
+                    </h3>
+
+                    <div className="p-3 bg-white rounded-2xl border border-gray-200 shadow-xs mb-3">
+                      <QRCodeCanvas
+                        value={qrUrl}
+                        size={160}
+                        level="H"
+                        includeMargin={false}
+                      />
+                    </div>
+
+                    <p className="text-xs font-bold text-gray-900 leading-tight">
+                      Aponte a câmera do celular
+                    </p>
+                    <p className="text-[11px] text-gray-500 mt-0.5">
+                      Faça seu pedido diretamente da mesa sem esperar garçom!
+                    </p>
                   </div>
-
-                  <p className="text-xs font-black uppercase tracking-wider text-gray-500">
-                    {settings?.restaurant_name || "PedeMuleke"}
-                  </p>
-
-                  <h3 className="text-3xl font-black text-gray-950 mt-1 mb-3">
-                    Mesa {table.table_number}
-                  </h3>
-
-                  <div className="p-3 bg-white rounded-2xl border border-gray-200 shadow-xs mb-3">
-                    <QRCodeCanvas
-                      value={qrUrl}
-                      size={160}
-                      level="H"
-                      includeMargin={false}
-                    />
-                  </div>
-
-                  <p className="text-xs font-bold text-gray-900 leading-tight">
-                    Aponte a câmera do celular
-                  </p>
-                  <p className="text-[11px] text-gray-500 mt-0.5">
-                    Faça seu pedido diretamente da mesa sem esperar garçom!
-                  </p>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
-      {/* MODAL: NOVA MESA */}
+      {/* MODAL UNIFICADO: NOVA MESA (1 MESA OU VÁRIAS EM LOTE) */}
       <Dialog open={isAddTableModalOpen} onOpenChange={setIsAddTableModalOpen}>
         <DialogContent className="max-w-md rounded-3xl p-6 bg-white border border-gray-200 shadow-2xl">
           <DialogHeader>
-            <DialogTitle className="text-xl font-black text-gray-950">Cadastrar Nova Mesa</DialogTitle>
+            <DialogTitle className="text-xl font-black text-gray-950">Cadastrar Mesas</DialogTitle>
             <DialogDescription className="text-xs text-gray-500">
-              Adicione uma nova mesa física ou área ao seu salão.
+              Adicione uma mesa específica ou gere várias mesas de uma vez para o seu salão.
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleAddTable} className="space-y-4 mt-2">
-            <div>
-              <label className="text-xs font-bold text-gray-700 block mb-1">
-                Número ou Identificador da Mesa *
-              </label>
-              <Input
-                value={newTableNumber}
-                onChange={(e) => setNewTableNumber(e.target.value)}
-                placeholder="Ex: 11, 12, Varanda 1..."
-                className="h-10 rounded-xl text-sm"
-                required
-                autoFocus
-              />
-            </div>
+          <div className="grid grid-cols-2 gap-1.5 bg-stone-100 p-1 rounded-xl border border-stone-200 mt-1">
+            <button
+              type="button"
+              onClick={() => setAddTableMode("single")}
+              className={cn(
+                "py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+                addTableMode === "single"
+                  ? "bg-white text-stone-900 shadow-2xs"
+                  : "text-stone-600 hover:text-stone-900"
+              )}
+            >
+              1 Mesa
+            </button>
+            <button
+              type="button"
+              onClick={() => setAddTableMode("batch")}
+              className={cn(
+                "py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+                addTableMode === "batch"
+                  ? "bg-white text-stone-900 shadow-2xs"
+                  : "text-stone-600 hover:text-stone-900"
+              )}
+            >
+              Várias (em lote)
+            </button>
+          </div>
 
-            <div>
-              <label className="text-xs font-bold text-gray-700 block mb-1">
-                Setor / Ambiente
-              </label>
-              <Input
-                value={newTableLabel}
-                onChange={(e) => setNewTableLabel(e.target.value)}
-                placeholder="Ex: Salão Principal, Deck, Área Externa"
-                className="h-10 rounded-xl text-sm"
-              />
-            </div>
+          {addTableMode === "single" ? (
+            <form onSubmit={handleAddTable} className="space-y-4 mt-2">
+              <div>
+                <label className="text-xs font-bold text-gray-700 block mb-1">
+                  Número ou Identificador da Mesa *
+                </label>
+                <Input
+                  value={newTableNumber}
+                  onChange={(e) => setNewTableNumber(e.target.value)}
+                  placeholder="Ex: 11, 12, Varanda 1..."
+                  className="h-10 rounded-xl text-sm"
+                  required
+                  autoFocus
+                />
+              </div>
 
-            <div>
-              <label className="text-xs font-bold text-gray-700 block mb-1">
-                Capacidade (Pessoas)
-              </label>
-              <Input
-                type="number"
-                min="1"
-                max="50"
-                value={newTableCapacity}
-                onChange={(e) => setNewTableCapacity(e.target.value)}
-                className="h-10 rounded-xl text-sm"
-              />
-            </div>
+              <div>
+                <label className="text-xs font-bold text-gray-700 block mb-1">
+                  Setor / Ambiente
+                </label>
+                <Input
+                  value={newTableLabel}
+                  onChange={(e) => setNewTableLabel(e.target.value)}
+                  placeholder="Ex: Salão Principal, Deck, Área Externa"
+                  className="h-10 rounded-xl text-sm"
+                />
+              </div>
 
-            <div className="pt-3 flex items-center justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsAddTableModalOpen(false)}
-                className="h-10 rounded-xl font-bold cursor-pointer"
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="submit"
-                disabled={isAddingTable}
-                className="h-10 px-5 rounded-xl bg-[#047857] hover:bg-[#036348] text-white font-bold cursor-pointer shadow-sm"
-              >
-                {isAddingTable ? "Salvando..." : "Criar Mesa"}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+              <div>
+                <label className="text-xs font-bold text-gray-700 block mb-1">
+                  Capacidade (Pessoas)
+                </label>
+                <Input
+                  type="number"
+                  min="1"
+                  max="50"
+                  value={newTableCapacity}
+                  onChange={(e) => setNewTableCapacity(e.target.value)}
+                  className="h-10 rounded-xl text-sm"
+                />
+              </div>
 
-      {/* MODAL: GERAR MESAS EM LOTE */}
-      <Dialog open={isBatchModalOpen} onOpenChange={setIsBatchModalOpen}>
-        <DialogContent className="max-w-md rounded-3xl p-6 bg-white border border-gray-200 shadow-2xl">
-          <DialogHeader>
-            <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-[#047857] mb-2">
-              <Layers className="w-6 h-6" />
-            </div>
-            <DialogTitle className="text-xl font-black text-gray-950">Gerar Mesas em Lote</DialogTitle>
-            <DialogDescription className="text-xs text-gray-500">
-              Gere de forma instantânea a numeração sequencial de mesas para o seu restaurante.
-            </DialogDescription>
-          </DialogHeader>
+              <div className="pt-3 flex items-center justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsAddTableModalOpen(false)}
+                  className="h-10 rounded-xl font-bold cursor-pointer"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isAddingTable}
+                  className="h-10 px-5 rounded-xl bg-[#047857] hover:bg-[#036348] text-white font-bold cursor-pointer shadow-sm"
+                >
+                  {isAddingTable ? "Salvando..." : "Criar Mesa"}
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <div className="space-y-4 mt-2">
+              <div>
+                <label className="text-xs font-bold text-gray-700 block mb-1.5">
+                  Quantidade de Mesas para Gerar (1 até N)
+                </label>
+                <div className="flex items-center gap-2">
+                  {[5, 10, 15, 20, 30].map(cnt => (
+                    <button
+                      key={cnt}
+                      type="button"
+                      onClick={() => setBatchCount(cnt)}
+                      className={cn(
+                        "flex-1 h-9 rounded-xl text-xs font-bold transition-all border cursor-pointer",
+                        batchCount === cnt
+                          ? "bg-[#047857] text-white border-[#047857]"
+                          : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
+                      )}
+                    >
+                      {cnt}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-stone-500 mt-2">
+                  Mesas que já existem não são duplicadas; apenas as faltantes serão criadas.
+                </p>
+              </div>
 
-          <div className="space-y-4 mt-2">
-            <div>
-              <label className="text-xs font-bold text-gray-700 block mb-1">
-                Quantidade de Mesas para Gerar
-              </label>
-              <div className="flex items-center gap-2">
-                {[5, 10, 15, 20, 30].map(cnt => (
-                  <button
-                    key={cnt}
-                    type="button"
-                    onClick={() => setBatchCount(cnt)}
-                    className={cn(
-                      "flex-1 h-9 rounded-xl text-xs font-bold transition-all border cursor-pointer",
-                      batchCount === cnt
-                        ? "bg-[#047857] text-white border-[#047857]"
-                        : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100"
-                    )}
-                  >
-                    {cnt}
-                  </button>
-                ))}
+              <div className="pt-3 flex items-center justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsAddTableModalOpen(false)}
+                  className="h-10 rounded-xl font-bold cursor-pointer"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleBatchGenerate}
+                  disabled={isGeneratingBatch}
+                  className="h-10 px-5 rounded-xl bg-[#047857] hover:bg-[#036348] text-white font-bold cursor-pointer shadow-sm"
+                >
+                  {isGeneratingBatch ? "Gerando..." : `Gerar ${batchCount} Mesas`}
+                </Button>
               </div>
             </div>
-
-            <div className="pt-3 flex items-center justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsBatchModalOpen(false)}
-                className="h-10 rounded-xl font-bold cursor-pointer"
-              >
-                Cancelar
-              </Button>
-              <Button
-                onClick={handleBatchGenerate}
-                disabled={isGeneratingBatch}
-                className="h-10 px-5 rounded-xl bg-[#047857] hover:bg-[#036348] text-white font-bold cursor-pointer shadow-sm"
-              >
-                {isGeneratingBatch ? "Gerando..." : `Gerar ${batchCount} Mesas`}
-              </Button>
-            </div>
-          </div>
+          )}
         </DialogContent>
       </Dialog>
+
+      {/* Abertura de Caixa em 1 Clique para Recebimento de Comandas */}
+      <OpenCashModal
+        isOpen={showOpenCashModal}
+        onClose={() => {
+          setShowOpenCashModal(false);
+          setPendingCashAction(null);
+        }}
+        currentOperator={cashSession.cashDrawerInfo?.operator}
+        orphanOrders={cashSession.orphanOrders}
+        reasonBanner={
+          pendingCashAction
+            ? "Para receber ou encerrar a comanda desta mesa com segurança no caixa, abra o turno agora."
+            : null
+        }
+        onConfirmOpen={async (payload) => {
+          const res = await cashSession.openCashSession(payload);
+          const pending = pendingCashAction;
+          setPendingCashAction(null);
+          if (pending?.type === "settle" && pending?.table) {
+            initializeSettlementModal(pending.table);
+          } else if (pending?.type === "release" && pending?.table) {
+            handleQuickReleaseTable(pending.table, true);
+          }
+          return res;
+        }}
+      />
     </div>
   );
 }

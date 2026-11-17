@@ -42,7 +42,7 @@ export default function AdminLoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Pré-preenche o slug da loja a partir da URL, state ou storage e detecta retorno de recuperação
+  // Pré-preenche o slug da loja a partir da URL, state ou storage
   useEffect(() => {
     const segments = window.location.pathname.split("/").filter(Boolean);
     const RESERVED = ["login", "adminlogin", "superadmin", "menu", "myorders", "home", "printorder", "dashboard", "orders", "settings"];
@@ -57,7 +57,10 @@ export default function AdminLoginPage() {
     if (detectedSlug && detectedSlug !== "undefined" && detectedSlug !== "null") {
       setStoreSlug(detectedSlug);
     }
+  }, [location.state]);
 
+  // Detecta retorno de recuperação de senha pela URL ou AuthContext
+  useEffect(() => {
     if (
       isPasswordRecovery ||
       window.location.hash.includes("type=recovery") ||
@@ -77,7 +80,7 @@ export default function AdminLoginPage() {
     });
 
     return () => subscription?.unsubscribe();
-  }, [isPasswordRecovery, location.state]);
+  }, [isPasswordRecovery]);
 
   // Carrega Código da Loja e Usuário (somente leitura) ao entrar na tela de redefinição de senha
   useEffect(() => {
@@ -166,6 +169,29 @@ export default function AdminLoginPage() {
     }
   };
 
+  const exitRecoveryToLogin = async (preserveFields = false) => {
+    try {
+      await supabase.auth.signOut();
+    } catch (_e) {}
+    localStorage.removeItem("admin_auth");
+    localStorage.removeItem("admin_user");
+    clearPasswordRecovery();
+
+    if (preserveFields) {
+      if (recoveryInfo.storeCode) setStoreSlug(recoveryInfo.storeCode);
+      if (recoveryInfo.username) setUsername(recoveryInfo.username);
+    }
+
+    setNewPassword("");
+    setConfirmNewPassword("");
+    setPassword("");
+    setAuthMode("login");
+    navigate("/login", {
+      replace: true,
+      state: preserveFields && recoveryInfo.storeCode ? { slug: recoveryInfo.storeCode } : null,
+    });
+  };
+
   const handleUpdateRecoveredPassword = async (e) => {
     e.preventDefault();
     setError("");
@@ -192,25 +218,7 @@ export default function AdminLoginPage() {
         return;
       }
 
-      try {
-        await supabase.auth.signOut();
-      } catch (_e) {}
-      localStorage.removeItem("admin_auth");
-      localStorage.removeItem("admin_user");
-      clearPasswordRecovery();
-      window.history.replaceState(null, "", window.location.pathname);
-
-      if (recoveryInfo.storeCode) {
-        setStoreSlug(recoveryInfo.storeCode);
-      }
-      if (recoveryInfo.username) {
-        setUsername(recoveryInfo.username);
-      }
-
-      setNewPassword("");
-      setConfirmNewPassword("");
-      setPassword("");
-      setAuthMode("login");
+      await exitRecoveryToLogin(true);
       setSuccessMessage("Senha redefinida com sucesso! Faça login com sua nova senha.");
     } catch (_err) {
       setError("Erro ao salvar nova senha. Tente novamente.");
@@ -518,12 +526,7 @@ export default function AdminLoginPage() {
                     onClick={async () => {
                       setError("");
                       setSuccessMessage("");
-                      try {
-                        await supabase.auth.signOut();
-                      } catch (_e) {}
-                      clearPasswordRecovery();
-                      window.history.replaceState(null, "", window.location.pathname);
-                      setAuthMode("login");
+                      await exitRecoveryToLogin(false);
                     }}
                     className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-stone-600 hover:text-stone-900 py-1.5 cursor-pointer"
                   >

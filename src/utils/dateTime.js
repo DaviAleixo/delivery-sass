@@ -95,3 +95,52 @@ export function formatInBrasilia(
 
   return `${dateStr}${separator}${timeStr}`;
 }
+
+/**
+ * Retorna os dados da data considerando a virada do dia comercial (Business Day Cutoff).
+ * Ex: Se o cutoff for "04:00" (4h da manhã), qualquer pedido feito entre 00:00 e 03:59:59
+ * é contabilizado como pertencente ao expediente da noite anterior (D - 1 dia).
+ * Se o cutoff for "00:00", o dia comercial coincide exatamente com o dia civil.
+ *
+ * @param {Date|string|number} dateInput
+ * @param {string} cutoffTime - Horário no formato "HH:mm", ex: "04:00"
+ * @param {string} timeZone
+ */
+export function getBusinessDayParts(
+  dateInput = new Date(),
+  cutoffTime = "04:00",
+  timeZone = BRASILIA_TIMEZONE
+) {
+  const d = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  const validDate = isNaN(d.getTime()) ? new Date() : d;
+  const parts = getBrasiliaParts(validDate, timeZone);
+
+  let cutoffMinutes = 240; // 04:00 por padrão
+  if (cutoffTime && typeof cutoffTime === "string") {
+    const [h, m] = cutoffTime.split(":").map((v) => parseInt(v, 10));
+    if (!isNaN(h)) {
+      cutoffMinutes = h * 60 + (isNaN(m) ? 0 : m);
+    }
+  }
+
+  // Se o pedido ocorreu antes do horário de corte da madrugada, retroage 24 horas
+  if (cutoffMinutes > 0 && parts.minutesOfDay < cutoffMinutes) {
+    const shiftedDate = new Date(validDate.getTime() - 24 * 60 * 60 * 1000);
+    const shiftedParts = getBrasiliaParts(shiftedDate, timeZone);
+    return {
+      ...parts,
+      businessDateKey: shiftedParts.dateKey,
+      businessDayOfWeek: shiftedParts.dayOfWeek,
+      isOvernightShift: true,
+      cutoffTime,
+    };
+  }
+
+  return {
+    ...parts,
+    businessDateKey: parts.dateKey,
+    businessDayOfWeek: parts.dayOfWeek,
+    isOvernightShift: false,
+    cutoffTime,
+  };
+}

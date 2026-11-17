@@ -25,7 +25,7 @@ import {
   Save,
 } from "lucide-react";
 import { generateWhatsAppClosingText } from "@/utils/shiftClosingWhatsAppFormatter";
-import { calculateShiftClosing, getStoreShiftInfo } from "@/utils/shiftClosingCalculator";
+import { calculateShiftClosing, getStoreShiftInfo, SHOW_DRIVER_CLOSING_SECTIONS } from "@/utils/shiftClosingCalculator";
 import { ShiftClosing } from "@/entities/ShiftClosing";
 import { getBrasiliaParts } from "@/utils/dateTime";
 import { createPageUrl } from "@/utils";
@@ -434,7 +434,7 @@ export default function ShiftClosingModal({
                   </p>
                 </div>
 
-                {drivers.hasDrivers && cashDrawer.cashCollectedByDrivers > 0 ? (
+                {SHOW_DRIVER_CLOSING_SECTIONS && drivers.hasDrivers && cashDrawer.cashCollectedByDrivers > 0 ? (
                   <div className="space-y-1.5 pt-1">
                     <div className="flex justify-between text-stone-600">
                       <span>• Balcão / Entrada Direta no Caixa:</span>
@@ -459,7 +459,8 @@ export default function ShiftClosingModal({
           </div>
 
           {/* 3. Seção Adaptativa de Entregadores */}
-          {drivers.hasDrivers ? (
+          {SHOW_DRIVER_CLOSING_SECTIONS && (
+            drivers.hasDrivers ? (
             <div className="p-4 sm:p-5 rounded-2xl border border-orange-200/90 bg-orange-50/40 space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-orange-200/60 pb-2">
                 <div className="flex items-center gap-2">
@@ -583,6 +584,7 @@ export default function ShiftClosingModal({
                 </p>
               </div>
             </div>
+          )
           )}
         </div>
 

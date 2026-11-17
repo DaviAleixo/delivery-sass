@@ -1,4 +1,5 @@
 import React from "react";
+import { SHOW_DRIVER_CLOSING_SECTIONS } from "@/utils/shiftClosingCalculator";
 
 export default function ShiftClosingThermalSlip({ closingData, storeName = "Restaurante", cashierName = "Operador" }) {
   if (!closingData) return null;
@@ -112,11 +113,77 @@ export default function ShiftClosingThermalSlip({ closingData, storeName = "Rest
         <div className="text-[11px] font-black uppercase tracking-wider mb-1">
           CONFERÊNCIA DA GAVETA
         </div>
-        <div className="flex justify-between font-black text-xs">
-          <span>TOTAL ESPERADO EM DINHEIRO:</span>
-          <span>{formatMoney(cashDrawer.totalCashExpected)}</span>
+        {(cashDrawer.initialFloat !== undefined || closingData.initialFloat !== undefined) && (
+          <div className="flex justify-between text-[11px]">
+            <span>(+) Troco Inicial:</span>
+            <span className="font-bold">{formatMoney(cashDrawer.initialFloat ?? closingData.initialFloat ?? 0)}</span>
+          </div>
+        )}
+        <div className="flex justify-between text-[11px]">
+          <span>(+) Vendas em Dinheiro:</span>
+          <span className="font-bold">
+            {formatMoney(cashDrawer.cashSales ?? cashDrawer.totalCashExpected ?? 0)}
+          </span>
         </div>
-        {drivers.hasDrivers && cashDrawer.cashCollectedByDrivers > 0 && (
+        {Number(cashDrawer.supplies ?? cashDrawer.totalSupplies ?? 0) > 0 && (
+          <div className="flex justify-between text-[11px]">
+            <span>(+) Suprimentos:</span>
+            <span className="font-bold">+{formatMoney(cashDrawer.supplies ?? cashDrawer.totalSupplies)}</span>
+          </div>
+        )}
+        {Number(cashDrawer.bleeds ?? cashDrawer.totalBleeds ?? 0) > 0 && (
+          <div className="flex justify-between text-[11px]">
+            <span>(-) Sangrias:</span>
+            <span className="font-bold">-{formatMoney(cashDrawer.bleeds ?? cashDrawer.totalBleeds)}</span>
+          </div>
+        )}
+        {Number(cashDrawer.expenses ?? cashDrawer.totalExpenses ?? 0) > 0 && (
+          <div className="flex justify-between text-[11px]">
+            <span>(-) Despesas do Caixa:</span>
+            <span className="font-bold">-{formatMoney(cashDrawer.expenses ?? cashDrawer.totalExpenses)}</span>
+          </div>
+        )}
+        <div className="flex justify-between font-black text-xs pt-1 border-t border-dotted border-black">
+          <span>ESPERADO NA GAVETA:</span>
+          <span>
+            {formatMoney(
+              cashDrawer.expectedCashInDrawer ??
+                cashDrawer.expectedInDrawer ??
+                closingData.expectedCashInDrawer ??
+                cashDrawer.totalCashExpected
+            )}
+          </span>
+        </div>
+        {(cashDrawer.countedCash !== undefined || closingData.countedCash !== undefined) && (
+          <>
+            <div className="flex justify-between font-black text-xs">
+              <span>CONTADO NA GAVETA:</span>
+              <span>{formatMoney(cashDrawer.countedCash ?? closingData.countedCash)}</span>
+            </div>
+            {(() => {
+              const diff = Number(cashDrawer.difference ?? closingData.difference ?? 0);
+              const label =
+                Math.abs(diff) < 0.01
+                  ? "R$ 0,00 (EXATO)"
+                  : diff > 0
+                  ? `+${formatMoney(diff)} (SOBRA)`
+                  : `-${formatMoney(Math.abs(diff))} (FALTA)`;
+              return (
+                <div className="flex justify-between font-black text-xs">
+                  <span>QUEBRA / SOBRA:</span>
+                  <span>{label}</span>
+                </div>
+              );
+            })()}
+          </>
+        )}
+        {(cashDrawer.justification || closingData.justification) && (
+          <div className="text-[10px] pt-1 border-t border-dotted border-black whitespace-pre-wrap">
+            <span className="font-black uppercase block">Justificativa:</span>
+            <span>"{cashDrawer.justification || closingData.justification}"</span>
+          </div>
+        )}
+        {SHOW_DRIVER_CLOSING_SECTIONS && drivers.hasDrivers && cashDrawer.cashCollectedByDrivers > 0 && (
           <>
             <div className="flex justify-between text-[11px] pl-2 font-medium">
               <span>↳ Balcão / Caixa Direto:</span>
@@ -131,7 +198,7 @@ export default function ShiftClosingThermalSlip({ closingData, storeName = "Rest
       </div>
 
       {/* Bloco Adaptativo de Motoboys (Apenas se houver entregadores) */}
-      {drivers.hasDrivers && drivers.list.length > 0 && (
+      {SHOW_DRIVER_CLOSING_SECTIONS && drivers.hasDrivers && drivers.list.length > 0 && (
         <div className="py-2.5 border-b-2 border-dashed border-black space-y-2">
           <div className="text-[11px] font-black uppercase tracking-wider">
             ACERTO DE ENTREGADORES

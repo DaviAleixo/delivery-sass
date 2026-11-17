@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -28,13 +28,28 @@ export default function CashSupplyModal({
   currentOperator = "Operador",
 }) {
   const [amountStr, setAmountStr] = useState("");
-  const [reason, setReason] = useState("moedas");
+  const [reason, setReason] = useState("cofre");
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const quickNotes = [
+    "Reposição de moedas / troco miúdo",
+    "Reforço de troco para o turno",
+    "Retorno de troco de motoboy",
+  ];
+
+  useEffect(() => {
+    if (isOpen) {
+      setAmountStr("");
+      setReason("cofre");
+      setNotes("");
+      setIsSubmitting(false);
+    }
+  }, [isOpen]);
+
   const amountValue = parseBRLToNumber(amountStr);
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!amountValue || amountValue <= 0) {
       toast.error("Informe um valor válido para o suprimento.");
       return;
@@ -43,7 +58,7 @@ export default function CashSupplyModal({
     setIsSubmitting(true);
     try {
       if (typeof onConfirmSupply === "function") {
-        onConfirmSupply({
+        await onConfirmSupply({
           type: "supply",
           amount: amountValue,
           reason,
@@ -58,7 +73,7 @@ export default function CashSupplyModal({
       onClose();
     } catch (err) {
       console.error("[CashSupplyModal] Erro ao registrar suprimento:", err);
-      toast.error("Erro ao registrar suprimento.");
+      toast.error(err?.message || "Erro ao registrar suprimento.");
     } finally {
       setIsSubmitting(false);
     }
@@ -98,36 +113,48 @@ export default function CashSupplyModal({
             />
           </div>
 
-          {/* Origem / Motivo */}
+          {/* Origem do Dinheiro (Padrão Conta Azul / Omie / Bling) */}
           <div className="space-y-1.5">
             <Label className="text-xs font-semibold text-stone-700">
-              Origem / Motivo:
+              Origem do Dinheiro (De onde veio):
             </Label>
             <Select value={reason} onValueChange={setReason}>
               <SelectTrigger className="h-9.5 rounded-lg text-xs font-medium border-stone-200">
-                <SelectValue placeholder="Selecione o motivo" />
+                <SelectValue placeholder="Selecione a origem" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="moedas">Entrada de Moedas / Troco Miúdo</SelectItem>
-                <SelectItem value="reforco">Reforço de Troco pelo Gerente</SelectItem>
-                <SelectItem value="troca">Troca de Cédulas Altas por Miúdas</SelectItem>
-                <SelectItem value="outro">Outro Suprimento</SelectItem>
+                <SelectItem value="cofre">Cofre / Caixa Central da Loja</SelectItem>
+                <SelectItem value="gerente">Gerente / Proprietário</SelectItem>
+                <SelectItem value="banco">Conta Bancária (Saque p/ Troco)</SelectItem>
+                <SelectItem value="outro">Outra Origem</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          {/* Observações */}
+          {/* Motivo / Observação (Padrão Saipos / Consumer) */}
           <div className="space-y-1.5">
             <Label className="text-xs font-semibold text-stone-700">
-              Observações (Opcional):
+              Motivo / Observação (Opcional):
             </Label>
             <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Ex: R$ 50 em moedas de 0,50 e 1,00 para troco..."
+              placeholder="Ex: Busca de moedas no cofre para troco..."
               rows={2}
               className="resize-none rounded-lg text-xs border-stone-200 focus-visible:ring-blue-500"
             />
+            <div className="flex flex-wrap gap-1.5 pt-0.5">
+              {quickNotes.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  onClick={() => setNotes(suggestion)}
+                  className="text-[10px] font-medium px-2 py-1 rounded-md bg-stone-100 hover:bg-blue-50 text-stone-600 hover:text-blue-700 border border-stone-200 transition-colors cursor-pointer"
+                >
+                  + {suggestion}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Alerta de Auditoria */}

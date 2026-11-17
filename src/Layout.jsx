@@ -1,7 +1,7 @@
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { LayoutDashboard, Package, ShoppingBag, Settings, LogOut, Image as ImageIcon, Tag, BarChart, Folder, Users, Monitor, Layers, Flame, Lock, CreditCard, ExternalLink, RefreshCw, Bike, ChevronRight, ChevronDown, UtensilsCrossed, Wallet } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingBag, Settings, LogOut, Image as ImageIcon, Tag, BarChart, Folder, Users, Monitor, Layers, Flame, Lock, CreditCard, ExternalLink, RefreshCw, Bike, ChevronRight, ChevronDown, UtensilsCrossed, Wallet, CircleDollarSign } from "lucide-react";
 import { Settings as SettingsEntity } from "@/entities/Settings";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { isRealtimeChannelActive } from "@/lib/realtimeHub";
@@ -45,7 +45,7 @@ const navigationItems = [
     icon: ShoppingBag,
   },
   {
-    title: "KDS Cozinha",
+    title: "KDS",
     pageKey: "KDS",
     url: createPageUrl("KDS"),
     icon: Flame,
@@ -63,6 +63,12 @@ const navigationItems = [
     icon: Wallet,
   },
   {
+    title: "Financeiro",
+    pageKey: "Financial",
+    url: createPageUrl("Financial"),
+    icon: CircleDollarSign,
+  },
+  {
     title: "Salão & Mesas",
     pageKey: "Tables",
     url: createPageUrl("Tables"),
@@ -73,6 +79,7 @@ const navigationItems = [
     pageKey: "DeliveryDrivers",
     url: createPageUrl("DeliveryDrivers"),
     icon: Bike,
+    hidden: true,
   },
   {
     title: "Clientes",
@@ -409,6 +416,7 @@ export default function Layout({ children, currentPageName }) {
 
     return navigationItems
       .filter(item => {
+        if (item.hidden) return false;
         if (!hasPermission(item.pageKey)) return false;
         if (item.pageKey === "Tables" && (settings?.accepts_dine_in === false || isVisualOnly)) return false;
         if (isVisualOnly) {
@@ -687,8 +695,10 @@ export default function Layout({ children, currentPageName }) {
     const pageTitles = {
       Dashboard: "Dashboard",
       Orders: "Pedidos",
-      KDS: "KDS (Cozinha)",
+      KDS: "KDS",
       PDV: "PDV (Balcão)",
+      CashManagement: "Gestão de Caixa",
+      Financial: "Financeiro & Cofre",
       Tables: "Salão & Mesas",
       DeliveryDrivers: "Entregadores",
       Clients: "Clientes",
@@ -704,8 +714,8 @@ export default function Layout({ children, currentPageName }) {
     const storeStatus = getStoreStatusInfo(settings);
 
     return (
-      <SidebarProvider>
-        <div className="min-h-screen flex w-full bg-[#F7F9F8]">
+      <SidebarProvider className="min-h-screen w-full bg-[#F7F9F8]">
+        <div className="flex min-h-screen w-full bg-[#F7F9F8]">
           <Sidebar className="border-r border-gray-200/80 bg-white text-stone-900">
             {user?.role === "super_admin" && (
               <div className="p-2 bg-slate-900 border-b border-slate-800 flex items-center justify-between text-xs text-slate-200">
@@ -843,9 +853,9 @@ export default function Layout({ children, currentPageName }) {
             </SidebarFooter>
           </Sidebar>
 
-          <main className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+          <main className="flex-1 flex flex-col min-w-0 min-h-screen bg-[#F7F9F8]">
             {/* Top Navbar Moderna Idêntica à Foto (sem notificação) */}
-            <header className="bg-white border-b border-gray-150 px-4 md:px-6 py-2.5 shrink-0 flex items-center justify-between z-10">
+            <header className="bg-white border-b border-gray-150 px-4 md:px-6 py-2.5 shrink-0 flex items-center justify-between sticky top-0 z-20">
               <div className="flex items-center gap-3">
                 <SidebarTrigger className="text-gray-600 hover:text-gray-900 hover:bg-gray-100 p-2 rounded-xl transition-colors cursor-pointer" />
                 <h1 className="text-sm md:text-base font-bold text-gray-900">{currentPageTitle}</h1>
@@ -920,7 +930,7 @@ export default function Layout({ children, currentPageName }) {
               </div>
             </header>
 
-            <div className="flex-1 overflow-auto min-w-0 h-full">
+            <div className="flex-1 min-w-0">
               {children}
             </div>
           </main>

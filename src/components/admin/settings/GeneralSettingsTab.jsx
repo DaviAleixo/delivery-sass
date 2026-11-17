@@ -1,9 +1,20 @@
 import React from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MapPin, Search, Loader2, Bike, ShoppingBag, UtensilsCrossed, BellRing, Gift, Store } from "lucide-react";
-import { formatPhone } from "./settingsConstants";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import {
+  Store,
+  MapPin,
+  Clock,
+  Search,
+  Loader2,
+  Copy,
+  Phone,
+  Instagram,
+  Upload,
+} from "lucide-react";
+import { DAYS_CONFIG, getDayDisplayName, formatPhone, normalizeOpenDays } from "./settingsConstants";
 
 export default function GeneralSettingsTab({
   settings,
@@ -14,687 +25,415 @@ export default function GeneralSettingsTab({
   isUploadingLogo,
   isFetchingCep,
   cepError,
-  isVisualOnly = false,
-  isTableOnly = false,
+  handleToggleAllDays,
+  handleToggleDay,
+  handleDayTime,
+  handleCopyDayTimeToAll,
 }) {
+  const openDaysList = normalizeOpenDays(
+    settings.open_days,
+    settings.opening_time || "18:00",
+    settings.closing_time || "23:00"
+  );
+
   return (
     <div className="space-y-6">
-      {/* Identidade do Restaurante */}
-      <Card className="border border-stone-200 rounded-xl shadow-2xs bg-white">
-        <CardHeader className="border-b border-stone-100 pb-3">
-          <CardTitle className="text-base font-bold text-stone-900 flex items-center gap-2">
+      {/* SEÇÃO 1: IDENTIDADE DA LOJA & CONTATO */}
+      <div className="bg-white rounded-2xl border border-stone-200 shadow-2xs">
+        <div className="px-5 py-4 bg-stone-50/70 border-b border-stone-200/80 rounded-t-2xl">
+          <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
             <Store className="w-4 h-4 text-stone-700" />
-            <span>Identidade do Restaurante</span>
-          </CardTitle>
+            <span>Identidade do Estabelecimento & Canais de Contato</span>
+          </h3>
           <p className="text-xs text-stone-500 mt-0.5">
-            Nome exibido no cardápio online e logotipo da sua marca.
+            Dados principais exibidos no cabeçalho do seu cardápio online e no atendimento aos clientes.
           </p>
-        </CardHeader>
-        <CardContent className="space-y-4 pt-4">
-          <div>
-            <Label htmlFor="name" className="text-xs font-semibold text-stone-700">
-              Nome do Restaurante <span className="text-rose-500">*</span>
-            </Label>
-            <Input
-              id="name"
-              value={settings.restaurant_name}
-              onChange={(e) => handleInputChange("restaurant_name", e.target.value)}
-              placeholder="Digite o nome do seu restaurante"
-              className="mt-1 font-medium bg-white rounded-lg text-xs"
-            />
-          </div>
+        </div>
 
-          <div>
-            <Label htmlFor="logo" className="text-xs font-semibold text-stone-700">
-              Logo do Restaurante
-            </Label>
-            <Input
-              id="logo"
-              type="file"
-              accept="image/*"
-              onChange={handleLogoUpload}
-              disabled={isUploadingLogo}
-              className="mt-1 cursor-pointer bg-white rounded-lg text-xs"
-            />
-            {isUploadingLogo && (
-              <p className="text-xs text-amber-600 mt-1 font-medium animate-pulse">
-                Enviando e processando logo...
-              </p>
-            )}
-            {settings.restaurant_logo && !isUploadingLogo && (
-              <div className="mt-2 flex items-center gap-3">
-                <img
-                  src={settings.restaurant_logo}
-                  alt="Logo"
-                  className="w-16 h-16 object-cover rounded-lg border border-stone-200 shadow-2xs"
-                />
-                <span className="text-xs text-stone-500">Logo atual cadastrada</span>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Canais de Atendimento: Delivery & Retirada */}
-      {!isVisualOnly && !isTableOnly && (
-        <Card className="border border-stone-200 rounded-xl shadow-2xs bg-white">
-          <CardHeader className="border-b border-stone-100 pb-3">
-            <CardTitle className="text-base font-bold text-stone-900 flex items-center gap-2">
-              <Bike className="w-4 h-4 text-stone-700" />
-              <span>Canais de Atendimento (Delivery & Retirada)</span>
-            </CardTitle>
-            <p className="text-xs text-stone-500 mt-0.5">
-              Defina como seus clientes remotos podem receber os pedidos. Ideal para lojas que atendem apenas entrega, apenas retirada no balcão ou ambos.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4 pt-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Opção 1: Delivery */}
-              <div
-                onClick={() => handleInputChange("accepts_delivery", !(settings.accepts_delivery !== false))}
-                className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
-                  settings.accepts_delivery !== false
-                    ? "border-emerald-600 bg-emerald-50/30 shadow-2xs"
-                    : "border-stone-200 hover:border-stone-300 bg-stone-50/50 opacity-70"
-                }`}
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
-                      <Bike className="w-4 h-4 text-emerald-700" />
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={settings.accepts_delivery !== false}
-                      onChange={(e) => handleInputChange("accepts_delivery", e.target.checked)}
-                      className="accent-emerald-700 h-4 w-4 rounded cursor-pointer"
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  </div>
-                  <h4 className="font-semibold text-xs text-stone-900">
-                    Aceitar Pedidos para Delivery
-                  </h4>
-                  <p className="text-[11px] text-stone-500 mt-1 leading-relaxed">
-                    Clientes informam o endereço e pagam a taxa de entrega. O pedido entra na fila de despacho de entregadores.
-                  </p>
-                </div>
-                <div className="mt-3 pt-2 border-t border-stone-200/60 flex items-center justify-between">
-                  <span className={`text-[10px] font-semibold ${settings.accepts_delivery !== false ? "text-emerald-700" : "text-stone-400"}`}>
-                    {settings.accepts_delivery !== false ? "✓ Ativo no cardápio" : "✕ Desativado"}
-                  </span>
-                </div>
-              </div>
-
-              {/* Opção 2: Retirada */}
-              <div
-                onClick={() => handleInputChange("accepts_takeaway", !(settings.accepts_takeaway !== false))}
-                className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
-                  settings.accepts_takeaway !== false
-                    ? "border-emerald-600 bg-emerald-50/30 shadow-2xs"
-                    : "border-stone-200 hover:border-stone-300 bg-stone-50/50 opacity-70"
-                }`}
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="w-8 h-8 rounded-lg bg-stone-100 text-stone-800 flex items-center justify-center font-bold">
-                      <ShoppingBag className="w-4 h-4 text-stone-700" />
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={settings.accepts_takeaway !== false}
-                      onChange={(e) => handleInputChange("accepts_takeaway", e.target.checked)}
-                      className="accent-emerald-700 h-4 w-4 rounded cursor-pointer"
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  </div>
-                  <h4 className="font-semibold text-xs text-stone-900">
-                    Aceitar Retirada no Balcão
-                  </h4>
-                  <p className="text-[11px] text-stone-500 mt-1 leading-relaxed">
-                    O cliente faz o pedido pelo celular e vai buscar na sua loja com frete grátis. Não exige endereço nem taxa.
-                  </p>
-                </div>
-                <div className="mt-3 pt-2 border-t border-stone-200/60 flex items-center justify-between">
-                  <span className={`text-[10px] font-semibold ${settings.accepts_takeaway !== false ? "text-emerald-700" : "text-stone-400"}`}>
-                    {settings.accepts_takeaway !== false ? "✓ Ativo no cardápio" : "✕ Desativado"}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {settings.accepts_delivery === false && settings.accepts_takeaway === false && (
-              <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-700 font-medium">
-                Atenção: Se ambos estiverem desativados, seus clientes remotos não conseguirão finalizar pedidos. Recomendamos manter pelo menos um canal ativo.
-              </div>
-            )}
-
-            {settings.accepts_delivery !== false && (
-              <div
-                onClick={() => handleInputChange("auto_accept_delivery", !settings.auto_accept_delivery)}
-                className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-4 ${
-                  settings.auto_accept_delivery
-                    ? "border-emerald-600 bg-emerald-50/40 shadow-2xs"
-                    : "border-stone-200 hover:border-stone-300 bg-stone-50/60"
-                }`}
-              >
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-semibold text-xs text-stone-900">
-                      Aceitar Pedidos de Delivery Sozinho (Automático)
-                    </h4>
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        settings.auto_accept_delivery
-                          ? "bg-emerald-600 text-white"
-                          : "bg-stone-200 text-stone-600"
-                      }`}
-                    >
-                      {settings.auto_accept_delivery ? "LIGADO" : "MANUAL"}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-stone-500 leading-relaxed">
-                    Ligado: novos pedidos de Delivery já entram confirmados e disparam direto na Cozinha, Bar e Caixa sem precisar clicar em "Confirmar". Desligado: o pedido toca alarme em Pendentes até o caixa aceitar.
-                  </p>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={Boolean(settings.auto_accept_delivery)}
-                  onChange={(e) => handleInputChange("auto_accept_delivery", e.target.checked)}
-                  onClick={(e) => e.stopPropagation()}
-                  className="accent-emerald-700 h-4 w-4 rounded cursor-pointer shrink-0"
-                />
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Precificação de Pizzas Fracionadas (Meio a Meio) */}
-      <Card className="border border-stone-200 rounded-xl shadow-2xs bg-white">
-        <CardHeader className="border-b border-stone-100 pb-3">
-          <CardTitle className="text-base font-bold text-stone-900 flex items-center gap-2">
-            <UtensilsCrossed className="w-4 h-4 text-stone-700" />
-            <span>Regra de Cobrança de Pizzas (Meio a Meio)</span>
-          </CardTitle>
-          <p className="text-xs text-stone-500 mt-0.5">
-            Defina como o sistema calcula o valor final da pizza quando o cliente escolhe sabores de preços diferentes.
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-4 pt-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Opção 1: Maior Valor (Padrão) */}
-            <div
-              onClick={() => handleInputChange("pizza_pricing_rule", "highest_price")}
-              className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
-                settings.pizza_pricing_rule !== "average"
-                  ? "border-emerald-600 bg-emerald-50/30 shadow-2xs"
-                  : "border-stone-200 hover:border-stone-300 bg-white opacity-70"
-              }`}
-            >
+        <div className="p-5 space-y-5">
+          {/* Nome e Logotipo */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
+            <div className="md:col-span-8 space-y-4">
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="w-8 h-8 rounded-lg bg-stone-100 text-stone-700 flex items-center justify-center font-bold">
-                    <UtensilsCrossed className="w-4 h-4 text-stone-700" />
-                  </div>
-                  <input
-                    type="radio"
-                    name="pizza_pricing_rule"
-                    checked={settings.pizza_pricing_rule !== "average"}
-                    onChange={() => handleInputChange("pizza_pricing_rule", "highest_price")}
-                    className="accent-emerald-700 h-4 w-4 cursor-pointer"
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                </div>
-                <h4 className="font-semibold text-xs text-stone-900">
-                  Cobrar pelo Maior Valor (Padrão)
-                </h4>
-                <p className="text-[11px] text-stone-500 mt-1 leading-relaxed">
-                  Cobra o valor da pizza inteira do sabor mais caro selecionado. Modelo mais tradicional no Brasil (cobre custos operacionais de montagem).
-                </p>
-                <div className="mt-2.5 p-2 bg-stone-50 rounded-lg text-[11px] text-stone-600 font-mono">
-                  Ex: 1/2 R$ 40 + 1/2 R$ 60 = <strong className="text-stone-900 font-bold">R$ 60,00</strong>
-                </div>
-              </div>
-              <div className="mt-3 pt-2 border-t border-stone-200/60 flex items-center justify-between">
-                <span className={`text-[10px] font-semibold ${settings.pizza_pricing_rule !== "average" ? "text-emerald-700" : "text-stone-400"}`}>
-                  {settings.pizza_pricing_rule !== "average" ? "✓ Regra Ativa" : "Selecionar"}
-                </span>
-              </div>
-            </div>
-
-            {/* Opção 2: Média Proporcional */}
-            <div
-              onClick={() => handleInputChange("pizza_pricing_rule", "average")}
-              className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
-                settings.pizza_pricing_rule === "average"
-                  ? "border-emerald-600 bg-emerald-50/30 shadow-2xs"
-                  : "border-stone-200 hover:border-stone-300 bg-white opacity-70"
-              }`}
-            >
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="w-8 h-8 rounded-lg bg-stone-100 text-stone-700 flex items-center justify-center font-bold">
-                    <UtensilsCrossed className="w-4 h-4 text-stone-700" />
-                  </div>
-                  <input
-                    type="radio"
-                    name="pizza_pricing_rule"
-                    checked={settings.pizza_pricing_rule === "average"}
-                    onChange={() => handleInputChange("pizza_pricing_rule", "average")}
-                    className="accent-emerald-700 h-4 w-4 cursor-pointer"
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                </div>
-                <h4 className="font-semibold text-xs text-stone-900">
-                  Cobrar pela Média Proporcional
-                </h4>
-                <p className="text-[11px] text-stone-500 mt-1 leading-relaxed">
-                  Cobra exatamente 50% de cada sabor (ou 33% em 3 sabores). Modelo considerado mais transparente e justo pelo consumidor.
-                </p>
-                <div className="mt-2.5 p-2 bg-stone-50 rounded-lg text-[11px] text-stone-600 font-mono">
-                  Ex: 1/2 R$ 40 + 1/2 R$ 60 = <strong className="text-stone-900 font-bold">R$ 50,00</strong>
-                </div>
-              </div>
-              <div className="mt-3 pt-2 border-t border-stone-200/60 flex items-center justify-between">
-                <span className={`text-[10px] font-semibold ${settings.pizza_pricing_rule === "average" ? "text-emerald-700" : "text-stone-400"}`}>
-                  {settings.pizza_pricing_rule === "average" ? "✓ Regra Ativa" : "Selecionar"}
-                </span>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Taxa de Serviço do Salão & Mesas (10% Opcional) */}
-      {!isVisualOnly && (
-        <Card className="border border-stone-200 rounded-xl shadow-2xs bg-white">
-          <CardHeader className="border-b border-stone-100 pb-3">
-            <CardTitle className="text-base font-bold text-stone-900 flex items-center gap-2">
-              <BellRing className="w-4 h-4 text-stone-700" />
-              <span>Taxa de Serviço do Salão & Mesas</span>
-            </CardTitle>
-            <p className="text-xs text-stone-500 mt-0.5">
-              Defina se o restaurante inclui a taxa de serviço opcional para atendimento nas comandas e pré-contas de mesa.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4 pt-4">
-            <div
-              onClick={() => handleInputChange("table_service_fee_enabled", !settings.table_service_fee_enabled)}
-              className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
-                settings.table_service_fee_enabled
-                  ? "border-emerald-600 bg-emerald-50/30 shadow-2xs"
-                  : "border-stone-200 hover:border-stone-300 bg-stone-50/50 opacity-80"
-              }`}
-            >
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold shrink-0">
-                  <BellRing className="w-4 h-4 text-emerald-700" />
-                </div>
-                <div>
-                  <h4 className="font-semibold text-xs text-stone-900 flex items-center gap-2">
-                    <span>Cobrar Taxa de Serviço nas Mesas</span>
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${
-                      settings.table_service_fee_enabled 
-                        ? "bg-emerald-50 text-emerald-800 border-emerald-200" 
-                        : "bg-stone-100 text-stone-600 border-stone-200"
-                    }`}>
-                      {settings.table_service_fee_enabled ? "Ativo" : "Desativado"}
-                    </span>
-                  </h4>
-                  <p className="text-[11px] text-stone-500 mt-1 leading-relaxed">
-                    Quando ativado, a taxa é calculada automaticamente na comanda, no cupom impresso de pré-conta e no recebimento da mesa.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 shrink-0 self-end sm:self-center" onClick={(e) => e.stopPropagation()}>
-                <input
-                  type="checkbox"
-                  id="table_service_fee_enabled"
-                  checked={Boolean(settings.table_service_fee_enabled)}
-                  onChange={(e) => handleInputChange("table_service_fee_enabled", e.target.checked)}
-                  className="accent-emerald-700 h-4 w-4 rounded cursor-pointer"
-                />
-              </div>
-            </div>
-
-            {settings.table_service_fee_enabled && (
-              <div className="p-3.5 bg-stone-50/70 rounded-xl border border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <Label htmlFor="table_service_fee_rate" className="text-xs font-semibold text-stone-700 block">
-                    Porcentagem da Taxa de Serviço (%)
-                  </Label>
-                  <p className="text-[11px] text-stone-500 mt-0.5">
-                    Padrão no Brasil é 10%, mas você pode personalizar se necessário.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Input
-                    id="table_service_fee_rate"
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="1"
-                    value={settings.table_service_fee_rate ?? 10}
-                    onChange={(e) => handleInputChange("table_service_fee_rate", Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
-                    className="w-20 h-8 text-center font-mono font-bold text-xs bg-white border-stone-300 rounded-lg"
-                  />
-                  <span className="text-xs font-bold text-stone-700">%</span>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Programa de Cashback & Fidelidade da Loja */}
-      {!isVisualOnly && (
-        <Card className="border border-stone-200 rounded-xl shadow-2xs bg-white">
-          <CardHeader className="border-b border-stone-100 pb-3">
-            <CardTitle className="text-base font-bold text-stone-900 flex items-center gap-2">
-              <Gift className="w-4 h-4 text-stone-700" />
-              <span>Programa de Cashback da Loja</span>
-            </CardTitle>
-            <p className="text-xs text-stone-500 mt-0.5">
-              Devolva uma porcentagem em crédito virtual para o cliente gastar no próximo pedido dentro da sua loja. Aumenta a fidelidade e a recompra semanal.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4 pt-4">
-            <div
-              onClick={() => handleInputChange("cashback_enabled", !settings.cashback_enabled)}
-              className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
-                settings.cashback_enabled
-                  ? "border-emerald-600 bg-emerald-50/30 shadow-2xs"
-                  : "border-stone-200 hover:border-stone-300 bg-stone-50/50 opacity-80"
-              }`}
-            >
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold shrink-0">
-                  <Gift className="w-4 h-4 text-emerald-700" />
-                </div>
-                <div>
-                  <h4 className="font-semibold text-xs text-stone-900 flex items-center gap-2">
-                    <span>Ativar Cashback para Clientes</span>
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${
-                      settings.cashback_enabled 
-                        ? "bg-emerald-50 text-emerald-800 border-emerald-200" 
-                        : "bg-stone-100 text-stone-600 border-stone-200"
-                    }`}>
-                      {settings.cashback_enabled ? "Ativo" : "Desativado"}
-                    </span>
-                  </h4>
-                  <p className="text-[11px] text-stone-500 mt-1 leading-relaxed">
-                    Quando ativado, os clientes cadastrados acumulam crédito a cada pedido concluído para abater na próxima compra.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 shrink-0 self-end sm:self-center" onClick={(e) => e.stopPropagation()}>
-                <input
-                  type="checkbox"
-                  id="cashback_enabled"
-                  checked={Boolean(settings.cashback_enabled)}
-                  onChange={(e) => handleInputChange("cashback_enabled", e.target.checked)}
-                  className="accent-emerald-700 h-4 w-4 rounded cursor-pointer"
-                />
-              </div>
-            </div>
-
-            {settings.cashback_enabled && (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
-                {/* Porcentagem de Cashback */}
-                <div className="p-3.5 bg-stone-50/70 rounded-xl border border-stone-200 flex flex-col justify-between gap-2">
-                  <div>
-                    <Label htmlFor="cashback_rate" className="text-xs font-semibold text-stone-700 block">
-                      % de Volta por Pedido
-                    </Label>
-                    <p className="text-[11px] text-stone-500 mt-0.5">
-                      Padrão recomendado: 5% a 10%.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 mt-2">
-                    <Input
-                      id="cashback_rate"
-                      type="number"
-                      min="1"
-                      max="30"
-                      step="0.5"
-                      value={settings.cashback_rate ?? 5}
-                      onChange={(e) => handleInputChange("cashback_rate", Math.max(0.5, Math.min(30, Number(e.target.value) || 0)))}
-                      className="w-20 h-8 text-center font-mono font-bold text-xs bg-white border-stone-300 rounded-lg"
-                    />
-                    <span className="text-xs font-bold text-stone-700">%</span>
-                  </div>
-                </div>
-
-                {/* Validade do Saldo em Dias */}
-                <div className="p-3.5 bg-stone-50/70 rounded-xl border border-stone-200 flex flex-col justify-between gap-2">
-                  <div>
-                    <Label htmlFor="cashback_validity_days" className="text-xs font-semibold text-stone-700 block">
-                      Validade do Saldo
-                    </Label>
-                    <p className="text-[11px] text-stone-500 mt-0.5">
-                      Gera urgência para recomprar logo.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 mt-2">
-                    <Input
-                      id="cashback_validity_days"
-                      type="number"
-                      min="3"
-                      max="90"
-                      step="1"
-                      value={settings.cashback_validity_days ?? 15}
-                      onChange={(e) => handleInputChange("cashback_validity_days", Math.max(1, Math.min(180, Number(e.target.value) || 0)))}
-                      className="w-20 h-8 text-center font-mono font-bold text-xs bg-white border-stone-300 rounded-lg"
-                    />
-                    <span className="text-xs font-semibold text-stone-700">dias</span>
-                  </div>
-                </div>
-
-                {/* Trava Máxima de Abatimento por Pedido */}
-                <div className="p-3.5 bg-stone-50/70 rounded-xl border border-stone-200 flex flex-col justify-between gap-2">
-                  <div>
-                    <Label htmlFor="cashback_max_discount_percentage" className="text-xs font-semibold text-stone-700 block">
-                      Abatimento Máximo
-                    </Label>
-                    <p className="text-[11px] text-stone-500 mt-0.5">
-                      Trava anti-prejuízo (máx do pedido).
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 mt-2">
-                    <Input
-                      id="cashback_max_discount_percentage"
-                      type="number"
-                      min="10"
-                      max="100"
-                      step="5"
-                      value={settings.cashback_max_discount_percentage ?? 50}
-                      onChange={(e) => handleInputChange("cashback_max_discount_percentage", Math.max(10, Math.min(100, Number(e.target.value) || 0)))}
-                      className="w-20 h-8 text-center font-mono font-bold text-xs bg-white border-stone-300 rounded-lg"
-                    />
-                    <span className="text-xs font-bold text-stone-700">% máx</span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Informações de Contato e Localização */}
-      <Card className="border border-stone-200 rounded-xl shadow-2xs bg-white">
-        <CardHeader className="border-b border-stone-100 pb-3">
-          <CardTitle className="text-base font-bold text-stone-900 flex items-center gap-2">
-            <MapPin className="w-4 h-4 text-stone-700" />
-            <span>Contato & Endereço da Loja</span>
-          </CardTitle>
-          <p className="text-xs text-stone-500 mt-0.5">
-            Localização física da sua base e canais de atendimento direto.
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-4 pt-4">
-          <div>
-            <Label htmlFor="whatsapp" className="text-xs font-semibold text-stone-700">
-              WhatsApp da Loja <span className="text-rose-500">*</span>
-            </Label>
-            <Input
-              id="whatsapp"
-              type="tel"
-              value={settings.whatsapp}
-              onChange={(e) => handleInputChange("whatsapp", formatPhone(e.target.value))}
-              placeholder="(11) 99999-9999"
-              maxLength={15}
-              className="mt-1 font-mono text-xs bg-white rounded-lg"
-            />
-            <p className="text-[11px] text-stone-500 mt-1">
-              DDD e telefone para envio de pedidos e atendimento no WhatsApp.
-            </p>
-          </div>
-
-          {/* Endereço com CEP */}
-          <div className="pt-2 border-t border-stone-100 space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-              {/* CEP */}
-              <div className="sm:col-span-7">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="cep" className="text-xs font-semibold text-stone-700 flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-stone-600" />
-                    <span>CEP da Loja</span>
-                  </Label>
-                  {isFetchingCep && (
-                    <span className="text-[11px] text-emerald-700 font-semibold flex items-center gap-1 animate-pulse">
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                      Buscando CEP...
-                    </span>
-                  )}
-                </div>
-                <div className="relative mt-1">
-                  <Input
-                    id="cep"
-                    type="text"
-                    value={settings.cep || ""}
-                    onChange={handleCepChange}
-                    placeholder="00000-000"
-                    maxLength={9}
-                    className="font-mono text-xs pr-10 bg-white rounded-lg"
-                  />
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none">
-                    {isFetchingCep ? (
-                      <Loader2 className="w-4 h-4 animate-spin text-emerald-700" />
-                    ) : (
-                      <Search className="w-4 h-4" />
-                    )}
-                  </div>
-                </div>
-                {cepError ? (
-                  <p className="text-[11px] text-rose-600 font-medium mt-1">{cepError}</p>
-                ) : (
-                  <p className="text-[11px] text-stone-500 mt-1">
-                    Preenche rua, bairro, cidade e UF automaticamente.
-                  </p>
-                )}
-              </div>
-
-              {/* Número */}
-              <div className="sm:col-span-5">
-                <Label htmlFor="address_number" className="text-xs font-semibold text-stone-700 flex items-center gap-1">
-                  <span>Número da Casa / Loja</span>
-                  <span className="text-rose-500">*</span>
+                <Label htmlFor="restaurant_name" className="text-xs font-bold text-stone-800">
+                  Nome do Restaurante / Loja <span className="text-rose-500">*</span>
                 </Label>
                 <Input
-                  id="address_number"
-                  type="text"
-                  value={settings.address_number || ""}
-                  onChange={(e) => handleAddressFieldChange("address_number", e.target.value)}
-                  placeholder="Ex: 120 ou S/N"
-                  className="mt-1 font-mono text-xs bg-white rounded-lg"
+                  id="restaurant_name"
+                  value={settings.restaurant_name}
+                  onChange={(e) => handleInputChange("restaurant_name", e.target.value)}
+                  placeholder="Ex: PedeMuleke Hamburgueria & Chopp"
+                  className="mt-1 font-semibold text-xs bg-white rounded-lg h-9 border-stone-300"
                 />
                 <p className="text-[11px] text-stone-500 mt-1">
-                  Número do imóvel.
+                  Nome oficial que os clientes verão ao abrir o cardápio e no rastreamento de pedidos.
                 </p>
               </div>
+
+              {/* Telefones / Redes */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                <div>
+                  <Label htmlFor="whatsapp" className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
+                    <Phone className="w-3.5 h-3.5 text-stone-600" />
+                    <span>WhatsApp da Loja</span> <span className="text-rose-500">*</span>
+                  </Label>
+                  <Input
+                    id="whatsapp"
+                    type="tel"
+                    value={settings.whatsapp}
+                    onChange={(e) => handleInputChange("whatsapp", formatPhone(e.target.value))}
+                    placeholder="(11) 99999-9999"
+                    maxLength={15}
+                    className="mt-1 font-mono text-xs bg-white rounded-lg h-9 border-stone-300"
+                  />
+                  <p className="text-[10px] text-stone-500 mt-0.5">
+                    Número principal para contato no cardápio.
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="instagram" className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
+                    <Instagram className="w-3.5 h-3.5 text-stone-600" />
+                    <span>Instagram Oficial (Opcional)</span>
+                  </Label>
+                  <Input
+                    id="instagram"
+                    type="text"
+                    value={settings.instagram || ""}
+                    onChange={(e) => handleInputChange("instagram", e.target.value)}
+                    placeholder="@seurestaurante"
+                    className="mt-1 text-xs bg-white rounded-lg h-9 border-stone-300"
+                  />
+                  <p className="text-[10px] text-stone-500 mt-0.5">
+                    Perfil público para divulgar nas redes.
+                  </p>
+                </div>
+              </div>
             </div>
 
-            {/* Rua e Complemento */}
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-              <div className="sm:col-span-8">
-                <Label htmlFor="address_street" className="text-xs font-semibold text-stone-700">
-                  Rua / Avenida / Logradouro
-                </Label>
-                <Input
-                  id="address_street"
-                  type="text"
-                  value={settings.address_street || ""}
-                  onChange={(e) => handleAddressFieldChange("address_street", e.target.value)}
-                  placeholder="Ex: Av. Principal ou Rua das Flores"
-                  className="mt-1 text-xs bg-white rounded-lg"
-                />
-              </div>
+            {/* Logotipo da Marca */}
+            <div className="md:col-span-4 bg-stone-50/70 p-4 rounded-xl border border-stone-200/90 flex flex-col items-center justify-center text-center">
+              <Label className="text-xs font-bold text-stone-800 block mb-2">
+                Logotipo da Marca
+              </Label>
+              {settings.restaurant_logo ? (
+                <div className="relative group mb-3">
+                  <img
+                    src={settings.restaurant_logo}
+                    alt="Logo da Loja"
+                    className="w-20 h-20 object-cover rounded-xl border border-stone-200 shadow-2xs bg-white"
+                  />
+                </div>
+              ) : (
+                <div className="w-20 h-20 rounded-xl bg-stone-200/80 border border-stone-300 flex items-center justify-center text-stone-400 mb-3">
+                  <Store className="w-8 h-8 stroke-1" />
+                </div>
+              )}
 
-              <div className="sm:col-span-4">
-                <Label htmlFor="address_complement" className="text-xs font-semibold text-stone-700">
-                  Complemento (Opcional)
-                </Label>
-                <Input
-                  id="address_complement"
-                  type="text"
-                  value={settings.address_complement || ""}
-                  onChange={(e) => handleAddressFieldChange("address_complement", e.target.value)}
-                  placeholder="Ex: Loja 2, Fundos, Sala 3"
-                  className="mt-1 text-xs bg-white rounded-lg"
+              <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-stone-100 text-stone-700 font-semibold text-xs rounded-lg border border-stone-300 shadow-2xs transition-colors">
+                <Upload className="w-3.5 h-3.5 text-stone-500" />
+                <span>{settings.restaurant_logo ? "Alterar Logotipo" : "Enviar Imagem"}</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleLogoUpload}
+                  disabled={isUploadingLogo}
+                  className="hidden"
                 />
-              </div>
-            </div>
+              </label>
 
-            {/* Bairro, Cidade e UF */}
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-              <div className="sm:col-span-5">
-                <Label htmlFor="address_neighborhood" className="text-xs font-semibold text-stone-700">
-                  Bairro da Loja
-                </Label>
-                <Input
-                  id="address_neighborhood"
-                  type="text"
-                  value={settings.address_neighborhood || ""}
-                  onChange={(e) => handleAddressFieldChange("address_neighborhood", e.target.value)}
-                  placeholder="Ex: Centro"
-                  className="mt-1 text-xs bg-white rounded-lg"
-                />
-              </div>
-
-              <div className="sm:col-span-5">
-                <Label htmlFor="address_city" className="text-xs font-semibold text-stone-700">
-                  Cidade
-                </Label>
-                <Input
-                  id="address_city"
-                  type="text"
-                  value={settings.address_city || ""}
-                  onChange={(e) => handleAddressFieldChange("address_city", e.target.value)}
-                  placeholder="Ex: Belo Horizonte"
-                  className="mt-1 text-xs bg-white font-medium rounded-lg"
-                />
-              </div>
-
-              <div className="sm:col-span-2">
-                <Label htmlFor="address_state" className="text-xs font-semibold text-stone-700">
-                  UF
-                </Label>
-                <Input
-                  id="address_state"
-                  type="text"
-                  value={settings.address_state || ""}
-                  onChange={(e) => handleAddressFieldChange("address_state", e.target.value.toUpperCase())}
-                  placeholder="MG"
-                  maxLength={2}
-                  className="mt-1 text-xs bg-white uppercase text-center font-bold rounded-lg"
-                />
-              </div>
+              {isUploadingLogo && (
+                <p className="text-[11px] text-emerald-700 font-semibold mt-2 animate-pulse flex items-center gap-1">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Processando logo...
+                </p>
+              )}
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
+
+      {/* SEÇÃO 2: LOCALIZAÇÃO & ENDEREÇO DA BASE */}
+      <div className="bg-white rounded-2xl border border-stone-200 shadow-2xs">
+        <div className="px-5 py-4 bg-stone-50/70 border-b border-stone-200/80 rounded-t-2xl">
+          <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-stone-700" />
+            <span>Endereço Físico & Localização da Loja</span>
+          </h3>
+          <p className="text-xs text-stone-500 mt-0.5">
+            Endereço utilizado para cálculo de rota dos entregadores e ponto de retirada para clientes.
+          </p>
+        </div>
+
+        <div className="p-5">
+          <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
+            {/* Linha 1: CEP (4 cols) + Rua / Logradouro (8 cols) */}
+            <div className="sm:col-span-4">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="cep" className="text-xs font-bold text-stone-800">
+                  CEP da Loja
+                </Label>
+                {isFetchingCep && (
+                  <span className="text-[11px] text-emerald-700 font-semibold flex items-center gap-1 animate-pulse">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Buscando CEP...
+                  </span>
+                )}
+              </div>
+              <div className="relative mt-1">
+                <Input
+                  id="cep"
+                  type="text"
+                  value={settings.cep || ""}
+                  onChange={handleCepChange}
+                  placeholder="00000-000"
+                  maxLength={9}
+                  className="font-mono text-xs pr-10 bg-white rounded-lg h-9 border-stone-300 shadow-2xs"
+                />
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none">
+                  {isFetchingCep ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-emerald-700" />
+                  ) : (
+                    <Search className="w-4 h-4" />
+                  )}
+                </div>
+              </div>
+              {cepError ? (
+                <p className="text-[11px] text-rose-600 font-medium mt-1">{cepError}</p>
+              ) : (
+                <p className="text-[10px] text-stone-500 mt-0.5">
+                  Preenche rua, bairro e cidade automaticamente.
+                </p>
+              )}
+            </div>
+
+            {/* Rua / Logradouro */}
+            <div className="sm:col-span-8">
+              <Label htmlFor="address_street" className="text-xs font-bold text-stone-800">
+                Rua / Logradouro <span className="text-rose-500">*</span>
+              </Label>
+              <Input
+                id="address_street"
+                type="text"
+                value={settings.address_street || ""}
+                onChange={(e) => handleAddressFieldChange("address_street", e.target.value)}
+                placeholder="Ex: Alameda Dois de Novembro ou Rua Principal"
+                className="mt-1 text-xs bg-white rounded-lg h-9 border-stone-300 shadow-2xs"
+              />
+              <p className="text-[10px] text-stone-500 mt-0.5">
+                Nome da via pública do seu estabelecimento.
+              </p>
+            </div>
+
+            {/* Linha 2: Número (3 cols) + Complemento (4 cols) + Bairro (5 cols) */}
+            <div className="sm:col-span-3">
+              <Label htmlFor="address_number" className="text-xs font-bold text-stone-800">
+                Número <span className="text-rose-500">*</span>
+              </Label>
+              <Input
+                id="address_number"
+                type="text"
+                value={settings.address_number || ""}
+                onChange={(e) => handleAddressFieldChange("address_number", e.target.value)}
+                placeholder="Ex: 44 ou S/N"
+                className="mt-1 font-mono text-xs bg-white rounded-lg h-9 border-stone-300 shadow-2xs"
+              />
+              <p className="text-[10px] text-stone-500 mt-0.5">
+                Número do imóvel.
+              </p>
+            </div>
+
+            {/* Complemento */}
+            <div className="sm:col-span-4">
+              <Label htmlFor="address_complement" className="text-xs font-bold text-stone-800">
+                Complemento (Opcional)
+              </Label>
+              <Input
+                id="address_complement"
+                type="text"
+                value={settings.address_complement || ""}
+                onChange={(e) => handleAddressFieldChange("address_complement", e.target.value)}
+                placeholder="Ex: Loja 2, Fundos, Galpão A"
+                className="mt-1 text-xs bg-white rounded-lg h-9 border-stone-300 shadow-2xs"
+              />
+              <p className="text-[10px] text-stone-500 mt-0.5">
+                Informação adicional (sala, bloco, etc).
+              </p>
+            </div>
+
+            {/* Bairro */}
+            <div className="sm:col-span-5">
+              <Label htmlFor="address_neighborhood" className="text-xs font-bold text-stone-800">
+                Bairro <span className="text-rose-500">*</span>
+              </Label>
+              <Input
+                id="address_neighborhood"
+                type="text"
+                value={settings.address_neighborhood || ""}
+                onChange={(e) => handleAddressFieldChange("address_neighborhood", e.target.value)}
+                placeholder="Ex: Queluz, Centro"
+                className="mt-1 text-xs bg-white rounded-lg h-9 border-stone-300 shadow-2xs"
+              />
+              <p className="text-[10px] text-stone-500 mt-0.5">
+                Bairro onde a loja está situada.
+              </p>
+            </div>
+
+            {/* Linha 3: Cidade (9 cols) + UF (3 cols) */}
+            <div className="sm:col-span-9">
+              <Label htmlFor="address_city" className="text-xs font-bold text-stone-800">
+                Cidade <span className="text-rose-500">*</span>
+              </Label>
+              <Input
+                id="address_city"
+                type="text"
+                value={settings.address_city || ""}
+                onChange={(e) => handleAddressFieldChange("address_city", e.target.value)}
+                placeholder="Ex: Conselheiro Lafaiete"
+                className="mt-1 text-xs bg-white font-medium rounded-lg h-9 border-stone-300 shadow-2xs"
+              />
+              <p className="text-[10px] text-stone-500 mt-0.5">
+                Município sede do negócio.
+              </p>
+            </div>
+
+            <div className="sm:col-span-3">
+              <Label htmlFor="address_state" className="text-xs font-bold text-stone-800">
+                UF (Estado) <span className="text-rose-500">*</span>
+              </Label>
+              <Input
+                id="address_state"
+                type="text"
+                value={settings.address_state || ""}
+                onChange={(e) => handleAddressFieldChange("address_state", e.target.value.toUpperCase())}
+                placeholder="MG"
+                maxLength={2}
+                className="mt-1 text-xs bg-white uppercase text-center font-bold rounded-lg h-9 border-stone-300 shadow-2xs"
+              />
+              <p className="text-[10px] text-stone-500 mt-0.5">
+                Sigla UF (Ex: MG, SP, RJ).
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* SEÇÃO 3: DIAS E HORÁRIOS DE ATENDIMENTO (SEMANA) */}
+      <div className="bg-white rounded-2xl border border-stone-200 shadow-2xs">
+        <div className="px-5 py-4 bg-stone-50/70 border-b border-stone-200/80 rounded-t-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
+              <Clock className="w-4 h-4 text-stone-700" />
+              <span>Dias & Horários de Funcionamento da Loja</span>
+            </h3>
+            <p className="text-xs text-stone-500 mt-0.5">
+              Grade semanal que controla quando o cardápio online aceita pedidos de clientes automaticamente.
+            </p>
+          </div>
+
+          {/* Atalhos Rápidos */}
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => handleToggleAllDays && handleToggleAllDays(true)}
+              className="text-xs font-bold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer"
+            >
+              Marcar Todos
+            </button>
+            <span className="text-stone-300">•</span>
+            <button
+              type="button"
+              onClick={() => handleToggleAllDays && handleToggleAllDays(false)}
+              className="text-xs font-bold text-stone-500 hover:text-stone-700 hover:underline cursor-pointer"
+            >
+              Desmarcar Todos
+            </button>
+          </div>
+        </div>
+
+        <div className="divide-y divide-stone-100">
+          {DAYS_CONFIG.map((cfg) => {
+            const d = openDaysList.find(
+              (item) => item.day === cfg.day || Number(item.day) === cfg.day
+            ) || { day: cfg.day, enabled: false, opening_time: "18:00", closing_time: "23:00" };
+
+            const isEnabled = Boolean(d.enabled);
+
+            return (
+              <div
+                key={cfg.day}
+                className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors ${
+                  isEnabled ? "bg-white hover:bg-stone-50/40" : "bg-stone-50/50 opacity-60"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <Switch
+                    checked={isEnabled}
+                    onCheckedChange={() => handleToggleDay && handleToggleDay(cfg.day)}
+                    className="data-[state=checked]:bg-emerald-700 cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-stone-900 block">
+                      {getDayDisplayName(cfg.day)}
+                    </span>
+                    <span className="text-[10px] font-medium text-stone-500">
+                      {isEnabled ? "Loja aberta para pedidos" : "Fechado o dia todo"}
+                    </span>
+                  </div>
+                </div>
+
+                {isEnabled ? (
+                  <div className="flex items-center gap-2 flex-wrap pl-11 sm:pl-0">
+                    <div className="flex items-center gap-1.5">
+                      <Label className="text-xs text-stone-500 font-medium">De:</Label>
+                      <Input
+                        type="time"
+                        value={d.opening_time || "18:00"}
+                        onChange={(e) =>
+                          handleDayTime && handleDayTime(d.day, "opening_time", e.target.value)
+                        }
+                        className="h-8 w-24 bg-white border-stone-300 text-xs font-semibold rounded-lg text-center"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Label className="text-xs text-stone-500 font-medium">Até:</Label>
+                      <Input
+                        type="time"
+                        value={d.closing_time || "23:00"}
+                        onChange={(e) =>
+                          handleDayTime && handleDayTime(d.day, "closing_time", e.target.value)
+                        }
+                        className="h-8 w-24 bg-white border-stone-300 text-xs font-semibold rounded-lg text-center"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        handleCopyDayTimeToAll &&
+                        handleCopyDayTimeToAll(
+                          d.opening_time || "18:00",
+                          d.closing_time || "23:00"
+                        )
+                      }
+                      title="Replicar este horário para todos os outros dias"
+                      className="h-8 px-2 text-xs font-semibold text-stone-600 hover:text-stone-900 border-stone-200 hover:bg-stone-100 rounded-lg flex items-center gap-1 shadow-2xs"
+                    >
+                      <Copy className="w-3.5 h-3.5 text-stone-500" />
+                      <span className="hidden sm:inline">Copiar p/ todos</span>
+                    </Button>
+                  </div>
+                ) : (
+                  <span className="text-xs text-stone-400 italic pl-11 sm:pl-0">
+                    Cardápio fechado
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }

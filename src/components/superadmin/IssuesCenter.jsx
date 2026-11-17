@@ -23,6 +23,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { appConfirm } from "@/components/ui/ConfirmDialogHost";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
@@ -192,7 +193,13 @@ export default function IssuesCenter({ tenants = [] }) {
 
   // Excluir pendência
   const handleDeleteIssue = async (issueId) => {
-    if (!window.confirm("Deseja realmente excluir este registro de pendência?")) return;
+    const ok = await appConfirm({
+      title: "Excluir pendência?",
+      description: "Deseja realmente excluir este registro de pendência?",
+      confirmText: "Excluir",
+      variant: "danger",
+    });
+    if (!ok) return;
     try {
       await deleteSystemIssue(issueId);
       toast({ title: "Excluído", description: "Registro removido com sucesso." });

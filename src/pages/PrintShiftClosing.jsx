@@ -169,7 +169,13 @@ export default function PrintShiftClosingPage() {
         <ShiftClosingThermalSlip
           closingData={closingData}
           storeName={storeName}
-          cashierName={localStorage.getItem("admin_user") ? JSON.parse(localStorage.getItem("admin_user") || "{}").name || "Operador" : "Operador"}
+          cashierName={
+            closingData?.cashier_name ||
+            closingData?.cashDrawer?.openedBy ||
+            (localStorage.getItem("admin_user")
+              ? JSON.parse(localStorage.getItem("admin_user") || "{}").name || "Operador"
+              : "Operador")
+          }
         />
       </div>
     </div>

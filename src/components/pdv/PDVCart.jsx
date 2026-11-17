@@ -42,7 +42,8 @@ export default function PDVCart({
   const cleanPhone = (customerPhone || "").replace(/\D/g, "");
   const trimmedName = (customerName || "").trim();
   const isDineIn = orderType === "dine_in";
-  const isCustomerValid = isDineIn || (trimmedName.length >= 2 && cleanPhone.length >= 10);
+  const isPhonePartial = cleanPhone.length > 0 && cleanPhone.length < 10;
+  const hasIdentifiedCustomer = trimmedName.length > 0 || cleanPhone.length >= 10;
 
   const handleFinalizeClick = () => {
     if (cart.length === 0) {
@@ -55,15 +56,9 @@ export default function PDVCart({
       return;
     }
 
-    if (!isCustomerValid) {
+    if (isPhonePartial) {
       setHasAttemptedFinalize(true);
-      if (!trimmedName && cleanPhone.length < 10) {
-        toast.error("Informe o nome e o telefone do cliente (ou selecione um salvo) para finalizar.");
-      } else if (!trimmedName) {
-        toast.error("Informe o nome do cliente para finalizar.");
-      } else {
-        toast.error("Informe um telefone válido com DDD (mínimo 10 dígitos).");
-      }
+      toast.error("Se informar o telefone, preencha com DDD (mínimo 10 dígitos) ou deixe em branco.");
       return;
     }
 
@@ -266,7 +261,7 @@ export default function PDVCart({
         <div className="flex items-center justify-between gap-1">
           <div className="flex items-center gap-1.5 text-xs font-bold text-gray-700">
             <User className="w-3.5 h-3.5 text-[#047857]" />
-            <span>{isDineIn ? "Identificação (Opcional p/ Mesa)" : "Identificação do Cliente"}</span>
+            <span>{isDineIn ? "Identificação (Opcional p/ Mesa)" : "Identificação (Opcional)"}</span>
           </div>
           <div className="flex items-center gap-1">
             {(customerName || customerPhone) && (
@@ -295,7 +290,7 @@ export default function PDVCart({
         <div className="space-y-1.5">
           <div className="relative">
             <Input
-              placeholder="Telefone / WhatsApp *"
+              placeholder="Telefone / WhatsApp (opcional)"
               value={customerPhone || ""}
               onChange={(e) => {
                 handlePhoneChange(e);
@@ -303,7 +298,7 @@ export default function PDVCart({
               }}
               className={cn(
                 "h-8 text-xs bg-white rounded-lg pr-7 focus-visible:ring-[#047857]",
-                hasAttemptedFinalize && cleanPhone.length < 10 && "border-rose-400 ring-1 ring-rose-400 bg-rose-50/30 placeholder:text-rose-400"
+                hasAttemptedFinalize && isPhonePartial && "border-rose-400 ring-1 ring-rose-400 bg-rose-50/30 placeholder:text-rose-400"
               )}
             />
             {isSearchingPhone && (
@@ -315,26 +310,18 @@ export default function PDVCart({
 
           <div>
             <Input
-              placeholder="Nome do Cliente *"
+              placeholder={isDineIn ? "Nome / Comanda (opcional)" : "Nome do Cliente (opcional)"}
               value={customerName || ""}
               onChange={(e) => {
                 onCustomerNameChange(e.target.value);
                 if (hasAttemptedFinalize) setHasAttemptedFinalize(false);
               }}
-              className={cn(
-                "h-8 text-xs bg-white rounded-lg focus-visible:ring-[#047857]",
-                hasAttemptedFinalize && trimmedName.length < 2 && "border-rose-400 ring-1 ring-rose-400 bg-rose-50/30 placeholder:text-rose-400"
-              )}
+              className="h-8 text-xs bg-white rounded-lg focus-visible:ring-[#047857]"
             />
           </div>
         </div>
 
-        {isCustomerValid ? (
-          <div className="bg-emerald-50 text-emerald-800 text-[11px] font-semibold px-2 py-1 rounded-md border border-emerald-200 flex items-center gap-1">
-            <Sparkles className="w-3 h-3 text-emerald-600 shrink-0" />
-            <span className="truncate">Cliente: <b>{trimmedName}</b> ({customerPhone})</span>
-          </div>
-        ) : (
+        {isPhonePartial ? (
           <div className={cn(
             "text-[10.5px] rounded-md px-2 py-1 flex items-center gap-1.5 transition-colors",
             hasAttemptedFinalize
@@ -343,11 +330,23 @@ export default function PDVCart({
           )}>
             <AlertCircle className={cn("w-3.5 h-3.5 shrink-0", hasAttemptedFinalize ? "text-rose-500" : "text-amber-500")} />
             <span className="leading-tight">
-              {hasAttemptedFinalize 
-                ? "Nome e telefone obrigatórios para finalizar." 
-                : "Informe nome e telefone (ou escolha em Salvos)."}
+              Informe DDD + número completo ou deixe em branco.
             </span>
           </div>
+        ) : hasIdentifiedCustomer ? (
+          <div className="bg-emerald-50 text-emerald-800 text-[11px] font-semibold px-2 py-1 rounded-md border border-emerald-200 flex items-center gap-1">
+            <Sparkles className="w-3 h-3 text-emerald-600 shrink-0" />
+            <span className="truncate">
+              Cliente: <b>{trimmedName || "Cliente Balcão"}</b>
+              {customerPhone ? ` (${customerPhone})` : ""}
+            </span>
+          </div>
+        ) : (
+          <p className="text-[10.5px] text-stone-500 px-0.5 leading-tight">
+            {isDineIn
+              ? "Opcional: deixe em branco para identificar pela mesa."
+              : "Venda rápida: pode deixar em branco ou selecionar em Salvos."}
+          </p>
         )}
       </div>
 
@@ -467,12 +466,7 @@ export default function PDVCart({
           <Button
             onClick={handleFinalizeClick}
             disabled={cart.length === 0}
-            className={cn(
-              "w-full h-11 sm:h-12 text-sm sm:text-base font-bold text-white shadow-md rounded-xl cursor-pointer transition-all active:scale-[0.99]",
-              !isCustomerValid && cart.length > 0
-                ? "bg-[#047857]/90 hover:bg-[#047857]"
-                : "bg-[#047857] hover:bg-[#065f46]"
-            )}
+            className="w-full h-11 sm:h-12 text-sm sm:text-base font-bold text-white shadow-md rounded-xl cursor-pointer transition-all active:scale-[0.99] bg-[#047857] hover:bg-[#065f46]"
           >
             ✓ Finalizar Pedido
           </Button>

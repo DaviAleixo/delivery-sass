@@ -14,6 +14,7 @@ import DynamicHead from '@/components/DynamicHead';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { PrintQueueProvider } from '@/hooks/useFifoPrintQueue';
 import StagingBanner from '@/components/common/StagingBanner';
+import { ConfirmDialogHost } from '@/components/ui/ConfirmDialogHost';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -224,6 +225,7 @@ function App() {
           </TenantProvider>
         </Router>
         <Toaster />
+        <ConfirmDialogHost />
         <StagingBanner />
       </QueryClientProvider>
     </AuthProvider>

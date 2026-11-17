@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -36,6 +36,16 @@ export default function CashExpenseModal({
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  useEffect(() => {
+    if (isOpen) {
+      setAmountStr("");
+      setCategory("gelo");
+      setDescription("");
+      setNotes("");
+      setIsSubmitting(false);
+    }
+  }, [isOpen]);
+
   const amountValue = parseBRLToNumber(amountStr);
   const nowFormatted = formatInBrasilia(new Date(), { includeSeconds: false });
 
@@ -48,7 +58,7 @@ export default function CashExpenseModal({
     { key: "outros", label: "Outra Despesa Operacional", example: "Pequeno pagamento autorizado pelo gerente" },
   ];
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!amountValue || amountValue <= 0) {
       toast.error("Informe um valor válido para a despesa.");
       return;
@@ -61,7 +71,7 @@ export default function CashExpenseModal({
     setIsSubmitting(true);
     try {
       if (typeof onConfirmExpense === "function") {
-        onConfirmExpense({
+        await onConfirmExpense({
           type: "expense",
           amount: amountValue,
           category,
@@ -79,7 +89,7 @@ export default function CashExpenseModal({
       onClose();
     } catch (err) {
       console.error("[CashExpenseModal] Erro ao registrar despesa:", err);
-      toast.error("Erro ao registrar saída operacional.");
+      toast.error(err?.message || "Erro ao registrar saída operacional.");
     } finally {
       setIsSubmitting(false);
     }

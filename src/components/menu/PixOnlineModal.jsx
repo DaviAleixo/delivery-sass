@@ -267,17 +267,17 @@ export default function PixOnlineModal({
 
         {/* Título & Badge Principal */}
         <div>
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold mb-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/10 border border-teal-500/20 text-teal-400 text-xs font-bold mb-2">
+            <img src="/bandeiras/pix.webp" alt="Pix" className="w-3.5 h-3.5 object-contain" />
             PIX Automático Mercado Pago
           </div>
           <h3 className="text-xl font-black text-white">
             {isApproved
-              ? "Pagamento Aprovado! 🎉"
+              ? "Pagamento Aprovado!"
               : isRejected
-              ? "Pagamento Não Aprovado ❌"
+              ? "Pagamento Não Aprovado"
               : isExpired
-              ? "Tempo Esgotado ⏰"
+              ? "Tempo Esgotado"
               : "Pague via PIX"}
           </h3>
           <p className="text-xs text-stone-400 mt-1">

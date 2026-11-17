@@ -4,13 +4,15 @@ import { Category } from "@/entities/Category";
 import { ProductionSector } from "@/entities/ProductionSector";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/ui/CurrencyInput";
+import { parseBRLToNumber, formatToBRL } from "@/utils/moneyMask";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Edit, Trash2, Sparkles, ChevronUp, ChevronDown, Flame } from "lucide-react";
+import { Plus, Edit, Trash2, ChevronUp, ChevronDown, Flame, Pizza, UtensilsCrossed } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
+import { appConfirm } from "@/components/ui/ConfirmDialogHost";
 
 const DEFAULT_PIZZA_SIZES = [
   { id: "broto", name: "Broto (4 fatias)", slices: 4, max_flavors: 1 },
@@ -31,7 +33,6 @@ export default function CategoriesPage() {
   const [categoryForm, setCategoryForm] = useState({
     name: "",
     order_index: 0,
-    is_combo: false,
     type: "standard",
     pizza_sizes: [],
     sector_id: null,
@@ -95,28 +96,33 @@ export default function CategoriesPage() {
     setIsSubmitting(true);
 
     try {
-      // Se esta categoria for marcada como combo, desativa is_combo de todas as outras (permitido apenas 1)
-      if (categoryForm.is_combo) {
-        const otherCombos = categories.filter(
-          (c) => c.is_combo && (!editingCategory || c.id !== editingCategory.id)
-        );
-        for (const other of otherCombos) {
-          await Category.update(other.id, { is_combo: false });
-        }
-      }
-
       const nextOrder = editingCategory 
         ? (Number(categoryForm.order_index) || 0)
         : (categories.length > 0 ? Math.max(...categories.map(c => Number(c.order_index) || 0)) + 1 : 1);
 
+      const rawSizes = categoryForm.pizza_sizes?.length
+        ? categoryForm.pizza_sizes
+        : DEFAULT_PIZZA_SIZES;
+      const sanitizedSizes = rawSizes.map((s) => {
+        const parsedDefault =
+          typeof s.default_price === "number"
+            ? s.default_price
+            : s.default_price
+              ? parseBRLToNumber(String(s.default_price))
+              : 0;
+        return {
+          ...s,
+          default_price: Number.isFinite(parsedDefault) && parsedDefault > 0 ? parsedDefault : 0,
+        };
+      });
+
       const payload = {
         ...categoryForm,
+        is_combo: false,
         sector_id: categoryForm.sector_id || null,
         order_index: nextOrder,
         type: categoryForm.type || "standard",
-        pizza_sizes: categoryForm.type === "pizza" 
-          ? (categoryForm.pizza_sizes?.length ? categoryForm.pizza_sizes : DEFAULT_PIZZA_SIZES)
-          : [],
+        pizza_sizes: categoryForm.type === "pizza" ? sanitizedSizes : [],
       };
 
       if (editingCategory) {
@@ -137,7 +143,13 @@ export default function CategoriesPage() {
   };
 
   const handleDelete = async (categoryId) => {
-    if (confirm("Tem certeza que deseja excluir esta categoria?")) {
+    const ok = await appConfirm({
+      title: "Excluir categoria?",
+      description: "Tem certeza que deseja excluir esta categoria?",
+      confirmText: "Excluir",
+      variant: "danger",
+    });
+    if (ok) {
       try {
         await Category.delete(categoryId);
         toast.success("Categoria excluída com sucesso!");
@@ -156,7 +168,6 @@ export default function CategoriesPage() {
     setCategoryForm({
       name: "",
       order_index: nextOrder,
-      is_combo: false,
       type: "standard",
       pizza_sizes: [],
       sector_id: null,
@@ -169,7 +180,6 @@ export default function CategoriesPage() {
     setCategoryForm({
       name: category.name,
       order_index: category.order_index || 0,
-      is_combo: !!category.is_combo,
       type: category.type || "standard",
       pizza_sizes: Array.isArray(category.pizza_sizes) && category.pizza_sizes.length > 0
         ? category.pizza_sizes
@@ -215,8 +225,8 @@ export default function CategoriesPage() {
         {/* Topo / Header */}
         <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-stone-900 tracking-tight flex items-center gap-2">
-              🏷️ Categorias do Cardápio
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-stone-900 tracking-tight">
+              Categorias do Cardápio
             </h1>
             <p className="text-xs sm:text-sm text-stone-600 mt-1">
               Organize a ordem em que as categorias e produtos aparecem para os clientes.
@@ -318,13 +328,8 @@ export default function CategoriesPage() {
 
                       {category.type === "pizza" && (
                         <span className="inline-flex items-center gap-1 bg-amber-500 text-white text-[11px] font-bold px-2.5 py-0.5 rounded-full shadow-2xs">
-                          🍕 Pizzas & Fracionados
-                        </span>
-                      )}
-
-                      {category.is_combo && (
-                        <span className="inline-flex items-center gap-1 bg-[#047857] text-white text-[11px] font-bold px-2 py-0.5 rounded-full shadow-2xs">
-                          <Sparkles className="w-3 h-3" /> Combos
+                          <Pizza className="w-3 h-3" />
+                          Pizzas & Fracionados
                         </span>
                       )}
 
@@ -341,16 +346,14 @@ export default function CategoriesPage() {
                     {/* Coluna 3: Tipo / Configuração */}
                     <div className="sm:col-span-3 text-xs">
                       {category.type === "pizza" ? (
-                        <span className="font-semibold text-amber-900 bg-amber-100/70 border border-amber-200/80 px-2.5 py-1 rounded-lg inline-block">
-                          🍕 {(category.pizza_sizes?.length || 4)} tamanhos cadastrados
-                        </span>
-                      ) : category.is_combo ? (
-                        <span className="font-semibold text-[#047857] bg-[#D1E9DF]/60 border border-[#047857]/20 px-2.5 py-1 rounded-lg inline-block">
-                          ✨ Banner Promocional Ativo
+                        <span className="inline-flex items-center gap-1.5 font-semibold text-amber-900 bg-amber-100/70 border border-amber-200/80 px-2.5 py-1 rounded-lg">
+                          <Pizza className="w-3.5 h-3.5 text-amber-700" />
+                          {(category.pizza_sizes?.length || 4)} tamanhos cadastrados
                         </span>
                       ) : (
-                        <span className="text-stone-500 bg-stone-100/90 border border-stone-200/70 px-2.5 py-1 rounded-lg inline-block">
-                          🍔 Padrão (convencional)
+                        <span className="inline-flex items-center gap-1.5 text-stone-600 bg-stone-100/90 border border-stone-200/70 px-2.5 py-1 rounded-lg">
+                          <UtensilsCrossed className="w-3.5 h-3.5 text-stone-500" />
+                          Padrão (convencional)
                         </span>
                       )}
                     </div>
@@ -403,81 +406,93 @@ export default function CategoriesPage() {
         )}
         
         <Dialog open={showModal} onOpenChange={setShowModal}>
-          <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="text-stone-900 font-extrabold text-lg">
+          <DialogContent className="sm:max-w-xl max-h-[90vh] p-0 flex flex-col overflow-hidden bg-[#F7F9F8] border-stone-200">
+            <DialogHeader className="px-6 py-4 bg-white border-b border-stone-200 text-left shrink-0">
+              <DialogTitle className="text-stone-900 font-bold text-lg">
                 {editingCategory ? "Editar Categoria" : "Nova Categoria"}
               </DialogTitle>
+              <p className="text-xs text-stone-500 mt-0.5">
+                Configure o tipo, ordem no cardápio e setor de preparo
+              </p>
             </DialogHeader>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="name">Nome da categoria *</Label>
-                  <Input
-                    id="name"
-                    value={categoryForm.name}
-                    onChange={(e) => setCategoryForm({...categoryForm, name: e.target.value})}
-                    required
-                    placeholder="Ex: Pizzas Tradicionais, Lanches, Bebidas..."
-                    className="border-stone-200 focus:border-[#047857] mt-1"
-                  />
-                </div>
+            <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+              <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+                <div className="bg-white border border-stone-200/90 rounded-xl p-4 space-y-4 shadow-2xs">
+                  <div>
+                    <Label htmlFor="name" className="text-xs font-semibold text-stone-700">
+                      Nome da categoria *
+                    </Label>
+                    <Input
+                      id="name"
+                      value={categoryForm.name}
+                      onChange={(e) => setCategoryForm({...categoryForm, name: e.target.value})}
+                      required
+                      placeholder="Ex: Pizzas Tradicionais, Lanches, Bebidas..."
+                      className="bg-stone-50/50 border-stone-200 focus:bg-white focus:border-[#047857] mt-1"
+                    />
+                  </div>
 
-                {/* Seletor do Tipo de Categoria: Padrão vs Pizza */}
-                <div>
-                  <Label className="text-xs font-bold text-gray-700 uppercase tracking-wider block mb-2">
-                    Tipo de Categoria
-                  </Label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setCategoryForm({ ...categoryForm, type: "standard" })}
-                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                        categoryForm.type !== "pizza"
-                          ? "border-[#047857] bg-[#D1E9DF]/25 ring-2 ring-[#047857]/20"
-                          : "border-gray-200 hover:border-gray-300 bg-white"
-                      }`}
-                    >
-                      <div className="text-xl mb-1">🍔</div>
-                      <p className="font-bold text-sm text-gray-900 leading-tight">Produtos Padrão</p>
-                      <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">
-                        Lanches, bebidas, porções, sobremesas, açaí
-                      </p>
-                    </button>
+                  {/* Seletor do Tipo de Categoria: Padrão vs Pizza */}
+                  <div>
+                    <Label className="text-xs font-semibold text-stone-700 block mb-2">
+                      Tipo de categoria
+                    </Label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setCategoryForm({ ...categoryForm, type: "standard" })}
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                          categoryForm.type !== "pizza"
+                            ? "border-[#047857] bg-[#D1E9DF]/25 ring-2 ring-[#047857]/15"
+                            : "border-stone-200 hover:border-stone-300 bg-white"
+                        }`}
+                      >
+                        <div className="w-7 h-7 rounded-lg bg-emerald-50 border border-emerald-200/70 flex items-center justify-center mb-2">
+                          <UtensilsCrossed className="w-3.5 h-3.5 text-[#047857]" />
+                        </div>
+                        <p className="font-bold text-xs text-stone-900 leading-tight">Produtos Padrão</p>
+                        <p className="text-[11px] text-stone-500 mt-0.5 leading-snug">
+                          Lanches, bebidas, porções, sobremesas, açaí
+                        </p>
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => setCategoryForm({ 
-                        ...categoryForm, 
-                        type: "pizza",
-                        pizza_sizes: categoryForm.pizza_sizes?.length ? categoryForm.pizza_sizes : DEFAULT_PIZZA_SIZES
-                      })}
-                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                        categoryForm.type === "pizza"
-                          ? "border-amber-500 bg-amber-50 ring-2 ring-amber-500/20"
-                          : "border-gray-200 hover:border-gray-300 bg-white"
-                      }`}
-                    >
-                      <div className="text-xl mb-1">🍕</div>
-                      <p className="font-bold text-sm text-gray-900 leading-tight">Pizzas & Fracionados</p>
-                      <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">
-                        Permite metades (1/2 e 1/2), tamanhos e bordas
-                      </p>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => setCategoryForm({ 
+                          ...categoryForm, 
+                          type: "pizza",
+                          pizza_sizes: categoryForm.pizza_sizes?.length ? categoryForm.pizza_sizes : DEFAULT_PIZZA_SIZES
+                        })}
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                          categoryForm.type === "pizza"
+                            ? "border-amber-500 bg-amber-50/80 ring-2 ring-amber-500/15"
+                            : "border-stone-200 hover:border-stone-300 bg-white"
+                        }`}
+                      >
+                        <div className="w-7 h-7 rounded-lg bg-amber-50 border border-amber-200/70 flex items-center justify-center mb-2">
+                          <Pizza className="w-3.5 h-3.5 text-amber-600" />
+                        </div>
+                        <p className="font-bold text-xs text-stone-900 leading-tight">Pizzas & Fracionados</p>
+                        <p className="text-[11px] text-stone-500 mt-0.5 leading-snug">
+                          Permite metades (1/2 e 1/2), tamanhos e bordas
+                        </p>
+                      </button>
+                    </div>
                   </div>
                 </div>
 
                 {/* Seção Condicional: Tamanhos da Pizza */}
                 {categoryForm.type === "pizza" && (
-                  <div className="p-3.5 bg-amber-50/70 border border-amber-200 rounded-2xl space-y-3">
-                    <div className="flex items-center justify-between">
+                  <div className="bg-white border border-stone-200/90 rounded-xl p-4 space-y-3 shadow-2xs">
+                    <div className="flex items-center justify-between pb-2 border-b border-stone-100">
                       <div>
-                        <h4 className="font-bold text-xs sm:text-sm text-amber-950 flex items-center gap-1.5">
-                          <span>🍕</span> Tamanhos Disponíveis
+                        <h4 className="font-bold text-xs text-stone-900 flex items-center gap-1.5">
+                          <Pizza className="w-3.5 h-3.5 text-amber-600" />
+                          Tamanhos Disponíveis
                         </h4>
-                        <p className="text-[11px] text-amber-800 mt-0.5">
-                          Discos e limite de sabores por tamanho
+                        <p className="text-[11px] text-stone-500 mt-0.5">
+                          Discos, limite de sabores e preço padrão opcional
                         </p>
                       </div>
                       <Button
@@ -485,49 +500,63 @@ export default function CategoriesPage() {
                         size="sm"
                         variant="outline"
                         onClick={handleAddPizzaSize}
-                        className="h-7 text-xs border-amber-300 text-amber-900 hover:bg-amber-100 cursor-pointer font-bold"
+                        className="h-7 text-xs border-stone-200 text-stone-700 hover:bg-stone-50 cursor-pointer font-semibold"
                       >
                         <Plus className="w-3.5 h-3.5 mr-1" />
                         Adicionar
                       </Button>
                     </div>
 
-                    <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
                       {(categoryForm.pizza_sizes || []).map((size, idx) => (
                         <div 
                           key={size.id || idx}
-                          className="flex items-center gap-2 bg-white p-2.5 rounded-xl border border-amber-200 shadow-2xs text-xs"
+                          className="flex items-center gap-2 bg-stone-50/70 p-2.5 rounded-xl border border-stone-200 text-xs"
                         >
                           <div className="flex-1 min-w-0">
-                            <Label className="text-[10px] text-gray-500 font-semibold uppercase">Nome do Tamanho</Label>
+                            <Label className="text-[10px] text-stone-500 font-semibold uppercase">Nome do Tamanho</Label>
                             <Input
                               value={size.name}
                               onChange={(e) => handleUpdatePizzaSize(idx, "name", e.target.value)}
                               placeholder="Ex: Grande (8 fatias)"
-                              className="h-7 text-xs mt-0.5"
+                              className="h-7 text-xs mt-0.5 bg-white"
                             />
                           </div>
 
-                          <div className="w-20">
-                            <Label className="text-[10px] text-gray-500 font-semibold uppercase">Fatias</Label>
+                          <div className="w-16">
+                            <Label className="text-[10px] text-stone-500 font-semibold uppercase">Fatias</Label>
                             <Input
                               type="number"
                               value={size.slices}
                               onChange={(e) => handleUpdatePizzaSize(idx, "slices", parseInt(e.target.value) || 1)}
-                              className="h-7 text-xs mt-0.5"
+                              className="h-7 text-xs mt-0.5 bg-white"
                               min={1}
                             />
                           </div>
 
-                          <div className="w-24">
-                            <Label className="text-[10px] text-gray-500 font-semibold uppercase">Até Sabores</Label>
+                          <div className="w-20">
+                            <Label className="text-[10px] text-stone-500 font-semibold uppercase">Sabores</Label>
                             <Input
                               type="number"
                               value={size.max_flavors}
                               onChange={(e) => handleUpdatePizzaSize(idx, "max_flavors", parseInt(e.target.value) || 1)}
-                              className="h-7 text-xs mt-0.5"
+                              className="h-7 text-xs mt-0.5 bg-white"
                               min={1}
                               max={4}
+                            />
+                          </div>
+
+                          <div className="w-24">
+                            <Label className="text-[10px] text-stone-500 font-semibold uppercase">Padrão</Label>
+                            <CurrencyInput
+                              value={
+                                typeof size.default_price === "number"
+                                  ? (size.default_price > 0 ? formatToBRL(size.default_price) : "")
+                                  : (size.default_price || "")
+                              }
+                              onChange={(e) => handleUpdatePizzaSize(idx, "default_price", e.target.value)}
+                              placeholder="Opcional"
+                              className="h-7 text-xs mt-0.5 bg-white font-mono"
                             />
                           </div>
 
@@ -536,7 +565,7 @@ export default function CategoriesPage() {
                             variant="ghost"
                             size="icon"
                             onClick={() => handleRemovePizzaSize(idx)}
-                            className="h-7 w-7 text-gray-400 hover:text-red-600 mt-3 cursor-pointer shrink-0"
+                            className="h-7 w-7 text-stone-400 hover:text-rose-600 mt-3 cursor-pointer shrink-0"
                             title="Remover tamanho"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -547,79 +576,65 @@ export default function CategoriesPage() {
                   </div>
                 )}
                 
-                <div>
-                  <Label htmlFor="order">Ordem de exibição</Label>
-                  <Input
-                    id="order"
-                    type="number"
-                    value={categoryForm.order_index}
-                    onChange={(e) => setCategoryForm({...categoryForm, order_index: parseInt(e.target.value) || 0})}
-                    className="border-stone-200 focus:border-[#047857] mt-1"
-                  />
-                </div>
-
-                {/* Vínculo com Setor de Produção */}
-                <div>
-                  <Label className="text-xs font-bold text-gray-700">
-                    Setor de Preparo (Impressão & KDS)
-                  </Label>
-                  <Select
-                    value={categoryForm.sector_id || "__none__"}
-                    onValueChange={(value) =>
-                      setCategoryForm({ ...categoryForm, sector_id: value === "__none__" ? null : value })
-                    }
-                  >
-                    <SelectTrigger className="border-stone-200 focus:border-[#047857] mt-1">
-                      <SelectValue placeholder="Padrão / Nenhum setor específico" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">Nenhum setor específico</SelectItem>
-                      {productionSectors.map((sec) => (
-                        <SelectItem key={sec.id} value={String(sec.id)}>
-                          {sec.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-[11px] text-gray-500 mt-1">
-                    Todos os produtos desta categoria irão automaticamente para este setor (a menos que você altere no produto).
-                  </p>
-                </div>
-
-                {/* Flag de Categoria de Combos */}
-                <div className="flex items-center justify-between p-3 bg-[#D1E9DF]/20 rounded-xl border border-[#D1E9DF]/60">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="is_combo" className="text-sm font-bold text-gray-900 cursor-pointer">
-                      Categoria de Combos (Banner Promocional)
+                {/* Bloco 3: Ordem & Setor */}
+                <div className="bg-white border border-stone-200/90 rounded-xl p-4 space-y-3.5 shadow-2xs">
+                  <div>
+                    <Label htmlFor="order" className="text-xs font-semibold text-stone-700">
+                      Ordem de exibição
                     </Label>
-                    <p className="text-xs text-gray-500">
-                      Ativa o card promocional no cardápio direcionando direto para esta categoria.
+                    <Input
+                      id="order"
+                      type="number"
+                      value={categoryForm.order_index}
+                      onChange={(e) => setCategoryForm({...categoryForm, order_index: parseInt(e.target.value) || 0})}
+                      className="bg-stone-50/50 border-stone-200 focus:bg-white focus:border-[#047857] mt-1 font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <Label className="text-xs font-semibold text-stone-700">
+                      Setor de Preparo (Impressão & KDS)
+                    </Label>
+                    <Select
+                      value={categoryForm.sector_id || "__none__"}
+                      onValueChange={(value) =>
+                        setCategoryForm({ ...categoryForm, sector_id: value === "__none__" ? null : value })
+                      }
+                    >
+                      <SelectTrigger className="bg-stone-50/50 border-stone-200 focus:border-[#047857] mt-1">
+                        <SelectValue placeholder="Padrão / Nenhum setor específico" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">Nenhum setor específico</SelectItem>
+                        {productionSectors.map((sec) => (
+                          <SelectItem key={sec.id} value={String(sec.id)}>
+                            {sec.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-stone-500 mt-1">
+                      Todos os produtos desta categoria irão automaticamente para este setor (a menos que você altere no produto).
                     </p>
                   </div>
-                  <Switch
-                    id="is_combo"
-                    checked={categoryForm.is_combo}
-                    onCheckedChange={(checked) => setCategoryForm({ ...categoryForm, is_combo: checked })}
-                    className="data-[state=checked]:bg-[#047857]"
-                  />
                 </div>
               </div>
 
-              <div className="flex gap-3 pt-2">
+              <div className="px-6 py-3.5 bg-white border-t border-stone-200 flex items-center justify-end gap-2.5 shrink-0">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => {setShowModal(false); resetForm();}}
-                  className="flex-1 border-stone-200 text-stone-700 hover:bg-stone-50 cursor-pointer"
+                  className="h-9 px-4 text-xs border-stone-300 text-stone-700 hover:bg-stone-50 cursor-pointer"
                 >
                   Cancelar
                 </Button>
                 <Button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex-1 bg-[#047857] hover:bg-[#065f46] text-white font-bold cursor-pointer"
+                  className="h-9 px-5 text-xs bg-[#047857] hover:bg-[#065f46] text-white font-bold cursor-pointer"
                 >
-                  {isSubmitting ? "Salvando..." : "Salvar"}
+                  {isSubmitting ? "Salvando..." : "Salvar Categoria"}
                 </Button>
               </div>
             </form>

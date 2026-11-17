@@ -119,8 +119,11 @@ export const buildFullAddress = (fields = {}) => {
 export const ALL_ADMIN_SCREENS = [
   { key: "Dashboard", label: "Dashboard / Visão Geral" },
   { key: "Orders", label: "Pedidos / Gestor" },
-  { key: "KDS", label: "KDS Cozinha" },
+  { key: "KDS", label: "KDS (Cozinha)" },
   { key: "PDV", label: "PDV Balcão" },
+  { key: "CashManagement", label: "Gestão de Caixa" },
+  { key: "Financial", label: "Financeiro & Cofre" },
+  { key: "Tables", label: "Salão & Mesas" },
   { key: "DeliveryDrivers", label: "Entregadores & Motoboys" },
   { key: "Clients", label: "Clientes" },
   { key: "Products", label: "Produtos & Cardápio" },
@@ -130,4 +133,46 @@ export const ALL_ADMIN_SCREENS = [
   { key: "Banners", label: "Banners Promocionais" },
   { key: "Reports", label: "Relatórios de Vendas" },
   { key: "Settings", label: "Configurações da Loja & Usuários" },
+];
+
+export const ROLE_PERMISSION_PRESETS = [
+  {
+    id: "cashier",
+    label: "Operador de Caixa",
+    role: "operator",
+    permissions: ["Orders", "PDV", "Tables", "CashManagement"],
+  },
+  {
+    id: "kds",
+    label: "Cozinha (KDS)",
+    role: "operator",
+    permissions: ["KDS"],
+  },
+  {
+    id: "waiter",
+    label: "Garçom",
+    role: "operator",
+    permissions: ["Tables", "Orders"],
+  },
+  {
+    id: "manager",
+    label: "Gerente",
+    role: "manager",
+    permissions: [
+      "Dashboard",
+      "Orders",
+      "KDS",
+      "PDV",
+      "CashManagement",
+      "Tables",
+      "DeliveryDrivers",
+      "Clients",
+      "Products",
+      "Categories",
+      "Complements",
+      "Coupons",
+      "Banners",
+      "Reports",
+    ],
+  },
 ];

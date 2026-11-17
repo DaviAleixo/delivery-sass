@@ -10,7 +10,8 @@ import {
   MapPin, 
   Phone, 
   ArrowRight,
-  Instagram
+  Instagram,
+  Ticket
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createPageUrl } from "@/utils";
@@ -57,7 +58,6 @@ export default function VrummMenu({
   setSearchQuery,
   activeCategoryObj,
   filteredProducts,
-  comboCategory,
   cart,
   updateCartQuantity,
   handleCheckout,
@@ -200,54 +200,38 @@ export default function VrummMenu({
         </div>
       )}
 
-      {/* Banner de Pedido em Andamento (Oculto em pedidos na mesa / QR Code) */}
+      {/* Card "Meus Pedidos" Ativo (Inspirado em app moderno / Foto 1) */}
       {!isVisualOnly && !urlMesa && activeGuestOrder && activeGuestOrder.order_type !== 'dine_in' && !activeGuestOrder.table_number && (
-        <div className={`${hasTopNotice ? 'pt-3' : 'pt-20'} container mx-auto px-4 max-w-6xl`}>
-          <div className="relative">
-            <Link to={`${createPageUrl("MyOrders")}?id=${activeGuestOrder.id}`}>
-              <motion.div 
-                initial={{ opacity: 0, y: -10 }} 
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-gradient-to-r from-red-700 via-red-600 to-amber-600 text-white rounded-2xl p-3.5 shadow-xl flex items-center justify-between cursor-pointer hover:opacity-95 transition-opacity border border-red-400/30 pr-12"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center shadow-inner">
-                    <Bike className="w-5 h-5 animate-pulse text-white" />
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-extrabold uppercase tracking-wider text-red-200">Pedido em Andamento</p>
-                    <p className="text-sm font-bold">
-                      #{activeGuestOrder.id.slice(-6).toUpperCase()} • {
-                        activeGuestOrder.status === 'preparando' || activeGuestOrder.status === 'confirmado'
-                          ? 'CONFIRMADO' 
-                          : (activeGuestOrder.status === 'enviado' 
-                              ? (activeGuestOrder.order_type === 'delivery' ? 'A CAMINHO' : (activeGuestOrder.order_type === 'dine_in' || activeGuestOrder.table_number ? 'SENDO SERVIDO' : 'PRONTO P/ RETIRADA')) 
-                              : activeGuestOrder.status.toUpperCase())
-                      }
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center text-xs font-bold gap-1 bg-black/30 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10">
-                  <span>Rastrear</span>
-                  <ChevronRight className="w-4 h-4" />
-                </div>
-              </motion.div>
-            </Link>
-            <button
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setActiveGuestOrder(null);
-                try {
-                  localStorage.removeItem("vrumburguer_recent_orders");
-                } catch {}
-              }}
-              title="Dispensar aviso"
-              className="absolute right-3 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/40 hover:bg-black/70 text-white/80 hover:text-white flex items-center justify-center text-xs font-bold transition-all z-10"
+        <div className={`${hasTopNotice ? 'pt-3' : 'pt-20'} mb-3 sm:mb-3.5 container mx-auto px-4 max-w-6xl`}>
+          <Link to={`${createPageUrl("MyOrders")}?id=${activeGuestOrder.id}`} className="block group">
+            <motion.div 
+              initial={{ opacity: 0, y: -8 }} 
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-white rounded-2xl p-3 sm:p-3.5 border border-stone-200/90 shadow-xs hover:border-emerald-300 hover:shadow-sm transition-all flex items-center justify-between gap-3 cursor-pointer select-none"
             >
-              ✕
-            </button>
-          </div>
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100/70 group-hover:scale-105 transition-transform">
+                  <Ticket className="w-5 h-5 text-emerald-600" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-bold text-stone-900 group-hover:text-emerald-700 transition-colors">
+                    Meus pedidos
+                  </h3>
+                  <p className="text-xs text-stone-500 font-medium truncate mt-0.5">
+                    Acompanhe o status do seu pedido
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  1 ativo
+                </span>
+                <ChevronRight className="w-4 h-4 text-stone-400 group-hover:text-stone-600 group-hover:translate-x-0.5 transition-all" />
+              </div>
+            </motion.div>
+          </Link>
         </div>
       )}
 
@@ -451,50 +435,6 @@ export default function VrummMenu({
               </button>
             )}
           </div>
-        )}
-
-        {/* Banner Promocional de Combos - Visual Dark Clean */}
-        {comboCategory && (
-          <motion.div 
-            whileHover={{ y: -2 }}
-            className="rounded-3xl overflow-hidden relative border border-stone-800 bg-[#14100e] p-6 sm:p-8 shadow-xl"
-          >
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
-              <div className="space-y-2.5 text-left flex-1">
-                <div className="inline-flex items-center gap-1.5 text-red-400 text-xs font-black uppercase tracking-widest">
-                  <span>SELEÇÃO ESPECIAL</span>
-                </div>
-                
-                <h3 
-                  className="text-xl sm:text-2xl font-black text-white leading-tight tracking-tight" 
-                  style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
-                >
-                  Conheça nossos <span className="text-red-500">{comboCategory.name}</span>
-                </h3>
-                
-                <p className="text-xs sm:text-sm text-stone-400 max-w-lg leading-relaxed font-normal">
-                  Burgers artesanais acompanhados de batata crocante e bebida gelada com o melhor custo-benefício.
-                </p>
-              </div>
-
-              <div className="flex-shrink-0 w-full sm:w-auto">
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  type="button"
-                  onClick={() => {
-                    setActiveCategory(comboCategory.id);
-                    setSearchQuery("");
-                    window.scrollTo({ top: 180, behavior: 'smooth' });
-                  }}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-red-600 hover:bg-red-500 text-white font-extrabold text-xs sm:text-sm px-6 py-3.5 rounded-2xl shadow-lg transition-all duration-200 cursor-pointer whitespace-nowrap"
-                >
-                  <span>Explorar Combos</span>
-                  <ArrowRight className="w-4 h-4" />
-                </motion.button>
-              </div>
-            </div>
-          </motion.div>
         )}
       </main>
 

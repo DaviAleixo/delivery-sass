@@ -3,6 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import {
   MapPin,
   Search,
@@ -19,7 +21,7 @@ import {
   X,
   Edit2,
   Trash2,
-  AlertCircle
+  AlertCircle,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
@@ -44,8 +46,8 @@ export default function DeliveryFeesTab({
   // Seleção e alteração em lote
   neighborhoodSearchTerm,
   setNeighborhoodSearchTerm,
-  selectedNeighborhoodIds,
-  handleToggleSelectNeighborhood,
+  selectedNeighborhoodIds: _selectedNeighborhoodIds,
+  handleToggleSelectNeighborhood: _handleToggleSelectNeighborhood,
   handleToggleSelectAllFiltered,
   bulkApplyFee,
   setBulkApplyFee,
@@ -77,6 +79,116 @@ export default function DeliveryFeesTab({
 
   return (
     <div className="space-y-6">
+      {/* SEÇÃO 1: CANAIS DE ATENDIMENTO & AUTO-ACEITE */}
+      <div className="bg-white rounded-2xl border border-stone-200 shadow-2xs overflow-hidden">
+        <div className="px-5 py-4 bg-stone-50/70 border-b border-stone-200/80">
+          <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
+            <Bike className="w-4 h-4 text-stone-700" />
+            <span>Canais de Atendimento (Delivery & Retirada)</span>
+          </h3>
+          <p className="text-xs text-stone-500 mt-0.5">
+            Defina como os clientes remotos podem receber pedidos e o fluxo de despacho para a cozinha.
+          </p>
+        </div>
+
+        <div className="divide-y divide-stone-100">
+          {/* Opção 1: Delivery */}
+          <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1 max-w-xl">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-stone-900">
+                  Aceitar Pedidos para Delivery
+                </span>
+                <Badge
+                  variant="outline"
+                  className={`text-[10px] font-semibold ${
+                    settings.accepts_delivery !== false
+                      ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                      : "bg-stone-100 text-stone-600 border-stone-200"
+                  }`}
+                >
+                  {settings.accepts_delivery !== false ? "Ativo no Cardápio" : "Desativado"}
+                </Badge>
+              </div>
+              <p className="text-[11px] text-stone-500 leading-relaxed">
+                Clientes informam endereço e taxa de entrega. O pedido entra na fila de despacho de motoboys e entregadores.
+              </p>
+            </div>
+
+            <div className="shrink-0 flex items-center gap-3">
+              <Switch
+                checked={settings.accepts_delivery !== false}
+                onCheckedChange={(val) => handleInputChange("accepts_delivery", val)}
+                className="data-[state=checked]:bg-emerald-700 cursor-pointer"
+              />
+            </div>
+          </div>
+
+          {/* Opção 2: Retirada no Balcão */}
+          <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1 max-w-xl">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-stone-900">
+                  Aceitar Retirada no Balcão (Takeaway)
+                </span>
+                <Badge
+                  variant="outline"
+                  className={`text-[10px] font-semibold ${
+                    settings.accepts_takeaway !== false
+                      ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                      : "bg-stone-100 text-stone-600 border-stone-200"
+                  }`}
+                >
+                  {settings.accepts_takeaway !== false ? "Ativo no Cardápio" : "Desativado"}
+                </Badge>
+              </div>
+              <p className="text-[11px] text-stone-500 leading-relaxed">
+                O cliente busca o pedido diretamente no balcão da loja sem pagar taxa de entrega.
+              </p>
+            </div>
+
+            <div className="shrink-0 flex items-center gap-3">
+              <Switch
+                checked={settings.accepts_takeaway !== false}
+                onCheckedChange={(val) => handleInputChange("accepts_takeaway", val)}
+                className="data-[state=checked]:bg-emerald-700 cursor-pointer"
+              />
+            </div>
+          </div>
+
+          {/* Opção 3: Auto-aceite de Pedidos */}
+          <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1 max-w-xl">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-stone-900">
+                  Auto-aceitar Pedidos de Delivery e Retirada
+                </span>
+                <Badge
+                  variant="outline"
+                  className={`text-[10px] font-semibold ${
+                    Boolean(settings.auto_accept_delivery)
+                      ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                      : "bg-stone-100 text-stone-600 border-stone-200"
+                  }`}
+                >
+                  {Boolean(settings.auto_accept_delivery) ? "Automático na Cozinha" : "Manual pelo Operador"}
+                </Badge>
+              </div>
+              <p className="text-[11px] text-stone-500 leading-relaxed">
+                Ao receber um pedido novo online, o sistema aprova e despacha automaticamente para a cozinha/KDS e impressora sem exigir confirmação manual do operador.
+              </p>
+            </div>
+
+            <div className="shrink-0 flex items-center gap-3">
+              <Switch
+                checked={Boolean(settings.auto_accept_delivery)}
+                onCheckedChange={(val) => handleInputChange("auto_accept_delivery", val)}
+                className="data-[state=checked]:bg-emerald-700 cursor-pointer"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
       <Card className="border border-stone-200 rounded-xl shadow-2xs bg-white">
         <CardHeader className="border-b border-stone-100 pb-3">
           <CardTitle className="text-base font-bold text-stone-900 flex items-center gap-2">
@@ -93,10 +205,10 @@ export default function DeliveryFeesTab({
               <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
               <div>
                 <h4 className="text-xs font-bold text-amber-900">
-                  O serviço de Delivery está desativado nas Configurações Gerais
+                  O serviço de Delivery está desativado acima
                 </h4>
                 <p className="text-[11px] text-amber-700 mt-0.5 leading-relaxed">
-                  Seus clientes atualmente só conseguem pedir para <strong>Retirada no Balcão</strong>. As taxas e bairros configurados abaixo só serão cobrados se você reativar o Delivery na aba <strong>Geral & Loja</strong>.
+                  Seus clientes atualmente só conseguem pedir para <strong>Retirada no Balcão</strong>. As taxas e bairros configurados abaixo só serão aplicados se você ativar a opção de Delivery acima.
                 </p>
               </div>
             </div>

@@ -8,22 +8,35 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Input } from "@/components/ui/input";
 import { 
-  ArrowLeft, Clock, Sparkles, Truck, Store, 
-  Search, CheckCircle2, Bike, PackageCheck, RefreshCw,
-  MessageCircle, UtensilsCrossed, ShieldCheck
+  ArrowLeft, Clock, Sparkles, Store, 
+  CheckCircle2, Bike, PackageCheck, RefreshCw,
+  UtensilsCrossed, MapPin, User, Phone, CreditCard
 } from "lucide-react";
+import { formatPhoneBR } from "@/services/clientsService";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link, useSearchParams } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { formatInBrasilia } from "@/utils/dateTime";
 import OrderCountdownTimer from "@/components/admin/OrderCountdownTimer";
+import { getPaymentBrandInfo } from "@/constants/paymentBrands";
 
 // --- Utilitários de Segurança e Formatação Resiliente ---
 function safeFormatCurrency(val) {
   const num = Number(val);
   return isNaN(num) ? "0,00" : num.toFixed(2).replace(".", ",");
+}
+
+function formatPaymentMethodLabel(method) {
+  if (!method) return "Não informado";
+  const m = String(method).toLowerCase().trim();
+  if (m === "pix" || m === "pix_online") return "PIX";
+  if (m.includes("debito")) return "Cartão de Débito";
+  if (m.includes("credito")) return "Cartão de Crédito";
+  if (m.includes("dinheiro")) return "Dinheiro";
+  if (m.includes("refeicao") || m.includes("alimentacao") || m.includes("vale")) return "Vale Refeição";
+  if (m.includes("cashback")) return "Saldo de Cashback";
+  return method.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
 }
 
 function safeFormatDate(val) {
@@ -69,11 +82,12 @@ const getOrderSteps = (orderType) => [
   { status: "entregue", label: "Entregue", icon: PackageCheck },
 ];
 
-function getStepIndex(status) {
+function getStepIndex(status, orderType) {
   switch (status) {
     case "pendente": return 0;
     case "confirmado":
     case "preparando": return 1;
+    case "pronto": return orderType === "delivery" ? 1 : 2;
     case "enviado": return 2;
     case "entregue": return 3;
     default: return -1;
@@ -87,10 +101,8 @@ export default function MyOrdersPage() {
 
   const [orders, setOrders] = useState([]);
   const [settings, setSettings] = useState(null);
-  const [user, setUser] = useState(null);
+  const [_user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [phoneSearch, setPhoneSearch] = useState("");
-  const [isSearchingPhone, setIsSearchingPhone] = useState(false);
 
   const requestNotificationPermission = async () => {
     try {
@@ -127,8 +139,6 @@ export default function MyOrdersPage() {
 
       // Coletar IDs de pedidos salvos localmente
       const localIds = JSON.parse(localStorage.getItem("vrumburguer_recent_orders") || "[]");
-      const savedPhone = localStorage.getItem("vrumburguer_customer_phone") || "";
-      if (savedPhone && !phoneSearch) setPhoneSearch(savedPhone);
 
       // Buscar apenas os pedidos autorizados do usuário/navegador (sem Order.list() global!)
       const [settingsData] = await Promise.all([
@@ -194,46 +204,12 @@ export default function MyOrdersPage() {
     }
   };
 
-  const handleSearchByPhone = async (e) => {
-    e.preventDefault();
-    if (!phoneSearch.trim()) return;
-    setIsSearchingPhone(true);
-
-    try {
-      const cleanInput = phoneSearch.replace(/\D/g, "");
-      localStorage.setItem("vrumburguer_customer_phone", phoneSearch);
-
-      let baseList = orders;
-      if (isSupabaseConfigured() && supabase) {
-        const tokenEntries = JSON.parse(localStorage.getItem("vrumburguer_recent_orders_tokens") || "[]");
-        if (Array.isArray(tokenEntries) && tokenEntries.length > 0) {
-          const { data: tokOrders } = await supabase.rpc("get_public_orders_by_tokens", {
-            p_tokens: tokenEntries,
-          });
-          if (Array.isArray(tokOrders)) baseList = tokOrders;
-        }
-      } else {
-        baseList = await Order.list("-created_date", 25);
-      }
-
-      const matches = (baseList || []).filter(o => {
-        const orderPhoneClean = (o.customer_phone || "").replace(/\D/g, "");
-        return orderPhoneClean.includes(cleanInput) || cleanInput.includes(orderPhoneClean);
-      });
-
-      setOrders(matches);
-    } catch (err) {
-      console.error("Erro ao buscar por telefone:", err);
-    } finally {
-      setIsSearchingPhone(false);
-    }
-  };
-
   const getStatusColor = (status) => {
     const colors = {
       pendente: "bg-amber-100 text-amber-800 border-amber-300",
       confirmado: "bg-blue-100 text-blue-800 border-blue-300",
       preparando: "bg-blue-100 text-blue-800 border-blue-300",
+      pronto: "bg-emerald-100 text-emerald-800 border-emerald-300",
       enviado: "bg-indigo-100 text-indigo-800 border-indigo-300",
       entregue: "bg-emerald-100 text-emerald-800 border-emerald-300",
       cancelado: "bg-red-100 text-red-800 border-red-300"
@@ -244,6 +220,11 @@ export default function MyOrdersPage() {
   const getStatusText = (status, order = null) => {
     if (status === "preparando" || status === "confirmado") {
       return "Confirmado";
+    }
+    if (status === "pronto") {
+      if (order?.order_type === "delivery") return "Pronto • Aguardando entregador";
+      if (order?.order_type === "dine_in" || order?.table_number?.toLowerCase().includes("mesa")) return "Pronto p/ Servir";
+      return "Pronto p/ Retirada";
     }
     if (status === "enviado") {
       if (order?.order_type === "delivery") return "A Caminho";
@@ -259,12 +240,8 @@ export default function MyOrdersPage() {
     return texts[status] || status;
   };
 
-  const activeOrders = orders.filter(o => ['pendente', 'confirmado', 'preparando', 'enviado'].includes(o.status));
+  const activeOrders = orders.filter(o => ['pendente', 'confirmado', 'preparando', 'pronto', 'enviado'].includes(o.status));
   const completedOrders = orders.filter(o => ['entregue', 'cancelado'].includes(o.status));
-
-  // Dados do restaurante para suporte WhatsApp
-  const restaurantWhatsApp = tenant?.whatsapp || tenant?.phone || settings?.whatsapp || settings?.phone || "";
-  const cleanStorePhone = restaurantWhatsApp.replace(/\D/g, "");
 
   if (isLoading) {
     return (
@@ -303,34 +280,6 @@ export default function MyOrdersPage() {
       </header>
 
       <div className="container mx-auto px-4 py-6 max-w-4xl space-y-6">
-        {/* Banner informativo de Guest Checkout */}
-        {!user && (
-          <Card className="border-amber-200 bg-amber-50/80 shadow-none">
-            <CardContent className="p-4">
-              <form onSubmit={handleSearchByPhone} className="flex flex-col sm:flex-row gap-3 items-center justify-between">
-                <div className="flex items-start gap-2.5">
-                  <Search className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
-                  <div>
-                    <p className="text-sm font-semibold text-amber-950">Consultar por WhatsApp / Telefone</p>
-                    <p className="text-xs text-amber-800">Comprou sem login? Digite seu número para resgatar seus pedidos.</p>
-                  </div>
-                </div>
-                <div className="flex gap-2 w-full sm:w-auto">
-                  <Input
-                    placeholder="(11) 99999-9999"
-                    value={phoneSearch}
-                    onChange={(e) => setPhoneSearch(e.target.value)}
-                    className="bg-white max-w-xs h-9 text-sm"
-                  />
-                  <Button type="submit" size="sm" disabled={isSearchingPhone} className="bg-[#047857] hover:bg-[#065f46] text-white shrink-0 h-9 font-bold">
-                    {isSearchingPhone ? "Buscando..." : "Buscar"}
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        )}
-
         {orders.length === 0 ? (
           <div className="text-center py-16 bg-white rounded-2xl border border-stone-200 shadow-sm p-6">
             <div className="text-6xl mb-4">🛵</div>
@@ -356,23 +305,8 @@ export default function MyOrdersPage() {
 
                 <AnimatePresence>
                   {activeOrders.map((order) => {
-                    const currentStep = getStepIndex(order.status);
+                    const currentStep = getStepIndex(order.status, order.order_type);
                     const orderItems = safeGetItems(order.items);
-                    const isHighlighted = highlightOrderId === order.id;
-                    const isPixMethod = order.payment_method === "pix" || order.payment_method === "pix_online";
-                    const isPixPaid = isPixMethod && (order.payment_status === "paid" || order.status === "confirmado");
-                    const isOrderConfirmed = order.status === "confirmado";
-
-                    const getPaymentMethodBadgeLabel = (method) => {
-                      if (!method) return "Confirmado";
-                      const m = method.toLowerCase();
-                      if (m.includes("pix")) return "Pago via PIX";
-                      if (m.includes("debito")) return "Cartão de Débito";
-                      if (m.includes("credito")) return "Cartão de Crédito";
-                      if (m.includes("alimentacao") || m.includes("refeicao")) return "Vale Refeição";
-                      if (m.includes("dinheiro")) return "Dinheiro";
-                      return "Confirmado";
-                    };
 
                     return (
                       <motion.div
@@ -381,30 +315,6 @@ export default function MyOrdersPage() {
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -15 }}
                       >
-                        {/* Banner de Celebração de Pedido Confirmado */}
-                        {isHighlighted && (isPixPaid || isOrderConfirmed) && (
-                          <div className="mb-3 p-4 bg-emerald-600 text-white rounded-2xl shadow-md flex items-center justify-between gap-3 animate-fade-in">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center shrink-0">
-                                <ShieldCheck className="w-6 h-6 text-white" />
-                              </div>
-                              <div>
-                                <h4 className="font-extrabold text-sm sm:text-base leading-tight">
-                                  {isPixPaid
-                                    ? "🎉 Pagamento PIX Confirmado com Sucesso!"
-                                    : "🎉 Pedido Confirmado pela Cozinha!"}
-                                </h4>
-                                <p className="text-xs text-emerald-100 mt-0.5">
-                                  Seu pedido já foi enviado para a cozinha e está sendo preparado.
-                                </p>
-                              </div>
-                            </div>
-                            <Badge className="bg-white text-emerald-800 font-bold border-none shrink-0 shadow-sm">
-                              {getPaymentMethodBadgeLabel(order.payment_method)}
-                            </Badge>
-                          </div>
-                        )}
-
                         <Card className="border-[#D1E9DF] shadow-lg overflow-hidden bg-white">
                           {/* Topo do Card */}
                           <div className="bg-gradient-to-r from-[#064e3b] to-[#047857] p-4 sm:p-5 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -484,38 +394,99 @@ export default function MyOrdersPage() {
                             )}
 
                             {/* Informações de Entrega / Retirada / Consumo no Local */}
-                            <div className="bg-stone-50 rounded-xl p-4 border border-stone-200/80 space-y-2 text-sm">
-                              <div className="flex items-center gap-2 text-stone-700">
-                                {order.order_type === 'delivery' ? (
-                                  <>
-                                    <Truck className="w-4 h-4 text-red-600 shrink-0" />
-                                    <span className="font-medium">Entrega em:</span>
-                                    <span className="text-stone-600">{order.customer_address || order.delivery_address}</span>
-                                  </>
-                                ) : (order.order_type === 'dine_in' || (order.table_number && order.table_number.toLowerCase().includes('mesa'))) ? (
-                                  <>
-                                    <span className="text-base shrink-0">🍽️</span>
-                                    <span className="font-medium">Consumo no Local:</span>
-                                    <span className="font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg text-xs">
-                                      {order.table_number || "Mesa do Salão"}
+                            <div className="bg-stone-50/80 rounded-2xl p-4 border border-stone-200/90 space-y-3.5">
+                              {/* Destino do Pedido */}
+                              {order.order_type === 'delivery' ? (
+                                <div className="flex items-start gap-3">
+                                  <div className="w-9 h-9 rounded-xl bg-emerald-100/70 text-[#047857] flex items-center justify-center shrink-0 mt-0.5">
+                                    <MapPin className="w-4 h-4 text-[#047857]" />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block">
+                                      Endereço de Entrega
                                     </span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Store className="w-4 h-4 text-amber-600 shrink-0" />
-                                    <span className="font-medium">Retirada no Balcão:</span>
-                                    <span className="text-xs text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-lg font-semibold">
-                                      Retire quando pronto
+                                    <p className="text-xs sm:text-sm font-semibold text-stone-900 leading-snug mt-0.5">
+                                      {order.customer_address || order.delivery_address || "Endereço não informado"}
+                                    </p>
+                                  </div>
+                                </div>
+                              ) : (order.order_type === 'dine_in' || (order.table_number && order.table_number.toLowerCase().includes('mesa'))) ? (
+                                <div className="flex items-start gap-3">
+                                  <div className="w-9 h-9 rounded-xl bg-emerald-100/70 text-[#047857] flex items-center justify-center shrink-0 mt-0.5">
+                                    <UtensilsCrossed className="w-4 h-4 text-[#047857]" />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block">
+                                      Consumo no Local
                                     </span>
-                                  </>
+                                    <div className="mt-1">
+                                      <span className="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-900 font-extrabold text-xs inline-block">
+                                        {order.table_number || "Mesa do Salão"}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex items-start gap-3">
+                                  <div className="w-9 h-9 rounded-xl bg-amber-100/70 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
+                                    <Store className="w-4 h-4 text-amber-700" />
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block">
+                                      Retirada no Balcão
+                                    </span>
+                                    <p className="text-xs sm:text-sm font-semibold text-stone-900 mt-0.5">
+                                      Retire seu pedido diretamente no balcão da loja assim que estiver pronto.
+                                    </p>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Linhas de Informações: Cliente, WhatsApp e Pagamento */}
+                              <div className="border-t border-stone-200/70 pt-3 space-y-2">
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="text-stone-500 flex items-center gap-1.5 font-medium">
+                                    <User className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                                    Cliente
+                                  </span>
+                                  <span className="font-semibold text-stone-900 truncate max-w-[200px] text-right">
+                                    {order.customer_name || "Cliente"}
+                                  </span>
+                                </div>
+
+                                {order.customer_phone && (
+                                  <div className="flex items-center justify-between text-xs">
+                                    <span className="text-stone-500 flex items-center gap-1.5 font-medium">
+                                      <Phone className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                                      WhatsApp
+                                    </span>
+                                    <span className="font-mono font-medium text-stone-800">
+                                      {formatPhoneBR(order.customer_phone)}
+                                    </span>
+                                  </div>
                                 )}
-                              </div>
-                              <div className="flex flex-wrap items-center gap-4 text-xs text-stone-500 pt-1">
-                                <span>Cliente: <strong>{order.customer_name || "Cliente"}</strong></span>
-                                <span>WhatsApp: <strong>{order.customer_phone || "Não informado"}</strong></span>
-                                {order.payment_method && (
-                                  <span>Forma de Pagamento: <strong className="capitalize">{order.payment_method}</strong></span>
-                                )}
+
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="text-stone-500 flex items-center gap-1.5 font-medium">
+                                    <CreditCard className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                                    Pagamento
+                                  </span>
+                                  <span className="font-medium text-stone-800 bg-white border border-stone-200 px-2 py-0.5 rounded-md text-[11px] shadow-2xs inline-flex items-center gap-1.5">
+                                    {order.card_brand ? (
+                                      <>
+                                        {(() => {
+                                          const bInfo = getPaymentBrandInfo(order.card_brand);
+                                          return bInfo?.image ? (
+                                            <img src={bInfo.image} alt={order.card_brand} className="h-3.5 w-auto object-contain shrink-0" />
+                                          ) : null;
+                                        })()}
+                                        <span>{formatPaymentMethodLabel(order.payment_method)} ({order.card_brand})</span>
+                                      </>
+                                    ) : (
+                                      formatPaymentMethodLabel(order.payment_method)
+                                    )}
+                                  </span>
+                                </div>
                               </div>
                             </div>
 
@@ -556,29 +527,12 @@ export default function MyOrdersPage() {
                               </span>
                             </div>
 
-                            {/* Ações: Contatar Loja & Novo Pedido */}
+                            {/* Ações: Novo Pedido */}
                             <div className="pt-2 flex flex-col sm:flex-row gap-2.5">
-                              {cleanStorePhone && order.order_type !== 'dine_in' && !order.table_number && (
-                                <a
-                                  href={`https://wa.me/55${cleanStorePhone}?text=${encodeURIComponent(`Olá! Gostaria de acompanhar o andamento do meu pedido #${safeOrderId(order.id)}`)}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="flex-1"
-                                >
-                                  <Button 
-                                    variant="outline" 
-                                    className="w-full border-emerald-600 text-emerald-700 hover:bg-emerald-50 gap-2 h-10 text-xs font-semibold"
-                                  >
-                                    <MessageCircle className="w-4 h-4 text-emerald-600" />
-                                    Falar com o Restaurante no WhatsApp
-                                  </Button>
-                                </a>
-                              )}
-
-                              <Link to={createPageUrl("Menu")} className="flex-1">
+                              <Link to={createPageUrl("Menu")} className="w-full">
                                 <Button 
-                                  variant="ghost" 
-                                  className="w-full border border-stone-200 text-stone-700 hover:bg-stone-100 gap-2 h-10 text-xs font-semibold"
+                                  variant="outline" 
+                                  className="w-full border-stone-200 text-stone-700 hover:bg-stone-100 gap-2 h-10 text-xs font-semibold cursor-pointer"
                                 >
                                   <UtensilsCrossed className="w-4 h-4 text-stone-500" />
                                   Fazer Novo Pedido

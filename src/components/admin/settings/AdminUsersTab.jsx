@@ -18,7 +18,7 @@ import {
   Copy,
   Check,
 } from "lucide-react";
-import { ALL_ADMIN_SCREENS } from "./settingsConstants";
+import { ALL_ADMIN_SCREENS, ROLE_PERMISSION_PRESETS } from "./settingsConstants";
 import { toast } from "sonner";
 
 export default function AdminUsersTab({
@@ -398,6 +398,28 @@ export default function AdminUsersTab({
 
                 {userFormData.access_type === "custom" && (
                   <div className="p-3 bg-stone-50 rounded-2xl border border-stone-200 space-y-2.5 animate-in fade-in">
+                    <div className="flex flex-wrap items-center gap-1.5 pb-2 border-b border-stone-200">
+                      <span className="text-[11px] text-stone-500 font-bold mr-1">
+                        Perfis prontos:
+                      </span>
+                      {ROLE_PERMISSION_PRESETS.map((preset) => (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() =>
+                            setUserFormData((prev) => ({
+                              ...prev,
+                              role: preset.role,
+                              permissions: [...preset.permissions],
+                            }))
+                          }
+                          className="px-2 py-1 rounded-lg bg-white hover:bg-purple-50 border border-stone-200 hover:border-purple-300 text-[11px] font-semibold text-stone-700 cursor-pointer transition-colors"
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+                    </div>
+
                     <div className="flex items-center justify-between pb-2 border-b border-stone-200 text-xs">
                       <span className="text-stone-600 font-bold">
                         Selecione as telas permitidas:

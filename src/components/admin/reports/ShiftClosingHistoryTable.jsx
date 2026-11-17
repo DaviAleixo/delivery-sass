@@ -9,9 +9,11 @@ import {
   Bike,
 } from "lucide-react";
 import { generateWhatsAppClosingText } from "@/utils/shiftClosingWhatsAppFormatter";
+import { SHOW_DRIVER_CLOSING_SECTIONS } from "@/utils/shiftClosingCalculator";
 import { createPageUrl } from "@/utils";
 import { toast } from "sonner";
 import ShiftClosingModal from "@/components/admin/orders/ShiftClosingModal";
+import CashClosingAuditModal from "@/components/admin/cash/CashClosingAuditModal";
 
 export default function ShiftClosingHistoryTable({
   closings = [],
@@ -97,25 +99,43 @@ export default function ShiftClosingHistoryTable({
                 <thead className="bg-stone-100/70 text-stone-600 uppercase text-[11px] font-bold border-b border-stone-200">
                   <tr>
                     <th className="py-3 px-4">Data / Turno</th>
+                    <th className="py-3 px-4">Operador</th>
                     <th className="py-3 px-4 text-center">Pedidos</th>
                     <th className="py-3 px-4 text-right">Faturamento</th>
-                    <th className="py-3 px-4 text-right">Gaveta (Dinheiro)</th>
-                    <th className="py-3 px-4 text-center">Entregadores</th>
+                    <th className="py-3 px-4 text-right">Esperado / Contado</th>
+                    <th className="py-3 px-4">Conferência & Justificativa</th>
+                    {SHOW_DRIVER_CLOSING_SECTIONS && (
+                      <th className="py-3 px-4 text-center">Entregadores</th>
+                    )}
                     <th className="py-3 px-4 text-right">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100 bg-white font-medium">
                   {closings.map((c, idx) => {
-                    const raw = c.raw_closing_data || {};
                     const driversCount = Array.isArray(c.driver_settlements)
                       ? c.driver_settlements.length
                       : 0;
+                    const expectedDrawer = Number(
+                      c.cash_drawer?.expectedCashInDrawer ??
+                        c.cash_drawer?.expectedInDrawer ??
+                        c.cash_drawer?.totalCashExpected ??
+                        0
+                    );
+                    const hasCounted =
+                      c.cash_drawer?.countedCash !== undefined &&
+                      c.cash_drawer?.countedCash !== null;
+                    const countedDrawer = hasCounted
+                      ? Number(c.cash_drawer.countedCash)
+                      : expectedDrawer;
+                    const diff = Number(c.cash_drawer?.difference || 0);
+                    const isExact = Math.abs(diff) < 0.01;
+                    const just = (c.cash_drawer?.justification || "").trim();
 
                     return (
-                      <tr key={c.id || idx} className="hover:bg-stone-50 transition-colors">
+                      <tr key={c.id || idx} className="hover:bg-stone-50 transition-colors align-top">
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                            <span className={`w-2 h-2 rounded-full ${isExact ? "bg-emerald-500" : diff > 0 ? "bg-blue-500" : "bg-rose-500"}`} />
                             <div>
                               <span className="font-bold text-stone-900 block">
                                 {c.period_label || c.shift_date}
@@ -126,6 +146,9 @@ export default function ShiftClosingHistoryTable({
                             </div>
                           </div>
                         </td>
+                        <td className="py-3 px-4 text-stone-700 font-semibold">
+                          {c.cashier_name || c.cash_drawer?.openedBy || "Operador"}
+                        </td>
                         <td className="py-3 px-4 text-center">
                           <span className="font-bold text-stone-800">{c.total_orders}</span>
                           <span className="text-[10px] text-stone-400 block">
@@ -135,24 +158,57 @@ export default function ShiftClosingHistoryTable({
                         <td className="py-3 px-4 text-right font-bold text-stone-900">
                           {formatMoney(c.gross_revenue)}
                         </td>
-                        <td className="py-3 px-4 text-right font-bold text-emerald-700">
-                          {formatMoney(c.cash_drawer?.totalCashExpected || 0)}
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          {driversCount > 0 ? (
-                            <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100 border-orange-200 text-[10px] font-bold">
-                              <Bike className="w-3 h-3 mr-1 text-orange-600" />
-                              {driversCount} motoboys
-                            </Badge>
-                          ) : (
-                            <span className="text-stone-400 text-xs">Sem entregadores</span>
+                        <td className="py-3 px-4 text-right font-mono">
+                          <span className="font-bold text-emerald-700 block">
+                            {formatMoney(expectedDrawer)}
+                          </span>
+                          {hasCounted && (
+                            <span className="text-[10px] text-stone-500 block">
+                              Contado: {formatMoney(countedDrawer)}
+                            </span>
                           )}
                         </td>
+                        <td className="py-3 px-4 max-w-xs">
+                          {hasCounted ? (
+                            isExact ? (
+                              <Badge className="bg-emerald-50 text-emerald-800 border-emerald-200 text-[10px] font-bold">
+                                Exato (R$ 0,00)
+                              </Badge>
+                            ) : diff > 0 ? (
+                              <Badge className="bg-blue-50 text-blue-800 border-blue-200 text-[10px] font-bold">
+                                +{formatMoney(diff)} (Sobra)
+                              </Badge>
+                            ) : (
+                              <Badge className="bg-rose-50 text-rose-800 border-rose-200 text-[10px] font-bold">
+                                -{formatMoney(Math.abs(diff))} (Falta)
+                              </Badge>
+                            )
+                          ) : (
+                            <span className="text-[11px] text-stone-400">—</span>
+                          )}
+                          {just && (
+                            <p className="text-[11px] text-stone-600 mt-1 whitespace-normal break-words">
+                              "{just}"
+                            </p>
+                          )}
+                        </td>
+                        {SHOW_DRIVER_CLOSING_SECTIONS && (
+                          <td className="py-3 px-4 text-center">
+                            {driversCount > 0 ? (
+                              <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-100 border-orange-200 text-[10px] font-bold">
+                                <Bike className="w-3 h-3 mr-1 text-orange-600" />
+                                {driversCount} motoboys
+                              </Badge>
+                            ) : (
+                              <span className="text-stone-400 text-xs">Sem entregadores</span>
+                            )}
+                          </td>
+                        )}
                         <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             <button
                               type="button"
-                              onClick={() => setSelectedClosing(raw)}
+                              onClick={() => setSelectedClosing(c)}
                               className="p-1.5 rounded-lg text-stone-600 hover:text-stone-900 hover:bg-stone-100 transition-colors cursor-pointer"
                               title="Visualizar Raio-X Completo"
                             >
@@ -186,15 +242,27 @@ export default function ShiftClosingHistoryTable({
         </CardContent>
       </Card>
 
-      {/* Modal em Modo Somente-Leitura ao Clicar em Visualizar */}
+      {/* Modal Raio-X Auditável ao Clicar em Visualizar */}
       {selectedClosing && (
-        <ShiftClosingModal
-          isOpen={Boolean(selectedClosing)}
-          onClose={() => setSelectedClosing(null)}
-          closingData={selectedClosing}
-          storeName={storeName}
-          readOnly={true}
-        />
+        selectedClosing.cash_drawer?.movements ||
+        selectedClosing.cash_drawer?.countedCash !== undefined ||
+        selectedClosing.cash_drawer?.justification ? (
+          <CashClosingAuditModal
+            isOpen={Boolean(selectedClosing)}
+            onClose={() => setSelectedClosing(null)}
+            closing={selectedClosing}
+            onPrint={handlePrint}
+            onCopyWhatsApp={handleShareWhatsApp}
+          />
+        ) : (
+          <ShiftClosingModal
+            isOpen={Boolean(selectedClosing)}
+            onClose={() => setSelectedClosing(null)}
+            closingData={selectedClosing.raw_closing_data || selectedClosing}
+            storeName={storeName}
+            readOnly={true}
+          />
+        )
       )}
     </>
   );

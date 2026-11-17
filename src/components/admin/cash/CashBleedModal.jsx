@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -25,6 +25,7 @@ export default function CashBleedModal({
   isOpen,
   onClose,
   currentDrawerBalance = 0,
+  hideBalance = false,
   onConfirmBleed,
   currentOperator = "Operador",
 }) {
@@ -33,22 +34,31 @@ export default function CashBleedModal({
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  useEffect(() => {
+    if (isOpen) {
+      setAmountStr("");
+      setReason("cofre");
+      setNotes("");
+      setIsSubmitting(false);
+    }
+  }, [isOpen]);
+
   const amountValue = parseBRLToNumber(amountStr);
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!amountValue || amountValue <= 0) {
       toast.error("Informe um valor válido para a sangria.");
       return;
     }
 
-    if (amountValue > currentDrawerBalance && currentDrawerBalance > 0) {
+    if (!hideBalance && amountValue > currentDrawerBalance && currentDrawerBalance > 0) {
       toast.warning("Atenção: o valor da sangria é maior que o saldo estimado na gaveta.");
     }
 
     setIsSubmitting(true);
     try {
       if (typeof onConfirmBleed === "function") {
-        onConfirmBleed({
+        await onConfirmBleed({
           type: "bleed",
           amount: amountValue,
           reason,
@@ -63,7 +73,7 @@ export default function CashBleedModal({
       onClose();
     } catch (err) {
       console.error("[CashBleedModal] Erro ao registrar sangria:", err);
-      toast.error("Erro ao registrar sangria.");
+      toast.error(err?.message || "Erro ao registrar sangria.");
     } finally {
       setIsSubmitting(false);
     }
@@ -89,14 +99,16 @@ export default function CashBleedModal({
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          {/* Card com saldo estimado atual */}
+          {/* Card com saldo estimado atual (oculto no Modo Cego) */}
           <div className="bg-stone-50 border border-stone-200 rounded-lg p-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Wallet className="w-4 h-4 text-stone-400" />
               <span className="text-xs font-semibold text-stone-600">Dinheiro Atual na Gaveta:</span>
             </div>
             <span className="text-sm font-bold font-mono text-stone-900 bg-white px-2.5 py-1 rounded-md border border-stone-200">
-              R$ {Number(currentDrawerBalance || 0).toFixed(2).replace(".", ",")}
+              {hideBalance
+                ? "Oculto (Modo Cego)"
+                : `R$ ${Number(currentDrawerBalance || 0).toFixed(2).replace(".", ",")}`}
             </span>
           </div>
 

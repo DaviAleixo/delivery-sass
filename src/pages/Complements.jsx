@@ -1,26 +1,33 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useParams, useLocation } from "react-router-dom";
+import { toast } from "sonner";
 import { ComplementGroup, ComplementItem, ProductComplementGroup, Product, Category } from "@/entities";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import { parseBRLToNumber } from "@/utils/moneyMask";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { 
-  Plus, 
-  Layers, 
-  Edit3, 
-  Trash2, 
-  ListPlus, 
-  Link2, 
-  AlertCircle 
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { appConfirm } from "@/components/ui/ConfirmDialogHost";
+import ComplementCardGrid from "@/components/admin/ComplementCardGrid";
+import ComplementListTable from "@/components/admin/ComplementListTable";
+import {
+  Plus,
+  Layers,
+  Trash2,
+  Link2,
+  Search,
+  LayoutGrid,
+  List,
+  HelpCircle,
+  Pizza,
+  CheckCircle2,
+  PauseCircle,
+  ShieldCheck,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
 
 export default function ComplementsPage() {
   const [groups, setGroups] = useState([]);
@@ -58,6 +65,28 @@ export default function ComplementsPage() {
   const [selectedProductIds, setSelectedProductIds] = useState([]);
   const [filterCategory, setFilterCategory] = useState("all");
   const [isSaving, setIsSaving] = useState(false);
+
+  // Filtros, KPIs e Modo de Visualização
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterRule, setFilterRule] = useState("all");
+  const [showPizzaTip, setShowPizzaTip] = useState(false);
+  const [duplicatingGroupId, setDuplicatingGroupId] = useState(null);
+  const [viewMode, setViewMode] = useState(() => {
+    try {
+      return localStorage.getItem("pedemuleke_complements_view_mode") || "list";
+    } catch {
+      return "list";
+    }
+  });
+
+  const handleChangeViewMode = (mode) => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem("pedemuleke_complements_view_mode", mode);
+    } catch {
+      // ignore storage errors
+    }
+  };
 
   const { slug } = useParams();
   const location = useLocation();
@@ -147,22 +176,71 @@ export default function ComplementsPage() {
         });
       }
       setShowGroupModal(false);
+      toast.success(editingGroup ? "Grupo atualizado!" : "Grupo criado com sucesso!");
       await loadAllData();
     } catch (err) {
-      alert("Erro ao salvar grupo.");
+      toast.error("Erro ao salvar grupo.");
       console.error(err);
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleDeleteGroup = async (groupId) => {
-    if (!confirm("Tem certeza que deseja excluir este grupo? Todas as opções e vínculos serão removidos.")) return;
+  const handleDuplicateGroup = async (group) => {
+    setDuplicatingGroupId(group.id);
     try {
-      await ComplementGroup.delete(groupId);
+      const newGroup = await ComplementGroup.create({
+        name: `${group.name} (Cópia)`,
+        description: group.description || "",
+        min_quantity: group.min_quantity ?? 0,
+        max_quantity: group.max_quantity ?? 1,
+        required: Boolean(group.required),
+        active: Boolean(group.active),
+        is_pizza_crust: Boolean(group.is_pizza_crust),
+        order_index: (groups.length || 0) + 1,
+      });
+
+      const grpItems = items.filter((i) => i.group_id === group.id);
+      if (newGroup?.id && grpItems.length > 0) {
+        await Promise.all(
+          grpItems.map((item, idx) =>
+            ComplementItem.create({
+              group_id: newGroup.id,
+              name: item.name,
+              description: item.description || "",
+              price: Number(item.price || 0),
+              max_quantity: item.max_quantity ?? 1,
+              active: Boolean(item.active),
+              order_index: item.order_index ?? idx + 1,
+            })
+          )
+        );
+      }
+
+      toast.success(`Grupo "${group.name}" duplicado com sucesso!`);
       await loadAllData();
     } catch (err) {
-      alert("Erro ao excluir grupo.");
+      toast.error("Erro ao duplicar grupo.");
+      console.error(err);
+    } finally {
+      setDuplicatingGroupId(null);
+    }
+  };
+
+  const handleDeleteGroup = async (groupId) => {
+    const ok = await appConfirm({
+      title: "Excluir grupo de complementos?",
+      description: "Todas as opções e vínculos serão removidos.",
+      confirmText: "Excluir Grupo",
+      variant: "danger",
+    });
+    if (!ok) return;
+    try {
+      await ComplementGroup.delete(groupId);
+      toast.success("Grupo excluído.");
+      await loadAllData();
+    } catch (err) {
+      toast.error("Erro ao excluir grupo.");
       console.error(err);
     }
   };
@@ -214,7 +292,7 @@ export default function ComplementsPage() {
       });
       await loadAllData();
     } catch (err) {
-      alert("Erro ao adicionar item.");
+      toast.error("Erro ao adicionar item.");
       console.error(err);
     }
   };
@@ -224,7 +302,7 @@ export default function ComplementsPage() {
       await ComplementItem.delete(itemId);
       await loadAllData();
     } catch (err) {
-      alert("Erro ao excluir item.");
+      toast.error("Erro ao excluir item.");
       console.error(err);
     }
   };
@@ -289,9 +367,10 @@ export default function ComplementsPage() {
       }
 
       setShowLinkModal(false);
+      toast.success("Vínculos salvos com sucesso!");
       await loadAllData();
     } catch (err) {
-      alert("Erro ao salvar vínculos.");
+      toast.error("Erro ao salvar vínculos.");
       console.error(err);
     } finally {
       setIsSaving(false);
@@ -300,6 +379,32 @@ export default function ComplementsPage() {
 
   const groupItemsMap = (groupId) => items.filter(i => i.group_id === groupId);
   const groupLinkedProductsCount = (groupId) => productGroups.filter(pg => pg.group_id === groupId).length;
+
+  const stats = useMemo(() => {
+    const total = groups.length;
+    const required = groups.filter((g) => g.required || (g.min_quantity ?? 0) > 0).length;
+    const optional = total - required;
+    const inactive = groups.filter((g) => !g.active).length;
+    return { total, required, optional, inactive };
+  }, [groups]);
+
+  const filteredGroups = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    return groups.filter((group) => {
+      const isReq = group.required || (group.min_quantity ?? 0) > 0;
+      if (filterRule === "required" && !isReq) return false;
+      if (filterRule === "optional" && isReq) return false;
+      if (filterRule === "inactive" && group.active) return false;
+
+      if (!term) return true;
+      const inName = (group.name || "").toLowerCase().includes(term);
+      const inDesc = (group.description || "").toLowerCase().includes(term);
+      const inItems = items.some(
+        (i) => i.group_id === group.id && (i.name || "").toLowerCase().includes(term)
+      );
+      return inName || inDesc || inItems;
+    });
+  }, [groups, items, searchTerm, filterRule]);
 
   return (
     <div className="p-6 sm:p-8 bg-[#F7F9F8] min-h-screen">
@@ -314,39 +419,176 @@ export default function ComplementsPage() {
               Crie grupos reutilizáveis (Bordas Recheadas, Extras, Ponto da Carne) e vincule aos produtos com 1 clique.
             </p>
           </div>
-          <Button 
-            onClick={handleOpenCreateGroup} 
-            className="bg-[#047857] hover:bg-[#065f46] text-white shadow-sm font-bold rounded-xl cursor-pointer shrink-0"
-          >
-            <Plus className="w-4 h-4 mr-2" /> Novo Grupo
-          </Button>
-        </div>
-
-        {/* Card de Dica Rápida para Pizzarias */}
-        <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 flex items-start sm:items-center justify-between gap-3 shadow-2xs">
-          <div className="flex items-start sm:items-center gap-3">
-            <span className="text-2xl shrink-0">🍕</span>
-            <div>
-              <h4 className="text-xs sm:text-sm font-bold text-emerald-950">
-                Como configurar Bordas Recheadas para Pizzas:
-              </h4>
-              <p className="text-xs text-emerald-800 mt-0.5 leading-relaxed">
-                Basta criar um grupo com a palavra <strong>"Borda"</strong> no nome (ex: <em>Bordas Recheadas</em>, Mín: 0 e Máx: 1), adicionar as opções (Catupiry, Cheddar, etc.) e vincular às suas pizzas. O montador de pizza colocará esse grupo automaticamente para a pizza toda!
-              </p>
-            </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowPizzaTip((v) => !v)}
+              className={`rounded-xl border-stone-200 text-xs font-semibold cursor-pointer ${
+                showPizzaTip ? "bg-emerald-50 text-[#047857] border-emerald-200" : "bg-white text-stone-600 hover:text-stone-900"
+              }`}
+            >
+              <HelpCircle className="w-4 h-4 mr-1.5" />
+              Dica: Bordas de Pizza
+            </Button>
+            <Button
+              onClick={handleOpenCreateGroup}
+              className="bg-[#047857] hover:bg-[#065f46] text-white shadow-sm font-bold rounded-xl cursor-pointer"
+            >
+              <Plus className="w-4 h-4 mr-2" /> Novo Grupo
+            </Button>
           </div>
         </div>
 
-        {/* Lista de Grupos */}
+        {/* Dica colapsável de Bordas para Pizzas (1 linha, sem emoji) */}
+        {showPizzaTip && (
+          <div className="px-4 py-3 rounded-xl bg-emerald-50/70 border border-emerald-200/80 flex items-center justify-between gap-3 text-xs text-emerald-900">
+            <div className="flex items-center gap-2.5">
+              <Pizza className="w-4 h-4 text-[#047857] shrink-0" />
+              <p className="leading-relaxed">
+                <strong>Bordas para Pizzas:</strong> crie um grupo com a opção <em>&quot;Borda Recheada / Pizza Inteira&quot;</em> ativada (ou &quot;Borda&quot; no nome, Mín: 0, Máx: 1) e vincule às pizzas — o montador aplica automaticamente ao disco inteiro.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowPizzaTip(false)}
+              className="text-emerald-700 hover:text-emerald-950 font-semibold shrink-0 cursor-pointer"
+            >
+              Fechar
+            </button>
+          </div>
+        )}
+
+        {/* KPIs Compactos e Clicáveis */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            {
+              key: "all",
+              label: "Total de Grupos",
+              value: stats.total,
+              icon: Layers,
+              iconColor: "text-stone-500",
+              activeRing: "border-[#047857] ring-1 ring-[#047857]/20 bg-emerald-50/30",
+              valueColor: "text-gray-900",
+            },
+            {
+              key: "required",
+              label: "Obrigatórios",
+              value: stats.required,
+              icon: ShieldCheck,
+              iconColor: "text-amber-600",
+              activeRing: "border-amber-500 ring-1 ring-amber-500/20 bg-amber-50/30",
+              valueColor: "text-amber-700",
+            },
+            {
+              key: "optional",
+              label: "Opcionais",
+              value: stats.optional,
+              icon: CheckCircle2,
+              iconColor: "text-emerald-600",
+              activeRing: "border-[#047857] ring-1 ring-[#047857]/20 bg-emerald-50/30",
+              valueColor: "text-[#047857]",
+            },
+            {
+              key: "inactive",
+              label: "Pausados",
+              value: stats.inactive,
+              icon: PauseCircle,
+              iconColor: "text-stone-400",
+              activeRing: "border-stone-500 ring-1 ring-stone-500/20 bg-stone-100/60",
+              valueColor: "text-stone-600",
+            },
+          ].map((kpi) => {
+            const Icon = kpi.icon;
+            const isSelected = filterRule === kpi.key;
+            return (
+              <button
+                key={kpi.key}
+                type="button"
+                onClick={() => setFilterRule(isSelected && kpi.key !== "all" ? "all" : kpi.key)}
+                className={`text-left px-4 py-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
+                  isSelected
+                    ? kpi.activeRing
+                    : "bg-white border-stone-200 hover:border-stone-300 shadow-2xs"
+                }`}
+              >
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-stone-500">
+                    {kpi.label}
+                  </p>
+                  <p className={`text-2xl font-extrabold mt-0.5 tabular-nums ${kpi.valueColor}`}>
+                    {kpi.value}
+                  </p>
+                </div>
+                <Icon className={`w-5 h-5 ${kpi.iconColor} shrink-0`} />
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Barra de Busca, Filtro e Toggle Lista | Cards */}
+        <div className="bg-white p-3 rounded-xl border border-stone-200 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Input
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Buscar grupo ou opção (ex: Catupiry, Bacon, Borda)..."
+              className="pl-9 bg-stone-50/60 border-stone-200 focus:bg-white rounded-lg"
+            />
+          </div>
+
+          <Select value={filterRule} onValueChange={setFilterRule}>
+            <SelectTrigger className="w-full sm:w-44 bg-stone-50/60 border-stone-200 rounded-lg">
+              <SelectValue placeholder="Filtrar regra" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os grupos</SelectItem>
+              <SelectItem value="required">Obrigatórios</SelectItem>
+              <SelectItem value="optional">Opcionais</SelectItem>
+              <SelectItem value="inactive">Pausados</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <div className="inline-flex items-center p-1 rounded-lg bg-stone-100 border border-stone-200 shrink-0 self-end sm:self-auto">
+            <button
+              type="button"
+              onClick={() => handleChangeViewMode("list")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                viewMode === "list"
+                  ? "bg-white text-gray-900 shadow-2xs"
+                  : "text-stone-500 hover:text-stone-800"
+              }`}
+            >
+              <List className="w-3.5 h-3.5" />
+              Lista
+            </button>
+            <button
+              type="button"
+              onClick={() => handleChangeViewMode("cards")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                viewMode === "cards"
+                  ? "bg-white text-gray-900 shadow-2xs"
+                  : "text-stone-500 hover:text-stone-800"
+              }`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              Cards
+            </button>
+          </div>
+        </div>
+
+        {/* Lista / Cards de Grupos */}
         {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3].map(n => (
-              <Card key={n} className="animate-pulse bg-white h-52 border rounded-2xl shadow-xs" />
+          <div className="space-y-3">
+            {[1, 2, 3].map((n) => (
+              <div key={n} className="animate-pulse bg-white h-20 border border-stone-200 rounded-xl shadow-2xs" />
             ))}
           </div>
         ) : groups.length === 0 ? (
-          <Card className="border-dashed border-2 p-12 text-center rounded-2xl bg-white shadow-xs">
-            <Layers className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+          <div className="border-dashed border-2 border-stone-200 p-12 text-center rounded-2xl bg-white shadow-2xs">
+            <Layers className="w-12 h-12 text-stone-400 mx-auto mb-3" />
             <h3 className="text-lg font-bold text-gray-800">Nenhum grupo cadastrado</h3>
             <p className="text-sm text-gray-500 max-w-md mx-auto mt-1 mb-4">
               Crie seu primeiro grupo de complementos para organizar adicionais e opções obrigatórias ou opcionais.
@@ -354,256 +596,199 @@ export default function ComplementsPage() {
             <Button onClick={handleOpenCreateGroup} className="bg-[#047857] hover:bg-[#065f46] text-white font-bold rounded-xl cursor-pointer">
               <Plus className="w-4 h-4 mr-2" /> Criar Grupo Agora
             </Button>
-          </Card>
+          </div>
+        ) : filteredGroups.length === 0 ? (
+          <div className="border border-stone-200 p-10 text-center rounded-2xl bg-white shadow-2xs">
+            <Search className="w-9 h-9 text-stone-400 mx-auto mb-2" />
+            <h3 className="text-base font-bold text-gray-800">Nenhum grupo encontrado</h3>
+            <p className="text-xs text-gray-500 mt-1 mb-4">
+              Tente outro termo de busca ou limpe o filtro selecionado.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSearchTerm("");
+                setFilterRule("all");
+              }}
+              className="rounded-lg cursor-pointer"
+            >
+              Limpar filtros
+            </Button>
+          </div>
+        ) : viewMode === "list" ? (
+          <ComplementListTable
+            groups={filteredGroups}
+            getGroupItems={groupItemsMap}
+            getLinkedCount={groupLinkedProductsCount}
+            duplicatingGroupId={duplicatingGroupId}
+            onToggleGroupActive={handleToggleGroupActive}
+            onToggleItemActive={handleToggleItemActive}
+            onOpenItems={handleOpenItemsModal}
+            onOpenLinks={handleOpenLinkModal}
+            onDuplicate={handleDuplicateGroup}
+            onEdit={handleOpenEditGroup}
+            onDelete={handleDeleteGroup}
+          />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
-          <AnimatePresence>
-            {groups.map(group => {
-              const grpItems = groupItemsMap(group.id);
-              const linkedCount = groupLinkedProductsCount(group.id);
-              const isRequired = group.required || group.min_quantity > 0;
-
-              return (
-                <motion.div
-                  key={group.id}
-                  layout
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  className="h-full flex flex-col"
-                >
-                  <Card className={`rounded-2xl border transition-all duration-200 overflow-hidden shadow-sm hover:shadow-md flex flex-col justify-between h-full ${group.active ? 'bg-white' : 'bg-gray-50/80 opacity-75'}`}>
-                    {/* Cabeçalho do Card com Altura Uniforme */}
-                    <div className="p-5 border-b bg-gradient-to-r from-stone-50 to-white flex items-start justify-between gap-3 min-h-[96px] shrink-0">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                          <h3 className="font-bold text-gray-900 text-base sm:text-lg truncate max-w-[180px]" title={group.name}>
-                            {group.name}
-                          </h3>
-                          {group.is_pizza_crust && (
-                            <Badge className="bg-[#047857] hover:bg-[#065f46] text-white text-[10px] font-bold shrink-0">
-                              🍕 Borda (Pizza Toda)
-                            </Badge>
-                          )}
-                          {isRequired ? (
-                            <Badge className="bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-semibold shrink-0">
-                              Obrigatório (Mín: {group.min_quantity})
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-stone-600 bg-stone-100 text-[10px] font-semibold shrink-0">
-                              Opcional (Máx: {group.max_quantity})
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-xs text-gray-500 truncate h-4" title={group.description}>
-                          {group.description || "Nenhuma descrição"}
-                        </p>
-                      </div>
-
-                      <Switch 
-                        checked={group.active} 
-                        onCheckedChange={(c) => handleToggleGroupActive(group, c)}
-                        title={group.active ? "Grupo Ativo" : "Grupo Inativo"}
-                        className="shrink-0 mt-0.5"
-                      />
-                    </div>
-
-                    {/* Corpo do Card com Altura Padronizada */}
-                    <CardContent className="p-5 flex-1 flex flex-col justify-between space-y-4">
-                      {/* Resumo de Itens com Caixa de Altura Fixa */}
-                      <div className="flex-1 flex flex-col">
-                        <div className="flex items-center justify-between text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 shrink-0">
-                          <span>Opções ({grpItems.length})</span>
-                          <button 
-                            onClick={() => handleOpenItemsModal(group)}
-                            className="text-[#047857] hover:underline flex items-center gap-1 font-bold cursor-pointer"
-                          >
-                            <ListPlus className="w-3.5 h-3.5" /> Gerenciar Opções
-                          </button>
-                        </div>
-
-                        {grpItems.length === 0 ? (
-                          <div className="h-[120px] flex flex-col items-center justify-center p-3 rounded-xl border border-dashed border-amber-200 bg-amber-50/60 text-center">
-                            <AlertCircle className="w-5 h-5 text-amber-500 mb-1" />
-                            <p className="text-xs text-amber-800 font-medium">Nenhuma opção cadastrada</p>
-                            <button
-                              onClick={() => handleOpenItemsModal(group)}
-                              className="text-[11px] text-[#047857] font-bold hover:underline mt-1 cursor-pointer"
-                            >
-                              + Adicionar opções
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="h-[120px] space-y-1.5 overflow-y-auto pr-1 scrollbar-thin">
-                            {grpItems.slice(0, 4).map(item => (
-                              <div key={item.id} className="flex items-center justify-between text-xs p-1.5 rounded-lg bg-gray-50 border border-gray-100">
-                                <span className={`font-medium truncate ${item.active ? 'text-gray-800' : 'text-gray-400 line-through'}`}>
-                                  {item.name}
-                                </span>
-                                <span className="font-bold text-emerald-600 flex-shrink-0 ml-2">
-                                  {item.price > 0 ? `+ R$ ${Number(item.price).toFixed(2).replace('.', ',')}` : 'Grátis'}
-                                </span>
-                              </div>
-                            ))}
-                            {grpItems.length > 4 && (
-                              <p className="text-[11px] text-gray-400 text-center pt-0.5">
-                                + {grpItems.length - 4} outras opções...
-                              </p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Vínculo de Produtos e Ações sempre alinhados na base */}
-                      <div className="pt-3 border-t border-stone-100 flex items-center justify-between shrink-0 mt-auto">
-                        <button
-                          onClick={() => handleOpenLinkModal(group)}
-                          className="flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
-                        >
-                          <Link2 className="w-3.5 h-3.5" />
-                          <span>{linkedCount} {linkedCount === 1 ? 'produto vinculado' : 'produtos vinculados'}</span>
-                        </button>
-
-                        <div className="flex items-center gap-1">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 text-gray-600 hover:text-gray-900 rounded-full"
-                            onClick={() => handleOpenEditGroup(group)}
-                            title="Editar Grupo"
-                          >
-                            <Edit3 className="w-4 h-4" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full"
-                            onClick={() => handleDeleteGroup(group.id)}
-                            title="Excluir Grupo"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>
-        </div>
-      )}
+          <ComplementCardGrid
+            groups={filteredGroups}
+            getGroupItems={groupItemsMap}
+            getLinkedCount={groupLinkedProductsCount}
+            duplicatingGroupId={duplicatingGroupId}
+            onToggleGroupActive={handleToggleGroupActive}
+            onToggleItemActive={handleToggleItemActive}
+            onOpenItems={handleOpenItemsModal}
+            onOpenLinks={handleOpenLinkModal}
+            onDuplicate={handleDuplicateGroup}
+            onEdit={handleOpenEditGroup}
+            onDelete={handleDeleteGroup}
+          />
+        )}
 
       {/* Modal: Criar / Editar Grupo */}
       <Dialog open={showGroupModal} onOpenChange={setShowGroupModal}>
-        <DialogContent className="sm:max-w-md rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold">
+        <DialogContent className="sm:max-w-lg p-0 gap-0 overflow-hidden flex flex-col max-h-[90vh] rounded-2xl">
+          <DialogHeader className="px-6 py-4 border-b border-stone-200 bg-white shrink-0">
+            <DialogTitle className="text-lg font-extrabold text-gray-900 flex items-center gap-2">
+              <Layers className="w-5 h-5 text-[#047857]" />
               {editingGroup ? "Editar Grupo de Complementos" : "Novo Grupo de Complementos"}
             </DialogTitle>
+            <DialogDescription className="text-xs text-gray-500">
+              Configure o nome, regras de seleção e se o grupo se aplica à pizza inteira.
+            </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleSaveGroup} className="space-y-4 pt-2">
-            <div>
-              <Label htmlFor="grp-name" className="text-xs font-bold uppercase text-gray-600">Nome do Grupo *</Label>
-              <Input
-                id="grp-name"
-                value={groupForm.name}
-                onChange={e => setGroupForm({ ...groupForm, name: e.target.value })}
-                placeholder="Ex: Ponto da Carne, Turbine seu Burger, Molhos"
-                required
-                className="mt-1"
-              />
-            </div>
+          <form onSubmit={handleSaveGroup} className="flex flex-col flex-1 min-h-0">
+            <div className="flex-1 overflow-y-auto bg-[#F7F9F8] px-6 py-5 space-y-4">
+              {/* Identificação */}
+              <div className="bg-white p-4 rounded-xl border border-stone-200 space-y-3">
+                <div>
+                  <Label htmlFor="grp-name" className="text-xs font-bold uppercase text-gray-600">
+                    Nome do Grupo *
+                  </Label>
+                  <Input
+                    id="grp-name"
+                    value={groupForm.name}
+                    onChange={(e) => setGroupForm({ ...groupForm, name: e.target.value })}
+                    placeholder="Ex: Ponto da Carne, Turbine seu Burger, Molhos"
+                    required
+                    className="mt-1.5"
+                  />
+                </div>
 
-            <div>
-              <Label htmlFor="grp-desc" className="text-xs font-bold uppercase text-gray-600">Descrição / Instrução (Opcional)</Label>
-              <Input
-                id="grp-desc"
-                value={groupForm.description}
-                onChange={e => setGroupForm({ ...groupForm, description: e.target.value })}
-                placeholder="Ex: Escolha até 3 adicionais"
-                className="mt-1"
-              />
-            </div>
+                <div>
+                  <Label htmlFor="grp-desc" className="text-xs font-bold uppercase text-gray-600">
+                    Descrição / Instrução (Opcional)
+                  </Label>
+                  <Input
+                    id="grp-desc"
+                    value={groupForm.description}
+                    onChange={(e) => setGroupForm({ ...groupForm, description: e.target.value })}
+                    placeholder="Ex: Escolha até 3 adicionais"
+                    className="mt-1.5"
+                  />
+                </div>
+              </div>
 
-            <div className="grid grid-cols-2 gap-4 bg-stone-50 p-3.5 rounded-xl border border-stone-200">
-              <div>
-                <Label htmlFor="grp-min" className="text-xs font-bold uppercase text-gray-700">Mínimo de Escolhas</Label>
-                <Input
-                  id="grp-min"
-                  type="number"
-                  min="0"
-                  max="20"
-                  value={groupForm.min_quantity}
-                  onChange={e => {
-                    const min = parseInt(e.target.value) || 0;
-                    setGroupForm({ 
-                      ...groupForm, 
-                      min_quantity: min, 
-                      required: min > 0,
-                      max_quantity: Math.max(min, groupForm.max_quantity)
-                    });
-                  }}
-                  className="mt-1 bg-white"
+              {/* Regras de Seleção */}
+              <div className="bg-white p-4 rounded-xl border border-stone-200 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label htmlFor="grp-min" className="text-xs font-bold uppercase text-gray-600">
+                      Mínimo de Escolhas
+                    </Label>
+                    <Input
+                      id="grp-min"
+                      type="number"
+                      min="0"
+                      max="20"
+                      value={groupForm.min_quantity}
+                      onChange={(e) => {
+                        const min = parseInt(e.target.value) || 0;
+                        setGroupForm({
+                          ...groupForm,
+                          min_quantity: min,
+                          required: min > 0,
+                          max_quantity: Math.max(min, groupForm.max_quantity),
+                        });
+                      }}
+                      className="mt-1.5"
+                    />
+                    <span className="text-[11px] text-gray-500 mt-1 block">0 = Opcional, 1+ = Obrigatório</span>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="grp-max" className="text-xs font-bold uppercase text-gray-600">
+                      Máximo de Escolhas
+                    </Label>
+                    <Input
+                      id="grp-max"
+                      type="number"
+                      min="1"
+                      max="50"
+                      value={groupForm.max_quantity}
+                      onChange={(e) => setGroupForm({ ...groupForm, max_quantity: parseInt(e.target.value) || 1 })}
+                      className="mt-1.5"
+                    />
+                    <span className="text-[11px] text-gray-500 mt-1 block">Limite total no grupo</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-3 border-t border-stone-100">
+                  <div className="pr-3">
+                    <p className="font-semibold text-sm text-gray-800">Escolha Obrigatória</p>
+                    <p className="text-xs text-gray-500">
+                      O cliente precisa escolher ao menos 1 opção para adicionar ao carrinho
+                    </p>
+                  </div>
+                  <Switch
+                    checked={groupForm.required}
+                    onCheckedChange={(checked) =>
+                      setGroupForm({
+                        ...groupForm,
+                        required: checked,
+                        min_quantity: checked ? Math.max(1, groupForm.min_quantity) : 0,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+
+              {/* Flag: Borda / Complemento da Pizza Inteira */}
+              <div
+                className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
+                  groupForm.is_pizza_crust
+                    ? "border-[#047857] bg-emerald-50/60"
+                    : "border-stone-200 bg-white"
+                }`}
+              >
+                <div className="space-y-0.5 pr-3">
+                  <p className="font-bold text-sm text-gray-900 flex items-center gap-1.5">
+                    <Pizza className="w-4 h-4 text-amber-600 shrink-0" />
+                    Borda Recheada / Aplicar na Pizza Inteira
+                  </p>
+                  <p className="text-xs text-gray-500 leading-snug">
+                    Ative se este grupo pertencer ao disco todo da pizza (ex: Bordas Recheadas, Tipo de Massa). Deixe desativado para adicionais por fatia/metade.
+                  </p>
+                </div>
+                <Switch
+                  checked={groupForm.is_pizza_crust}
+                  onCheckedChange={(checked) => setGroupForm((prev) => ({ ...prev, is_pizza_crust: checked }))}
                 />
-                <span className="text-[11px] text-gray-500">0 = Opcional, 1+ = Obrigatório</span>
-              </div>
-
-              <div>
-                <Label htmlFor="grp-max" className="text-xs font-bold uppercase text-gray-700">Máximo de Escolhas</Label>
-                <Input
-                  id="grp-max"
-                  type="number"
-                  min="1"
-                  max="50"
-                  value={groupForm.max_quantity}
-                  onChange={e => setGroupForm({ ...groupForm, max_quantity: parseInt(e.target.value) || 1 })}
-                  className="mt-1 bg-white"
-                />
-                <span className="text-[11px] text-gray-500">Limite total no grupo</span>
               </div>
             </div>
 
-            <div className="flex items-center justify-between p-3 rounded-xl border bg-gray-50">
-              <div>
-                <p className="font-semibold text-sm text-gray-800">Escolha Obrigatória</p>
-                <p className="text-xs text-gray-500">O cliente precisa escolher ao menos 1 opção para adicionar ao carrinho</p>
-              </div>
-              <Switch 
-                checked={groupForm.required}
-                onCheckedChange={checked => setGroupForm({ 
-                  ...groupForm, 
-                  required: checked, 
-                  min_quantity: checked ? Math.max(1, groupForm.min_quantity) : 0 
-                })}
-              />
-            </div>
-
-            {/* Flag: Borda / Complemento da Pizza Inteira */}
-            <div className={`flex items-center justify-between p-3.5 rounded-xl border transition-all ${
-              groupForm.is_pizza_crust ? "border-[#047857] bg-[#D1E9DF]/25" : "border-gray-200 bg-gray-50/70"
-            }`}>
-              <div className="space-y-0.5 pr-3">
-                <p className="font-bold text-sm text-gray-900 flex items-center gap-1.5">
-                  <span>🍕 Borda Recheada / Aplicar na Pizza Inteira</span>
-                </p>
-                <p className="text-xs text-gray-500 leading-snug">
-                  Ative se este grupo pertencer ao disco todo da pizza (ex: Bordas Recheadas, Tipo de Massa). Deixe desativado para adicionais por fatia/metade (ex: Bacon Extra, Queijo Extra).
-                </p>
-              </div>
-              <Switch 
-                checked={groupForm.is_pizza_crust}
-                onCheckedChange={checked => setGroupForm(prev => ({ ...prev, is_pizza_crust: checked }))}
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-3 border-t">
-              <Button type="button" variant="outline" onClick={() => setShowGroupModal(false)}>
+            <div className="px-6 py-3.5 border-t border-stone-200 bg-white shrink-0 flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setShowGroupModal(false)} className="rounded-xl">
                 Cancelar
               </Button>
-              <Button type="submit" disabled={isSaving} className="bg-[#047857] hover:bg-[#065f46] text-white font-semibold cursor-pointer">
-                {isSaving ? "Salvando..." : (editingGroup ? "Salvar Alterações" : "Criar Grupo")}
+              <Button
+                type="submit"
+                disabled={isSaving}
+                className="bg-[#047857] hover:bg-[#065f46] text-white font-semibold rounded-xl cursor-pointer"
+              >
+                {isSaving ? "Salvando..." : editingGroup ? "Salvar Alterações" : "Criar Grupo"}
               </Button>
             </div>
           </form>
@@ -612,41 +797,50 @@ export default function ComplementsPage() {
 
       {/* Modal: Gerenciar Opções do Grupo */}
       <Dialog open={showItemsModal} onOpenChange={setShowItemsModal}>
-        <DialogContent className="sm:max-w-xl max-h-[88vh] overflow-y-auto rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold flex items-center gap-2">
+        <DialogContent className="sm:max-w-xl p-0 gap-0 overflow-hidden flex flex-col max-h-[90vh] rounded-2xl">
+          <DialogHeader className="px-6 py-4 border-b border-stone-200 bg-white shrink-0">
+            <DialogTitle className="text-lg font-extrabold text-gray-900 flex items-center gap-2">
               <Layers className="w-5 h-5 text-[#047857]" />
-              Opções do Grupo: <span className="text-[#047857]">{activeGroupForItems?.name}</span>
+              Opções de <span className="text-[#047857]">{activeGroupForItems?.name}</span>
             </DialogTitle>
+            <DialogDescription className="text-xs text-gray-500">
+              {activeGroupForItems
+                ? `${groupItemsMap(activeGroupForItems.id).length} opção(ões) cadastrada(s) neste grupo.`
+                : ""}
+            </DialogDescription>
           </DialogHeader>
 
           {activeGroupForItems && (
-            <div className="space-y-6 pt-2">
+            <div className="flex-1 overflow-y-auto bg-[#F7F9F8] px-6 py-5 space-y-5">
               {/* Formulário de adicionar opção */}
-              <form onSubmit={handleAddItem} className="bg-stone-50 p-4 rounded-2xl border border-stone-200 space-y-3">
-                <h4 className="font-bold text-sm text-gray-800 flex items-center gap-1.5">
+              <form onSubmit={handleAddItem} className="bg-white p-4 rounded-xl border border-stone-200 space-y-3">
+                <h4 className="font-bold text-xs uppercase tracking-wider text-gray-700 flex items-center gap-1.5">
                   <Plus className="w-4 h-4 text-[#047857]" /> Adicionar Nova Opção
                 </h4>
-                
+
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="sm:col-span-2">
-                    <Label htmlFor="opt-name" className="text-xs font-semibold text-gray-600">Nome da Opção *</Label>
+                    <Label htmlFor="opt-name" className="text-xs font-semibold text-gray-600">
+                      Nome da Opção *
+                    </Label>
                     <Input
                       id="opt-name"
                       placeholder="Ex: Bacon Extra, Ao Ponto"
                       value={itemForm.name}
-                      onChange={e => setItemForm({ ...itemForm, name: e.target.value })}
+                      onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })}
                       required
                       className="mt-1 bg-white focus:border-[#047857]"
                     />
                   </div>
                   <div>
-                    <Label htmlFor="opt-price" className="text-xs font-semibold text-gray-600">Preço Adicional (R$)</Label>
+                    <Label htmlFor="opt-price" className="text-xs font-semibold text-gray-600">
+                      Preço Adicional (R$)
+                    </Label>
                     <CurrencyInput
                       id="opt-price"
                       placeholder="R$ 0,00"
                       value={itemForm.price}
-                      onChange={e => setItemForm({ ...itemForm, price: e.target.value })}
+                      onChange={(e) => setItemForm({ ...itemForm, price: e.target.value })}
                       className="mt-1 bg-white focus:border-[#047857]"
                     />
                   </div>
@@ -654,56 +848,65 @@ export default function ComplementsPage() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
                   <div className="sm:col-span-2">
-                    <Label htmlFor="opt-desc" className="text-xs font-semibold text-gray-600">Descrição (Opcional)</Label>
+                    <Label htmlFor="opt-desc" className="text-xs font-semibold text-gray-600">
+                      Descrição (Opcional)
+                    </Label>
                     <Input
                       id="opt-desc"
                       placeholder="Ex: 4 fatias crocantes"
                       value={itemForm.description}
-                      onChange={e => setItemForm({ ...itemForm, description: e.target.value })}
+                      onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })}
                       className="mt-1 bg-white focus:border-[#047857]"
                     />
                   </div>
-                  <Button type="submit" className="w-full bg-[#047857] hover:bg-[#065f46] text-white font-semibold cursor-pointer">
+                  <Button
+                    type="submit"
+                    className="w-full bg-[#047857] hover:bg-[#065f46] text-white font-semibold rounded-xl cursor-pointer"
+                  >
                     <Plus className="w-4 h-4 mr-1" /> Adicionar
                   </Button>
                 </div>
               </form>
 
               {/* Lista de Opções Existentes */}
-              <div className="space-y-2">
-                <h4 className="font-bold text-sm text-gray-700">Opções Cadastradas</h4>
+              <div className="space-y-2.5">
+                <h4 className="font-bold text-xs uppercase tracking-wider text-gray-600">
+                  Opções Cadastradas ({groupItemsMap(activeGroupForItems.id).length})
+                </h4>
                 {groupItemsMap(activeGroupForItems.id).length === 0 ? (
-                  <p className="text-sm text-gray-500 italic p-4 text-center border rounded-xl bg-gray-50">
+                  <p className="text-sm text-gray-500 italic p-6 text-center border border-dashed border-stone-200 rounded-xl bg-white">
                     Nenhuma opção adicionada ainda neste grupo.
                   </p>
                 ) : (
                   <div className="space-y-2">
-                    {groupItemsMap(activeGroupForItems.id).map(item => (
-                      <div 
-                        key={item.id} 
-                        className={`flex items-center justify-between p-3 rounded-xl border transition-all ${item.active ? 'bg-white border-gray-200' : 'bg-gray-100 border-dashed border-gray-300 opacity-60'}`}
+                    {groupItemsMap(activeGroupForItems.id).map((item) => (
+                      <div
+                        key={item.id}
+                        className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
+                          item.active
+                            ? "bg-white border-stone-200"
+                            : "bg-stone-100/80 border-dashed border-stone-300 opacity-70"
+                        }`}
                       >
-                        <div>
-                          <p className={`font-semibold text-sm ${item.active ? 'text-gray-900' : 'text-gray-500 line-through'}`}>
+                        <div className="min-w-0 pr-3">
+                          <p className={`font-semibold text-sm truncate ${item.active ? "text-gray-900" : "text-gray-500 line-through"}`}>
                             {item.name}
                           </p>
-                          {item.description && (
-                            <p className="text-xs text-gray-500">{item.description}</p>
-                          )}
+                          {item.description && <p className="text-xs text-gray-500 truncate">{item.description}</p>}
                         </div>
 
-                        <div className="flex items-center gap-3">
-                          <span className="font-bold text-sm text-emerald-600">
-                            {item.price > 0 ? `+ R$ ${Number(item.price).toFixed(2).replace('.', ',')}` : 'Grátis (R$ 0,00)'}
+                        <div className="flex items-center gap-3 shrink-0">
+                          <span className="font-bold text-sm text-[#047857] tabular-nums">
+                            {item.price > 0 ? `+ R$ ${Number(item.price).toFixed(2).replace(".", ",")}` : "Grátis"}
                           </span>
-                          <Switch 
-                            checked={item.active} 
-                            onCheckedChange={c => handleToggleItemActive(item, c)}
+                          <Switch
+                            checked={item.active}
+                            onCheckedChange={(c) => handleToggleItemActive(item, c)}
                             title={item.active ? "Opção Disponível" : "Opção Pausada / Esgotada"}
                           />
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full"
                             onClick={() => handleDeleteItem(item.id)}
                             title="Excluir Opção"
@@ -718,107 +921,137 @@ export default function ComplementsPage() {
               </div>
             </div>
           )}
+
+          <div className="px-6 py-3.5 border-t border-stone-200 bg-white shrink-0 flex justify-end">
+            <Button
+              type="button"
+              onClick={() => setShowItemsModal(false)}
+              className="bg-[#047857] hover:bg-[#065f46] text-white font-semibold rounded-xl cursor-pointer"
+            >
+              Concluir
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
       {/* Modal: Vincular Produtos em Massa */}
       <Dialog open={showLinkModal} onOpenChange={setShowLinkModal}>
-        <DialogContent className="sm:max-w-2xl max-h-[88vh] overflow-y-auto rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold flex items-center gap-2">
+        <DialogContent className="sm:max-w-2xl p-0 gap-0 overflow-hidden flex flex-col max-h-[90vh] rounded-2xl">
+          <DialogHeader className="px-6 py-4 border-b border-stone-200 bg-white shrink-0">
+            <DialogTitle className="text-lg font-extrabold text-gray-900 flex items-center gap-2">
               <Link2 className="w-5 h-5 text-[#047857]" />
-              Vincular Grupo aos Produtos: <span className="text-[#047857]">{activeGroupForLink?.name}</span>
+              Vincular Grupo: <span className="text-[#047857]">{activeGroupForLink?.name}</span>
             </DialogTitle>
+            <DialogDescription className="text-xs text-gray-500">
+              Selecione os produtos do cardápio que devem exibir este grupo para os clientes.
+            </DialogDescription>
           </DialogHeader>
 
           {activeGroupForLink && (
-            <div className="space-y-4 pt-2">
-              <p className="text-xs text-gray-500">
-                Marque os produtos que devem exibir o grupo <strong>{activeGroupForLink.name}</strong> para os clientes.
-              </p>
-
-              {/* Filtro por Categoria */}
-              <div className="flex items-center gap-2 overflow-x-auto pb-2">
-                <Button
-                  variant={filterCategory === "all" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setFilterCategory("all")}
-                  className={filterCategory === "all" ? "bg-[#047857] hover:bg-[#065f46] text-white rounded-full text-xs font-bold" : "rounded-full text-xs hover:border-[#047857] hover:text-[#047857]"}
-                >
-                  Todas ({products.length})
-                </Button>
-                {categories.map(cat => {
-                  const catProds = products.filter(p => p.category === cat.id);
-                  return (
-                    <Button
-                      key={cat.id}
-                      variant={filterCategory === cat.id ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setFilterCategory(cat.id)}
-                      className={filterCategory === cat.id ? "bg-[#047857] hover:bg-[#065f46] text-white rounded-full text-xs font-bold" : "rounded-full text-xs hover:border-[#047857] hover:text-[#047857]"}
-                    >
-                      {cat.name} ({catProds.length})
-                    </Button>
-                  );
-                })}
-              </div>
-
-              {/* Ação de Selecionar Todos da Categoria */}
-              <div className="flex justify-between items-center bg-stone-50 p-2.5 rounded-xl border">
-                <span className="text-xs font-bold text-gray-700">
-                  {selectedProductIds.length} produto(s) selecionado(s)
-                </span>
-                <Button 
-                  type="button" 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => handleSelectAllCategory(filterCategory)}
-                  className="text-xs font-semibold text-[#047857] hover:bg-[#D1E9DF]/30 cursor-pointer"
-                >
-                  Marcar / Desmarcar Todos Desta Categoria
-                </Button>
-              </div>
-
-              {/* Grid de Produtos */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-72 overflow-y-auto p-1">
-                {products
-                  .filter(p => filterCategory === "all" || p.category === filterCategory)
-                  .map(product => {
-                    const isSelected = selectedProductIds.includes(product.id);
+            <>
+              <div className="flex-1 overflow-y-auto bg-[#F7F9F8] px-6 py-5 space-y-4">
+                {/* Filtro por Categoria */}
+                <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                  <Button
+                    variant={filterCategory === "all" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setFilterCategory("all")}
+                    className={
+                      filterCategory === "all"
+                        ? "bg-[#047857] hover:bg-[#065f46] text-white rounded-full text-xs font-bold cursor-pointer"
+                        : "bg-white rounded-full text-xs hover:border-[#047857] hover:text-[#047857] cursor-pointer"
+                    }
+                  >
+                    Todas ({products.length})
+                  </Button>
+                  {categories.map((cat) => {
+                    const catProds = products.filter((p) => p.category === cat.id);
                     return (
-                      <label
-                        key={product.id}
-                        className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${isSelected ? 'bg-[#D1E9DF]/20 border-[#047857] shadow-xs' : 'bg-white hover:border-gray-300'}`}
+                      <Button
+                        key={cat.id}
+                        variant={filterCategory === cat.id ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setFilterCategory(cat.id)}
+                        className={
+                          filterCategory === cat.id
+                            ? "bg-[#047857] hover:bg-[#065f46] text-white rounded-full text-xs font-bold cursor-pointer"
+                            : "bg-white rounded-full text-xs hover:border-[#047857] hover:text-[#047857] cursor-pointer"
+                        }
                       >
-                        <Checkbox
-                          checked={isSelected}
-                          onCheckedChange={() => handleToggleProductSelection(product.id)}
-                          className="data-[state=checked]:bg-[#047857] data-[state=checked]:border-[#047857]"
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="font-semibold text-sm text-gray-900 truncate">{product.name}</p>
-                          <p className="text-xs text-gray-500">R$ {Number(product.price || 0).toFixed(2).replace('.', ',')}</p>
-                        </div>
-                      </label>
+                        {cat.name} ({catProds.length})
+                      </Button>
                     );
                   })}
+                </div>
+
+                {/* Ação de Selecionar Todos da Categoria */}
+                <div className="flex justify-between items-center bg-white px-3.5 py-2.5 rounded-xl border border-stone-200">
+                  <span className="text-xs font-bold text-gray-700">
+                    {selectedProductIds.length} produto(s) selecionado(s)
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleSelectAllCategory(filterCategory)}
+                    className="text-xs font-semibold text-[#047857] hover:bg-emerald-50 cursor-pointer"
+                  >
+                    Marcar / Desmarcar Todos Desta Categoria
+                  </Button>
+                </div>
+
+                {/* Grid de Produtos */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {products
+                    .filter((p) => filterCategory === "all" || p.category === filterCategory)
+                    .map((product) => {
+                      const isSelected = selectedProductIds.includes(product.id);
+                      return (
+                        <label
+                          key={product.id}
+                          className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                            isSelected
+                              ? "bg-emerald-50/60 border-[#047857] shadow-2xs"
+                              : "bg-white border-stone-200 hover:border-stone-300"
+                          }`}
+                        >
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => handleToggleProductSelection(product.id)}
+                            className="data-[state=checked]:bg-[#047857] data-[state=checked]:border-[#047857]"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-sm text-gray-900 truncate">{product.name}</p>
+                            <p className="text-xs text-gray-500 tabular-nums">
+                              R$ {Number(product.price || 0).toFixed(2).replace(".", ",")}
+                            </p>
+                          </div>
+                        </label>
+                      );
+                    })}
+                </div>
               </div>
 
-              {/* Rodapé */}
-              <div className="flex justify-end gap-2 pt-4 border-t">
-                <Button type="button" variant="outline" onClick={() => setShowLinkModal(false)}>
-                  Cancelar
-                </Button>
-                <Button 
-                  type="button" 
-                  onClick={handleSaveLinks} 
-                  disabled={isSaving}
-                  className="bg-[#047857] hover:bg-[#065f46] text-white font-semibold cursor-pointer"
-                >
-                  {isSaving ? "Salvando..." : "Salvar Vínculos"}
-                </Button>
+              {/* Rodapé Fixo */}
+              <div className="px-6 py-3.5 border-t border-stone-200 bg-white shrink-0 flex justify-between items-center gap-2">
+                <span className="text-xs font-medium text-stone-500">
+                  {selectedProductIds.length} selecionado(s)
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" onClick={() => setShowLinkModal(false)} className="rounded-xl">
+                    Cancelar
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleSaveLinks}
+                    disabled={isSaving}
+                    className="bg-[#047857] hover:bg-[#065f46] text-white font-semibold rounded-xl cursor-pointer"
+                  >
+                    {isSaving ? "Salvando..." : "Salvar Vínculos"}
+                  </Button>
+                </div>
               </div>
-            </div>
+            </>
           )}
         </DialogContent>
       </Dialog>

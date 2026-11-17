@@ -31,6 +31,43 @@ export function findSectorByParam(sectors = [], param = "") {
 }
 
 /**
+ * Extrai com segurança o array de itens de um pedido (suporta array ou JSON string).
+ */
+export function parseOrderItems(order) {
+  if (!order) return [];
+  if (Array.isArray(order.items)) return order.items;
+  if (typeof order.items === "string") {
+    try {
+      const parsed = JSON.parse(order.items);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+/**
+ * Seleciona o setor KDS padrão de fallback para itens sem setor vinculado
+ * (prioriza "Cozinha"; caso não exista, usa o primeiro setor KDS ativo).
+ */
+export function getDefaultKdsFallbackSector(sectors = []) {
+  const activeKds = (Array.isArray(sectors) ? sectors : [])
+    .filter((s) => s && s.is_active !== false && s.operation_mode !== "print_only")
+    .sort((a, b) => (Number(a.order_index) || 0) - (Number(b.order_index) || 0));
+
+  if (activeKds.length === 0) return null;
+
+  return (
+    activeKds.find((s) => {
+      const sl = String(s.slug || "").toLowerCase();
+      const nm = slugifySector(s.name || "");
+      return sl === "cozinha" || nm === "cozinha" || sl.includes("cozinha") || nm.includes("cozinha");
+    }) || activeKds[0]
+  );
+}
+
+/**
  * Resolve o setor de produção de um item do carrinho/pedido.
  * Prioridade: snapshot no item -> override do produto -> setor padrão da categoria.
  */
@@ -40,19 +77,35 @@ export function resolveItemSector(item, { sectors = [], products = [], categorie
   let sectorId = item.sector_id || null;
 
   if (!sectorId) {
-    const prod = products.find(
-      (p) => String(p.id) === String(item.product_id || item.id)
-    );
+    const itemProdId = item.product_id || item.id;
+    const itemProdName = String(item.product_name || item.name || "").trim().toLowerCase();
+    const prod =
+      products.find((p) => itemProdId && String(p.id) === String(itemProdId)) ||
+      (itemProdName
+        ? products.find((p) => String(p.name || "").trim().toLowerCase() === itemProdName)
+        : null);
+
     if (prod?.sector_id) {
       sectorId = prod.sector_id;
     } else {
-      const catIdCandidate = item.category_id || prod?.category_id || prod?.category || null;
-      const catNameCandidate = item.category_name || (typeof item.category === "string" ? item.category : null);
-      const cat = categories.find(
-        (c) =>
-          (catIdCandidate && String(c.id) === String(catIdCandidate)) ||
-          (catNameCandidate && String(c.name).toLowerCase() === String(catNameCandidate).toLowerCase())
-      );
+      const catCandidates = [
+        item.category_id,
+        prod?.category_id,
+        prod?.category,
+        item.category_name,
+        typeof item.category === "string" ? item.category : item.category?.id || item.category?.name,
+      ]
+        .filter(Boolean)
+        .map((val) => String(val).trim());
+
+      const cat = categories.find((c) => {
+        const cId = String(c.id || "").trim();
+        const cName = String(c.name || "").trim().toLowerCase();
+        return catCandidates.some(
+          (cand) => (cId && cId === cand) || (cName && cName === cand.toLowerCase())
+        );
+      });
+
       if (cat?.sector_id) {
         sectorId = cat.sector_id;
       }
@@ -96,14 +149,18 @@ export function stampOrderItemsWithSectors(items = [], { sectors = [], products 
 
 /**
  * Filtra os itens de um pedido que pertencem a um determinado setor.
+ * Itens sem setor vinculado podem usar fallbackSectorId (ex.: Cozinha no KDS) para nunca perder pedidos.
  */
 export function filterOrderItemsForSector(order, sector, lookup = {}) {
-  const items = Array.isArray(order?.items) ? order.items : [];
+  const items = parseOrderItems(order);
   if (!sector) return items;
+
+  const fallbackSectorId = lookup?.fallbackSectorId ? String(lookup.fallbackSectorId) : null;
 
   return items.filter((item) => {
     const { sectorId } = resolveItemSector(item, lookup);
-    return sectorId && String(sectorId) === String(sector.id);
+    const effectiveSectorId = sectorId || fallbackSectorId;
+    return effectiveSectorId && String(effectiveSectorId) === String(sector.id);
   });
 }
 
@@ -115,7 +172,13 @@ export function normalizeOrderChannel(order) {
   const type = String(order.order_type || "").toLowerCase();
   const tableStr = String(order.table_number || "").toLowerCase();
 
-  if (type === "pickup" || type === "balcao" || type === "takeaway" || tableStr.includes("balc")) {
+  if (
+    type === "pickup" ||
+    type === "balcao" ||
+    type === "takeaway" ||
+    type === "takeout" ||
+    tableStr.includes("balc")
+  ) {
     return "pickup";
   }
   if (type === "dine_in" || type === "mesa" || (tableStr && !tableStr.includes("balc"))) {
@@ -147,7 +210,7 @@ export function analyzeOrderPrintJobs(
   const channel = normalizeOrderChannel(order);
   const status = String(order?.status || "").toLowerCase();
   const lookup = { sectors, products, categories };
-  const allItems = Array.isArray(order?.items) ? order.items : [];
+  const allItems = parseOrderItems(order);
   const jobs = [];
   const deferredJobs = [];
 

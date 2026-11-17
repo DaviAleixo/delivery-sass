@@ -1,10 +1,22 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { invalidateCache } from "@/entities/storage";
 import { Order } from "@/entities/Order";
 import { Settings } from "@/entities/Settings";
 import { ShiftClosing } from "@/entities/ShiftClosing";
 import { createPageUrl } from "@/utils";
-import { calculateShiftClosing, getStoreShiftInfo } from "@/utils/shiftClosingCalculator";
+import { calculateShiftClosing, findOrphanShiftOrders, getStoreShiftInfo, SHOW_DRIVER_CLOSING_SECTIONS } from "@/utils/shiftClosingCalculator";
+import {
+  UUID_REGEX,
+  CASH_SESSION_EVENT,
+  resolveLoggedOperatorName,
+  mapDbCashMovement,
+  fetchActiveCashSessionState,
+  openCashSessionAction,
+  attachOrphanOrdersAction,
+  notifyCashSessionChanged,
+} from "@/utils/cashSessionService";
 import { generateWhatsAppClosingText } from "@/utils/shiftClosingWhatsAppFormatter";
 import { formatInBrasilia, getBrasiliaParts } from "@/utils/dateTime";
 import { parseBRLToNumber } from "@/utils/moneyMask";
@@ -41,6 +53,9 @@ import {
   Banknote,
   UtensilsCrossed,
   Info,
+  Calculator,
+  EyeOff,
+  Eye,
 } from "lucide-react";
 
 // Cash Modals
@@ -49,6 +64,10 @@ import CashBleedModal from "@/components/admin/cash/CashBleedModal";
 import CashSupplyModal from "@/components/admin/cash/CashSupplyModal";
 import CashExpenseModal from "@/components/admin/cash/CashExpenseModal";
 import CashClosingConfirmModal from "@/components/admin/cash/CashClosingConfirmModal";
+import BillCoinCalculatorModal from "@/components/admin/cash/BillCoinCalculatorModal";
+import CashClosingAuditModal from "@/components/admin/cash/CashClosingAuditModal";
+import CashSessionBanner from "@/components/admin/cash/CashSessionBanner";
+import { createFinancialEntry } from "@/services/financialService";
 
 export default function CashManagement() {
   const location = useLocation();
@@ -66,54 +85,65 @@ export default function CashManagement() {
   const [settings, setSettings] = useState(null);
   const [storeName, setStoreName] = useState("Restaurante");
   const [pastClosings, setPastClosings] = useState([]);
+  const [historyPeriodFilter, setHistoryPeriodFilter] = useState("all");
+  const [historyOperatorFilter, setHistoryOperatorFilter] = useState("all");
+  const [tenantBlindClosing, setTenantBlindClosing] = useState(false);
+
+  const activeTenantId = useMemo(() => {
+    return (
+      settings?.id ||
+      (typeof window !== "undefined" ? localStorage.getItem("current_tenant_id") : null) ||
+      "a0000000-0000-0000-0000-000000000001"
+    );
+  }, [settings?.id]);
 
   const activeTenantStorageKey = useMemo(() => {
     const tid = (typeof window !== "undefined" ? localStorage.getItem("current_tenant_id") : null) || "default";
     return `pedemuleke_cash_drawer_${tid}`;
   }, []);
 
-  // Estado do Caixa do Turno Atual (persistido em localStorage por loja para não perder ao atualizar)
+  // Estado do Caixa do Turno Atual (sincronizado com Supabase cash_sessions + fallback offline)
   const [isCashDrawerOpen, setIsCashDrawerOpen] = useState(() => {
+    if (isSupabaseConfigured()) return false;
     try {
       const saved = localStorage.getItem(activeTenantStorageKey);
-      if (saved) return JSON.parse(saved).isCashDrawerOpen ?? true;
+      if (saved) return JSON.parse(saved).isCashDrawerOpen ?? false;
     } catch {}
-    return true;
+    return false;
   });
   const [cashDrawerInfo, setCashDrawerInfo] = useState(() => {
     try {
       const saved = localStorage.getItem(activeTenantStorageKey);
-      if (saved && JSON.parse(saved).cashDrawerInfo) return JSON.parse(saved).cashDrawerInfo;
+      if (!isSupabaseConfigured() && saved && JSON.parse(saved).cashDrawerInfo) {
+        return JSON.parse(saved).cashDrawerInfo;
+      }
     } catch {}
     return {
-      openedAt: new Date().toISOString(),
-      operator: "Operador Principal",
-      initialFloat: 100.0,
-      notes: "Fundo de troco inicial",
+      sessionId: null,
+      openedAt: null,
+      closedAt: null,
+      operator: resolveLoggedOperatorName(),
+      initialFloat: 0,
+      notes: "",
+      blindClosing: false,
+      lastClosedSessionId: null,
     };
   });
 
+  // Pedidos criados enquanto o caixa estava fechado aguardando vínculo ao turno
+  const [serverOrphanOrders, setServerOrphanOrders] = useState([]);
+  const [lastClosedAtRef, setLastClosedAtRef] = useState(null);
+
   // Lista de Movimentações Financeiras Manuais do Turno
   const [manualMovements, setManualMovements] = useState(() => {
+    if (isSupabaseConfigured()) return [];
     try {
       const saved = localStorage.getItem(activeTenantStorageKey);
       if (saved && Array.isArray(JSON.parse(saved).manualMovements)) {
         return JSON.parse(saved).manualMovements;
       }
     } catch {}
-    return [
-      {
-        id: "mov-init",
-        type: "open",
-        title: "Abertura de Caixa (Troco Inicial)",
-        category: "fundo_inicial",
-        amount: 100.0,
-        direction: "in",
-        operator: "Operador Principal",
-        timestamp: new Date().toISOString(),
-        notes: "Cédulas e moedas para troco inicial",
-      },
-    ];
+    return [];
   });
 
   useEffect(() => {
@@ -131,6 +161,8 @@ export default function CashManagement() {
   const [supplyModalVisible, setSupplyModalVisible] = useState(false);
   const [expenseModalVisible, setExpenseModalVisible] = useState(false);
   const [closingConfirmModalVisible, setClosingConfirmModalVisible] = useState(false);
+  const [billCalculatorOpen, setBillCalculatorOpen] = useState(false);
+  const [auditModalClosing, setAuditModalClosing] = useState(null);
 
   // Filtro de período para o Fechamento de Caixa
   const [periodMode, setPeriodMode] = useState("today");
@@ -139,6 +171,7 @@ export default function CashManagement() {
 
   // Conferência de Caixa (Contagem de Dinheiro)
   const [countedCashStr, setCountedCashStr] = useState("");
+  const [calculatorCounts, setCalculatorCounts] = useState(null);
   const [cashDifferenceJustification, setCashDifferenceJustification] = useState("");
   const [copiedPixId, setCopiedPixId] = useState(null);
   const [copiedWhatsApp, setCopiedWhatsApp] = useState(false);
@@ -146,38 +179,92 @@ export default function CashManagement() {
   // Filtro na tabela de movimentações da Aba 1
   const [movementFilter, setMovementFilter] = useState("all");
 
-  // Carrega dados iniciais
-  useEffect(() => {
-    async function loadData() {
-      setIsLoading(true);
-      try {
-        const [ordersData, settingsData, closingsData] = await Promise.all([
-          Order.list("-created_date", 250).catch(() => []),
-          Settings.get().catch(() => null),
-          ShiftClosing.list("-created_at", 50).catch(() => []),
-        ]);
+  // Carrega dados iniciais + Sessão de Caixa Ativa no Supabase
+  const loadCashPageData = async (showSpinner = true) => {
+    if (showSpinner) setIsLoading(true);
+    try {
+      const tid =
+        localStorage.getItem("current_tenant_id") ||
+        "a0000000-0000-0000-0000-000000000001";
 
-        setOrders(ordersData || []);
-        setSettings(settingsData);
-        setPastClosings(closingsData || []);
+      invalidateCache("orders");
+      const [ordersData, settingsData, closingsData, sessionState] = await Promise.all([
+        Order.list("-created_date", 250).catch(() => []),
+        Settings.get().catch(() => null),
+        ShiftClosing.list("-created_at", 50).catch(() => []),
+        fetchActiveCashSessionState(tid).catch(() => null),
+      ]);
 
-        const name =
-          settingsData?.restaurant_name ||
-          localStorage.getItem("current_tenant_name") ||
-          "Restaurante";
-        setStoreName(name);
-
-        if (Array.isArray(settingsData?.delivery_drivers)) {
-          setDrivers(settingsData.delivery_drivers);
+      const tenantRow = sessionState?.tenantRow || null;
+      if (sessionState) {
+        setIsCashDrawerOpen(Boolean(sessionState.isCashDrawerOpen));
+        setCashDrawerInfo((prev) => ({
+          ...sessionState.cashDrawerInfo,
+          lastClosedSessionId:
+            sessionState.cashDrawerInfo?.sessionId ||
+            prev.lastClosedSessionId ||
+            sessionState.lastClosedSessionId ||
+            null,
+        }));
+        setManualMovements(sessionState.manualMovements || []);
+        setServerOrphanOrders(sessionState.orphanOrders || []);
+        setLastClosedAtRef(sessionState.lastClosedAt || null);
+        if (sessionState.isCashDrawerOpen) {
+          setClosingSaved(false);
         }
-      } catch (err) {
-        console.error("[CashManagement] Erro ao carregar dados:", err);
-      } finally {
-        setIsLoading(false);
       }
+
+      const mergedSettings = {
+        ...(settingsData || {}),
+        ...(tenantRow || {}),
+      };
+      setOrders(ordersData || []);
+      setSettings(mergedSettings);
+      setTenantBlindClosing(Boolean(tenantRow?.blind_cash_closing));
+      setPastClosings(closingsData || []);
+
+      const name =
+        tenantRow?.name ||
+        settingsData?.restaurant_name ||
+        localStorage.getItem("current_tenant_name") ||
+        "Restaurante";
+      setStoreName(name);
+
+      if (Array.isArray(settingsData?.delivery_drivers)) {
+        setDrivers(settingsData.delivery_drivers);
+      }
+    } catch (err) {
+      console.error("[CashManagement] Erro ao carregar dados:", err);
+    } finally {
+      if (showSpinner) setIsLoading(false);
     }
-    loadData();
+  };
+
+  useEffect(() => {
+    loadCashPageData(true);
+    const handleSync = () => loadCashPageData(false);
+    if (typeof window !== "undefined") {
+      window.addEventListener(CASH_SESSION_EVENT, handleSync);
+      window.addEventListener("db_event_orders", handleSync);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener(CASH_SESSION_EVENT, handleSync);
+        window.removeEventListener("db_event_orders", handleSync);
+      }
+    };
   }, []);
+
+  const orphanOrders = useMemo(() => {
+    if (isSupabaseConfigured() && UUID_REGEX.test(String(activeTenantId || ""))) {
+      return serverOrphanOrders;
+    }
+    return findOrphanShiftOrders(orders, lastClosedAtRef);
+  }, [activeTenantId, serverOrphanOrders, orders, lastClosedAtRef]);
+
+  const isBlindActive = Boolean(
+    (tenantBlindClosing || cashDrawerInfo.blindClosing) && isCashDrawerOpen
+  );
 
   // Sincroniza a query string com a aba ativa
   const handleTabChange = (newTab) => {
@@ -190,15 +277,40 @@ export default function CashManagement() {
   // Informações do Turno
   const _shiftInfo = useMemo(() => getStoreShiftInfo(settings), [settings]);
 
-  // Cálculo Oficial do Fechamento do Turno (shiftClosingCalculator)
+  // Cálculo Oficial do Fechamento do Turno com vínculo real (cash_session_id) e janela exata
+  const activeCashSessionId = useMemo(() => {
+    if (periodMode !== "today") return null;
+    if (isCashDrawerOpen && cashDrawerInfo?.sessionId) return cashDrawerInfo.sessionId;
+    if (!isCashDrawerOpen && closingSaved && cashDrawerInfo?.lastClosedSessionId) {
+      return cashDrawerInfo.lastClosedSessionId;
+    }
+    return null;
+  }, [periodMode, isCashDrawerOpen, closingSaved, cashDrawerInfo?.sessionId, cashDrawerInfo?.lastClosedSessionId]);
+
   const shiftClosingData = useMemo(() => {
+    let customRange = null;
+    if (periodMode === "today" && cashDrawerInfo?.openedAt) {
+      const endPoint =
+        !isCashDrawerOpen && cashDrawerInfo?.closedAt
+          ? cashDrawerInfo.closedAt
+          : new Date(
+              Math.max(Date.now(), new Date(cashDrawerInfo.openedAt).getTime())
+            ).toISOString();
+      customRange = {
+        start: cashDrawerInfo.openedAt,
+        end: endPoint,
+      };
+    }
+
     return calculateShiftClosing({
       orders,
       drivers,
       tenantSettings: settings,
       periodMode,
+      customRange,
+      activeCashSessionId,
     });
-  }, [orders, drivers, settings, periodMode]);
+  }, [orders, drivers, settings, periodMode, cashDrawerInfo?.openedAt, cashDrawerInfo?.closedAt, isCashDrawerOpen, activeCashSessionId]);
 
   const { bounds, summary, payments, cashDrawer, drivers: driversClosing } = shiftClosingData;
 
@@ -219,13 +331,12 @@ export default function CashManagement() {
 
   // Vendas em dinheiro do turno
   const _cashSalesTotal = payments.cash.total;
-  // Dinheiro recebido no balcão/retirada (já na loja)
-  const cashAtCounter = cashDrawer.cashDirectCounter;
-  // Dinheiro em mãos com os motoboys (ainda na rua a acertar)
+  const cashAtCounter = SHOW_DRIVER_CLOSING_SECTIONS
+    ? cashDrawer.cashDirectCounter
+    : cashDrawer.totalCashExpected;
   const cashWithDrivers = cashDrawer.cashCollectedByDrivers;
 
   // Saldo Esperado Físico na Gaveta:
-  // Fundo Inicial + Dinheiro que entrou direto no balcão + Suprimentos - Sangrias - Despesas Operacionais
   const initialFloat = Number(cashDrawerInfo.initialFloat || 0);
   const expectedCashInDrawer =
     initialFloat +
@@ -242,41 +353,45 @@ export default function CashManagement() {
   const isSurplus = difference > 0.01;
   const _isShortage = difference < -0.01;
 
-  // Consolidação de Movimentações para a Tabela (Movimentações Manuais + Pedidos em Dinheiro)
+  // Consolidação de Movimentações para a Tabela
   const allShiftMovements = useMemo(() => {
     const list = [...manualMovements];
 
-    const shiftCashOrders = (shiftClosingData.shiftOrders || []).filter(
-      (o) =>
-        o.status !== "cancelado" &&
-        String(o.payment_method || "").toLowerCase().includes("dinheiro")
-    );
+    if (isCashDrawerOpen || cashDrawerInfo.openedAt) {
+      const shiftCashOrders = (shiftClosingData.shiftOrders || []).filter(
+        (o) =>
+          o.status !== "cancelado" &&
+          String(o.payment_method || "").toLowerCase().includes("dinheiro")
+      );
 
-    for (const ord of shiftCashOrders) {
-      const isCounter =
-        ord.order_type === "takeout" ||
-        ord.order_type === "balcao" ||
-        ord.order_type === "pickup" ||
-        ord.order_type === "dine_in" ||
-        ord.order_type === "mesa";
+      for (const ord of shiftCashOrders) {
+        const isCounter =
+          ord.order_type === "takeout" ||
+          ord.order_type === "balcao" ||
+          ord.order_type === "pickup" ||
+          ord.order_type === "dine_in" ||
+          ord.order_type === "mesa";
 
-      list.push({
-        id: `ord-${ord.id}`,
-        type: "sale_cash",
-        title: `Venda em Dinheiro (#${ord.id?.slice(-4) || ord.id})`,
-        category: isCounter ? "Balcão / Mesa" : "Entrega (com Motoboy)",
-        amount: Number(ord.total_amount || ord.total || 0),
-        direction: isCounter ? "in" : "pending_driver",
-        operator: ord.customer_name || "Cliente Balcão",
-        timestamp: ord.created_date || new Date().toISOString(),
-        notes: isCounter
-          ? "Recebido direto no caixa"
-          : `Em trânsito com ${ord.driver_name || "entregador"}`,
-      });
+        list.push({
+          id: `ord-${ord.id}`,
+          type: "sale_cash",
+          title: `Venda em Dinheiro (#${ord.order_number || ord.id?.slice(-4) || ord.id})`,
+          category: isCounter ? "Balcão / Mesa" : SHOW_DRIVER_CLOSING_SECTIONS ? "Entrega (com Motoboy)" : "Entrega (Delivery)",
+          amount: Number(ord.total_amount || ord.total || 0),
+          direction: isCounter || !SHOW_DRIVER_CLOSING_SECTIONS ? "in" : "pending_driver",
+          operator: ord.customer_name || "Cliente Balcão",
+          timestamp: ord.created_date || new Date().toISOString(),
+          notes: isCounter
+            ? "Recebido direto no caixa"
+            : SHOW_DRIVER_CLOSING_SECTIONS
+            ? `Em trânsito com ${ord.driver_name || "entregador"}`
+            : "Pedido Delivery em dinheiro",
+        });
+      }
     }
 
     return list.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-  }, [manualMovements, shiftClosingData]);
+  }, [manualMovements, shiftClosingData, isCashDrawerOpen, cashDrawerInfo.openedAt]);
 
   // Filtro da tabela de movimentações
   const filteredMovements = useMemo(() => {
@@ -288,32 +403,163 @@ export default function CashManagement() {
     return allShiftMovements;
   }, [allShiftMovements, movementFilter]);
 
-  // Handlers de Ações Manuais
-  const handleConfirmOpen = ({ operator, initialFloat: floatVal, notes, openedAt }) => {
-    setIsCashDrawerOpen(true);
-    setCashDrawerInfo({
-      operator,
-      initialFloat: floatVal,
-      notes,
-      openedAt,
+  const periodFilteredPastClosings = useMemo(() => {
+    const nowParts = getBrasiliaParts(new Date());
+    const nowMs = Date.now();
+    return pastClosings.filter((c) => {
+      if (historyPeriodFilter === "all") return true;
+      const refDate = c.closed_at || c.created_at;
+      if (!refDate) return true;
+      const parsed = new Date(refDate);
+      if (Number.isNaN(parsed.getTime())) return true;
+      if (historyPeriodFilter === "today") {
+        return getBrasiliaParts(parsed).dateKey === nowParts.dateKey;
+      }
+      const diffDays = (nowMs - parsed.getTime()) / (1000 * 60 * 60 * 24);
+      if (historyPeriodFilter === "7d") return diffDays <= 7;
+      if (historyPeriodFilter === "30d") return diffDays <= 30;
+      return true;
     });
-    setManualMovements((prev) => [
-      {
-        id: `mov-open-${Date.now()}`,
-        type: "open",
-        title: "Abertura de Caixa (Troco Inicial)",
-        category: "fundo_inicial",
-        amount: floatVal,
-        direction: "in",
-        operator,
-        timestamp: openedAt,
-        notes,
-      },
-      ...prev.filter((m) => m.type !== "open"),
-    ]);
+  }, [pastClosings, historyPeriodFilter]);
+
+  const historyOperators = useMemo(() => {
+    const names = new Set();
+    for (const c of periodFilteredPastClosings) {
+      const op = (c.cashier_name || c.cash_drawer?.openedBy || "Operador").trim();
+      if (op) names.add(op);
+    }
+    return Array.from(names).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [periodFilteredPastClosings]);
+
+  const filteredPastClosings = useMemo(() => {
+    if (historyOperatorFilter === "all") return periodFilteredPastClosings;
+    return periodFilteredPastClosings.filter((c) => {
+      const op = (c.cashier_name || c.cash_drawer?.openedBy || "Operador").trim();
+      return op === historyOperatorFilter;
+    });
+  }, [periodFilteredPastClosings, historyOperatorFilter]);
+
+  const formatHistoryTurnLabel = (c) => {
+    if (c.opened_at && c.closed_at) {
+      const openParts = getBrasiliaParts(new Date(c.opened_at));
+      const closeParts = getBrasiliaParts(new Date(c.closed_at));
+      if (openParts?.dateKey && closeParts?.dateKey) {
+        const openDate = `${openParts.day}/${openParts.month}/${openParts.year}`;
+        const openTime = `${openParts.hour}:${openParts.minute}`;
+        const closeDate = `${closeParts.day}/${closeParts.month}`;
+        const closeTime = `${closeParts.hour}:${closeParts.minute}`;
+        if (openParts.dateKey === closeParts.dateKey) {
+          return `${openDate} • ${openTime} → ${closeTime}`;
+        }
+        return `${openParts.day}/${openParts.month} ${openTime} → ${closeDate} ${closeTime}`;
+      }
+    }
+    return (c.period_label || c.shift_date || "Turno")
+      .replace(/^Personalizado:\s*/i, "")
+      .replace(/\s+até\s+/i, " → ");
   };
 
-  const handleConfirmBleed = (data) => {
+  // Indicadores Executivos do Dono na Aba 3 (Histórico e Auditoria)
+  const historyAuditStats = useMemo(() => {
+    let totalShortage = 0;
+    let shortageCount = 0;
+    let totalSurplus = 0;
+    let surplusCount = 0;
+    let divergentTurns = 0;
+
+    for (const c of filteredPastClosings) {
+      const diff = Number(c.cash_drawer?.difference ?? 0);
+      if (diff < -0.01) {
+        totalShortage += Math.abs(diff);
+        shortageCount += 1;
+        divergentTurns += 1;
+      } else if (diff > 0.01) {
+        totalSurplus += diff;
+        surplusCount += 1;
+        divergentTurns += 1;
+      }
+    }
+
+    return { totalShortage, shortageCount, totalSurplus, surplusCount, divergentTurns };
+  }, [filteredPastClosings]);
+
+  // Handlers de Ações Manuais (Supabase RPCs + fallback offline)
+  const handleConfirmOpen = async ({ operator, initialFloat: floatVal, notes, openedAt, attachOrderIds }) => {
+    const res = await openCashSessionAction({
+      tenantId: activeTenantId,
+      initialFloat: floatVal,
+      operator,
+      notes,
+      openedAt,
+      attachOrderIds,
+      blindClosing: tenantBlindClosing,
+    });
+
+    setIsCashDrawerOpen(true);
+    setClosingSaved(false);
+    setCountedCashStr("");
+    setCashDifferenceJustification("");
+    setCalculatorCounts(null);
+    setPeriodMode("today");
+    setCashDrawerInfo({
+      sessionId: res.sessionId,
+      lastClosedSessionId: res.sessionId,
+      openedAt: res.openedAt,
+      closedAt: null,
+      operator: res.operator,
+      initialFloat: res.initialFloat,
+      notes: res.notes,
+      blindClosing: res.blindClosing,
+    });
+    setManualMovements(res.movements || []);
+    await loadCashPageData(false);
+    return res;
+  };
+
+  const handleAttachOrphans = async (orderIds = null) => {
+    const res = await attachOrphanOrdersAction({
+      tenantId: activeTenantId,
+      sessionId: cashDrawerInfo.sessionId,
+      orderIds,
+    });
+    await loadCashPageData(false);
+    return res;
+  };
+
+  const handleConfirmBleed = async (data) => {
+    if (isSupabaseConfigured() && supabase && UUID_REGEX.test(activeTenantId) && cashDrawerInfo.sessionId) {
+      const { data: mov, error } = await supabase.rpc("add_cash_movement", {
+        p_tenant_id: activeTenantId,
+        p_session_id: cashDrawerInfo.sessionId,
+        p_type: "bleed",
+        p_title: "Sangria de Caixa (Retirada)",
+        p_amount: data.amount,
+        p_operator: data.operator || cashDrawerInfo.operator,
+        p_category: data.reason,
+        p_notes: data.notes || `Destino: ${data.reason}`,
+      });
+      if (error) throw new Error(error.message || "Falha ao registrar sangria.");
+      setManualMovements((prev) => [mapDbCashMovement(mov), ...prev]);
+      if (mov?.id) {
+        createFinancialEntry({
+          tenantId: activeTenantId,
+          entryType: "transfer",
+          description: `Sangria de Caixa (${data.reason || "Cofre"})`,
+          category: "Sangria / Cofre",
+          amount: data.amount,
+          accountCode: "drawer",
+          targetAccountCode: "safe",
+          operatorName: data.operator || cashDrawerInfo.operator,
+          notes: data.notes || `Destino: ${data.reason || "Cofre"}`,
+          sourceType: "cash_bleed",
+          sourceId: mov.id,
+        }).catch((syncErr) => {
+          console.warn("[CashManagement] Aviso ao sincronizar sangria no Financeiro:", syncErr);
+        });
+      }
+      return;
+    }
+
     setManualMovements((prev) => [
       {
         id: `mov-bleed-${Date.now()}`,
@@ -330,7 +576,23 @@ export default function CashManagement() {
     ]);
   };
 
-  const handleConfirmSupply = (data) => {
+  const handleConfirmSupply = async (data) => {
+    if (isSupabaseConfigured() && supabase && UUID_REGEX.test(activeTenantId) && cashDrawerInfo.sessionId) {
+      const { data: mov, error } = await supabase.rpc("add_cash_movement", {
+        p_tenant_id: activeTenantId,
+        p_session_id: cashDrawerInfo.sessionId,
+        p_type: "supply",
+        p_title: "Suprimento de Caixa (Entrada)",
+        p_amount: data.amount,
+        p_operator: data.operator || cashDrawerInfo.operator,
+        p_category: data.reason,
+        p_notes: data.notes || `Origem: ${data.reason}`,
+      });
+      if (error) throw new Error(error.message || "Falha ao registrar suprimento.");
+      setManualMovements((prev) => [mapDbCashMovement(mov), ...prev]);
+      return;
+    }
+
     setManualMovements((prev) => [
       {
         id: `mov-supply-${Date.now()}`,
@@ -341,47 +603,114 @@ export default function CashManagement() {
         direction: "in",
         operator: data.operator,
         timestamp: data.timestamp,
-        notes: data.notes || `Motivo: ${data.reason}`,
+        notes: data.notes || `Origem: ${data.reason}`,
       },
       ...prev,
     ]);
   };
 
-  const handleConfirmExpense = (data) => {
+  const handleConfirmExpense = async (data) => {
+    const title = `Despesa: ${data.categoryLabel}`;
+    const noteText = data.description + (data.notes ? ` • ${data.notes}` : "");
+
+    if (isSupabaseConfigured() && supabase && UUID_REGEX.test(activeTenantId) && cashDrawerInfo.sessionId) {
+      const { data: mov, error } = await supabase.rpc("add_cash_movement", {
+        p_tenant_id: activeTenantId,
+        p_session_id: cashDrawerInfo.sessionId,
+        p_type: "expense",
+        p_title: title,
+        p_amount: data.amount,
+        p_operator: data.operator || cashDrawerInfo.operator,
+        p_category: data.category,
+        p_notes: noteText,
+      });
+      if (error) throw new Error(error.message || "Falha ao registrar despesa.");
+      setManualMovements((prev) => [mapDbCashMovement(mov), ...prev]);
+      if (mov?.id) {
+        createFinancialEntry({
+          tenantId: activeTenantId,
+          entryType: "expense",
+          description: `${data.categoryLabel || "Despesa"}: ${data.description || "Despesa no caixa"}`,
+          category: data.categoryLabel || data.category || "Outros",
+          amount: data.amount,
+          accountCode: "drawer",
+          operatorName: data.operator || cashDrawerInfo.operator,
+          notes: noteText,
+          sourceType: "cash_expense",
+          sourceId: mov.id,
+        }).catch((syncErr) => {
+          console.warn("[CashManagement] Aviso ao sincronizar despesa no Financeiro:", syncErr);
+        });
+      }
+      return;
+    }
+
     setManualMovements((prev) => [
       {
         id: `mov-exp-${Date.now()}`,
         type: "expense",
-        title: `Despesa: ${data.categoryLabel}`,
+        title,
         category: data.category,
         amount: data.amount,
         direction: "out",
         operator: data.operator,
         timestamp: data.timestamp,
-        notes: data.description + (data.notes ? ` • ${data.notes}` : ""),
+        notes: noteText,
       },
       ...prev,
     ]);
   };
 
-  const handleFinalCloseShift = async ({ countedCash: counted, difference: diff, justification, closedAt }) => {
-    setIsCashDrawerOpen(false);
+  const buildCompleteCashDrawerPayload = ({ counted, diff, justification, closedBy }) => ({
+    ...cashDrawer,
+    initialFloat,
+    cashSales: cashAtCounter,
+    supplies: movementsSummary.totalSupplies,
+    bleeds: movementsSummary.totalBleeds,
+    expenses: movementsSummary.totalExpenses,
+    totalBleeds: movementsSummary.totalBleeds,
+    totalSupplies: movementsSummary.totalSupplies,
+    totalExpenses: movementsSummary.totalExpenses,
+    expectedCashInDrawer,
+    expectedInDrawer: expectedCashInDrawer,
+    totalCashExpected: expectedCashInDrawer,
+    countedCash: counted,
+    difference: diff,
+    justification,
+    openedBy: cashDrawerInfo.operator,
+    closedBy: closedBy || resolveLoggedOperatorName(),
+    blindClosing: Boolean(tenantBlindClosing || cashDrawerInfo.blindClosing),
+    movements: manualMovements,
+    billCounts: calculatorCounts,
+  });
+
+  const handleFinalCloseShift = async ({
+    countedCash: counted,
+    difference: diff,
+    justification,
+    closedAt,
+    retainedFloat,
+    collectedToSafe,
+  }) => {
     setIsSavingClosing(true);
     try {
-      const activeTenantId =
-        settings?.id ||
-        localStorage.getItem("current_tenant_id") ||
-        "a0000000-0000-0000-0000-000000000001";
       const shiftDate = bounds?.start
         ? getBrasiliaParts(bounds.start).dateKey
         : getBrasiliaParts(new Date()).dateKey;
+      const closedBy = resolveLoggedOperatorName();
+      const completeCashDrawer = buildCompleteCashDrawerPayload({
+        counted,
+        diff,
+        justification,
+        closedBy,
+      });
 
       const payload = {
         tenant_id: activeTenantId,
         shift_date: shiftDate,
         period_mode: bounds?.mode || periodMode,
         period_label: bounds?.label || "Turno",
-        opened_at: cashDrawerInfo.openedAt,
+        opened_at: cashDrawerInfo.openedAt || (bounds?.start ? bounds.start.toISOString() : closedAt),
         closed_at: closedAt,
         cashier_name: cashDrawerInfo.operator,
         gross_revenue: summary.grossRevenue,
@@ -392,20 +721,14 @@ export default function CashManagement() {
         dine_in_orders: summary.dineInCount,
         average_ticket: summary.averageTicket,
         payment_breakdown: payments,
-        cash_drawer: {
-          ...cashDrawer,
-          initialFloat,
-          totalBleeds: movementsSummary.totalBleeds,
-          totalSupplies: movementsSummary.totalSupplies,
-          totalExpenses: movementsSummary.totalExpenses,
-          expectedInDrawer: expectedCashInDrawer,
-          countedCash: counted,
-          difference: diff,
-          justification,
-        },
+        cash_drawer: completeCashDrawer,
         driver_settlements: driversClosing?.settlements || [],
         raw_closing_data: {
           ...shiftClosingData,
+          cashDrawer: completeCashDrawer,
+          cash_drawer: completeCashDrawer,
+          cashier_name: cashDrawerInfo.operator,
+          closedBy,
           initialFloat,
           expectedCashInDrawer,
           countedCash: counted,
@@ -415,29 +738,164 @@ export default function CashManagement() {
       };
 
       const saved = await ShiftClosing.create(payload);
+
+      if (isSupabaseConfigured() && supabase && UUID_REGEX.test(activeTenantId) && cashDrawerInfo.sessionId) {
+        const { error: closeRpcErr } = await supabase.rpc("close_cash_session", {
+          p_tenant_id: activeTenantId,
+          p_session_id: cashDrawerInfo.sessionId,
+          p_expected_cash: expectedCashInDrawer,
+          p_counted_cash: counted,
+          p_difference: diff,
+          p_justification: justification || "",
+          p_closed_by: closedBy,
+          p_blind_closing: Boolean(tenantBlindClosing || cashDrawerInfo.blindClosing),
+          p_shift_closing_id: UUID_REGEX.test(String(saved?.id || "")) ? saved.id : null,
+        });
+        if (closeRpcErr) {
+          throw new Error(closeRpcErr.message || "Erro ao encerrar sessão de caixa no servidor.");
+        }
+
+        const safeRetained =
+          retainedFloat !== undefined && retainedFloat !== null
+            ? Math.max(0, Number(retainedFloat))
+            : Math.max(0, Number(counted || 0));
+        const safeCollected = Math.max(0, Number(collectedToSafe || 0));
+
+        await supabase
+          .from("cash_sessions")
+          .update({
+            retained_float: safeRetained,
+            collected_to_safe: safeCollected,
+          })
+          .eq("id", cashDrawerInfo.sessionId)
+          .eq("tenant_id", activeTenantId);
+
+        const syncTasks = [];
+        if (safeCollected > 0) {
+          syncTasks.push(
+            createFinancialEntry({
+              tenantId: activeTenantId,
+              entryType: "transfer",
+              description: `Recolhimento de fechamento de turno (${cashDrawerInfo.operator})`,
+              category: "Fechamento de Caixa",
+              amount: safeCollected,
+              accountCode: "drawer",
+              targetAccountCode: "safe",
+              operatorName: closedBy,
+              notes: `Troco mantido na gaveta: ${formatMoney(safeRetained)}`,
+              sourceType: "shift_closing_safe",
+              sourceId: cashDrawerInfo.sessionId,
+            })
+          );
+        }
+
+        const nonCashRevenue = Math.max(
+          0,
+          Number((Number(summary.grossRevenue || 0) - Number(cashAtCounter || 0)).toFixed(2))
+        );
+        if (nonCashRevenue > 0) {
+          syncTasks.push(
+            createFinancialEntry({
+              tenantId: activeTenantId,
+              entryType: "income",
+              description: `Vendas Pix/Cartão do turno (${shiftDate})`,
+              category: "Vendas do Turno",
+              amount: nonCashRevenue,
+              accountCode: "bank",
+              operatorName: closedBy,
+              sourceType: "shift_closing_bank",
+              sourceId: cashDrawerInfo.sessionId,
+            })
+          );
+        }
+
+        const cashSalesTotal = Math.max(0, Number(Number(cashAtCounter || 0).toFixed(2)));
+        if (cashSalesTotal > 0) {
+          syncTasks.push(
+            createFinancialEntry({
+              tenantId: activeTenantId,
+              entryType: "income",
+              description: `Vendas em Dinheiro do turno (${shiftDate})`,
+              category: "Vendas do Turno",
+              amount: cashSalesTotal,
+              accountCode: "drawer",
+              operatorName: closedBy,
+              sourceType: "shift_closing_cash_sales",
+              sourceId: cashDrawerInfo.sessionId,
+            })
+          );
+        }
+
+        if (syncTasks.length > 0) {
+          Promise.allSettled(syncTasks).catch(() => {});
+        }
+      }
+
+      setIsCashDrawerOpen(false);
+      setCashDrawerInfo((prev) => ({
+        ...prev,
+        lastClosedSessionId: prev.sessionId || prev.lastClosedSessionId || null,
+        sessionId: null,
+        closedAt,
+      }));
+      notifyCashSessionChanged({ type: "close" });
       setPastClosings((prev) => [saved, ...prev]);
       setClosingSaved(true);
+      setCashDifferenceJustification(justification || "");
       toast.success("Fechamento de Caixa gravado no histórico!", {
         description: `Caixa fechado com sucesso por ${cashDrawerInfo.operator}.`,
       });
     } catch (err) {
       console.error("[CashManagement] Erro ao fechar caixa:", err);
-      toast.error("Erro ao registrar fechamento no histórico.");
+      toast.error(err?.message || "Erro ao registrar fechamento no histórico.");
+      throw err;
     } finally {
       setIsSavingClosing(false);
     }
   };
 
+  const canExportCurrentClosing = !isCashDrawerOpen && closingSaved;
+
   // Ações de compartilhamento e impressão térmica
-  const handlePrint = () => {
+  const handlePrint = (closingRecord = null) => {
     try {
-      const closingToPrint = {
-        ...shiftClosingData,
-        initialFloat,
-        expectedCashInDrawer,
-        countedCash,
-        difference,
-      };
+      if (!closingRecord && !canExportCurrentClosing) {
+        toast.info("Feche o caixa primeiro para imprimir o cupom oficial de fechamento.");
+        return;
+      }
+      if (!closingRecord && isBlindActive && periodMode === "today") {
+        toast.info("No Modo Cego, o cupom completo é liberado após o encerramento do caixa.");
+        return;
+      }
+      const closingToPrint = closingRecord
+        ? {
+            ...(closingRecord.raw_closing_data || closingRecord),
+            cashDrawer:
+              closingRecord.raw_closing_data?.cashDrawer ||
+              closingRecord.cash_drawer ||
+              closingRecord.raw_closing_data?.cash_drawer,
+            cashier_name: closingRecord.cashier_name,
+          }
+        : (() => {
+            const completeDrawer = buildCompleteCashDrawerPayload({
+              counted: hasCountedInput ? countedCash : expectedCashInDrawer,
+              diff: hasCountedInput ? difference : 0,
+              justification: cashDifferenceJustification,
+              closedBy: resolveLoggedOperatorName(),
+            });
+            return {
+              ...shiftClosingData,
+              cashDrawer: completeDrawer,
+              cash_drawer: completeDrawer,
+              cashier_name: cashDrawerInfo.operator,
+              initialFloat,
+              expectedCashInDrawer,
+              countedCash: hasCountedInput ? countedCash : undefined,
+              difference: hasCountedInput ? difference : 0,
+              justification: cashDifferenceJustification,
+            };
+          })();
+
       sessionStorage.setItem("shift_closing_print_data", JSON.stringify(closingToPrint));
       sessionStorage.setItem("current_tenant_name", storeName);
       window.open(createPageUrl("PrintShiftClosing"), "_blank");
@@ -447,8 +905,32 @@ export default function CashManagement() {
     }
   };
 
-  const handleCopyWhatsApp = () => {
-    const text = generateWhatsAppClosingText(shiftClosingData, storeName);
+  const handleCopyWhatsApp = (closingRecord = null) => {
+    if (!closingRecord && !canExportCurrentClosing) {
+      toast.info("Feche o caixa primeiro para copiar o resumo oficial de fechamento.");
+      return;
+    }
+    if (!closingRecord && isBlindActive && periodMode === "today") {
+      toast.info("No Modo Cego, o resumo para WhatsApp é liberado após o encerramento do caixa.");
+      return;
+    }
+    const sourceData = closingRecord
+      ? closingRecord.raw_closing_data || closingRecord
+      : (() => {
+          const completeDrawer = buildCompleteCashDrawerPayload({
+            counted: hasCountedInput ? countedCash : expectedCashInDrawer,
+            diff: hasCountedInput ? difference : 0,
+            justification: cashDifferenceJustification,
+            closedBy: resolveLoggedOperatorName(),
+          });
+          return {
+            ...shiftClosingData,
+            cashDrawer: completeDrawer,
+            cash_drawer: completeDrawer,
+            cashier_name: cashDrawerInfo.operator,
+          };
+        })();
+    const text = generateWhatsAppClosingText(sourceData, storeName);
     navigator.clipboard.writeText(text);
     setCopiedWhatsApp(true);
     toast.success("Resumo do fechamento copiado para o WhatsApp!");
@@ -505,25 +987,24 @@ export default function CashManagement() {
             >
               {isCashDrawerOpen ? "Caixa Aberto" : "Caixa Fechado"}
             </Badge>
+            {tenantBlindClosing && (
+              <Badge
+                variant="outline"
+                className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-stone-900 text-white border-stone-800 gap-1"
+              >
+                <EyeOff className="w-3 h-3" />
+                Modo Cego
+              </Badge>
+            )}
           </div>
           <p className="text-xs text-stone-500 mt-1">
             {storeName} • Faturamento consolidado por canal e controle auditável da gaveta física
           </p>
         </div>
 
-        {/* Barra de Ações Rápidas */}
-        <div className="flex flex-wrap items-center gap-2">
-          {!isCashDrawerOpen ? (
-            <Button
-              type="button"
-              onClick={() => setOpenModalVisible(true)}
-              className="bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-semibold gap-1.5 h-9 px-4 cursor-pointer shadow-xs"
-            >
-              <Unlock className="w-3.5 h-3.5" />
-              <span>Abrir Caixa</span>
-            </Button>
-          ) : (
-            <>
+        {/* Barra de Ações Rápidas (exibida apenas com caixa aberto; quando fechado o banner abaixo já oferece abertura em 1 clique) */}
+        {isCashDrawerOpen && (
+          <div className="flex flex-wrap items-center gap-2">
               <Button
                 type="button"
                 variant="outline"
@@ -565,10 +1046,22 @@ export default function CashManagement() {
                 <Lock className="w-3.5 h-3.5 text-stone-300" />
                 <span>Fechar Caixa</span>
               </Button>
-            </>
-          )}
-        </div>
+          </div>
+        )}
       </div>
+
+      {/* Banner de Pedidos Órfãos (feitos antes da abertura do caixa) */}
+      {(orphanOrders.length > 0 || !isCashDrawerOpen) && (
+        <CashSessionBanner
+          isLoading={isLoading}
+          isCashDrawerOpen={isCashDrawerOpen}
+          cashDrawerInfo={cashDrawerInfo}
+          orphanOrders={orphanOrders}
+          onOpenCashClick={() => setOpenModalVisible(true)}
+          onAttachOrphans={handleAttachOrphans}
+          compactWhenOpenWithoutOrphans={false}
+        />
+      )}
 
       {/* Navegação por Abas Executiva */}
       <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
@@ -610,15 +1103,21 @@ export default function CashManagement() {
                 <span className="text-[11px] font-semibold text-stone-500 uppercase tracking-wide">
                   Dinheiro na Gaveta
                 </span>
-                <Badge variant="outline" className="text-[9px] font-semibold text-emerald-800 bg-emerald-50 border-emerald-200 px-1.5 py-0">
-                  Ao Vivo
-                </Badge>
+                {isBlindActive ? (
+                  <Badge variant="outline" className="text-[9px] font-semibold text-stone-700 bg-stone-100 border-stone-300 px-1.5 py-0 gap-1">
+                    <EyeOff className="w-2.5 h-2.5" /> Modo Cego
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="text-[9px] font-semibold text-emerald-800 bg-emerald-50 border-emerald-200 px-1.5 py-0">
+                    Ao Vivo
+                  </Badge>
+                )}
               </div>
               <p className="text-2xl font-bold font-mono text-stone-900 mt-1">
-                {formatMoney(expectedCashInDrawer)}
+                {isBlindActive ? "•••••" : formatMoney(expectedCashInDrawer)}
               </p>
               <span className="text-[11px] text-stone-500 mt-0.5 block">
-                Físico disponível na loja
+                {isBlindActive ? "Saldo oculto até o fechamento" : "Físico disponível na loja"}
               </span>
             </Card>
 
@@ -628,7 +1127,7 @@ export default function CashManagement() {
                 Faturamento do Turno
               </span>
               <p className="text-2xl font-bold font-mono text-stone-900 mt-1">
-                {formatMoney(summary.grossRevenue)}
+                {isBlindActive ? "•••••" : formatMoney(summary.grossRevenue)}
               </p>
               <span className="text-[11px] text-stone-500 mt-0.5 block">
                 {summary.totalOrders} pedidos realizados
@@ -689,8 +1188,8 @@ export default function CashManagement() {
                   </p>
                 </div>
 
-                <Badge variant="outline" className="text-[10px] font-semibold text-emerald-800 bg-emerald-50 border-emerald-200">
-                  Saldo: {formatMoney(expectedCashInDrawer)}
+                <Badge variant="outline" className={`text-[10px] font-semibold ${isBlindActive ? "text-stone-700 bg-stone-100 border-stone-300" : "text-emerald-800 bg-emerald-50 border-emerald-200"}`}>
+                  {isBlindActive ? "Saldo: Oculto (Modo Cego)" : `Saldo: ${formatMoney(expectedCashInDrawer)}`}
                 </Badge>
               </CardHeader>
 
@@ -706,9 +1205,12 @@ export default function CashManagement() {
 
                   <div className="flex justify-between py-1 text-stone-600">
                     <span className="flex items-center gap-1.5">
-                      <span className="text-emerald-600 font-mono font-bold">(+)</span> Vendas em Dinheiro (Balcão):
+                      <span className="text-emerald-600 font-mono font-bold">(+)</span>{" "}
+                      {SHOW_DRIVER_CLOSING_SECTIONS ? "Vendas em Dinheiro (Balcão):" : "Vendas em Dinheiro:"}
                     </span>
-                    <span className="font-semibold font-mono text-emerald-700">+{formatMoney(cashAtCounter)}</span>
+                    <span className="font-semibold font-mono text-emerald-700">
+                      {isBlindActive ? "Oculto (Modo Cego)" : `+${formatMoney(cashAtCounter)}`}
+                    </span>
                   </div>
 
                   <div className="flex justify-between py-1 text-stone-600">
@@ -732,7 +1234,7 @@ export default function CashManagement() {
                     <span className="font-semibold font-mono text-rose-700">-{formatMoney(movementsSummary.totalExpenses)}</span>
                   </div>
 
-                  {cashWithDrivers > 0 && (
+                  {SHOW_DRIVER_CLOSING_SECTIONS && cashWithDrivers > 0 && (
                     <div className="flex justify-between py-1.5 bg-amber-50/60 px-2 rounded text-amber-900 border border-amber-200/50">
                       <span className="flex items-center gap-1 text-[11px] font-medium">
                         <Bike className="w-3.5 h-3.5 text-amber-600" />
@@ -749,8 +1251,9 @@ export default function CashManagement() {
                     type="button"
                     variant="outline"
                     size="sm"
+                    disabled={!isCashDrawerOpen}
                     onClick={() => setSupplyModalVisible(true)}
-                    className="bg-stone-50 hover:bg-blue-50 text-stone-700 hover:text-blue-800 border-stone-200 rounded-lg text-xs font-semibold gap-1 h-8.5 cursor-pointer shadow-2xs"
+                    className="bg-stone-50 hover:bg-blue-50 text-stone-700 hover:text-blue-800 border-stone-200 rounded-lg text-xs font-semibold gap-1 h-8.5 cursor-pointer shadow-2xs disabled:opacity-50"
                   >
                     <ArrowUpRight className="w-3.5 h-3.5 text-blue-600" />
                     <span>Suprimento</span>
@@ -760,8 +1263,9 @@ export default function CashManagement() {
                     type="button"
                     variant="outline"
                     size="sm"
+                    disabled={!isCashDrawerOpen}
                     onClick={() => setBleedModalVisible(true)}
-                    className="bg-stone-50 hover:bg-amber-50 text-stone-700 hover:text-amber-800 border-stone-200 rounded-lg text-xs font-semibold gap-1 h-8.5 cursor-pointer shadow-2xs"
+                    className="bg-stone-50 hover:bg-amber-50 text-stone-700 hover:text-amber-800 border-stone-200 rounded-lg text-xs font-semibold gap-1 h-8.5 cursor-pointer shadow-2xs disabled:opacity-50"
                   >
                     <ArrowDownRight className="w-3.5 h-3.5 text-amber-600" />
                     <span>Sangria</span>
@@ -771,8 +1275,9 @@ export default function CashManagement() {
                     type="button"
                     variant="outline"
                     size="sm"
+                    disabled={!isCashDrawerOpen}
                     onClick={() => setExpenseModalVisible(true)}
-                    className="bg-stone-50 hover:bg-rose-50 text-stone-700 hover:text-rose-800 border-stone-200 rounded-lg text-xs font-semibold gap-1 h-8.5 cursor-pointer shadow-2xs"
+                    className="bg-stone-50 hover:bg-rose-50 text-stone-700 hover:text-rose-800 border-stone-200 rounded-lg text-xs font-semibold gap-1 h-8.5 cursor-pointer shadow-2xs disabled:opacity-50"
                   >
                     <Receipt className="w-3.5 h-3.5 text-rose-600" />
                     <span>Despesa</span>
@@ -781,7 +1286,11 @@ export default function CashManagement() {
 
                 <div className="pt-2 border-t border-stone-100 flex items-center justify-between text-[11px] text-stone-500">
                   <span>Operador: <b className="text-stone-800">{cashDrawerInfo.operator}</b></span>
-                  <span>Aberto às {formatInBrasilia(cashDrawerInfo.openedAt, { includeSeconds: false })}</span>
+                  <span>
+                    {cashDrawerInfo.openedAt
+                      ? `Aberto às ${formatInBrasilia(cashDrawerInfo.openedAt, { includeSeconds: false })}`
+                      : "Caixa fechado"}
+                  </span>
                 </div>
               </CardContent>
             </Card>
@@ -827,13 +1336,14 @@ export default function CashManagement() {
                     val: payments.cash.total,
                     count: payments.cash.count,
                     note: "Entrada na gaveta da loja",
+                    isCash: true,
                   },
                   {
                     label: "Vale Refeição / Alimentação",
                     icon: <UtensilsCrossed className="w-4 h-4 text-amber-600" />,
                     val: payments.mealVoucher.total,
                     count: payments.mealVoucher.count,
-                    note: "Sodexo, VR, Ticket, Alelo",
+                    note: "Pluxee / Sodexo, VR, Ticket, Alelo",
                   },
                 ].map((row, idx) => (
                   <div key={idx} className="p-3 sm:px-4 flex items-center justify-between hover:bg-stone-50/50 transition-colors">
@@ -849,10 +1359,10 @@ export default function CashManagement() {
 
                     <div className="text-right">
                       <span className="text-xs font-bold font-mono text-stone-900 block">
-                        {formatMoney(row.val)}
+                        {row.isCash && isBlindActive ? "Oculto (Modo Cego)" : formatMoney(row.val)}
                       </span>
                       <span className="text-[10px] text-stone-400 font-medium">
-                        {calculatePct(row.val)} do faturamento
+                        {isBlindActive ? "Modo Cego" : `${calculatePct(row.val)} do faturamento`}
                       </span>
                     </div>
                   </div>
@@ -1003,43 +1513,41 @@ export default function CashManagement() {
             ABA 2: CONFERÊNCIA & FECHAMENTO DE CAIXA (AUDITORIA E ENCERRAMENTO)
         ========================================================================== */}
         <TabsContent value="closing" className="space-y-6 animate-in fade-in-50">
-          {/* Barra de Período e Ações de Exportação */}
+          {/* Barra do Turno Atual e Ações de Exportação (liberadas após o fechamento) */}
           <div className="bg-white p-3.5 rounded-xl border border-stone-200 shadow-2xs flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-1.5 p-1 bg-stone-100 rounded-lg border border-stone-200/80">
-              <button
-                type="button"
-                onClick={() => setPeriodMode("today")}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer ${
-                  periodMode === "today"
-                    ? "bg-white text-stone-900 font-semibold shadow-xs"
-                    : "text-stone-500 hover:text-stone-900"
-                }`}
-              >
-                Hoje (Turno Ativo)
-              </button>
-              <button
-                type="button"
-                onClick={() => setPeriodMode("yesterday")}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer ${
-                  periodMode === "yesterday"
-                    ? "bg-white text-stone-900 font-semibold shadow-xs"
-                    : "text-stone-500 hover:text-stone-900"
-                }`}
-              >
-                Ontem
-              </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-stone-900 text-white">
+                {isCashDrawerOpen ? (
+                  <Unlock className="w-3.5 h-3.5 text-emerald-400" />
+                ) : (
+                  <Lock className="w-3.5 h-3.5 text-stone-300" />
+                )}
+                <span>Turno Atual • {cashDrawerInfo.operator}</span>
+              </span>
+
+              <span className="text-xs font-medium text-stone-500 bg-stone-50 px-3 py-1.5 rounded-lg border border-stone-200">
+                {(bounds?.label || "Turno Atual").replace(/^Personalizado:\s*/i, "Período: ")}
+              </span>
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-stone-500 bg-stone-50 px-3 py-1.5 rounded-lg border border-stone-200">
-                {bounds?.label || "Período do Fechamento"}
-              </span>
+            <div className="flex flex-wrap items-center gap-2">
+              {!canExportCurrentClosing && (
+                <span className="text-[11px] font-medium text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-md">
+                  Libera após fechar o caixa
+                </span>
+              )}
 
               <Button
                 type="button"
                 variant="outline"
-                onClick={handleCopyWhatsApp}
-                className="border-emerald-300 text-emerald-800 hover:bg-emerald-50 rounded-lg text-xs font-semibold gap-1.5 h-9 cursor-pointer shadow-2xs"
+                disabled={!canExportCurrentClosing}
+                onClick={() => handleCopyWhatsApp()}
+                title={
+                  canExportCurrentClosing
+                    ? "Copiar resumo oficial do fechamento para WhatsApp"
+                    : "Conclua o fechamento do caixa para liberar o envio"
+                }
+                className="border-emerald-300 text-emerald-800 hover:bg-emerald-50 rounded-lg text-xs font-semibold gap-1.5 h-9 cursor-pointer shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Share2 className="w-3.5 h-3.5 text-emerald-700" />
                 <span>{copiedWhatsApp ? "Copiado!" : "Copiar p/ WhatsApp"}</span>
@@ -1047,8 +1555,14 @@ export default function CashManagement() {
 
               <Button
                 type="button"
-                onClick={handlePrint}
-                className="bg-stone-800 hover:bg-stone-900 text-white rounded-lg text-xs font-semibold gap-1.5 h-9 cursor-pointer shadow-xs"
+                disabled={!canExportCurrentClosing}
+                onClick={() => handlePrint()}
+                title={
+                  canExportCurrentClosing
+                    ? "Imprimir cupom térmico oficial do fechamento"
+                    : "Conclua o fechamento do caixa para liberar a impressão"
+                }
+                className="bg-stone-800 hover:bg-stone-900 text-white rounded-lg text-xs font-semibold gap-1.5 h-9 cursor-pointer shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Printer className="w-3.5 h-3.5" />
                 <span>Imprimir Cupom Térmico</span>
@@ -1063,10 +1577,10 @@ export default function CashManagement() {
                 Faturamento Bruto
               </span>
               <p className="text-xl font-bold font-mono text-stone-900 mt-1">
-                {formatMoney(summary.grossRevenue)}
+                {isBlindActive && periodMode === "today" ? "•••••" : formatMoney(summary.grossRevenue)}
               </p>
               <span className="text-[10px] text-stone-400 mt-0.5 block">
-                Todas as vendas do período
+                {isBlindActive && periodMode === "today" ? "Oculto no Modo Cego" : "Todas as vendas do período"}
               </span>
             </Card>
 
@@ -1078,7 +1592,7 @@ export default function CashManagement() {
                 {summary.totalOrders}
               </p>
               <span className="text-[10px] text-stone-400 mt-0.5 block">
-                Ticket Médio: {formatMoney(summary.averageTicket)}
+                Ticket Médio: {isBlindActive && periodMode === "today" ? "•••••" : formatMoney(summary.averageTicket)}
               </span>
             </Card>
 
@@ -1099,10 +1613,10 @@ export default function CashManagement() {
                 Saldo Esperado na Gaveta
               </span>
               <p className="text-xl font-bold font-mono text-emerald-800 mt-1">
-                {formatMoney(expectedCashInDrawer)}
+                {isBlindActive && periodMode === "today" ? "•••••" : formatMoney(expectedCashInDrawer)}
               </p>
               <span className="text-[10px] text-stone-400 mt-0.5 block">
-                Dinheiro físico a conferir
+                {isBlindActive && periodMode === "today" ? "Modo Cego (Antifraude)" : "Dinheiro físico a conferir"}
               </span>
             </Card>
           </div>
@@ -1118,23 +1632,43 @@ export default function CashManagement() {
                   </h2>
                 </div>
                 <p className="text-xs text-stone-500 mt-0.5">
-                  Informe o valor físico apurado em notas e moedas para checar se houve sobra ou falta de caixa
+                  {isBlindActive && periodMode === "today"
+                    ? "Fechamento Cego ativo: conte as cédulas e moedas da gaveta sem visualizar o saldo esperado"
+                    : "Informe o valor físico apurado em notas e moedas para checar se houve sobra ou falta de caixa"}
                 </p>
               </div>
 
-              <div className="text-right">
-                <span className="text-[10px] uppercase font-semibold text-stone-400 block">Saldo Esperado pelo Sistema</span>
-                <span className="text-lg font-bold font-mono text-stone-900">{formatMoney(expectedCashInDrawer)}</span>
-              </div>
+              {isBlindActive && periodMode === "today" ? (
+                <Badge className="bg-stone-900 text-white border-0 text-[11px] font-semibold px-3 py-1 gap-1.5 self-start sm:self-auto">
+                  <EyeOff className="w-3.5 h-3.5 text-amber-300" />
+                  Modo Cego Ativo (Saldo Oculto)
+                </Badge>
+              ) : (
+                <div className="text-right">
+                  <span className="text-[10px] uppercase font-semibold text-stone-400 block">Saldo Esperado pelo Sistema</span>
+                  <span className="text-lg font-bold font-mono text-stone-900">{formatMoney(expectedCashInDrawer)}</span>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
               {/* Campo de Entrada: Valor Contado */}
-              <div className="space-y-2">
-                <Label className="text-xs font-semibold text-stone-700 flex items-center justify-between">
-                  <span>Valor Total Contado na Gaveta:</span>
-                  <span className="text-[11px] text-stone-400 font-normal">Cédulas + Moedas</span>
-                </Label>
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <Label className="text-xs font-semibold text-stone-700">
+                    Valor Total Contado na Gaveta:
+                  </Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setBillCalculatorOpen(true)}
+                    className="h-7 px-2.5 text-[11px] font-semibold text-stone-800 border-stone-300 hover:bg-stone-100 gap-1.5 cursor-pointer"
+                  >
+                    <Calculator className="w-3.5 h-3.5 text-emerald-700" />
+                    Contar Notas e Moedas
+                  </Button>
+                </div>
 
                 <CurrencyInput
                   value={countedCashStr}
@@ -1144,7 +1678,7 @@ export default function CashManagement() {
                 />
 
                 <p className="text-[11px] text-stone-500">
-                  Conte o dinheiro na gaveta no final do dia e digite o valor exato apurado.
+                  Conte o dinheiro na gaveta no final do turno e digite o total ou use a calculadora de cédulas.
                 </p>
               </div>
 
@@ -1154,7 +1688,17 @@ export default function CashManagement() {
 
                 {!hasCountedInput ? (
                   <div className="p-4 rounded-lg bg-stone-50 border border-stone-200 text-center text-xs text-stone-500">
-                    Aguardando a digitação do valor contado para apurar a diferença...
+                    Aguardando a digitação do valor contado para liberar o fechamento...
+                  </div>
+                ) : isBlindActive && periodMode === "today" ? (
+                  <div className="p-4 rounded-lg bg-stone-900 text-white space-y-1.5">
+                    <div className="flex items-center gap-2 font-bold text-xs">
+                      <EyeOff className="w-4 h-4 text-amber-300" />
+                      <span>Contagem Cega Declarada: {formatMoney(countedCash)}</span>
+                    </div>
+                    <p className="text-[11px] text-stone-300 leading-relaxed">
+                      Para evitar manipulação, o comparativo (Sobra/Falta) só será revelado após travar sua contagem no botão de encerramento abaixo.
+                    </p>
                   </div>
                 ) : isExactDifference ? (
                   <div className="p-3.5 rounded-lg bg-emerald-50 border border-emerald-300 text-emerald-900 space-y-1">
@@ -1188,8 +1732,8 @@ export default function CashManagement() {
                   </div>
                 )}
 
-                {/* Justificativa caso haja diferença */}
-                {hasCountedInput && !isExactDifference && (
+                {/* Justificativa no modo aberto */}
+                {!(isBlindActive && periodMode === "today") && hasCountedInput && !isExactDifference && (
                   <div className="space-y-1 animate-in fade-in">
                     <Label className="text-xs font-semibold text-stone-700">
                       Justificativa da Divergência:
@@ -1207,7 +1751,7 @@ export default function CashManagement() {
           </Card>
 
           {/* Acerto de Contas com a Equipe de Entregas */}
-          {driversClosing?.hasDrivers && (
+          {SHOW_DRIVER_CLOSING_SECTIONS && driversClosing?.hasDrivers && (
             <Card className="rounded-xl bg-white border border-stone-200 shadow-2xs p-4 sm:p-5 space-y-3">
               <div className="flex items-center justify-between border-b border-stone-100 pb-2.5">
                 <div>
@@ -1294,15 +1838,23 @@ export default function CashManagement() {
                 Encerramento Oficial do Expediente
               </span>
               <p className="text-xs text-stone-500 mt-0.5 max-w-xl">
-                Ao encerrar, este expediente é arquivado no Histórico e Auditoria com o comprovante imutável gerado para reimpressão.
+                {!hasCountedInput && !closingSaved
+                  ? "Digite o valor contado na gaveta acima para liberar o encerramento oficial do caixa."
+                  : "Ao encerrar, este expediente é arquivado no Histórico e Auditoria com o comprovante imutável gerado para reimpressão."}
               </p>
             </div>
 
             <Button
               type="button"
-              onClick={() => setClosingConfirmModalVisible(true)}
-              disabled={isSavingClosing || closingSaved}
-              className={`rounded-lg text-xs font-semibold px-5 py-2.5 shadow-xs gap-2 cursor-pointer transition-all ${
+              onClick={() => {
+                if (!hasCountedInput) {
+                  toast.error("Informe quanto há em dinheiro na gaveta antes de encerrar.");
+                  return;
+                }
+                setClosingConfirmModalVisible(true);
+              }}
+              disabled={isSavingClosing || closingSaved || !hasCountedInput || (!isCashDrawerOpen && periodMode === "today")}
+              className={`rounded-lg text-xs font-semibold px-5 py-2.5 shadow-xs gap-2 cursor-pointer transition-all disabled:opacity-50 ${
                 closingSaved
                   ? "bg-emerald-700 hover:bg-emerald-800 text-white"
                   : "bg-stone-900 hover:bg-black text-white"
@@ -1326,7 +1878,91 @@ export default function CashManagement() {
         {/* =========================================================================
             ABA 3: HISTÓRICO E AUDITORIA (LIVRO-CAIXA DIGITAL E TURNOS ANTERIORES)
         ========================================================================== */}
-        <TabsContent value="history" className="space-y-6 animate-in fade-in-50">
+        <TabsContent value="history" className="space-y-5 animate-in fade-in-50">
+          {/* Barra de Filtros da Auditoria (Período + Operador) */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-white border border-stone-200 rounded-xl px-4 py-2.5 shadow-2xs">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[11px] font-semibold text-stone-500 mr-1">Período:</span>
+              {[
+                { id: "all", label: "Tudo" },
+                { id: "today", label: "Hoje" },
+                { id: "7d", label: "7 dias" },
+                { id: "30d", label: "30 dias" },
+              ].map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setHistoryPeriodFilter(opt.id)}
+                  className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
+                    historyPeriodFilter === opt.id
+                      ? "bg-stone-900 text-white"
+                      : "bg-stone-100 text-stone-600 hover:bg-stone-200"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            {historyOperators.length > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-semibold text-stone-500">Operador:</span>
+                <select
+                  value={historyOperatorFilter}
+                  onChange={(e) => setHistoryOperatorFilter(e.target.value)}
+                  className="h-7.5 rounded-md border border-stone-200 bg-stone-50 px-2.5 text-xs font-medium text-stone-800 focus:outline-none focus:ring-2 focus:ring-stone-300 cursor-pointer"
+                >
+                  <option value="all">Todos</option>
+                  {historyOperators.map((op) => (
+                    <option key={op} value={op}>
+                      {op}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* Painel Executivo do Dono (Quebras, Sobras e Turnos Divergentes) */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Card className="p-4 bg-white border border-stone-200 rounded-xl shadow-2xs">
+              <span className="text-[11px] font-semibold text-rose-700 uppercase tracking-wide block">
+                Total de Faltas (Quebras)
+              </span>
+              <p className="text-xl font-bold font-mono text-rose-700 mt-1">
+                -{formatMoney(historyAuditStats.totalShortage)}
+              </p>
+              <span className="text-[11px] text-stone-500 mt-0.5 block">
+                Em {historyAuditStats.shortageCount} {historyAuditStats.shortageCount === 1 ? "turno fechado" : "turnos fechados"}
+              </span>
+            </Card>
+
+            <Card className="p-4 bg-white border border-stone-200 rounded-xl shadow-2xs">
+              <span className="text-[11px] font-semibold text-blue-700 uppercase tracking-wide block">
+                Total de Sobras
+              </span>
+              <p className="text-xl font-bold font-mono text-blue-700 mt-1">
+                +{formatMoney(historyAuditStats.totalSurplus)}
+              </p>
+              <span className="text-[11px] text-stone-500 mt-0.5 block">
+                Em {historyAuditStats.surplusCount} {historyAuditStats.surplusCount === 1 ? "turno fechado" : "turnos fechados"}
+              </span>
+            </Card>
+
+            <Card className="p-4 bg-white border border-stone-200 rounded-xl shadow-2xs">
+              <span className="text-[11px] font-semibold text-stone-600 uppercase tracking-wide block">
+                Turnos com Divergência
+              </span>
+              <p className="text-xl font-bold font-mono text-stone-900 mt-1">
+                {historyAuditStats.divergentTurns}{" "}
+                <span className="text-xs font-normal text-stone-400">de {filteredPastClosings.length}</span>
+              </p>
+              <span className="text-[11px] text-stone-500 mt-0.5 block">
+                Clique em "Raio-X" para auditar os detalhes
+              </span>
+            </Card>
+          </div>
+
           <Card className="rounded-xl bg-white border border-stone-200 shadow-xs overflow-hidden">
             <CardHeader className="bg-stone-50/60 border-b border-stone-200/80 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
@@ -1334,24 +1970,28 @@ export default function CashManagement() {
                   Histórico de Turnos e Fechamentos Anteriores
                 </CardTitle>
                 <p className="text-xs text-stone-500 mt-0.5">
-                  Livro-caixa digital e auditoria dos expedientes concluídos
+                  Livro-caixa digital e auditoria completa de divergências, justificativas e movimentações
                 </p>
               </div>
 
               <Badge variant="outline" className="text-xs font-semibold bg-white border-stone-300 text-stone-700 self-start sm:self-auto">
-                {pastClosings.length} {pastClosings.length === 1 ? "fechamento" : "fechamentos"}
+                {filteredPastClosings.length} {filteredPastClosings.length === 1 ? "fechamento" : "fechamentos"}
               </Badge>
             </CardHeader>
 
             <CardContent className="p-0">
-              {pastClosings.length === 0 ? (
+              {filteredPastClosings.length === 0 ? (
                 <div className="py-16 px-4 flex flex-col items-center justify-center text-center text-stone-400 gap-1.5">
                   <Receipt className="w-8 h-8 stroke-1 text-stone-300" />
                   <p className="text-xs font-semibold text-stone-700">
-                    Nenhum fechamento registrado no histórico
+                    {pastClosings.length === 0
+                      ? "Nenhum fechamento registrado no histórico"
+                      : "Nenhum fechamento encontrado para o filtro selecionado"}
                   </p>
                   <p className="text-[11px] text-stone-400 max-w-sm">
-                    Quando você encerrar um turno na aba <b>Conferência & Fechamento</b>, ele será arquivado aqui com comprovante térmico e extrato completo.
+                    {pastClosings.length === 0
+                      ? "Quando você encerrar um turno na aba Fechamento de Caixa, ele será arquivado aqui com comprovante térmico e extrato completo."
+                      : "Altere o período ou o operador acima para visualizar outros turnos."}
                   </p>
                 </div>
               ) : (
@@ -1359,46 +1999,100 @@ export default function CashManagement() {
                   <table className="w-full text-left text-xs">
                     <thead>
                       <tr className="border-b border-stone-200/80 bg-stone-50/70 text-stone-500 font-semibold uppercase text-[10px]">
-                        <th className="py-2.5 px-4">Data / Turno</th>
+                        <th className="py-2.5 px-4">Turno</th>
                         <th className="py-2.5 px-4">Operador</th>
                         <th className="py-2.5 px-4">Faturamento Bruto</th>
-                        <th className="py-2.5 px-4">Gaveta Esperada</th>
-                        <th className="py-2.5 px-4">Conferência (Quebra/Sobra)</th>
+                        <th className="py-2.5 px-4">Gaveta (Dinheiro)</th>
+                        <th className="py-2.5 px-4">Conferência & Justificativa</th>
                         <th className="py-2.5 px-4 text-right">Ações</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-stone-100">
-                      {pastClosings.map((c) => {
+                      {filteredPastClosings.map((c) => {
+                        const expectedVal = Number(
+                          c.cash_drawer?.expectedCashInDrawer ??
+                            c.cash_drawer?.expectedInDrawer ??
+                            c.cash_drawer?.totalCashExpected ??
+                            0
+                        );
+                        const initialFloatVal = Number(c.cash_drawer?.initialFloat ?? 0);
+                        const suppliesVal = Number(c.cash_drawer?.totalSupplies ?? c.cash_drawer?.supplies ?? 0);
+                        const bleedsVal = Number(c.cash_drawer?.totalBleeds ?? c.cash_drawer?.bleeds ?? 0);
+                        const expensesVal = Number(c.cash_drawer?.totalExpenses ?? c.cash_drawer?.expenses ?? 0);
+                        const hasCounted =
+                          c.cash_drawer?.countedCash !== undefined &&
+                          c.cash_drawer?.countedCash !== null;
+                        const countedVal = hasCounted ? Number(c.cash_drawer.countedCash) : expectedVal;
                         const diff = Number(c.cash_drawer?.difference || 0);
                         const isDiffZero = Math.abs(diff) < 0.01;
+                        const just = (c.cash_drawer?.justification || "").trim();
 
                         return (
-                          <tr key={c.id} className="hover:bg-stone-50/60 transition-colors">
+                          <tr key={c.id} className="hover:bg-stone-50/60 transition-colors align-top">
                             <td className="py-3 px-4">
-                              <span className="font-semibold text-stone-900 block">
-                                {c.period_label || c.shift_date}
-                              </span>
-                              <span className="text-[10px] text-stone-400 font-mono">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-semibold text-stone-900">
+                                  {formatHistoryTurnLabel(c)}
+                                </span>
+                                {c.cash_drawer?.blindClosing && (
+                                  <Badge className="bg-stone-900 text-white border-0 text-[9px] px-1.5 py-0">
+                                    Cego
+                                  </Badge>
+                                )}
+                              </div>
+                              <span className="text-[10px] text-stone-400 font-mono block mt-0.5">
                                 Fechado em: {formatInBrasilia(c.closed_at || c.created_at, { includeSeconds: false })}
                               </span>
+                              {(suppliesVal > 0 || bleedsVal > 0 || expensesVal > 0) && (
+                                <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                                  {suppliesVal > 0 && (
+                                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                                      +Suprimento {formatMoney(suppliesVal)}
+                                    </span>
+                                  )}
+                                  {bleedsVal > 0 && (
+                                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
+                                      -Sangria {formatMoney(bleedsVal)}
+                                    </span>
+                                  )}
+                                  {expensesVal > 0 && (
+                                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200">
+                                      -Despesa {formatMoney(expensesVal)}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                             </td>
 
                             <td className="py-3 px-4 font-medium text-stone-700">
-                              {c.cashier_name || "Operador"}
+                              <span>{c.cashier_name || c.cash_drawer?.openedBy || "Operador"}</span>
+                              {c.cash_drawer?.closedBy && c.cash_drawer.closedBy !== (c.cashier_name || c.cash_drawer?.openedBy) && (
+                                <span className="text-[10px] text-stone-400 block">
+                                  Fechou: {c.cash_drawer.closedBy}
+                                </span>
+                              )}
                             </td>
 
                             <td className="py-3 px-4 font-mono font-bold text-stone-900">
                               {formatMoney(c.gross_revenue)}
                               <span className="text-[10px] text-stone-400 block font-normal font-sans">
-                                {c.total_orders || 0} pedidos
+                                {c.total_orders || 0} {c.total_orders === 1 ? "pedido" : "pedidos"} (todos os meios)
                               </span>
                             </td>
 
-                            <td className="py-3 px-4 font-mono font-semibold text-stone-700">
-                              {formatMoney(c.cash_drawer?.expectedInDrawer || c.cash_drawer?.totalCashExpected || 0)}
+                            <td className="py-3 px-4 font-mono text-stone-700">
+                              <span className="font-semibold block">Esperado: {formatMoney(expectedVal)}</span>
+                              <span className="text-[10px] text-stone-500 block">
+                                Contado: {hasCounted ? formatMoney(countedVal) : "—"}
+                              </span>
+                              {initialFloatVal > 0 && (
+                                <span className="text-[10px] text-stone-400 block font-sans">
+                                  Troco inicial: {formatMoney(initialFloatVal)}
+                                </span>
+                              )}
                             </td>
 
-                            <td className="py-3 px-4">
+                            <td className="py-3 px-4 max-w-xs">
                               {isDiffZero ? (
                                 <Badge className="bg-emerald-50 text-emerald-800 border-emerald-300 text-[10px] font-semibold rounded">
                                   ✓ Exato (R$ 0,00)
@@ -1412,45 +2106,47 @@ export default function CashManagement() {
                                   -{formatMoney(Math.abs(diff))} (Falta)
                                 </Badge>
                               )}
-                              {c.cash_drawer?.justification && (
-                                <span className="text-[10px] text-stone-500 block font-medium truncate max-w-xs mt-0.5">
-                                  "{c.cash_drawer.justification}"
-                                </span>
+                              {just && (
+                                <p className="text-[11px] text-stone-700 font-medium whitespace-normal break-words mt-1 bg-stone-50 border border-stone-200 rounded px-2 py-1">
+                                  "{just}"
+                                </p>
                               )}
                             </td>
 
                             <td className="py-3 px-4 text-right">
-                              <div className="flex items-center justify-end gap-1.5">
+                              <div className="flex items-center justify-end gap-1">
                                 <Button
                                   type="button"
                                   variant="ghost"
                                   size="sm"
-                                  onClick={() => {
-                                    sessionStorage.setItem("shift_closing_print_data", JSON.stringify(c.raw_closing_data || c));
-                                    sessionStorage.setItem("current_tenant_name", storeName);
-                                    window.open(createPageUrl("PrintShiftClosing"), "_blank");
-                                  }}
-                                  className="h-7.5 px-2 rounded-md text-xs font-medium text-stone-600 hover:text-stone-900 hover:bg-stone-100 gap-1 cursor-pointer"
-                                  title="Reimprimir Cupom Térmico"
+                                  onClick={() => setAuditModalClosing(c)}
+                                  className="h-7.5 px-2 rounded-md text-xs font-semibold text-stone-800 hover:bg-stone-100 gap-1 cursor-pointer"
+                                  title="Ver Raio-X Completo e Movimentações"
                                 >
-                                  <Printer className="w-3.5 h-3.5" />
-                                  <span className="hidden sm:inline">Imprimir</span>
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span className="hidden sm:inline">Raio-X</span>
                                 </Button>
 
                                 <Button
                                   type="button"
                                   variant="ghost"
                                   size="sm"
-                                  onClick={() => {
-                                    const text = generateWhatsAppClosingText(c.raw_closing_data || c, storeName);
-                                    navigator.clipboard.writeText(text);
-                                    toast.success("Resumo copiado para o WhatsApp!");
-                                  }}
+                                  onClick={() => handlePrint(c)}
+                                  className="h-7.5 px-2 rounded-md text-xs font-medium text-stone-600 hover:text-stone-900 hover:bg-stone-100 gap-1 cursor-pointer"
+                                  title="Reimprimir Cupom Térmico"
+                                >
+                                  <Printer className="w-3.5 h-3.5" />
+                                </Button>
+
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleCopyWhatsApp(c)}
                                   className="h-7.5 px-2 rounded-md text-xs font-medium text-emerald-800 hover:bg-emerald-50 gap-1 cursor-pointer"
                                   title="Copiar para WhatsApp"
                                 >
                                   <Share2 className="w-3.5 h-3.5" />
-                                  <span className="hidden sm:inline">WhatsApp</span>
                                 </Button>
                               </div>
                             </td>
@@ -1474,6 +2170,8 @@ export default function CashManagement() {
         isOpen={openModalVisible}
         onClose={() => setOpenModalVisible(false)}
         currentOperator={cashDrawerInfo.operator}
+        orphanOrders={orphanOrders}
+        tenantId={activeTenantId}
         onConfirmOpen={handleConfirmOpen}
       />
 
@@ -1482,6 +2180,7 @@ export default function CashManagement() {
         isOpen={bleedModalVisible}
         onClose={() => setBleedModalVisible(false)}
         currentDrawerBalance={expectedCashInDrawer}
+        hideBalance={isBlindActive}
         onConfirmBleed={handleConfirmBleed}
         currentOperator={cashDrawerInfo.operator}
       />
@@ -1512,7 +2211,28 @@ export default function CashManagement() {
         difference={difference}
         justification={cashDifferenceJustification}
         operator={cashDrawerInfo.operator}
+        isBlindClosing={isBlindActive && periodMode === "today"}
         onConfirmCloseShift={handleFinalCloseShift}
+      />
+
+      {/* 6. Calculadora de Cédulas e Moedas */}
+      <BillCoinCalculatorModal
+        isOpen={billCalculatorOpen}
+        onClose={() => setBillCalculatorOpen(false)}
+        initialCounts={calculatorCounts}
+        onApplyTotal={(total, countsMap) => {
+          setCountedCashStr(`R$ ${Number(total || 0).toFixed(2).replace(".", ",")}`);
+          setCalculatorCounts(countsMap);
+        }}
+      />
+
+      {/* 7. Raio-X Auditável de Fechamento Anterior (Visão do Dono) */}
+      <CashClosingAuditModal
+        isOpen={Boolean(auditModalClosing)}
+        onClose={() => setAuditModalClosing(null)}
+        closing={auditModalClosing}
+        onPrint={(c) => handlePrint(c)}
+        onCopyWhatsApp={(c) => handleCopyWhatsApp(c)}
       />
     </div>
   );

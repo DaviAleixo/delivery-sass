@@ -12,6 +12,7 @@ export default function PrintOrderPage() {
   const sectorParam = urlParams.get("sector") || "";
   const modeParam = urlParams.get("mode") || "";
   const paperParam = urlParams.get("paper") || "";
+  const isReprintParam = urlParams.get("reprint") === "true";
 
   const [order, setOrder] = useState(null);
   const [settings, setSettings] = useState(null);
@@ -50,6 +51,9 @@ export default function PrintOrderPage() {
       setCategories(Array.isArray(categoriesData) ? categoriesData : []);
       if (settingsData && settingsData.length > 0) {
         setSettings(settingsData[0]);
+      }
+      if (orderData?.order_type === 'delivery') {
+        setPrintTwoCopies(true);
       }
       if (orderData?.customer_phone && Array.isArray(allOrders)) {
         const clean = orderData.customer_phone.replace(/\D/g, "");
@@ -148,10 +152,17 @@ export default function PrintOrderPage() {
   const isDelayedOffline = minutesDelayed >= 10;
 
   // Componente de Cupom Único (Reutilizado na Via 1 e Via 2 ou filtrado por Setor)
-  const ReceiptCopy = ({ isKitchenOnly = false }) => (
+  const ReceiptCopy = ({ isKitchenOnly = false, isDriverCopy = false }) => (
     <div className="receipt-copy bg-white text-black font-sans text-[13px] leading-snug select-none font-bold">
-      {/* Banner do Setor ou Senha Curta */}
-      {isShortReceipt ? (
+      {/* Banner do Setor, Senha Curta ou Via do Motoboy */}
+      {isDriverCopy ? (
+        <div className="border-2 border-black bg-black text-white text-center py-2 px-2 mb-2">
+          <p className="font-black text-base tracking-widest uppercase">
+            VIA DO MOTOBOY / ENTREGA
+          </p>
+          <p className="text-[11px] font-bold uppercase opacity-90">{restaurantName}</p>
+        </div>
+      ) : isShortReceipt ? (
         <div className="border-2 border-black bg-black text-white text-center py-2 px-2 mb-2">
           <p className="font-black text-xl tracking-widest uppercase">
             SENHA #{orderNumber}
@@ -170,6 +181,13 @@ export default function PrintOrderPage() {
 
       {/* Topo / Header */}
       <div className="text-center space-y-0.5 pb-1">
+        {isReprintParam && (
+          <div className="border-2 border-black bg-black text-white text-center py-1 px-2 mb-1.5">
+            <p className="font-black text-xs tracking-widest uppercase">
+              [2a VIA / REIMPRESSAO]
+            </p>
+          </div>
+        )}
         <p className="font-black text-base tracking-wider uppercase text-black">{orderTypeTitle}</p>
         <p className="text-[12px] font-bold text-black">{orderDateFormatted}</p>
         {!isShortReceipt && <p className="text-[12px] font-black text-black uppercase">{restaurantName}</p>}
@@ -308,9 +326,9 @@ export default function PrintOrderPage() {
         )}
 
         {!isKitchenOnly && !isShortReceipt && order.order_type === 'delivery' && deliveryAddress && (
-          <div className="pt-1.5 mt-1.5 border-t border-black space-y-1">
-            <p className="font-black text-[12px] uppercase">ENDEREÇO COMPLETO:</p>
-            <p className="font-black text-[14px] leading-snug">{deliveryAddress}</p>
+          <div className={`pt-1.5 mt-1.5 border-t border-black space-y-1 ${isDriverCopy ? "border-2 border-black p-2 bg-stone-50" : ""}`}>
+            <p className="font-black text-[12px] uppercase">ENDEREÇO DE ENTREGA:</p>
+            <p className={`font-black leading-snug ${isDriverCopy ? "text-[15px]" : "text-[14px]"}`}>{deliveryAddress}</p>
           </div>
         )}
 
@@ -383,7 +401,11 @@ export default function PrintOrderPage() {
 
       {/* Rodapé */}
       <div className="text-center pt-2 mt-2 border-t border-dashed border-black text-[11px] space-y-0.5 text-black font-bold">
-        <p>{isShortReceipt ? "Aguarde chamar sua senha!" : `${restaurantName} - Delivery & Cardápio`}</p>
+        {isDriverCopy ? (
+          <p className="font-black text-xs uppercase">🏍️ BOA ENTREGA! DIRIJA COM CUIDADO</p>
+        ) : (
+          <p>{isShortReceipt ? "Aguarde chamar sua senha!" : `${restaurantName} - Delivery & Cardápio`}</p>
+        )}
       </div>
     </div>
   );
@@ -498,7 +520,7 @@ export default function PrintOrderPage() {
                 ✂ - - - CORTE AQUI - - - ✂
               </span>
             </div>
-            <ReceiptCopy isKitchenOnly={false} />
+            <ReceiptCopy isKitchenOnly={false} isDriverCopy={order.order_type === 'delivery'} />
           </>
         )}
       </div>

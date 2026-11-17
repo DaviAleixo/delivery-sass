@@ -64,6 +64,9 @@ export function sanitizeOrderData(rawOrder = {}) {
     table_session_id: (rawOrder.table_session_id && typeof rawOrder.table_session_id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawOrder.table_session_id.trim()))
       ? rawOrder.table_session_id.trim()
       : null,
+    cash_session_id: (rawOrder.cash_session_id && typeof rawOrder.cash_session_id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawOrder.cash_session_id.trim()))
+      ? rawOrder.cash_session_id.trim()
+      : null,
     customer_address: rawOrder.customer_address ? String(rawOrder.customer_address).trim() : null,
     delivery_address: rawOrder.delivery_address ? String(rawOrder.delivery_address).trim() : null,
     payment_method: String(rawOrder.payment_method || "dinheiro").toLowerCase().trim(),

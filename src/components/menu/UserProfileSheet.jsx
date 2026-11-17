@@ -3,6 +3,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { appConfirm } from "@/components/ui/ConfirmDialogHost";
 import { 
   User as UserIcon, 
   LogOut, 
@@ -609,7 +610,13 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
   };
 
   const handleDeleteAddress = async (addressId) => {
-    if (confirm("Tem certeza que deseja excluir este endereço?")) {
+    const ok = await appConfirm({
+      title: "Excluir endereço?",
+      description: "Tem certeza que deseja excluir este endereço?",
+      confirmText: "Excluir",
+      variant: "danger",
+    });
+    if (ok) {
       const phoneToUse = user?.phone || localStorage.getItem("vrumburguer_customer_phone") || "";
       const currentTenantId = (typeof window !== "undefined" ? localStorage.getItem("current_tenant_id") : null) || "a0000000-0000-0000-0000-000000000001";
       const customerToken = user?.customer_token || getStoredCustomerToken();

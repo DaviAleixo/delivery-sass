@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { Plus, Minus, Trash2, ShoppingBag, X, ArrowRight, Sparkles } from "lucide-react";
+import { Plus, Minus, Trash2, ShoppingBag, X, ArrowRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 
@@ -348,9 +348,7 @@ export default function Cart({
             >
               <div className="flex items-center justify-between px-0.5">
                 <div className="flex items-center gap-1.5">
-                  <div className="w-5 h-5 rounded-md bg-[#D1E9DF]/40 border border-[#D1E9DF] flex items-center justify-center text-[#047857]">
-                    <Sparkles className="w-3 h-3 text-amber-500" />
-                  </div>
+
                   <h4 
                     className="font-black text-xs uppercase tracking-wider text-[#171717]"
                     style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}

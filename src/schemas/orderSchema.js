@@ -44,13 +44,14 @@ export const orderSchema = z.object({
   message: "Endereço de entrega é obrigatório para pedidos de Delivery",
   path: ["delivery_address"]
 }).refine((data) => {
-  if (data.order_type === "delivery" || data.order_type === "balcao") {
-    const cleanDigits = (data.customer_phone || "").replace(/\D/g, "");
+  const cleanDigits = (data.customer_phone || "").replace(/\D/g, "");
+  if (data.order_type === "delivery") {
     return cleanDigits.length >= 8;
   }
-  return true;
+  // Balcão e Mesa permitem venda rápida sem telefone; se preenchido, exige DDD + número
+  return cleanDigits.length === 0 || cleanDigits.length >= 8;
 }, {
-  message: "Telefone do cliente é obrigatório para entregas e retiradas",
+  message: "Telefone válido com DDD é obrigatório para entregas",
   path: ["customer_phone"]
 }).refine((data) => {
   if (data.order_type === "delivery" || data.order_type === "balcao") {

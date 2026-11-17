@@ -34,10 +34,10 @@ import {
   Search, 
   MapPin, 
   Phone, 
-  ArrowRight, 
   Instagram,
   CheckCircle2,
-  Info
+  Info,
+  Ticket
 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -99,6 +99,7 @@ export default function MenuPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [storeIsOpen, setStoreIsOpen] = useState(true);
   const [activeGuestOrder, setActiveGuestOrder] = useState(null);
+  const [activeOrdersCount, setActiveOrdersCount] = useState(1);
   const [recentOrders, setRecentOrders] = useState([]);
   const [complementGroups, setComplementGroups] = useState([]);
   const [complementItems, setComplementItems] = useState([]);
@@ -280,6 +281,7 @@ export default function MenuPage() {
       // Pedidos na mesa / QR Code NÃO têm componente de rastreamento
       if (urlMesa) {
         setActiveGuestOrder(null);
+        setActiveOrdersCount(0);
         return;
       }
 
@@ -287,38 +289,43 @@ export default function MenuPage() {
         const tokenEntries = JSON.parse(localStorage.getItem("vrumburguer_recent_orders_tokens") || "[]");
         if (!Array.isArray(tokenEntries) || tokenEntries.length === 0) {
           setActiveGuestOrder(null);
+          setActiveOrdersCount(0);
           return;
         }
         const { data: tokOrders } = await supabase.rpc("get_public_orders_by_tokens", {
           p_tokens: tokenEntries,
         });
-        const active = (Array.isArray(tokOrders) ? tokOrders : []).find(o =>
+        const activeList = (Array.isArray(tokOrders) ? tokOrders : []).filter(o =>
           o.order_type !== 'dine_in' &&
           !o.table_number &&
           ['pendente', 'confirmado', 'preparando', 'enviado'].includes(o.status)
         );
-        setActiveGuestOrder(active || null);
+        setActiveGuestOrder(activeList[0] || null);
+        setActiveOrdersCount(activeList.length || (activeList[0] ? 1 : 0));
         return;
       }
 
       const recentIds = JSON.parse(localStorage.getItem("vrumburguer_recent_orders") || "[]");
       if (!Array.isArray(recentIds) || recentIds.length === 0) {
         setActiveGuestOrder(null);
+        setActiveOrdersCount(0);
         return;
       }
 
       const allOrders = await Order.list("-created_date", 10);
-      const active = allOrders.find(o => 
+      const activeList = allOrders.filter(o => 
         recentIds.includes(o.id) && 
         !o.user_email && 
         o.order_type !== 'dine_in' && 
         !o.table_number &&
         ['pendente', 'confirmado', 'preparando', 'enviado'].includes(o.status)
       );
-      setActiveGuestOrder(active || null);
+      setActiveGuestOrder(activeList[0] || null);
+      setActiveOrdersCount(activeList.length || (activeList[0] ? 1 : 0));
     } catch (_err) {
       console.log("Erro ao verificar pedidos ativos:", _err);
       setActiveGuestOrder(null);
+      setActiveOrdersCount(0);
     }
   };
 
@@ -539,7 +546,6 @@ export default function MenuPage() {
   const activeCategoryObj = activeCategory === "all"
     ? { id: "all", name: "Todos", description: "Todos os produtos disponíveis no cardápio" }
     : categories.find(c => c.id === activeCategory);
-  const comboCategory = categories.find(c => c.is_combo);
 
   // Agrupamento por categorias para renderização em componentes grandes (Inspirado na Foto 1)
   const categorizedSections = React.useMemo(() => {
@@ -1074,7 +1080,6 @@ export default function MenuPage() {
           setSearchQuery={setSearchQuery}
           activeCategoryObj={activeCategoryObj}
           filteredProducts={filteredProducts}
-          comboCategory={comboCategory}
           updateCartQuantity={updateCartQuantity}
           handleCheckout={handleCheckout}
           complementGroups={complementGroups}
@@ -1247,54 +1252,38 @@ export default function MenuPage() {
         </div>
       )}
 
-      {/* Banner de Pedido em Andamento (Oculto em pedidos na mesa / QR Code) */}
+      {/* Card "Meus Pedidos" Ativo (Inspirado em app moderno / Foto 1) */}
       {!isVisualOnly && !urlMesa && activeGuestOrder && activeGuestOrder.order_type !== 'dine_in' && !activeGuestOrder.table_number && (
-        <div className="mt-3 container mx-auto px-4 max-w-6xl">
-          <div className="relative">
-            <Link to={`${createPageUrl("MyOrders")}?id=${activeGuestOrder.id}`}>
-              <motion.div 
-                initial={{ opacity: 0, y: -10 }} 
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-stone-900 text-white rounded-2xl p-3.5 shadow-md flex items-center justify-between cursor-pointer hover:bg-stone-850 transition-colors pr-12"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center">
-                    <Bike className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-extrabold uppercase tracking-wider text-stone-400">Pedido em Andamento</p>
-                    <p className="text-sm font-bold">
-                      #{activeGuestOrder.id.slice(-6).toUpperCase()} • {
-                        activeGuestOrder.status === 'preparando' || activeGuestOrder.status === 'confirmado'
-                          ? 'CONFIRMADO' 
-                          : (activeGuestOrder.status === 'enviado' 
-                              ? (activeGuestOrder.order_type === 'delivery' ? 'A CAMINHO' : (activeGuestOrder.order_type === 'dine_in' || activeGuestOrder.table_number ? 'SENDO SERVIDO' : 'PRONTO P/ RETIRADA')) 
-                              : activeGuestOrder.status.toUpperCase())
-                      }
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center text-xs font-bold gap-1 bg-white/10 px-3 py-1.5 rounded-xl">
-                  <span>Rastrear</span>
-                  <ChevronRight className="w-4 h-4" />
-                </div>
-              </motion.div>
-            </Link>
-            <button
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setActiveGuestOrder(null);
-                try {
-                  localStorage.removeItem("vrumburguer_recent_orders");
-                } catch {}
-              }}
-              title="Dispensar aviso"
-              className="absolute right-3 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center text-xs font-bold transition-all z-10"
+        <div className="my-3 sm:my-3.5 container mx-auto px-4 max-w-6xl">
+          <Link to={`${createPageUrl("MyOrders")}?id=${activeGuestOrder.id}`} className="block group">
+            <motion.div 
+              initial={{ opacity: 0, y: -8 }} 
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-white rounded-2xl p-3 sm:p-3.5 border border-stone-200/90 shadow-xs hover:border-emerald-300 hover:shadow-sm transition-all flex items-center justify-between gap-3 cursor-pointer select-none"
             >
-              ✕
-            </button>
-          </div>
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100/70 group-hover:scale-105 transition-transform">
+                  <Ticket className="w-5 h-5 text-emerald-600" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-bold text-stone-900 group-hover:text-emerald-700 transition-colors">
+                    Meus pedidos
+                  </h3>
+                  <p className="text-xs text-stone-500 font-medium truncate mt-0.5">
+                    Acompanhe o status do seu pedido
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  {activeOrdersCount} {activeOrdersCount > 1 ? 'ativos' : 'ativo'}
+                </span>
+                <ChevronRight className="w-4 h-4 text-stone-400 group-hover:text-stone-600 group-hover:translate-x-0.5 transition-all" />
+              </div>
+            </motion.div>
+          </Link>
         </div>
       )}
 
@@ -1544,50 +1533,6 @@ export default function MenuPage() {
               </button>
             )}
           </div>
-        )}
-
-        {/* Banner Promocional de Combos */}
-        {comboCategory && (
-          <motion.div 
-            whileHover={{ y: -2 }}
-            className="rounded-3xl overflow-hidden relative border border-[#E5EAE7] bg-white p-6 sm:p-8 shadow-xs"
-          >
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
-              <div className="space-y-2 text-left flex-1">
-                <div className="inline-flex items-center gap-1.5 text-[#047857] text-xs font-black uppercase tracking-widest">
-                  <span>SELEÇÃO ESPECIAL</span>
-                </div>
-                
-                <h3 
-                  className="text-xl sm:text-2xl font-black text-[#171717] leading-tight tracking-tight" 
-                  style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
-                >
-                  Conheça nossos <span className="text-[#047857]">{comboCategory.name}</span>
-                </h3>
-                
-                <p className="text-xs sm:text-sm text-stone-500 max-w-lg leading-relaxed font-normal">
-                  Combos especiais e produtos selecionados com o melhor custo-benefício para sua refeição.
-                </p>
-              </div>
-
-              <div className="flex-shrink-0 w-full sm:w-auto">
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  type="button"
-                  onClick={() => {
-                    setActiveCategory(comboCategory.id);
-                    setSearchQuery("");
-                    window.scrollTo({ top: 180, behavior: 'smooth' });
-                  }}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-[#047857] hover:bg-[#036348] text-white font-extrabold text-xs sm:text-sm px-6 py-3.5 rounded-2xl shadow-md shadow-[#047857]/20 transition-all duration-200 cursor-pointer whitespace-nowrap"
-                >
-                  <span>Explorar Combos</span>
-                  <ArrowRight className="w-4 h-4" />
-                </motion.button>
-              </div>
-            </div>
-          </motion.div>
         )}
       </main>
     </div>

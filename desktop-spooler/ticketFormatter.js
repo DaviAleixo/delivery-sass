@@ -180,6 +180,9 @@ export function formatOrderToThermalText(order, options = {}) {
 
   // Cabeçalho da Loja ou Banner de Setor
   lines.push(divider("=", width));
+  if (options.isReprint || order.is_reprint) {
+    lines.push(centerText("[ 2a VIA / REIMPRESSAO ]", width));
+  }
   if (sectorName) {
     lines.push(centerText(`*** SETOR: ${sectorName} ***`, width));
   }
@@ -383,14 +386,92 @@ export function formatOrderToThermalText(order, options = {}) {
   }
   lines.push(divider("-", width));
 
-  // Rodapé e avanço de papel para guilhotina não cortar o texto
+  // Rodapé da Via 1
   lines.push("");
   lines.push(centerText("Obrigado pela preferencia!", width));
   lines.push(centerText("www.pedemuleke.com", width));
+
+  // ========================================================
+  // SE FOR DELIVERY: IMPRIME AUTOMATICAMENTE A VIA DO MOTOBOY
+  // ========================================================
+  if (orderType === "delivery" && !isProductionOnly && !isShortReceipt) {
+    lines.push("");
+    lines.push("");
+    lines.push(divider("=", width));
+    lines.push(centerText("✂ - - - CORTE AQUI - - - ✂", width));
+    lines.push(divider("=", width));
+    lines.push("");
+    lines.push(centerText(">>> VIA DO MOTOBOY / ENTREGA <<<", width));
+    lines.push(centerText(storeName.toUpperCase(), width));
+    lines.push(divider("=", width));
+    lines.push("");
+    lines.push(centerText(`>>> PEDIDO #${orderId} <<<`, width));
+    lines.push(padLine("Horario:", dataHora, width));
+    lines.push(divider("-", width));
+
+    lines.push(`CLIENTE: ${cleanText(order.customer_name || "Nao informado")}`);
+    if (order.customer_phone) {
+      lines.push(`WHATSAPP/TEL: ${cleanText(order.customer_phone)}`);
+    }
+
+    lines.push("");
+    lines.push("ENDERECO DE ENTREGA:");
+    const rawAddr = order.customer_address || order.delivery_address || "";
+    const wrappedAddr = wordWrap(cleanText(rawAddr), width);
+    wrappedAddr.forEach((a) => lines.push(a));
+    if (order.customer_complement) {
+      const wrappedCompl = wordWrap(`Compl: ${cleanText(order.customer_complement)}`, width);
+      wrappedCompl.forEach((c) => lines.push(c));
+    }
+    if (order.customer_reference) {
+      const wrappedRef = wordWrap(`Ref: ${cleanText(order.customer_reference)}`, width);
+      wrappedRef.forEach((r) => lines.push(r));
+    }
+    if (order.customer_neighborhood) {
+      lines.push(`Bairro: ${cleanText(order.customer_neighborhood)}`);
+    }
+
+    lines.push(divider("-", width));
+    lines.push("PAGAMENTO E COBRANCA:");
+    if (order.payment_status === "paid" || paymentMethod.includes("ONLINE") || paymentMethod.includes("JA PAGO")) {
+      lines.push(centerText("[ JA PAGO ONLINE - NAO COBRAR ]", width));
+    } else {
+      lines.push(centerText(`>>> COBRAR DO CLIENTE: R$ ${formatMoney(total)} <<<`, width));
+      lines.push(padLine("Forma:", paymentMethod, width));
+      if (order.change_for) {
+        lines.push(padLine("Troco para:", `R$ ${formatMoney(order.change_for)}`, width));
+        const trocoDevolver = Number(order.change_for) - total;
+        if (trocoDevolver > 0) {
+          lines.push(padLine("Troco a Devolver:", `R$ ${formatMoney(trocoDevolver)}`, width));
+        }
+      }
+      if (order.card_brand) {
+        lines.push(`* LEVAR MAQUININHA: ${cleanText(order.card_brand).toUpperCase()} *`);
+      }
+    }
+
+    lines.push(divider("-", width));
+    lines.push("ITENS DO PACOTE (CONFERENCIA):");
+    items.forEach((item) => {
+      const qty = item.quantity || item.qty || 1;
+      const name = cleanText(item.product_name || item.name || "Item");
+      lines.push(`[ ${qty}x ] ${name}`);
+    });
+
+    if (order.notes || order.observation) {
+      lines.push(divider("-", width));
+      lines.push(`OBS: ${cleanText(order.notes || order.observation)}`);
+    }
+
+    lines.push(divider("=", width));
+    lines.push(centerText("BOA ENTREGA! DIRIJA COM CUIDADO", width));
+  }
+
+  // Avanço físico além da lâmina da guilhotina
   lines.push("");
   lines.push("");
   lines.push("");
-  lines.push(""); // 4 linhas vazias garantem avanço físico além da lâmina
+  lines.push("");
 
   return lines.join("\r\n");
 }

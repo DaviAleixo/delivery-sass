@@ -7,6 +7,7 @@ import { ProductionSector } from "@/entities/ProductionSector";
 import { Product } from "@/entities/Product";
 import { Category } from "@/entities/Category";
 import { analyzeOrderPrintJobs, filterOrderItemsForSector } from "@/utils/sectorUtils";
+import { useOrdersRealtime } from "@/hooks/useOrdersRealtime";
 import { toast } from "sonner";
 
 const PrintQueueContext = createContext(null);
@@ -254,7 +255,8 @@ function useFifoPrintQueueInternal({
   /**
    * Despacha um único job físico (via Spooler Desktop para térmica ou iframe PrintOrder para A4/navegador).
    */
-  const dispatchSingleJob = useCallback(async (order, job) => {
+  const dispatchSingleJob = useCallback(async (order, job, printMeta = {}) => {
+    const isReprint = Boolean(printMeta?.isReprint);
     if (job.printer_type !== "a4_browser") {
       try {
         const controller = new AbortController();
@@ -263,13 +265,14 @@ function useFifoPrintQueueInternal({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            order: { ...order, items: job.items },
+            order: { ...order, items: job.items, is_reprint: isReprint },
             items: job.items,
             printerName: job.printer_name || undefined,
             paperWidth: job.paper_width || undefined,
             sectorName: job.sector_id ? job.sector_name : undefined,
             contentMode: job.content_mode || "full_ticket",
             copies: job.copies || 1,
+            isReprint,
           }),
           signal: controller.signal,
         });
@@ -295,6 +298,7 @@ function useFifoPrintQueueInternal({
         const params = new URLSearchParams({ id: String(order.id), auto: "true" });
         if (job.sector_id) params.set("sector", String(job.sector_id));
         if (job.content_mode) params.set("mode", String(job.content_mode));
+        if (isReprint) params.set("reprint", "true");
         if (job.printer_type === "a4_browser" || job.paper_width === "a4") {
           params.set("paper", "a4");
         }
@@ -486,7 +490,7 @@ function useFifoPrintQueueInternal({
         }
       }
 
-      const result = await dispatchSingleJob(order, job);
+      const result = await dispatchSingleJob(order, job, printMeta);
       if (!result.ok) {
         allSucceeded = false;
       }
@@ -719,6 +723,24 @@ function useFifoPrintQueueInternal({
       document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [isQueueActive, syncPendingOrders]);
+
+  // Escuta global Realtime de novos pedidos em qualquer tela do painel (Salão, PDV, Caixa, etc.)
+  useOrdersRealtime({
+    onInsert: (newOrder) => {
+      if (!isQueueActive || !newOrder) return;
+      if (newOrder.status === "aguardando_pagamento" || newOrder.status === "cancelado") return;
+      enqueueOrders([newOrder]);
+    },
+    onUpdate: (updatedOrder) => {
+      if (!isQueueActive || !updatedOrder) return;
+      if (
+        updatedOrder.print_status !== "printed" &&
+        ["pendente", "confirmado", "preparando"].includes(String(updatedOrder.status || "").toLowerCase().trim())
+      ) {
+        enqueueOrders([updatedOrder]);
+      }
+    },
+  });
 
   /**
    * Função para imprimir manualmente qualquer pedido pela fila sem conflito (suporta reimpressão por setor)

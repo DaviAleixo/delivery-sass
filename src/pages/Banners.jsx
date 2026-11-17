@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { BannerImage } from "@/entities/BannerImage";
 import { UploadFile } from "@/integrations/Core";
+import { appConfirm } from "@/components/ui/ConfirmDialogHost";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -176,7 +177,13 @@ export default function BannersPage() {
   };
 
   const handleDelete = async (bannerId) => {
-    if (confirm("Tem certeza que deseja excluir este banner?")) {
+    const ok = await appConfirm({
+      title: "Excluir banner?",
+      description: "Tem certeza que deseja excluir este banner?",
+      confirmText: "Excluir",
+      variant: "danger",
+    });
+    if (ok) {
       try {
         await BannerImage.delete(bannerId);
         toast.success("Banner excluído com sucesso!");

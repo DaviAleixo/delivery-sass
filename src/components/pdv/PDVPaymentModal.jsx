@@ -136,26 +136,39 @@ export default function PDVPaymentModal({ total, customerName, customerPhone, on
                       key={b.id}
                       type="button"
                       onClick={() => setSelectedBrand(isSel ? "" : b.name)}
-                      className={`py-1 px-1.5 rounded-lg text-xs font-bold border transition-all text-center truncate ${
+                      className={`py-1.5 px-1.5 rounded-lg text-xs font-bold border transition-all flex flex-col items-center justify-center gap-1 active:scale-95 cursor-pointer ${
                         isSel
                           ? "bg-purple-600 text-white border-purple-600 shadow-xs"
                           : "bg-white text-stone-700 border-purple-200 hover:bg-purple-100/50"
                       }`}
                     >
-                      {b.shortName || b.name}
+                      {b.image ? (
+                        <div className="h-4 flex items-center justify-center">
+                          <img
+                            src={b.image}
+                            alt={b.name}
+                            className={`max-h-4 max-w-[36px] object-contain ${isSel ? "brightness-200" : ""}`}
+                            loading="lazy"
+                          />
+                        </div>
+                      ) : null}
+                      <span className="truncate max-w-full text-[10px] leading-tight">{b.shortName || b.name}</span>
                     </button>
                   );
                 })}
                 <button
                   type="button"
                   onClick={() => setSelectedBrand(selectedBrand === "Outro" ? "" : "Outro")}
-                  className={`py-1 px-1.5 rounded-lg text-xs font-bold border transition-all text-center truncate ${
+                  className={`py-1.5 px-1.5 rounded-lg text-xs font-bold border transition-all flex flex-col items-center justify-center gap-1 active:scale-95 cursor-pointer ${
                     selectedBrand === "Outro"
                       ? "bg-purple-600 text-white border-purple-600 shadow-xs"
                       : "bg-white text-stone-700 border-purple-200 hover:bg-purple-100/50"
                   }`}
                 >
-                  Outro
+                  <div className="h-4 flex items-center justify-center">
+                    <span className="text-[9px] font-black px-1 rounded bg-stone-100 text-stone-600">...</span>
+                  </div>
+                  <span className="truncate max-w-full text-[10px] leading-tight">Outro</span>
                 </button>
               </div>
             </div>

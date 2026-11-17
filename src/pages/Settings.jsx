@@ -5,6 +5,7 @@ import { AdminUser } from "@/entities/AdminUser";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { UploadFile } from "@/integrations/Core";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Save, 
   Store, 
@@ -12,15 +13,18 @@ import {
   Users,
   CreditCard,
   Wallet,
-  Printer
+  Printer,
+  Sliders
 } from "lucide-react";
 import { fetchCityNeighborhoods } from "@/services/cityNeighborhoods";
 import { parseBRLToNumber } from "@/utils/moneyMask";
 import { toast } from "sonner";
+import { appConfirm } from "@/components/ui/ConfirmDialogHost";
 import { validateSchema, settingsSchema, adminUserSchema } from "@/schemas";
 
 // Sub-abas modularizadas
 import GeneralSettingsTab from "@/components/admin/settings/GeneralSettingsTab";
+import OperationsTab from "@/components/admin/settings/OperationsTab";
 import DeliveryFeesTab from "@/components/admin/settings/DeliveryFeesTab";
 import AdminUsersTab from "@/components/admin/settings/AdminUsersTab";
 import SubscriptionTab from "@/components/admin/settings/SubscriptionTab";
@@ -52,7 +56,7 @@ export {
 export default function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialTabParam = searchParams.get("tab");
-  const validTabs = ["geral", "entregas", "pagamentos", "setores", "usuarios", "assinatura"];
+  const validTabs = ["geral", "operacao", "entregas", "pagamentos", "setores", "usuarios", "assinatura"];
   const [activeTab, setActiveTabState] = useState(
     validTabs.includes(initialTabParam) ? initialTabParam : "geral"
   );
@@ -103,9 +107,14 @@ export default function SettingsPage() {
     accepts_delivery: true,
     accepts_takeaway: true,
     auto_accept_delivery: false,
+    blind_cash_closing: false,
     pizza_pricing_rule: "highest_price",
     table_service_fee_enabled: false,
     table_service_fee_rate: 10,
+    business_day_cutoff_time: "04:00",
+    kanban_show_dine_in: false,
+    kanban_show_pos: false,
+    kds_show_dine_in: true,
     cashback_enabled: false,
     cashback_rate: 5,
     cashback_validity_days: 15,
@@ -229,9 +238,14 @@ export default function SettingsPage() {
             accepts_delivery: tenantData.accepts_delivery !== false,
             accepts_takeaway: tenantData.accepts_takeaway !== false,
             auto_accept_delivery: tenantData.auto_accept_delivery === true,
+            blind_cash_closing: tenantData.blind_cash_closing === true,
             pizza_pricing_rule: tenantData.pizza_pricing_rule || "highest_price",
             table_service_fee_enabled: tenantData.table_service_fee_enabled === true,
             table_service_fee_rate: Number(tenantData.table_service_fee_rate ?? 10),
+            business_day_cutoff_time: tenantData.business_day_cutoff_time || "04:00",
+            kanban_show_dine_in: tenantData.kanban_show_dine_in !== undefined ? tenantData.kanban_show_dine_in === true : tenantData.payment_methods?.kanban_show_dine_in === true,
+            kanban_show_pos: tenantData.kanban_show_pos !== undefined ? tenantData.kanban_show_pos === true : tenantData.payment_methods?.kanban_show_pos === true,
+            kds_show_dine_in: tenantData.kds_show_dine_in !== undefined ? tenantData.kds_show_dine_in !== false : tenantData.payment_methods?.kds_show_dine_in !== false,
             cashback_enabled: tenantData.cashback_enabled === true,
             cashback_rate: Number(tenantData.cashback_rate ?? 5),
             cashback_validity_days: Number(tenantData.cashback_validity_days ?? 15),
@@ -279,6 +293,7 @@ export default function SettingsPage() {
             pizza_pricing_rule: currentSettings.pizza_pricing_rule || "highest_price",
             table_service_fee_enabled: currentSettings.table_service_fee_enabled === true,
             table_service_fee_rate: Number(currentSettings.table_service_fee_rate ?? 10),
+            business_day_cutoff_time: currentSettings.business_day_cutoff_time || "04:00",
           });
         }
       } else {
@@ -311,7 +326,8 @@ export default function SettingsPage() {
           accepts_takeaway: true,
           pizza_pricing_rule: "highest_price",
           table_service_fee_enabled: false,
-          table_service_fee_rate: 10
+          table_service_fee_rate: 10,
+          business_day_cutoff_time: "04:00"
         });
       }
     } finally {
@@ -428,8 +444,8 @@ export default function SettingsPage() {
     }
   };
 
-  // Funções de dias e horários (legado mantido para compatibilidade de esquema)
-  const _handleToggleDay = (dayIndex) => {
+  // Funções de dias e horários de funcionamento da loja
+  const handleToggleDay = (dayIndex) => {
     setSettings(prev => ({
       ...prev,
       open_days: prev.open_days.map(d =>
@@ -438,7 +454,7 @@ export default function SettingsPage() {
     }));
   };
 
-  const _handleDayTime = (dayIndex, field, value) => {
+  const handleDayTime = (dayIndex, field, value) => {
     setSettings(prev => ({
       ...prev,
       open_days: prev.open_days.map(d =>
@@ -447,7 +463,7 @@ export default function SettingsPage() {
     }));
   };
 
-  const _handleCopyDayTimeToAll = (openTime, closeTime) => {
+  const handleCopyDayTimeToAll = (openTime, closeTime) => {
     setSettings(prev => ({
       ...prev,
       opening_time: openTime,
@@ -461,7 +477,7 @@ export default function SettingsPage() {
     toast.success("Horário replicado para todos os dias!");
   };
 
-  const _handleToggleAllDays = (enabledState) => {
+  const handleToggleAllDays = (enabledState) => {
     setSettings(prev => ({
       ...prev,
       open_days: prev.open_days.map(d => ({
@@ -850,7 +866,13 @@ export default function SettingsPage() {
       return;
     }
 
-    if (confirm(`Excluir o usuário "${user.username}"?`)) {
+    const ok = await appConfirm({
+      title: `Excluir usuário "${user.username}"?`,
+      description: "Tem certeza que deseja remover este acesso do sistema?",
+      confirmText: "Excluir Usuário",
+      variant: "danger",
+    });
+    if (ok) {
       try {
         if (isSupabaseConfigured() && supabase) {
           try {
@@ -910,7 +932,11 @@ export default function SettingsPage() {
         pizza_pricing_rule: settings.pizza_pricing_rule || "highest_price",
         salon_mode: settings.salon_mode || "full",
         table_service_fee_enabled: settings.table_service_fee_enabled === true,
-        table_service_fee_rate: Number(settings.table_service_fee_rate ?? 10)
+        table_service_fee_rate: Number(settings.table_service_fee_rate ?? 10),
+        business_day_cutoff_time: settings.business_day_cutoff_time || "04:00",
+        kanban_show_dine_in: settings.kanban_show_dine_in === true,
+        kanban_show_pos: settings.kanban_show_pos === true,
+        kds_show_dine_in: settings.kds_show_dine_in !== false
       };
 
       const zodValidation = validateSchema(settingsSchema, validationPayload);
@@ -959,14 +985,24 @@ export default function SettingsPage() {
           accepts_delivery: settings.accepts_delivery !== false,
           accepts_takeaway: settings.accepts_takeaway !== false,
           auto_accept_delivery: settings.auto_accept_delivery === true,
+          blind_cash_closing: settings.blind_cash_closing === true,
           pizza_pricing_rule: settings.pizza_pricing_rule || 'highest_price',
           table_service_fee_enabled: settings.table_service_fee_enabled === true,
           table_service_fee_rate: Number(settings.table_service_fee_rate ?? 10),
+          business_day_cutoff_time: settings.business_day_cutoff_time || "04:00",
+          kanban_show_dine_in: settings.kanban_show_dine_in === true,
+          kanban_show_pos: settings.kanban_show_pos === true,
+          kds_show_dine_in: settings.kds_show_dine_in !== false,
           cashback_enabled: settings.cashback_enabled === true,
           cashback_rate: Number(settings.cashback_rate ?? 5),
           cashback_validity_days: Number(settings.cashback_validity_days ?? 15),
           cashback_max_discount_percentage: Number(settings.cashback_max_discount_percentage ?? 50),
-          payment_methods: tenantDetails?.payment_methods || null,
+          payment_methods: {
+            ...(tenantDetails?.payment_methods || {}),
+            kanban_show_dine_in: settings.kanban_show_dine_in === true,
+            kanban_show_pos: settings.kanban_show_pos === true,
+            kds_show_dine_in: settings.kds_show_dine_in !== false,
+          },
         };
 
         const resolvedId = targetTenantId || (isVruum ? "a0000000-0000-0000-0000-000000000001" : null);
@@ -1055,7 +1091,7 @@ export default function SettingsPage() {
   const isTableOnly = currentSalonMode === "table_only" || currentPlan === "table";
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 bg-[#F7F9F8] min-h-screen space-y-6 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 lg:p-8 bg-[#F7F9F8] space-y-6 max-w-6xl mx-auto pb-24">
       {/* Cabeçalho Executivo */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -1093,95 +1129,77 @@ export default function SettingsPage() {
       </div>
 
       {/* Barra de Abas Executiva */}
-      <div className="flex items-center gap-1.5 p-1 bg-stone-200/70 rounded-xl w-fit border border-stone-300/80 overflow-x-auto">
-        <button
-          type="button"
-          onClick={() => setActiveTab("geral")}
-          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-            activeTab === "geral"
-              ? "bg-white text-stone-900 shadow-2xs"
-              : "text-stone-600 hover:text-stone-900"
-          }`}
-        >
-          <Store className="w-3.5 h-3.5 text-stone-700" />
-          <span>Geral & Loja</span>
-        </button>
-
-        {!isVisualOnly && !isTableOnly && (
-          <button
-            type="button"
-            onClick={() => setActiveTab("entregas")}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-              activeTab === "entregas"
-                ? "bg-white text-stone-900 shadow-2xs"
-                : "text-stone-600 hover:text-stone-900"
-            }`}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="bg-stone-100 p-1 rounded-xl border border-stone-200 w-full sm:w-auto flex overflow-x-auto h-auto justify-start gap-1">
+          <TabsTrigger
+            value="geral"
+            className="rounded-lg text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-stone-900 data-[state=active]:shadow-xs px-4 py-2 gap-2 cursor-pointer whitespace-nowrap transition-all"
           >
-            <Bike className="w-3.5 h-3.5 text-stone-700" />
-            <span>Taxas & Bairros</span>
-          </button>
-        )}
+            <Store className="w-3.5 h-3.5 text-stone-600" />
+            <span>Loja & Horários</span>
+          </TabsTrigger>
 
-        {!isVisualOnly && (
-          <button
-            type="button"
-            onClick={() => setActiveTab("pagamentos")}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-              activeTab === "pagamentos"
-                ? "bg-white text-stone-900 shadow-2xs"
-                : "text-stone-600 hover:text-stone-900"
-            }`}
-          >
-            <Wallet className="w-3.5 h-3.5 text-stone-700" />
-            <span>Formas de Pagamento</span>
-          </button>
-        )}
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("setores")}
-          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-            activeTab === "setores"
-              ? "bg-white text-stone-900 shadow-2xs"
-              : "text-stone-600 hover:text-stone-900"
-          }`}
-        >
-          <Printer className="w-3.5 h-3.5 text-stone-700" />
-          <span>Setores & Impressão</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("usuarios")}
-          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-            activeTab === "usuarios"
-              ? "bg-white text-stone-900 shadow-2xs"
-              : "text-stone-600 hover:text-stone-900"
-          }`}
-        >
-          <Users className="w-3.5 h-3.5 text-stone-700" />
-          <span>Usuários & Acessos</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("assinatura")}
-          className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-2 cursor-pointer whitespace-nowrap ${
-            activeTab === "assinatura"
-              ? "bg-white text-stone-900 shadow-2xs"
-              : "text-stone-600 hover:text-stone-900"
-          }`}
-        >
-          <CreditCard className="w-3.5 h-3.5 text-stone-700" />
-          <span>Minha Assinatura</span>
-          {tenantDetails?.subscription_status === "pending" && (
-            <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" title="Pagamento pendente" />
+          {!isVisualOnly && (
+            <TabsTrigger
+              value="operacao"
+              className="rounded-lg text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-stone-900 data-[state=active]:shadow-xs px-4 py-2 gap-2 cursor-pointer whitespace-nowrap transition-all"
+            >
+              <Sliders className="w-3.5 h-3.5 text-stone-600" />
+              <span>Operação & Salão</span>
+            </TabsTrigger>
           )}
-        </button>
-      </div>
 
-        {/* Conteúdo das Abas Gerais (com formulário) */}
-        {["geral", "entregas"].includes(activeTab) && (
+          {!isVisualOnly && !isTableOnly && (
+            <TabsTrigger
+              value="entregas"
+              className="rounded-lg text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-stone-900 data-[state=active]:shadow-xs px-4 py-2 gap-2 cursor-pointer whitespace-nowrap transition-all"
+            >
+              <Bike className="w-3.5 h-3.5 text-stone-600" />
+              <span>Canais & Entregas</span>
+            </TabsTrigger>
+          )}
+
+          {!isVisualOnly && (
+            <TabsTrigger
+              value="pagamentos"
+              className="rounded-lg text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-stone-900 data-[state=active]:shadow-xs px-4 py-2 gap-2 cursor-pointer whitespace-nowrap transition-all"
+            >
+              <Wallet className="w-3.5 h-3.5 text-stone-600" />
+              <span>Formas de Pagamento</span>
+            </TabsTrigger>
+          )}
+
+          <TabsTrigger
+            value="setores"
+            className="rounded-lg text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-stone-900 data-[state=active]:shadow-xs px-4 py-2 gap-2 cursor-pointer whitespace-nowrap transition-all"
+          >
+            <Printer className="w-3.5 h-3.5 text-stone-600" />
+            <span>Setores & Impressão</span>
+          </TabsTrigger>
+
+          <TabsTrigger
+            value="usuarios"
+            className="rounded-lg text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-stone-900 data-[state=active]:shadow-xs px-4 py-2 gap-2 cursor-pointer whitespace-nowrap transition-all"
+          >
+            <Users className="w-3.5 h-3.5 text-stone-600" />
+            <span>Usuários & Acessos</span>
+          </TabsTrigger>
+
+          <TabsTrigger
+            value="assinatura"
+            className="rounded-lg text-xs font-semibold data-[state=active]:bg-white data-[state=active]:text-stone-900 data-[state=active]:shadow-xs px-4 py-2 gap-2 cursor-pointer whitespace-nowrap transition-all"
+          >
+            <CreditCard className="w-3.5 h-3.5 text-stone-600" />
+            <span>Minha Assinatura</span>
+            {tenantDetails?.subscription_status === "pending" && (
+              <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" title="Pagamento pendente" />
+            )}
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+        {/* Conteúdo das Abas com Formulário Integrado */}
+        {["geral", "operacao", "entregas"].includes(activeTab) && (
           <form onSubmit={handleSubmit} className="space-y-6">
             {activeTab === "geral" && (
               <GeneralSettingsTab
@@ -1193,6 +1211,17 @@ export default function SettingsPage() {
                 isUploadingLogo={isUploadingLogo}
                 isFetchingCep={isFetchingCep}
                 cepError={cepError}
+                handleToggleAllDays={handleToggleAllDays}
+                handleToggleDay={handleToggleDay}
+                handleDayTime={handleDayTime}
+                handleCopyDayTimeToAll={handleCopyDayTimeToAll}
+              />
+            )}
+
+            {activeTab === "operacao" && (
+              <OperationsTab
+                settings={settings}
+                handleInputChange={handleInputChange}
                 isVisualOnly={isVisualOnly}
                 isTableOnly={isTableOnly}
               />

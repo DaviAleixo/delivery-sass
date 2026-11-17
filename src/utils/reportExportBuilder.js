@@ -38,17 +38,29 @@ export function buildReportData({
   const canceledOrders = periodOrders.filter((o) => o.status === "cancelado");
 
   // Totais globais
-  const totalGrossRevenue = validOrders.reduce(
-    (sum, o) => sum + (Number(o.total_amount ?? o.total ?? 0) || 0),
-    0
-  );
+  let totalNetRevenue = 0;
+  let totalDiscounts = 0;
+  let totalDeliveryFee = 0;
+
+  validOrders.forEach((o) => {
+    const netAmt = Number(o.total_amount ?? o.total ?? 0) || 0;
+    const disc = Number(o.discount_amount || 0) + Number(o.cashback_discount || 0);
+    const fee = Number(o.delivery_fee || 0);
+
+    totalNetRevenue += netAmt;
+    totalDiscounts += disc;
+    totalDeliveryFee += fee;
+  });
+
+  const totalGrossRevenue = totalNetRevenue + totalDiscounts;
+
   const totalCanceledRevenue = canceledOrders.reduce(
     (sum, o) => sum + (Number(o.total_amount ?? o.total ?? 0) || 0),
     0
   );
   const totalOrdersCount = validOrders.length;
   const canceledOrdersCount = canceledOrders.length;
-  const averageTicket = totalOrdersCount > 0 ? totalGrossRevenue / totalOrdersCount : 0;
+  const averageTicket = totalOrdersCount > 0 ? totalNetRevenue / totalOrdersCount : 0;
 
   // 1. Distribuição de Métodos de Pagamento
   const methodMap = {
@@ -226,11 +238,13 @@ export function buildReportData({
     options,
     summary: {
       totalGrossRevenue,
-      totalCanceledRevenue,
-      netRevenue: totalGrossRevenue,
+      totalDiscounts,
+      netRevenue: totalNetRevenue,
       totalOrdersCount,
       canceledOrdersCount,
+      totalCanceledRevenue,
       averageTicket,
+      totalDeliveryFee,
     },
     paymentMethodsList,
     channelsList,
@@ -269,12 +283,15 @@ export function exportReportToCSV(reportData, customFilename = null) {
   lines.push("");
 
   // Resumo Financeiro
-  lines.push('"RESUMO EXECUTIVO"');
-  lines.push(`"Faturamento Líquido";${sanitizeCsvCell(`R$ ${summary.totalGrossRevenue.toFixed(2).replace(".", ",")}`)}`);
-  lines.push(`"Total de Pedidos";${sanitizeCsvCell(summary.totalOrdersCount)}`);
-  lines.push(`"Ticket Médio";${sanitizeCsvCell(`R$ ${summary.averageTicket.toFixed(2).replace(".", ",")}`)}`);
+  lines.push('"DEMONSTRATIVO DE FATURAMENTO"');
+  lines.push(`"(+) Faturamento Bruto (Cardápio + Taxas)";${sanitizeCsvCell(`R$ ${summary.totalGrossRevenue.toFixed(2).replace(".", ",")}`)}`);
+  lines.push(`"(-) Descontos Concedidos (Cupons/Promoções)";${sanitizeCsvCell(`- R$ ${(summary.totalDiscounts || 0).toFixed(2).replace(".", ",")}`)}`);
+  lines.push(`"(=) Faturamento Líquido Efetivo";${sanitizeCsvCell(`R$ ${summary.netRevenue.toFixed(2).replace(".", ",")}`)}`);
+  lines.push(`"Total de Pedidos Concluídos";${sanitizeCsvCell(summary.totalOrdersCount)}`);
+  lines.push(`"Ticket Médio Líquido";${sanitizeCsvCell(`R$ ${summary.averageTicket.toFixed(2).replace(".", ",")}`)}`);
+  lines.push(`"Taxas de Entrega Arrecadadas";${sanitizeCsvCell(`R$ ${(summary.totalDeliveryFee || 0).toFixed(2).replace(".", ",")}`)}`);
   lines.push(`"Pedidos Cancelados";${sanitizeCsvCell(summary.canceledOrdersCount)}`);
-  lines.push(`"Receita Perdida por Cancelamento";${sanitizeCsvCell(`R$ ${summary.totalCanceledRevenue.toFixed(2).replace(".", ",")}`)}`);
+  lines.push(`"Receita Perdida por Cancelamentos";${sanitizeCsvCell(`- R$ ${summary.totalCanceledRevenue.toFixed(2).replace(".", ",")}`)}`);
   lines.push("");
 
   if (reportType === "financial" || reportType === "all") {

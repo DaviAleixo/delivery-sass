@@ -65,6 +65,14 @@
   4. **Produtos Pausados / Estoque Crítico**: Alerta rápido indicando se há produtos pausados hoje (para evitar esquecer itens importantes desativados no cardápio).
   5. **Comparativo com a Semana Passada (% Crescimento)**: Ex: "Hoje vs mesma segunda-feira da semana anterior (+12%)".
 * **Conexão com o Backlog**: Ideias registradas para discussão futura no [[01 - 🗺️ Roadmap & Backlog]].
+
+### 📈 18. Futuras Expansões de Inteligência Analítica (Benchmark Saipos / Toast / iFood)
+* **Contexto**: Pesquisa de mercado com os principais sistemas de gestão gastronômica (Saipos, Toast POS, iFood Gestor, Consumer, Anota AI) apontou oportunidades de módulos analíticos avançados para próximas fases do SaaS:
+  1. **Lead Time / Tempo Médio de Expedição e Entrega**: Mapear tempo médio entre `pendente` -> `preparando` -> `enviado` -> `entregue` para identificar gargalos da cozinha ou atrasos de motoboy.
+  2. **Taxa de Recompra & Cohort de Clientes**: Indicador de retenção (% de clientes que voltam a comprar no restaurante em 30, 60 ou 90 dias vs clientes novos).
+  3. **Mapa de Calor por Bairro / Região**: Identificar os bairros que mais geram faturamento no delivery para direcionar campanhas de marketing local e calibrar taxas de entrega.
+  4. **CMV Teórico (Custo de Mercadoria Vendida)**: Cálculo automatizado da margem real por prato a partir do cadastro de fichas técnicas e custos de insumos.
+* **Conexão com o Backlog**: Ideias catalogadas para fases avançadas no [[01 - 🗺️ Roadmap & Backlog]].
 * **Ideia**: Quando o cliente final abrir o cardápio no celular pelo navegador, exibir banner convidativo: *"Deseja instalar o app do [Nome do Restaurante] na tela inicial?"*.
 * **Benefício**: Dá a sensação de um aplicativo nativo próprio do restaurante, sem o custo e burocracia de publicar na Google Play ou App Store.
 
@@ -1243,6 +1251,97 @@
 * **Padrão de Adaptador Canônico para Marketplaces (`iFood` / `aiqfome`)**:
   - Todo pedido vindo de plataforma externa passa por um normalizador único que converte o JSON externo no formato interno do [[create_public_order]] / pedido do PedeMuleke, respeitando identificação de tenant, idempotência por ID externo e sincronização de status no KDS e `print_jobs`.
   - *Pré-requisito de negócio*: validar previamente credenciamento de parceiro e regras de homologação oficial da API de cada marketplace antes da implementação.
+
+### 🧾 17. Identificação do Cliente no PDV: Balcão Rápido vs. Mesa vs. Delivery
+* **Dúvida / Contexto**: No fluxo atual do [[PDV]] (`PDVCart.jsx`), pedidos de **Balcão** exigem obrigatoriamente Nome e Telefone/WhatsApp, enquanto **Mesa / Salão** já trata identificação como opcional. Em vendas rápidas de balcão (ex: bala, refrigerante, salgado), exigir nome e telefone gera fila e atrito.
+* **Padrão de Mercado (Saipos, Consumer, CardápioWeb, Anota AI & NFC-e)**:
+  1. **Delivery**: Nome e WhatsApp **sempre obrigatórios** (logística de entrega e contato do motoboy).
+  2. **Balcão (Venda Rápida)**: Nome e Telefone **opcionais** (padrão "Consumidor Final" / "Cliente Balcão" ou uso da senha/número do pedido `#order_number` no KDS/impressora; permite digitar apenas o primeiro nome para chamada no balcão sem exigir telefone; telefone só entra se o cliente quiser cashback/fidelidade). Na NFC-e presencial, a lei permite "Consumidor Não Identificado".
+  3. **Mesa / Salão**: Manter **opcional** também (como já funciona em [[Tables]] e [[OrderModal]] via QR Code), pois a mesa já possui identificador físico (`Mesa X`). Exigir telefone/nome na mesa trava o atendimento do garçom no pico; o nome opcional serve apenas quando o grupo quer separar itens por pessoa na mesma mesa.
+* **Cuidados Técnicos Mapeados**:
+  - `orderSchema.js` atualmente valida `customer_phone >= 8` dígitos para `balcao`.
+  - `orders.customer_phone` no Postgres é `NOT NULL`: enviar string vazia `""` em vez de `"-"` quando não informado, evitando poluir o relatório `get_clients_summary` / [[Clients]] com um cliente fantasma `"-"` e evitando crédito indevido em `process_order_cashback` (que já ignora telefones `< 8` dígitos).
+
+### 💵 18. Evolução & Correções na Gestão de Caixa (Quebra de Caixa, Justificativa & Fechamento Cego)
+* **Dúvida / Regra de Negócio Real**: Nenhum PDV de restaurante bloqueia o fechamento se o caixa não bater R$ 0,00 exato, pois trocos e erros de lançamento acontecem na operação. O padrão de mercado (Saipos, Consumer) é **permitir encerrar com Falta ou Sobra (Quebra de Caixa)** exigindo **justificativa obrigatória** (e opcionalmente senha gerencial acima de um limite) + **Fechamento Cego** (o operador conta e digita o físico antes de ver o valor esperado pelo sistema).
+* **Bugs & Gargalos Descobertos na Auditoria de [[CashManagement]]**:
+  1. **Bug do Botão Travado na Divergência (`CashClosingConfirmModal.jsx`)**: `localJustification` usa `useState(justification)` sem `useEffect` de sincronização quando o modal abre, ignorando a justificativa preenchida na Aba 2 e mantendo o botão `"Confirmar Encerramento"` desabilitado se houver diferença.
+  2. **Contagem em Branco Falsa-Exata (`CashManagement.jsx`)**: Quando `countedCashStr === ""`, `countedCash` fica `0` mas `difference` fica `0`, exibindo `"Caixa Correto (Exato)"` mesmo com saldo esperado diferente de zero.
+  3. **Estado do Caixa em `localStorage`**: Abertura, `initialFloat` (default `R$ 100,00`), sangrias, suprimentos e despesas ficam apenas no `localStorage` do navegador, sem persistência multi-dispositivo no Supabase e sem limpeza automática de movimentações ao reabrir novo turno.
+  4. **Visibilidade do Dono Incompleta**: Na Aba 3 (`CashManagement`), a justificativa aparece truncada sem modal "Raio-X do Turno"; em [[Reports]] (`ShiftClosingHistoryTable`), não exibe operador, quebra/sobra nem justificativa; no cupom térmico (`ShiftClosingThermalSlip`) e WhatsApp (`shiftClosingWhatsAppFormatter`), não constam troco inicial, sangrias, suprimentos, despesas, contado, quebra/sobra nem justificativa.
+  5. **Recorte por Sessão Real vs Relógio**: `CashManagement` usa `periodMode = "today"` (`00:00` até agora) em vez de `customRange` da sessão (`opened_at` até `closed_at`), quebrando turnos de madrugada (ex.: 18h–01h) ou 2 turnos no mesmo dia (Almoço + Jantar).
+* **Implementado (Padrão Ouro Concluído)**:
+  1. **Persistência Real de Sessões de Caixa no Supabase (`cash_sessions` / `cash_movements`)**: dono acompanha de casa/celular ao vivo com trava atômica contra dupla abertura (`uq_cash_sessions_open_tenant`).
+  2. **Fechamento Cego Configurável (`tenants.blind_cash_closing`) + Calculadora de Cédulas/Moedas (`BillCoinCalculatorModal.jsx`)**: opção nas Configurações para ocultar o esperado do operador durante todo o turno (inclusive sangria e faturamento), travando a contagem informada antes de revelar Exato/Sobra/Falta.
+  3. **Modal "Raio-X do Turno" para o Dono (`CashClosingAuditModal.jsx`) + KPIs de Auditoria**: total de faltas/sobras/divergências na Aba 3, justificativa completa sem corte, extrato cronológico de abertura/suprimentos/sangrias/despesas, quem abriu/fechou, espelhamento em [[Reports]] (`ShiftClosingHistoryTable.jsx`), cupom térmico (`ShiftClosingThermalSlip.jsx`) e resumo no WhatsApp (`shiftClosingWhatsAppFormatter.js`).
+
+### 💰 19. Financeiro Simplão + Conta Cofre (Visão do Dono)
+* **Dúvida / Dor**: Ter um módulo Financeiro enxuto e profissional sem parecer "cards genéricos de IA", integrando o dinheiro físico da gaveta com o que o dono guarda fora dela.
+* **Por que o Cofre é crucial**: Sem a conta **Cofre**, toda **Sangria** ou recolhimento feito no fechamento de caixa faz o dinheiro "desaparecer" do sistema — o dono não sabe quanto tem guardado em espécie vs. quanto está na gaveta do PDV vs. quanto caiu no banco (Pix/Cartão).
+* **Arquitetura Proposta (Página dedicada `Financeiro` no menu lateral, separada de [[CashManagement]])**:
+  1. **3 Contas Reais (Saldos estilo extrato bancário)**:
+     - `Gaveta (PDV)`: sincronizada ao vivo com o turno aberto.
+     - `Cofre (Dinheiro Guardado)`: sobe automaticamente com Sangrias/recolhimentos de fechamento e desce com Suprimentos ou pagamentos de fornecedores em espécie.
+     - `Banco / Conta Digital`: recebe Pix/Cartão e paga despesas/boletos.
+  2. **Extrato Único (`Lançamentos`)**: tabela limpa (`Data | Descrição | Categoria | Conta | Status | Valor`) com filtro de período/pago/a pagar, botão `+ Nova Despesa` e `Transferir` (`Gaveta ↔ Cofre ↔ Banco`), recebendo vendas e movimentações de caixa automaticamente.
+  3. **Resumo do Mês em 3 números**: `Entrou` | `Saiu` | `Sobrou` (Resultado Líquido), sem excesso de gráficos ou cards decorativos.
+  4. **Integração com Abertura de Caixa ([[OpenCashModal]])**: sugerir em 1 clique o troco deixado na gaveta no último fechamento (respeitando o Modo Cego), separando o que ficou na gaveta do que foi recolhido ao Cofre.
+
+### 👥 20. Evolução da Tela de Clientes para Mini-CRM & Retenção ([[Clients]])
+* **Diagnóstico Atual**: A tela [[Clients]] hoje funciona apenas como uma lista estática de consulta (`Nome`, `Telefone`, `Nº de Pedidos`, `Gasto Total (LTV)`, `Último Pedido`) sem clique na linha, sem filtros de segmentação, sem máscara de telefone e exibindo pedidos cancelados/zerados (`R$ 0,00`), além de rotular `LTV Médio` como `"Ticket Médio por Cliente"`.
+* **Melhorias Sugeridas (Foco em Venda do SaaS & Profissionalismo)**:
+  1. **Correções de Credibilidade & Linguagem**: Filtrar pedidos `cancelado` em `get_clients_summary`, mascarar telefone `(XX) XXXXX-XXXX`, trocar jargões (`"Lista auditável"`, `"LTV"`) por termos comerciais claros (`"Total Gasto"`, `"Ticket Médio por Pedido"` vs `"Gasto Médio por Cliente"`).
+  2. **Drawer / Ficha 360º do Cliente (ao clicar na linha)**: Exibir `last_address` (já retornado pelo banco e hoje ignorado), histórico de pedidos, itens mais pedidos, saldo de cashback disponível e campo de observações internas.
+  3. **Segmentação Rápida (Abas/Filtros + Ordenação)**: `Todos`, `VIPs`, `Recorrentes (3+ pedidos)`, `Sumidos (+30 dias)` e `Novos`, além de ordenação clicável por gasto, pedidos e recência.
+  4. **Ações Comerciais Diretas**: Botão de WhatsApp com mensagens prontas de reativação/cashback (com `{{nome}}` e `{{cashback}}`) e exportação CSV para listas de transmissão / tráfego pago.
+
+### 🔀 21. Roteamento Inteligente de Pedidos por Canal (Salão, Auto-atendimento & PDV Balcão)
+* **Contexto Operacional Real**: Em bares, choperias, lanchonetes e restaurantes com salão e garçom (ou auto-atendimento com QR na mesa), o fluxo de operação é radicalmente diferente do delivery:
+  - No Delivery, o operador precisa gerenciar o Kanban de [[Orders]] (`Pendente` -> `Em Preparo` -> `A Caminho` -> `Entregue`) para conferência e despacho de motoboy.
+  - No Salão ou Bar, quando uma mesa pede 2 chopes e 1 porção de fritas, o operador de caixa ou garçom não vai ficar arrastando cards na esteira de delivery. O pedido já nasce confirmado na mesa.
+  - Para a operação desse tipo de estabelecimento, o que realmente interessa é:
+    1. **Imprimir instantaneamente na impressora do setor correto** (ex: chope/drinque no Bar, comida na Cozinha).
+    2. **Aparecer na tela do KDS da Cozinha/Bar** (para a equipe preparar e riscar da tela).
+    3. Ficar registrado na **Comanda / Mesa** em [[Tables]] para consumo e conferência de conta na hora de pagar no caixa.
+* **Problema de não ter essa separação**: Se todo pedido de salão ou venda balcão cair no mesmo Kanban de delivery, a tela de expedição de entregas vira um caos de dezenas de comandas misturadas com saídas de motoboy.
+* **Configuração Proposta ([[Settings]] > Operação & Salão / `OperationsTab.jsx`)**:
+  - Switches por canal para definir o destino dos pedidos:
+    - *Exibir pedidos de Salão & Mesas no Kanban de Pedidos*: `[Desativado por padrão / Opcional]` (quando desativado, o pedido vai estritamente para impressão térmica e/ou KDS, mantendo o Kanban limpo apenas para entregas e retiradas).
+    - *Exibir vendas do PDV Balcão no Kanban de Pedidos*: `[Desativado por padrão / Opcional]` (vendas rápidas de balcão já entregues/pagas).
+    - *Exibir pedidos de Auto-atendimento no Kanban*: `[Configurável]`.
+* **Como o Caixa Reimprime se a Impressora Falhar (Benchmark Saipos / Toast / PedeMuleke)**:
+  - *Problema*: Se o pedido de mesa não estiver na esteira de delivery e a bobina acabar ou travar, como o operador reimprime?
+  - *Solução 1 (Direto na Mesa / [[Tables]])*: Na tela de Salão & Mesas, ao abrir a Mesa X, a comanda exibe os itens com o botão imediato `[ 🖨️ Reimprimir Comanda / Cozinha ]`. O caixa não precisa sair do salão para caçar a mesa no delivery.
+  - *Solução 2 (Filtro por Canal no [[Orders]])*: Abas rápidas no topo de Pedidos: `[ Delivery (12) | Salão & Mesas (6) | Balcão (4) | Todos ]` e campo de busca rápida. O Kanban padrão fica focado em Delivery, mas a qualquer segundo o operador pode alternar a aba ou buscar por "Mesa 04" e clicar em Reimprimir.
+  - *Solução 3 (Fila de Impressão no Navbar / `PrinterNavbarControl`)*: Menu suspenso no ícone de impressora do topo com os últimos 10 jobs de impressão e botão `[ Reimprimir ]` em 1 clique de qualquer tela do sistema.
+* **Benefício Comercial**: Permite vender o SaaS tanto para uma hamburgueria delivery pura quanto para um bar/pub movimentado com salão, sem engessar a rotina do operador de caixa.
+
+### 🍻 22. Arquitetura de Salão em Bares Reais: Mesa vs Comanda Individual vs Sub-comandas
+* **Contexto de Campo (Conversa com Garçom de Bar)**: Em bares, pubs e choperias, a dinâmica de atendimento e cobrança se divide em 3 modelos práticos usados por sistemas de referência (Saipos, Consumer, Colibri, Linx/Degust):
+  1. **Modo 1 — Conta Única por Mesa (Restaurante Tradicional)**: Tudo que é pedido vai para a conta geral da `Mesa 10`. No encerramento, a mesa paga o valor total junta, racha igualmente entre os presentes ou faz abatimentos parciais avulsos.
+  2. **Modo 2 — Mesa com Várias Comandas/Pessoas dentro (Mesa Híbrida / Bar com Grupos)**: 
+     - A **Mesa** (`Mesa 10`) é o contêiner físico onde os itens devem ser entregues pelo garçom/barman.
+     - A **Comanda** (`Davi`, `João`, ou número de ficha `Comanda #42`) é a titularidade financeira de quem consome e paga.
+     - **Impressão Setorizada Inteligente**: A comanda impressa no Bar/Cozinha exibe:
+       ```text
+       CONSUMO NO SALÃO: MESA 10
+       COMANDA / CLIENTE: JOÃO (#42)
+       1x Caipirinha de Limão
+       ```
+       *Objetivo duplo*: O garçom sabe caminhar até a **Mesa 10**, e entrega direto na mão do **João**, evitando o clássico atrito de fim de noite: *"eu não bebi essa caipirinha!"*.
+     - **Fechamento e Saída Parcial sem Trancar a Mesa**: Quando um cliente precisa ir embora mais cedo (ex.: 22h30 enquanto a galera fica até as 02h), o caixa fecha **exclusivamente a comanda dele** (`R$ 45,00 + taxa de serviço individual`), emite a pré-conta/comprovante individual dele, e a `Mesa 10` permanece aberta com os outros integrantes consumindo normalmente.
+  3. **Modo 3 — Comanda Individual Numerada Solta (Cartão PVC / Ficha de Entrada — Pub, Choperia & Balada)**:
+     - Cada cliente recebe um cartão numerado (`Comanda 001` a `500`) na portaria.
+     - O cliente circula livremente pelo salão, balcão e mesas.
+     - O garçom lança o pedido vinculado ao **Número da Comanda (`#088`)**, informando a mesa atual apenas para a entrega física imediata.
+     - Na saída, o segurança/caixa faz o checkout pela comanda individual (`#088`), liberando a catraca/saída após a quitação.
+
+* **Diagnóstico no [[PedeMuleke]] (O que já temos vs Oportunidades de Evolução)**:
+  - **Já Implementado**: O sistema em [[Tables]] já agrupa o consumo por pessoa (`ordersByCustomer`), calculando itens pedidos, % do consumo da mesa e valor proporcional com e sem taxa de serviço (`10%`).
+  - **Próximos Passos de Alto Impacto para Bares**:
+    1. **Botão de Cobrança Individual Direta na Comanda da Pessoa**: Botão `[ Cobrar Comanda de João (R$ XX,XX) ]` dentro do card de cada pessoa na mesa, abrindo o modal de pagamento já pré-preenchido com o saldo dela e marcando os pedidos daquela pessoa como quitados.
+    2. **Seleção Rápida de Comanda Existente**: No momento de lançar novo pedido (PDV ou garçom), listar pílulas/botões das comandas já abertas naquela mesa para evitar redigitar o nome do cliente a cada nova rodada de chopp.
+    3. **Impressão de Pré-Conta Individual da Comanda**: Permitir ao garçom imprimir apenas o extrato daquela pessoa que está saindo mais cedo, sem imprimir a soma da mesa inteira.
 
 ---
 

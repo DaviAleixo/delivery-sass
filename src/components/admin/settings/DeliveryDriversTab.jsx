@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { toast } from "sonner";
+import { appConfirm } from "@/components/ui/ConfirmDialogHost";
 import { formatPhone } from "./settingsConstants";
 
 export default function DeliveryDriversTab({ tenantData, onUpdateTenant }) {
@@ -194,7 +195,13 @@ export default function DeliveryDriversTab({ tenantData, onUpdateTenant }) {
   };
 
   const handleDeleteDriver = async (driverId) => {
-    if (!window.confirm("Deseja realmente remover este entregador?")) return;
+    const ok = await appConfirm({
+      title: "Remover entregador?",
+      description: "Deseja realmente remover este entregador?",
+      confirmText: "Remover",
+      variant: "danger",
+    });
+    if (!ok) return;
     const updated = drivers.filter((d) => d.id !== driverId);
     await persistDrivers(updated);
     toast.success("Entregador removido com sucesso.");

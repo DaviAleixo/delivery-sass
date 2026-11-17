@@ -9,6 +9,9 @@ import { getActiveTenantId } from "@/entities/storage";
 import PDVProductGrid from "../components/pdv/PDVProductGrid";
 import PDVCart from "../components/pdv/PDVCart";
 import PDVPaymentModal from "../components/pdv/PDVPaymentModal";
+import CashSessionBanner from "@/components/admin/cash/CashSessionBanner";
+import OpenCashModal from "@/components/admin/cash/OpenCashModal";
+import { useCashSession } from "@/hooks/useCashSession";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { validateSchema, orderSchema } from "@/schemas";
@@ -45,9 +48,13 @@ export default function PDVPage() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [showPayment, setShowPayment] = useState(false);
+  const [showOpenCashModal, setShowOpenCashModal] = useState(false);
+  const [pendingPaymentAfterOpen, setPendingPaymentAfterOpen] = useState(false);
   const [lastOrder, setLastOrder] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
+
+  const cashSession = useCashSession();
 
   useEffect(() => {
     const preTable = localStorage.getItem("pdv_preselected_table");
@@ -145,23 +152,27 @@ export default function PDVPage() {
   const total = cart.reduce((sum, item) => sum + (Number(item.price) || 0) * item.qty, 0);
   const totalItemsCount = cart.reduce((sum, item) => sum + item.qty, 0);
 
-  const handleOpenPayment = () => {
+  const handleOpenPayment = async () => {
     if (cart.length === 0) {
       toast.error("O carrinho está vazio.");
       return;
     }
 
-    const trimmedName = customerName.trim();
     const rawPhone = customerPhone.replace(/\D/g, "");
+    if (rawPhone.length > 0 && rawPhone.length < 10) {
+      toast.error("Se informar o telefone, preencha com DDD (mínimo 10 dígitos) ou deixe em branco.");
+      return;
+    }
 
-    if (!trimmedName || rawPhone.length < 10) {
-      if (!trimmedName && rawPhone.length < 10) {
-        toast.error("Informe o nome e o telefone do cliente (ou selecione um cliente salvo) para continuar.");
-      } else if (!trimmedName) {
-        toast.error("Informe o nome do cliente para continuar.");
-      } else {
-        toast.error("Informe um telefone válido com DDD (mínimo 10 dígitos) para continuar.");
-      }
+    let drawerOpen = cashSession.isCashDrawerOpen;
+    if (!drawerOpen) {
+      const refreshed = await cashSession.refreshCashSession();
+      drawerOpen = Boolean(refreshed?.isCashDrawerOpen);
+    }
+
+    if (!drawerOpen) {
+      setPendingPaymentAfterOpen(true);
+      setShowOpenCashModal(true);
       return;
     }
 
@@ -256,8 +267,9 @@ export default function PDVPage() {
 
       const orderData = {
         tenant_id: activeTenantId,
+        cash_session_id: cashSession.cashDrawerInfo?.sessionId || null,
         customer_name: activeSessionCustomer,
-        customer_phone: activeSessionPhone || "-",
+        customer_phone: activeSessionPhone || "",
         customer_email: customerEmail.trim() || "",
         total_amount: total,
         total: total,
@@ -311,11 +323,11 @@ export default function PDVPage() {
 
   const handleFinalize = async (paymentMethod, cardBrand) => {
     const isDineIn = orderType === "dine_in";
-    const trimmedName = customerName.trim() || (isDineIn ? `Mesa ${selectedTableNumber}` : "");
+    const trimmedName = customerName.trim() || (isDineIn ? `Mesa ${selectedTableNumber}` : "Cliente Balcão");
     const rawPhone = customerPhone.replace(/\D/g, "");
 
-    if (!isDineIn && (!trimmedName || rawPhone.length < 10)) {
-      toast.error("Nome e telefone do cliente são obrigatórios no PDV.");
+    if (rawPhone.length > 0 && rawPhone.length < 10) {
+      toast.error("Se informar o telefone, preencha com DDD (mínimo 10 dígitos) ou deixe em branco.");
       return;
     }
 
@@ -373,6 +385,7 @@ export default function PDVPage() {
 
     const orderData = {
       tenant_id: activeTenantId,
+      cash_session_id: cashSession.cashDrawerInfo?.sessionId || null,
       customer_name: trimmedName,
       customer_phone: customerPhone.trim(),
       customer_email: customerEmail.trim() || "",
@@ -458,6 +471,22 @@ export default function PDVPage() {
     <div className="relative flex flex-col lg:flex-row h-full min-h-0 min-w-0 bg-[#F7F9F8] overflow-hidden w-full">
       {/* Grade de Produtos */}
       <div className="flex-1 overflow-hidden flex flex-col min-h-0 min-w-0">
+        {(!cashSession.isCashDrawerOpen || cashSession.orphanOrders.length > 0) && (
+          <div className="px-3 pt-2.5 shrink-0">
+            <CashSessionBanner
+              isLoading={cashSession.isLoadingSession}
+              isCashDrawerOpen={cashSession.isCashDrawerOpen}
+              cashDrawerInfo={cashSession.cashDrawerInfo}
+              orphanOrders={cashSession.orphanOrders}
+              onOpenCashClick={() => {
+                setPendingPaymentAfterOpen(false);
+                setShowOpenCashModal(true);
+              }}
+              onAttachOrphans={cashSession.attachOrphans}
+              compactWhenOpenWithoutOrphans={false}
+            />
+          </div>
+        )}
         <PDVProductGrid
           products={products}
           categories={categories}
@@ -560,12 +589,37 @@ export default function PDVPage() {
       {showPayment && (
         <PDVPaymentModal
           total={total}
-          customerName={customerName}
-          customerPhone={customerPhone}
+          customerName={customerName.trim() || (orderType === "dine_in" && selectedTableNumber ? `Mesa ${selectedTableNumber}` : "Cliente Balcão")}
+          customerPhone={customerPhone.trim()}
           onConfirm={handleFinalize}
           onClose={() => setShowPayment(false)}
         />
       )}
+
+      {/* Abertura de Caixa em 1 Clique sem perder o carrinho */}
+      <OpenCashModal
+        isOpen={showOpenCashModal}
+        onClose={() => {
+          setShowOpenCashModal(false);
+          setPendingPaymentAfterOpen(false);
+        }}
+        currentOperator={cashSession.cashDrawerInfo?.operator}
+        orphanOrders={cashSession.orphanOrders}
+        reasonBanner={
+          pendingPaymentAfterOpen
+            ? "O caixa estava fechado. Abra o turno agora para concluir este recebimento sem perder os itens do carrinho."
+            : null
+        }
+        onConfirmOpen={async (payload) => {
+          const res = await cashSession.openCashSession(payload);
+          const shouldContinuePayment = pendingPaymentAfterOpen;
+          setPendingPaymentAfterOpen(false);
+          if (shouldContinuePayment) {
+            setShowPayment(true);
+          }
+          return res;
+        }}
+      />
     </div>
   );
 }

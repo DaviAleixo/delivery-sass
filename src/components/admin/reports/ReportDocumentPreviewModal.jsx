@@ -153,6 +153,20 @@ export default function ReportDocumentPreviewModal({
                 </h3>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
                   <div className="p-2.5 rounded-lg bg-stone-50 border border-stone-200">
+                    <p className="text-[10px] font-semibold text-stone-500 uppercase">Faturamento Bruto</p>
+                    <p className="text-base font-bold font-mono text-stone-900 mt-0.5">
+                      {formatMoney(summary.totalGrossRevenue)}
+                    </p>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-stone-50 border border-stone-200">
+                    <p className="text-[10px] font-semibold text-stone-500 uppercase">Descontos / Cupons</p>
+                    <p className="text-base font-bold font-mono text-amber-800 mt-0.5">
+                      -{formatMoney(summary.totalDiscounts)}
+                    </p>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-stone-50 border border-stone-200">
                     <p className="text-[10px] font-semibold text-stone-500 uppercase">Faturamento Líquido</p>
                     <p className="text-base font-bold font-mono text-emerald-800 mt-0.5">
                       {formatMoney(summary.netRevenue)}
@@ -165,20 +179,6 @@ export default function ReportDocumentPreviewModal({
                       {summary.totalOrdersCount} un.
                     </p>
                   </div>
-
-                  <div className="p-2.5 rounded-lg bg-stone-50 border border-stone-200">
-                    <p className="text-[10px] font-semibold text-stone-500 uppercase">Ticket Médio</p>
-                    <p className="text-base font-bold font-mono text-stone-900 mt-0.5">
-                      {formatMoney(summary.averageTicket)}
-                    </p>
-                  </div>
-
-                  <div className="p-2.5 rounded-lg bg-stone-50 border border-stone-200">
-                    <p className="text-[10px] font-semibold text-stone-500 uppercase">Perdas / Cancelados</p>
-                    <p className="text-base font-bold font-mono text-rose-700 mt-0.5">
-                      {summary.canceledOrdersCount} ({formatMoney(summary.totalCanceledRevenue)})
-                    </p>
-                  </div>
                 </div>
               </div>
 
@@ -187,10 +187,31 @@ export default function ReportDocumentPreviewModal({
               {/* Modelo A: Balanço Financeiro & Fiscal */}
               {(reportType === "financial" || reportType === "all") && (
                 <div className="space-y-6 mb-6">
+                  {/* Demonstrativo Contábil de Receita */}
+                  <div className="avoid-break bg-stone-50 border border-stone-200 rounded-lg p-3 text-xs">
+                    <h4 className="text-[11px] font-bold uppercase text-stone-700 tracking-wider mb-2">
+                      Demonstrativo Consolidado de Receita
+                    </h4>
+                    <div className="space-y-1 font-mono text-xs">
+                      <div className="flex justify-between">
+                        <span className="font-sans text-stone-600">(+) Faturamento Bruto (Cardápio + Taxas):</span>
+                        <span className="font-bold text-stone-900">{formatMoney(summary.totalGrossRevenue)}</span>
+                      </div>
+                      <div className="flex justify-between text-amber-900">
+                        <span className="font-sans">(-) Descontos Concedidos (Cupons & Promoções):</span>
+                        <span className="font-semibold">-{formatMoney(summary.totalDiscounts)}</span>
+                      </div>
+                      <div className="flex justify-between pt-1 border-t border-stone-300 font-bold text-emerald-900 text-sm">
+                        <span className="font-sans">(=) Faturamento Líquido Efetivo:</span>
+                        <span>{formatMoney(summary.netRevenue)}</span>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Tabela de Métodos de Pagamento */}
                   <div className="avoid-break">
                     <h3 className="text-xs font-bold uppercase text-stone-700 tracking-wider mb-2 border-l-2 border-stone-900 pl-2">
-                      2. Faturamento Discriminado por Meio de Pagamento
+                      2. Faturamento Discriminado por Meio de Pagamento (Destino do Líquido)
                     </h3>
                     <table className="w-full text-xs">
                       <thead>

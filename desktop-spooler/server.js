@@ -439,6 +439,7 @@ const server = http.createServer(async (req, res) => {
           sectorName,
           contentMode,
           items: Array.isArray(payload.items) ? payload.items : undefined,
+          isReprint: Boolean(payload.isReprint || order.is_reprint),
         });
 
         const sectorLog = sectorName ? ` [${sectorName}]` : "";

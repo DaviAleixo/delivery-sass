@@ -3,6 +3,7 @@ import { ProductionSector } from "@/entities/ProductionSector";
 import { getActiveTenantId } from "@/entities/storage";
 import { useFifoPrintQueue } from "@/hooks/useFifoPrintQueue";
 import { slugifySector, buildSectorKdsLinks } from "@/utils/sectorUtils";
+import { appConfirm } from "@/components/ui/ConfirmDialogHost";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -234,7 +235,13 @@ export default function ProductionSectorsTab({ storeSlug }) {
   };
 
   const handleDelete = async (sector) => {
-    if (!confirm(`Excluir o setor "${sector.name}"? Categorias e produtos ligados a ele ficarão sem setor específico.`)) {
+    const ok = await appConfirm({
+      title: `Excluir setor "${sector.name}"?`,
+      description: "Categorias e produtos ligados a ele ficarão sem setor específico.",
+      confirmText: "Excluir Setor",
+      variant: "danger",
+    });
+    if (!ok) {
       return;
     }
     try {
