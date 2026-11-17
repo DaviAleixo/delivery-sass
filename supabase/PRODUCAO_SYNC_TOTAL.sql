@@ -234,25 +234,6 @@ INSERT INTO public.admin_users (
     true
 ) ON CONFLICT DO NOTHING;
 
-CREATE TABLE IF NOT EXISTS public.tenant_admins (
-    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
-    user_id uuid,
-    tenant_id uuid REFERENCES public.tenants(id) ON DELETE CASCADE,
-    role text DEFAULT 'admin'::text NOT NULL,
-    username text NOT NULL,
-    is_active boolean DEFAULT true NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
-);
-
-INSERT INTO public.tenant_admins (
-    tenant_id, username, role, is_active
-) VALUES (
-    '5489690b-a8dd-4f5e-bd75-de339521ac47'::uuid,
-    'davi',
-    'super_admin',
-    true
-) ON CONFLICT DO NOTHING;
-
 -- ------------------------------------------------------------------------------
 -- 6. SETORES DE PRODUÇÃO (COZINHA, BAR)
 -- ------------------------------------------------------------------------------
