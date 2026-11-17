@@ -971,7 +971,7 @@ export default function ProductsPage() {
                       Nenhum grupo cadastrado. <Link to={createPageUrl("Complements")} className="underline font-semibold text-[#047857]">Criar grupos</Link>.
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 sm:max-h-64 overflow-y-auto pr-1">
                       {complementGroups.map(grp => {
                         const isSelected = selectedGroupIds.includes(grp.id);
                         return (
@@ -994,8 +994,14 @@ export default function ProductsPage() {
                             />
                             <div className="min-w-0 flex-1 text-xs">
                               <span className="font-semibold text-stone-800 block truncate">{grp.name}</span>
-                              <span className="text-stone-500 text-[10px]">
-                                {grp.required || grp.min_quantity > 0 ? 'Obrigatório' : 'Opcional'} · Máx: {grp.max_quantity}
+                              {grp.description && grp.description.trim() !== "" && (
+                                <p className="text-[11px] text-stone-600 line-clamp-2 mt-0.5 leading-snug">
+                                  {grp.description}
+                                </p>
+                              )}
+                              <span className="text-stone-500 text-[10px] block mt-0.5">
+                                {grp.is_size_selector ? 'Tamanho Principal' : grp.required || grp.min_quantity > 0 ? 'Obrigatório' : 'Opcional'} · Máx: {grp.max_quantity}
+                                {Number(grp.free_quantity) > 0 ? ` · ${grp.free_quantity} grátis` : ''}
                               </span>
                             </div>
                           </label>

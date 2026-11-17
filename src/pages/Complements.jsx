@@ -31,6 +31,7 @@ import {
   Ruler,
   Sparkles,
   Check,
+  Pencil,
 } from "lucide-react";
 
 export default function ComplementsPage() {
@@ -59,6 +60,7 @@ export default function ComplementsPage() {
 
   const [showItemsModal, setShowItemsModal] = useState(false);
   const [activeGroupForItems, setActiveGroupForItems] = useState(null);
+  const [editingItem, setEditingItem] = useState(null);
   const [itemForm, setItemForm] = useState({
     name: "",
     description: "",
@@ -277,6 +279,7 @@ export default function ComplementsPage() {
   // --- Gestão de Itens dentro do Grupo ---
   const handleOpenItemsModal = (group) => {
     setActiveGroupForItems(group);
+    setEditingItem(null);
     setItemForm({
       name: "",
       description: "",
@@ -287,21 +290,54 @@ export default function ComplementsPage() {
     setShowItemsModal(true);
   };
 
-  const handleAddItem = async (e) => {
+  const handleStartEditItem = (item) => {
+    setEditingItem(item);
+    setItemForm({
+      name: item.name || "",
+      description: item.description || "",
+      price: item.price ? Number(item.price).toFixed(2).replace(".", ",") : "",
+      max_quantity: item.max_quantity || 1,
+      active: item.active !== false,
+    });
+  };
+
+  const handleCancelEditItem = () => {
+    setEditingItem(null);
+    setItemForm({
+      name: "",
+      description: "",
+      price: "",
+      max_quantity: 1,
+      active: true,
+    });
+  };
+
+  const handleSaveItem = async (e) => {
     e.preventDefault();
     if (!itemForm.name.trim()) return;
 
     try {
       const priceNum = parseBRLToNumber(itemForm.price);
-      await ComplementItem.create({
-        group_id: activeGroupForItems.id,
-        name: itemForm.name.trim(),
-        description: itemForm.description.trim(),
-        price: priceNum,
-        max_quantity: parseInt(itemForm.max_quantity) || 1,
-        active: true,
-        order_index: (items.filter(i => i.group_id === activeGroupForItems.id).length || 0) + 1,
-      });
+      if (editingItem) {
+        await ComplementItem.update(editingItem.id, {
+          name: itemForm.name.trim(),
+          description: itemForm.description.trim(),
+          price: priceNum,
+        });
+        toast.success(`Opção "${itemForm.name}" atualizada com sucesso!`);
+        setEditingItem(null);
+      } else {
+        await ComplementItem.create({
+          group_id: activeGroupForItems.id,
+          name: itemForm.name.trim(),
+          description: itemForm.description.trim(),
+          price: priceNum,
+          max_quantity: parseInt(itemForm.max_quantity) || 1,
+          active: true,
+          order_index: (items.filter((i) => i.group_id === activeGroupForItems.id).length || 0) + 1,
+        });
+        toast.success("Opção adicionada com sucesso!");
+      }
 
       setItemForm({
         name: "",
@@ -312,13 +348,16 @@ export default function ComplementsPage() {
       });
       await loadAllData();
     } catch (err) {
-      toast.error("Erro ao adicionar item.");
+      toast.error(editingItem ? "Erro ao atualizar opção." : "Erro ao adicionar opção.");
       console.error(err);
     }
   };
 
   const handleDeleteItem = async (itemId) => {
     try {
+      if (editingItem?.id === itemId) {
+        handleCancelEditItem();
+      }
       await ComplementItem.delete(itemId);
       await loadAllData();
     } catch (err) {
@@ -1081,11 +1120,32 @@ export default function ComplementsPage() {
 
           {activeGroupForItems && (
             <div className="flex-1 overflow-y-auto bg-[#F7F9F8] px-6 py-5 space-y-5">
-              {/* Formulário de adicionar opção */}
-              <form onSubmit={handleAddItem} className="bg-white p-4 rounded-xl border border-stone-200 space-y-3">
-                <h4 className="font-bold text-xs uppercase tracking-wider text-gray-700 flex items-center gap-1.5">
-                  <Plus className="w-4 h-4 text-[#047857]" /> Adicionar Nova Opção
-                </h4>
+              {/* Formulário de adicionar ou editar opção */}
+              <form onSubmit={handleSaveItem} className="bg-white p-4 rounded-xl border border-stone-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-xs uppercase tracking-wider text-gray-700 flex items-center gap-1.5">
+                    {editingItem ? (
+                      <>
+                        <Pencil className="w-4 h-4 text-[#047857]" /> Editar Opção: {editingItem.name}
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4 text-[#047857]" /> Adicionar Nova Opção
+                      </>
+                    )}
+                  </h4>
+                  {editingItem && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleCancelEditItem}
+                      className="text-xs text-stone-500 hover:text-stone-800 h-7 px-2 cursor-pointer"
+                    >
+                      Cancelar Edição
+                    </Button>
+                  )}
+                </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="sm:col-span-2">
@@ -1132,7 +1192,15 @@ export default function ComplementsPage() {
                     type="submit"
                     className="w-full bg-[#047857] hover:bg-[#065f46] text-white font-semibold rounded-xl cursor-pointer"
                   >
-                    <Plus className="w-4 h-4 mr-1" /> Adicionar
+                    {editingItem ? (
+                      <>
+                        <Check className="w-4 h-4 mr-1" /> Salvar Opção
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4 mr-1" /> Adicionar
+                      </>
+                    )}
                   </Button>
                 </div>
               </form>
@@ -1152,19 +1220,25 @@ export default function ComplementsPage() {
                       <div
                         key={item.id}
                         className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
-                          item.active
-                            ? "bg-white border-stone-200"
+                          editingItem?.id === item.id
+                            ? "bg-emerald-50/80 border-emerald-400 ring-2 ring-emerald-400/30 shadow-xs"
+                            : item.active
+                            ? "bg-white border-stone-200 hover:border-stone-300 shadow-2xs"
                             : "bg-stone-100/80 border-dashed border-stone-300 opacity-70"
                         }`}
                       >
-                        <div className="min-w-0 pr-3">
+                        <div 
+                          className="min-w-0 pr-3 flex-1 cursor-pointer"
+                          onClick={() => handleStartEditItem(item)}
+                          title="Clique para editar esta opção"
+                        >
                           <p className={`font-semibold text-sm truncate ${item.active ? "text-gray-900" : "text-gray-500 line-through"}`}>
                             {item.name}
                           </p>
                           {item.description && <p className="text-xs text-gray-500 truncate">{item.description}</p>}
                         </div>
 
-                        <div className="flex items-center gap-3 shrink-0">
+                        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                           <span className="font-bold text-sm text-[#047857] tabular-nums">
                             {item.price > 0 ? `+ R$ ${Number(item.price).toFixed(2).replace(".", ",")}` : "Grátis"}
                           </span>
@@ -1176,7 +1250,16 @@ export default function ComplementsPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full"
+                            className="h-8 w-8 text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-full cursor-pointer"
+                            onClick={() => handleStartEditItem(item)}
+                            title="Editar Opção"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full cursor-pointer"
                             onClick={() => handleDeleteItem(item.id)}
                             title="Excluir Opção"
                           >
