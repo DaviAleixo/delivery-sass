@@ -67,10 +67,12 @@
     - [ ] _Recurso Meta_: Conta desativada preventivamente pelo robô da Meta; recurso para análise humana solicitado. Alternativa de SMS com Comtele implementada para produção imediata.
   - [x] **Infraestrutura Backend Supabase & Edge Functions (100% Pronta)**:
     - [x] Tabela `whatsapp_otp_codes` e funções RPC `request_whatsapp_otp` e `verify_whatsapp_otp` criadas.
-    - [x] Edge Function `whatsapp-otp` implementada com suporte a envio Graph API v19 e fallback de contingência.
+    - [x] Edge Function `whatsapp-otp` implementada com suporte a envio Graph API v19, Comtele SMS API (prioritária com `x-api-key`) e SMS Dev como contingência.
+    - [x] Rate limit / Backoff progressivo anti-spam implementado (1 min -> 5 min -> 10 min -> 30 min -> 1 hora) com HTTP 429 e proteção de saldo.
   - [x] **Frontend Checkout & Login (100% Pronto)**:
-    - [x] Serviço `whatsappOtpService.js` com suporte a OTP real e modo simulação.
-    - [x] Componentes de login (`WhatsAppAuthModal.jsx`, `UserProfileSheet.jsx`, `Cart.jsx`).
+    - [x] Serviço `whatsappOtpService.js` com suporte a OTP real por SMS e captura de rate limiting.
+    - [x] Componentes de login (`WhatsAppAuthModal.jsx`, `UserProfileSheet.jsx`, `Cart.jsx`) com timer formatado, persistência em localStorage e bloqueio de cliques repetidos.
+    - [x] Dimensionamento Comtele: recarga de R$ 50,00 garante ~555 disparos de SMS a R$ 0,09 sem expiração e sem necessidade de webhook.
 
 - [x] 🛒 **Redesenho Executivo Completo do Checkout do Cliente (`OrderModal.jsx`)**:
   - [x] **Seletor de Canal (Segmented Pill iOS/macOS)**: Seletor Delivery / Retirada em barra segmentada moderna com transição suave, sem bordas verdes grossas.

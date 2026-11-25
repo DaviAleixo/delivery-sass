@@ -32,6 +32,70 @@ serve(async (req: Request) => {
         );
       }
 
+      const cleanPhoneInput = String(phone).replace(/\D/g, "");
+      if (cleanPhoneInput.length < 10) {
+        return new Response(
+          JSON.stringify({ success: false, error: "Telefone inválido (mínimo 10 dígitos com DDD)." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // =========================================================================
+      // 0. VERIFICAÇÃO DE RATE LIMIT / INTERVALO PROGRESSIVO (PROTEÇÃO ANTI-SPAM)
+      // Escada de Espera:
+      // 1º reenvio: 1 minuto (60s)
+      // 2º reenvio: 5 minutos (300s)
+      // 3º reenvio: 10 minutos (600s)
+      // 4º reenvio: 30 minutos (1800s)
+      // 5º+ reenvio: 1 hora (3600s)
+      // =========================================================================
+      try {
+        const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+        const { data: recentCodes } = await supabase
+          .from("whatsapp_otp_codes")
+          .select("created_at")
+          .eq("phone", cleanPhoneInput)
+          .gte("created_at", twoHoursAgo)
+          .order("created_at", { ascending: false })
+          .limit(10);
+
+        if (recentCodes && recentCodes.length > 0) {
+          const lastSentAt = new Date(recentCodes[0].created_at).getTime();
+          const diffSeconds = Math.floor((Date.now() - lastSentAt) / 1000);
+          const attemptCount = recentCodes.length;
+
+          let requiredWait = 60; // 1 min (1º reenvio)
+          if (attemptCount === 2) requiredWait = 300; // 5 min (2º reenvio)
+          else if (attemptCount === 3) requiredWait = 600; // 10 min (3º reenvio)
+          else if (attemptCount === 4) requiredWait = 1800; // 30 min (4º reenvio)
+          else if (attemptCount >= 5) requiredWait = 3600; // 1 hora (5º+ reenvio)
+
+          if (diffSeconds < requiredWait) {
+            const waitRemaining = requiredWait - diffSeconds;
+            let waitMsg = `${waitRemaining}s`;
+            if (waitRemaining >= 60 && waitRemaining < 3600) {
+              const mins = Math.ceil(waitRemaining / 60);
+              waitMsg = `${mins} minuto${mins > 1 ? "s" : ""}`;
+            } else if (waitRemaining >= 3600) {
+              const hours = Math.ceil(waitRemaining / 3600);
+              waitMsg = `${hours} hora${hours > 1 ? "s" : ""}`;
+            }
+
+            return new Response(
+              JSON.stringify({
+                success: false,
+                error: `Aguarde ${waitMsg} antes de solicitar um novo código por SMS.`,
+                wait_seconds: waitRemaining,
+                rate_limited: true,
+              }),
+              { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+        }
+      } catch (rateErr) {
+        console.warn("[Rate Limit Check Warning]:", rateErr);
+      }
+
       // 1. Gera e registra o OTP no banco via RPC
       const { data: rpcData, error: rpcError } = await supabase.rpc("request_whatsapp_otp", {
         p_phone: phone,
@@ -51,7 +115,50 @@ serve(async (req: Request) => {
       const fullPhone = cleanPhone.startsWith("55") ? cleanPhone : `55${cleanPhone}`;
 
       // =========================================================================
-      // 2. DISPARO VIA SMS DEV (api.smsdev.com.br) — PRIORITÁRIO & SEM BUROCRACIA
+      // 2. DISPARO VIA COMTELE SMS (api.comtele.com.br) — PRIORITÁRIO
+      // =========================================================================
+      const comteleApiKey = Deno.env.get("COMTELE_API_KEY") || "566e82dc-b734-4267-8349-487fffd59a9b";
+      if (comteleApiKey) {
+        try {
+          const comteleUrl = "https://api.comtele.com.br/messages/sms/send";
+          const comtelePayload = {
+            receivers: [fullPhone],
+            message: `Seu codigo de acesso ao PedeMuleke e: ${generatedCode}. Valido por 10 minutos.`,
+            route: 1,
+          };
+
+          const smsRes = await fetch(comteleUrl, {
+            method: "POST",
+            headers: {
+              "x-api-key": comteleApiKey,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(comtelePayload),
+          });
+
+          const smsResult = await smsRes.json().catch(() => ({}));
+          console.log("[Comtele SMS Response]:", smsResult);
+
+          if (smsRes.ok && (smsResult.hasError === false || smsResult.Success === true || smsResult.success === true)) {
+            return new Response(
+              JSON.stringify({
+                success: true,
+                message: "Código de verificação enviado por SMS via Comtele!",
+                phone: cleanPhone,
+                channel: "comtele",
+              }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          } else {
+            console.warn("[Comtele SMS Warning]:", smsResult);
+          }
+        } catch (smsErr: any) {
+          console.error("[Comtele SMS Request Error]:", smsErr);
+        }
+      }
+
+      // =========================================================================
+      // 3. DISPARO VIA SMS DEV (api.smsdev.com.br) — FALLBACK SECUNDÁRIO
       // =========================================================================
       const smsdevApiKey = Deno.env.get("SMSDEV_API_KEY") || "LQP0WM30YEMPJPXUZJL4PRK7MOK1KA22H3UBKAYH9FVKCW7BKVQUADG8EA1HW62GHH13ZVC9YHO1OSI7JAWUNIAVEWSHG0YRWWOCSJKICEWY5YFXLYCKPDBVDTKGWA1V";
       if (smsdevApiKey) {
@@ -99,50 +206,7 @@ serve(async (req: Request) => {
       }
 
       // =========================================================================
-      // 3. DISPARO VIA COMTELE SMS (SE CONFIGURADA)
-      // =========================================================================
-      const comteleApiKey = Deno.env.get("COMTELE_API_KEY");
-      if (comteleApiKey) {
-        try {
-          const receiversPhone = cleanPhone.length === 11 ? cleanPhone : cleanPhone.replace(/^55/, "");
-          const comteleUrl = "https://sms.comtele.com.br/api/v2/send";
-          const comtelePayload = {
-            Sender: "PedeMuleke",
-            Receivers: receiversPhone,
-            Content: `Seu codigo de acesso ao PedeMuleke e: ${generatedCode}. Valido por 10 minutos.`,
-          };
-
-          const smsRes = await fetch(comteleUrl, {
-            method: "POST",
-            headers: {
-              "auth-key": comteleApiKey,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(comtelePayload),
-          });
-
-          const smsResult = await smsRes.json().catch(() => ({}));
-
-          if (smsRes.ok && (smsResult.Success === true || smsResult.success === true)) {
-            return new Response(
-              JSON.stringify({
-                success: true,
-                message: "Código de verificação enviado por SMS!",
-                phone: cleanPhone,
-                channel: "sms",
-              }),
-              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          } else {
-            console.warn("[Comtele SMS Warning]:", smsResult);
-          }
-        } catch (smsErr: any) {
-          console.error("[Comtele SMS Request Error]:", smsErr);
-        }
-      }
-
-      // =========================================================================
-      // 3. DISPARO VIA WHATSAPP CLOUD API DA META (SE CONFIGURADA)
+      // 4. DISPARO VIA WHATSAPP CLOUD API DA META (TERCIÁRIO SE CONFIGURADA)
       // =========================================================================
       const metaPhoneNumberId = Deno.env.get("META_WA_PHONE_NUMBER_ID");
       const metaAccessToken = Deno.env.get("META_WA_ACCESS_TOKEN");
@@ -150,7 +214,6 @@ serve(async (req: Request) => {
 
       if (metaPhoneNumberId && metaAccessToken) {
         try {
-          // Disparo Oficial via WhatsApp Business Cloud API (Graph API)
           const metaUrl = `https://graph.facebook.com/v19.0/${metaPhoneNumberId}/messages`;
           const metaPayload = {
             messaging_product: "whatsapp",
@@ -184,46 +247,24 @@ serve(async (req: Request) => {
             body: JSON.stringify(metaPayload),
           });
 
-          const metaResult = await metaRes.json();
-
-          if (!metaRes.ok) {
-            console.warn("[Meta WhatsApp API Warning]:", metaResult);
-            // Se o template falhar (ex: template não cadastrado ainda), tenta envio de texto direto de contingência
-            const textFallbackRes = await fetch(metaUrl, {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${metaAccessToken}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                messaging_product: "whatsapp",
-                recipient_type: "individual",
-                to: fullPhone,
-                type: "text",
-                text: {
-                  body: `Seu código de acesso ao PedeMuleke é: *${generatedCode}*. Válido por 10 minutos.`,
-                },
+          if (metaRes.ok) {
+            return new Response(
+              JSON.stringify({
+                success: true,
+                message: "Código de verificação enviado via WhatsApp Oficial!",
+                phone: cleanPhone,
+                channel: "whatsapp",
               }),
-            });
-            const textResult = await textFallbackRes.json();
-            console.log("[Meta Text Contingency Result]:", textResult);
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
           }
-
-          return new Response(
-            JSON.stringify({
-              success: true,
-              message: "Código de verificação enviado via WhatsApp Oficial!",
-              phone: cleanPhone,
-            }),
-            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
         } catch (metaErr: any) {
           console.error("[Meta WhatsApp Request Error]:", metaErr);
         }
       }
 
-      // Modo Preparação / Simulado (Enquanto o usuário não cadastrar as chaves no Meta for Developers)
-      console.log(`[WhatsApp OTP Preparado] Código para ${cleanPhone}: ${generatedCode}`);
+      // Fallback Simulado
+      console.log(`[OTP Simulado] Código para ${cleanPhone}: ${generatedCode}`);
       return new Response(
         JSON.stringify({
           success: true,

@@ -27,6 +27,53 @@ export default function WhatsAppAuthModal({
 
   const codeInputRef = useRef(null);
 
+  // Escada de espera para reenvio (Backoff progressivo)
+  // 1º reenvio: 1 min (60s)
+  // 2º reenvio: 5 min (300s)
+  // 3º reenvio: 10 min (600s)
+  // 4º reenvio: 30 min (1800s)
+  // 5º+ reenvio: 1 hora (3600s)
+  const getCooldownByAttempt = (attemptCount) => {
+    if (attemptCount <= 1) return 60;
+    if (attemptCount === 2) return 300;
+    if (attemptCount === 3) return 600;
+    if (attemptCount === 4) return 1800;
+    return 3600;
+  };
+
+  const formatCooldown = (seconds) => {
+    if (seconds >= 3600) {
+      const h = Math.floor(seconds / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
+      return `${h}h ${String(m).padStart(2, "0")}m`;
+    }
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  };
+
+  const getStoredOtpState = (phoneDigits) => {
+    try {
+      const raw = localStorage.getItem(`pedemuleke_otp_rate_${phoneDigits}`);
+      if (!raw) return { attempts: 0, cooldownUntil: 0 };
+      return JSON.parse(raw);
+    } catch {
+      return { attempts: 0, cooldownUntil: 0 };
+    }
+  };
+
+  const saveOtpState = (phoneDigits, attempts, cooldownSeconds) => {
+    try {
+      const cooldownUntil = Date.now() + cooldownSeconds * 1000;
+      localStorage.setItem(
+        `pedemuleke_otp_rate_${phoneDigits}`,
+        JSON.stringify({ attempts, cooldownUntil })
+      );
+    } catch {
+      // ignore
+    }
+  };
+
   // Formata telefone (XX) XXXXX-XXXX
   const formatPhone = (val) => {
     const digits = val.replace(/\D/g, "").slice(0, 11);
@@ -37,11 +84,22 @@ export default function WhatsAppAuthModal({
 
   useEffect(() => {
     if (isOpen) {
-      setPhone(formatPhone(initialPhone || ""));
+      const formatted = formatPhone(initialPhone || "");
+      setPhone(formatted);
       setFullName(initialName || "");
       setCode("");
       setError("");
       setStep("phone_step");
+
+      // Checa se há cooldown ativo para o número
+      const clean = formatted.replace(/\D/g, "");
+      if (clean.length >= 10) {
+        const stored = getStoredOtpState(clean);
+        if (stored.cooldownUntil > Date.now()) {
+          const remainingSecs = Math.ceil((stored.cooldownUntil - Date.now()) / 1000);
+          setResendCooldown(remainingSecs);
+        }
+      }
     }
   }, [isOpen, initialPhone, initialName]);
 
@@ -50,7 +108,7 @@ export default function WhatsAppAuthModal({
     let timer;
     if (resendCooldown > 0) {
       timer = setInterval(() => {
-        setResendCooldown((prev) => prev - 1);
+        setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
       }, 1000);
     }
     return () => clearInterval(timer);
@@ -69,6 +127,17 @@ export default function WhatsAppAuthModal({
     const formatted = formatPhone(e.target.value);
     setPhone(formatted);
     if (error) setError("");
+
+    const clean = formatted.replace(/\D/g, "");
+    if (clean.length >= 10) {
+      const stored = getStoredOtpState(clean);
+      if (stored.cooldownUntil > Date.now()) {
+        const remainingSecs = Math.ceil((stored.cooldownUntil - Date.now()) / 1000);
+        setResendCooldown(remainingSecs);
+      } else {
+        setResendCooldown(0);
+      }
+    }
   };
 
   const handleSendCode = async (e) => {
@@ -83,6 +152,15 @@ export default function WhatsAppAuthModal({
       return;
     }
 
+    // Validação local de cooldown para evitar chamadas de rede à toa
+    const stored = getStoredOtpState(cleanPhone);
+    if (stored.cooldownUntil > Date.now()) {
+      const remainingSecs = Math.ceil((stored.cooldownUntil - Date.now()) / 1000);
+      setResendCooldown(remainingSecs);
+      setError(`Aguarde ${formatCooldown(remainingSecs)} antes de solicitar um novo código.`);
+      return;
+    }
+
     setError("");
     setIsLoading(true);
 
@@ -93,14 +171,23 @@ export default function WhatsAppAuthModal({
       });
 
       if (result.success) {
+        const nextAttempt = (stored.attempts || 0) + 1;
+        const cooldownSecs = getCooldownByAttempt(nextAttempt);
+        saveOtpState(cleanPhone, nextAttempt, cooldownSecs);
+        setResendCooldown(cooldownSecs);
+
         setStep("code_step");
-        setResendCooldown(60);
-        toast.success("Código enviado com sucesso para seu celular!");
+        toast.success("Código SMS enviado com sucesso para seu celular!");
       } else {
+        if (result.rate_limited && result.wait_seconds) {
+          const waitSecs = Number(result.wait_seconds);
+          saveOtpState(cleanPhone, (stored.attempts || 1) + 1, waitSecs);
+          setResendCooldown(waitSecs);
+        }
         setError(result.error || "Não foi possível enviar o código agora. Tente novamente.");
       }
     } catch (_err) {
-      setError("Erro ao se comunicar com o serviço de envio. Tente novamente.");
+      setError("Erro ao se comunicar com o serviço de envio de SMS. Tente novamente.");
     } finally {
       setIsLoading(false);
     }
@@ -239,7 +326,7 @@ export default function WhatsAppAuthModal({
 
             <Button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || resendCooldown > 0}
               className={`w-full font-black h-12 rounded-xl shadow-md flex items-center justify-center gap-2 mt-2 cursor-pointer transition-all ${
                 dark
                   ? "bg-emerald-600 hover:bg-emerald-500 text-white"
@@ -251,17 +338,22 @@ export default function WhatsAppAuthModal({
                   <Loader2 className="w-4 h-4 animate-spin" />
                   <span>Enviando código...</span>
                 </>
+              ) : resendCooldown > 0 ? (
+                <>
+                  <PhoneCall className="w-4 h-4" />
+                  <span>Aguarde {formatCooldown(resendCooldown)}</span>
+                </>
               ) : (
                 <>
                   <PhoneCall className="w-4 h-4" />
-                  <span>Enviar Código no WhatsApp</span>
+                  <span>Enviar Código por SMS</span>
                 </>
               )}
             </Button>
 
             <div className="flex items-center justify-center gap-1.5 text-[11px] text-stone-400 font-medium pt-1">
               <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-              <span>Sem senhas. Confirmação instantânea por WhatsApp.</span>
+              <span>Sem senhas. Confirmação instantânea via SMS no celular.</span>
             </div>
           </form>
         ) : (
@@ -349,8 +441,8 @@ export default function WhatsAppAuthModal({
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
                 {resendCooldown > 0
-                  ? `Reenviar código em ${resendCooldown}s`
-                  : "Reenviar código no WhatsApp"}
+                  ? `Reenviar SMS em ${formatCooldown(resendCooldown)}`
+                  : "Reenviar código por SMS"}
               </button>
             </div>
           </form>

@@ -49,9 +49,19 @@ export async function sendWhatsAppOtp({ phone, fullName = "", tenantId = null })
         }
         return data;
       }
+    } else {
+      const errData = await res.json().catch(() => ({}));
+      if (res.status === 429 || errData?.rate_limited) {
+        return {
+          success: false,
+          error: errData?.error || "Aguarde antes de solicitar um novo código.",
+          wait_seconds: errData?.wait_seconds || 60,
+          rate_limited: true,
+        };
+      }
     }
   } catch (_fnErr) {
-    // Edge function ainda não deployada ou rede local
+    // Edge function indisponível ou rede local
   }
 
   // 2. Fallback direto para RPC no Supabase (já aplicada e ativa no banco)
