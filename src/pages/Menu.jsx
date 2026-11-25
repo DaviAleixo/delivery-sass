@@ -1353,7 +1353,7 @@ export default function MenuPage() {
       <div 
         className={`w-full bg-white relative z-10 transition-all ${
           hasBanners 
-            ? "-mt-6 rounded-t-[24px] sm:rounded-t-[28px]" 
+            ? "-mt-2.5 sm:-mt-3 rounded-t-[24px] sm:rounded-t-[28px]" 
             : ""
         }`}
       >

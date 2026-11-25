@@ -23,7 +23,7 @@ export default function BannerCarousel({ banners = [] }) {
   return (
     <div className="w-full relative overflow-hidden bg-white">
       <div 
-        className="relative w-full overflow-hidden rounded-t-[18px] sm:rounded-t-[20px] h-[170px] sm:h-[195px] md:h-[230px] bg-white"
+        className="relative w-full overflow-hidden rounded-t-[18px] sm:rounded-t-[20px] h-[190px] sm:h-[225px] md:h-[265px] bg-white"
       >
         <AnimatePresence mode="wait">
           <motion.div
@@ -61,7 +61,7 @@ export default function BannerCarousel({ banners = [] }) {
             </button>
 
             {/* Indicadores centralizados na base do banner */}
-            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-20 pointer-events-auto">
+            <div className="absolute bottom-4 sm:bottom-5 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-20 pointer-events-auto">
               {banners.map((_, index) => (
                 <button
                   key={index}
