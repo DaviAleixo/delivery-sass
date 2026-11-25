@@ -3,8 +3,14 @@ import { getActiveTenantId } from "@/entities/storage";
 import { User } from "@/entities/User";
 import { toast } from "sonner";
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://jqwtnzdsaivbjudvjhld.supabase.co";
-const OTP_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/whatsapp-otp`;
+const OTP_FUNCTION_URL =
+  import.meta.env.VITE_OTP_FUNCTION_URL ||
+  (import.meta.env.VITE_SUPABASE_URL
+    ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-otp`
+    : "https://zecuwijuiqsaoeafonsv.supabase.co/functions/v1/whatsapp-otp");
+
+// Fallback de contingência caso o domínio principal do Supabase não possua a Edge Function deployada
+const FALLBACK_OTP_FUNCTION_URL = "https://zecuwijuiqsaoeafonsv.supabase.co/functions/v1/whatsapp-otp";
 
 // Cache local de desenvolvimento e simulação
 const devOtpCache = new Map();
@@ -24,9 +30,9 @@ export async function sendWhatsAppOtp({ phone, fullName = "", tenantId = null })
 
   const activeTenantId = tenantId || getActiveTenantId() || "a0000000-0000-0000-0000-000000000001";
 
-  // 1. Tenta disparar via Edge Function do Supabase (que integra com Meta WhatsApp Business API)
+  // 1. Tenta disparar via Edge Function do Supabase
   try {
-    const res = await fetch(OTP_FUNCTION_URL, {
+    let res = await fetch(OTP_FUNCTION_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -36,6 +42,20 @@ export async function sendWhatsAppOtp({ phone, fullName = "", tenantId = null })
         tenant_id: activeTenantId,
       }),
     });
+
+    // Se o endpoint principal retornar 404 (ex: Edge Function não deployada no projeto alvo), redireciona para a Edge Function ativa
+    if (res.status === 404 && OTP_FUNCTION_URL !== FALLBACK_OTP_FUNCTION_URL) {
+      res = await fetch(FALLBACK_OTP_FUNCTION_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "send_otp",
+          phone: cleanPhone,
+          full_name: fullName.trim(),
+          tenant_id: activeTenantId,
+        }),
+      });
+    }
 
     if (res.ok) {
       const data = await res.json();
@@ -131,7 +151,7 @@ export async function verifyWhatsAppOtp({ phone, code, fullName = "", tenantId =
 
   // 1. Tenta validar via Edge Function
   try {
-    const res = await fetch(OTP_FUNCTION_URL, {
+    let res = await fetch(OTP_FUNCTION_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -142,6 +162,20 @@ export async function verifyWhatsAppOtp({ phone, code, fullName = "", tenantId =
         tenant_id: activeTenantId,
       }),
     });
+
+    if (res.status === 404 && OTP_FUNCTION_URL !== FALLBACK_OTP_FUNCTION_URL) {
+      res = await fetch(FALLBACK_OTP_FUNCTION_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "verify_otp",
+          phone: cleanPhone,
+          code: cleanCode,
+          full_name: fullName.trim(),
+          tenant_id: activeTenantId,
+        }),
+      });
+    }
 
     if (res.ok) {
       const data = await res.json();
