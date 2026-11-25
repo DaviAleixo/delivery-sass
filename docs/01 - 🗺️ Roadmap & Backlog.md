@@ -74,8 +74,10 @@
     - [x] Componentes de login (`WhatsAppAuthModal.jsx`, `UserProfileSheet.jsx`, `OrderModal.jsx`) 100% alinhados para envio de SMS/Celular, com timer formatado, persistência em localStorage e bloqueio de cliques repetidos.
     - [x] **Fluxo Unificado Padrão iFood / Uber em 3 Etapas**:
       - Etapa 1: Apenas o número de celular com formatação automática e botão `Continuar`.
+      - **Modal de Confirmação Pré-Disparo (Padrão WhatsApp)**: Card de confirmação (*"Confirme seu número"*) antes do envio real do SMS, com opção de `Editar` ou `Sim, enviar SMS`, impedindo desperdício de créditos por digitação errada.
       - Etapa 2: Código SMS de 6 dígitos com validação instantânea ao digitar o 6º dígito, timer de bloqueio progressivo e opção `Alterar número`.
       - Etapa 3 (condicional): Se cliente já cadastrado com nome, login imediato direto sem atrito; se novo cliente, solicitação elegante de nome completo (*"Como podemos te chamar?"*) e conclusão imediata.
+    - [x] **Proteção Total Anti-Refresh (Front & Back)**: O tempo de cooldown (1 min, 5 min, etc.) utiliza timestamp absoluto gravado em `localStorage` e é validado no servidor Supabase PostgreSQL; se a página for recarregada ou aberta em nova aba, o tempo não se perde e o cliente continua bloqueado até o término real.
     - [x] **Design Executivo Sóbrio**: 100% livre de emojis (`🔒`, `🛡️`), cores pastéis infantis ou estética genérica de IA; tipografia nítida, botões sóbrios e microcopy institucional de segurança.
     - [x] Correção do recarregamento de tela e reset indesejado ao alternar de aba/aplicativo (`AuthContext.jsx` atualizado para não desmontar a árvore React em `TOKEN_REFRESHED`).
     - [x] Dimensionamento Comtele: recarga de R$ 50,00 garante ~555 disparos de SMS a R$ 0,09 na Rota 17 Premium sem expiração e sem necessidade de webhook.

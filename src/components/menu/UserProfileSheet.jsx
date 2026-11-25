@@ -276,6 +276,7 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
   const [showAddressForm, setShowAddressForm] = useState(false);
   
   const [phoneInput, setPhoneInput] = useState("");
+  const [isConfirmingPhone, setIsConfirmingPhone] = useState(false);
   const [nameInput, setNameInput] = useState("");
   const [authStep, setAuthStep] = useState("phone"); // 'phone' | 'code' | 'name'
   const [otpCode, setOtpCode] = useState("");
@@ -495,7 +496,7 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
     }
   };
 
-  const handleSendOtp = async (e) => {
+  const handlePhoneSubmit = (e) => {
     e?.preventDefault();
     const clean = phoneInput.replace(/\D/g, "");
     if (clean.length < 10) {
@@ -512,6 +513,26 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
     }
 
     setPhoneError("");
+    setIsConfirmingPhone(true);
+  };
+
+  const handleSendOtp = async () => {
+    const clean = phoneInput.replace(/\D/g, "");
+    if (clean.length < 10) {
+      setPhoneError("Digite um número de celular válido com DDD.");
+      return;
+    }
+
+    const stored = getStoredOtpState(clean);
+    if (stored.cooldownUntil > Date.now()) {
+      const remainingSecs = Math.ceil((stored.cooldownUntil - Date.now()) / 1000);
+      setResendCooldown(remainingSecs);
+      setPhoneError(`Aguarde ${formatCooldown(remainingSecs)} antes de solicitar um novo código.`);
+      setIsConfirmingPhone(false);
+      return;
+    }
+
+    setPhoneError("");
     setIsSubmittingPhone(true);
     try {
       const res = await sendWhatsAppOtp({ phone: clean, fullName: "" });
@@ -521,6 +542,7 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
         saveOtpState(clean, nextAttempt, cooldownSecs);
         setResendCooldown(cooldownSecs);
 
+        setIsConfirmingPhone(false);
         setAuthStep("code");
         toast.success("Código de confirmação enviado via SMS.");
       } else {
@@ -529,9 +551,11 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
           saveOtpState(clean, (stored.attempts || 1) + 1, waitSecs);
           setResendCooldown(waitSecs);
         }
+        setIsConfirmingPhone(false);
         setPhoneError(res.error || "Erro ao enviar código por SMS.");
       }
     } catch (_err) {
+      setIsConfirmingPhone(false);
       setPhoneError("Erro ao se conectar ao serviço de envio de SMS.");
     } finally {
       setIsSubmittingPhone(false);
@@ -1234,61 +1258,132 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
 
               {/* ETAPA 1: CELULAR APENAS */}
               {authStep === "phone" && (
-                <form onSubmit={handleSendOtp} className="space-y-3.5">
-                  <div>
-                    <Label 
-                      htmlFor="profile-phone" 
-                      className={`text-xs font-semibold uppercase tracking-wider ${
-                        dark ? "text-stone-300" : "text-stone-600"
+                isConfirmingPhone ? (
+                  <div className={`p-4.5 rounded-2xl border text-center animate-in fade-in zoom-in-95 ${
+                    dark 
+                      ? "bg-stone-900 border-stone-800 text-stone-100" 
+                      : "bg-stone-50/80 border-stone-200 text-stone-900"
+                  }`}>
+                    <div className={`w-11 h-11 rounded-xl flex items-center justify-center mx-auto mb-2.5 border ${
+                      dark 
+                        ? "bg-stone-800 border-stone-700 text-stone-200" 
+                        : "bg-white border-stone-200 text-stone-700"
+                    }`}>
+                      <Smartphone className="w-5 h-5 text-[#047857]" strokeWidth={2} />
+                    </div>
+
+                    <h4 className={`font-bold text-sm tracking-tight ${dark ? "text-white" : "text-stone-900"}`}>
+                      Confirme seu número
+                    </h4>
+
+                    <p className={`text-xs mt-1 leading-relaxed max-w-[240px] mx-auto ${dark ? "text-stone-400" : "text-stone-500"}`}>
+                      Enviaremos o código SMS de verificação para:
+                    </p>
+
+                    <div className={`my-3 px-3 py-2 rounded-xl font-mono font-bold text-base tracking-wide border shadow-2xs ${
+                      dark 
+                        ? "bg-stone-950 border-stone-800 text-emerald-400" 
+                        : "bg-white border-stone-200 text-stone-900"
+                    }`}>
+                      {phoneInput}
+                    </div>
+
+                    <p className={`text-[11px] mb-3.5 ${dark ? "text-stone-400" : "text-stone-500"}`}>
+                      O número acima está correto?
+                    </p>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setIsConfirmingPhone(false)}
+                        className={`h-10 rounded-xl text-xs font-semibold cursor-pointer border ${
+                          dark
+                            ? "bg-stone-800 border-stone-700 text-stone-200 hover:bg-stone-700"
+                            : "bg-white border-stone-200 text-stone-700 hover:bg-stone-50"
+                        }`}
+                      >
+                        Editar
+                      </Button>
+
+                      <Button
+                        type="button"
+                        onClick={() => handleSendOtp()}
+                        disabled={isSubmittingPhone}
+                        className={`h-10 rounded-xl text-xs font-semibold cursor-pointer shadow-xs flex items-center justify-center gap-1.5 ${
+                          dark
+                            ? "bg-emerald-600 hover:bg-emerald-500 text-white"
+                            : "bg-[#047857] hover:bg-[#065f46] text-white"
+                        }`}
+                      >
+                        {isSubmittingPhone ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Enviando...</span>
+                          </>
+                        ) : (
+                          <span>Sim, enviar SMS</span>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <form onSubmit={handlePhoneSubmit} className="space-y-3.5">
+                    <div>
+                      <Label 
+                        htmlFor="profile-phone" 
+                        className={`text-xs font-semibold uppercase tracking-wider ${
+                          dark ? "text-stone-300" : "text-stone-600"
+                        }`}
+                      >
+                        Número de Celular
+                      </Label>
+                      <Input
+                        id="profile-phone"
+                        type="tel"
+                        placeholder="(00) 00000-0000"
+                        value={phoneInput}
+                        onChange={(e) => {
+                          handlePhoneInputChange(e.target.value);
+                          if (phoneError) setPhoneError("");
+                        }}
+                        className={`mt-1.5 rounded-xl h-12 text-base font-medium tracking-wide ${
+                          dark 
+                            ? "bg-stone-950 border-stone-800 text-white placeholder:text-stone-600 focus-visible:ring-emerald-500" 
+                            : "bg-stone-50/60 border-stone-200 text-stone-900 placeholder:text-stone-400 focus-visible:ring-[#047857]"
+                        }`}
+                        required
+                        autoFocus
+                      />
+                    </div>
+
+                    <Button
+                      type="submit"
+                      disabled={isSubmittingPhone || resendCooldown > 0}
+                      className={`w-full font-semibold h-11 rounded-xl shadow-xs flex items-center justify-center gap-2 cursor-pointer transition-all ${
+                        dark 
+                          ? "bg-emerald-600 hover:bg-emerald-500 text-white" 
+                          : "bg-[#047857] hover:bg-[#065f46] text-white"
                       }`}
                     >
-                      Número de Celular
-                    </Label>
-                    <Input
-                      id="profile-phone"
-                      type="tel"
-                      placeholder="(00) 00000-0000"
-                      value={phoneInput}
-                      onChange={(e) => {
-                        handlePhoneInputChange(e.target.value);
-                        if (phoneError) setPhoneError("");
-                      }}
-                      className={`mt-1.5 rounded-xl h-12 text-base font-medium tracking-wide ${
-                        dark 
-                          ? "bg-stone-950 border-stone-800 text-white placeholder:text-stone-600 focus-visible:ring-emerald-500" 
-                          : "bg-stone-50/60 border-stone-200 text-stone-900 placeholder:text-stone-400 focus-visible:ring-[#047857]"
-                      }`}
-                      required
-                      autoFocus
-                    />
-                  </div>
+                      {isSubmittingPhone ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Enviando SMS...</span>
+                        </>
+                      ) : resendCooldown > 0 ? (
+                        <span>Aguarde {formatCooldown(resendCooldown)}</span>
+                      ) : (
+                        <span>Continuar</span>
+                      )}
+                    </Button>
 
-                  <Button
-                    type="submit"
-                    disabled={isSubmittingPhone || resendCooldown > 0}
-                    className={`w-full font-semibold h-11 rounded-xl shadow-xs flex items-center justify-center gap-2 cursor-pointer transition-all ${
-                      dark 
-                        ? "bg-emerald-600 hover:bg-emerald-500 text-white" 
-                        : "bg-[#047857] hover:bg-[#065f46] text-white"
-                    }`}
-                  >
-                    {isSubmittingPhone ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Enviando SMS...</span>
-                      </>
-                    ) : resendCooldown > 0 ? (
-                      <span>Aguarde {formatCooldown(resendCooldown)}</span>
-                    ) : (
-                      <span>Continuar</span>
-                    )}
-                  </Button>
-
-                  <div className="flex items-center justify-center gap-1.5 text-[11px] text-stone-400 font-medium pt-1">
-                    <ShieldCheck className="w-3.5 h-3.5 text-stone-400" />
-                    <span>Ambiente seguro. Acesso por código transacional.</span>
-                  </div>
-                </form>
+                    <div className="flex items-center justify-center gap-1.5 text-[11px] text-stone-400 font-medium pt-1">
+                      <ShieldCheck className="w-3.5 h-3.5 text-stone-400" />
+                      <span>Ambiente seguro. Acesso por código transacional.</span>
+                    </div>
+                  </form>
+                )
               )}
 
               {/* ETAPA 2: CÓDIGO DE 6 DÍGITOS */}

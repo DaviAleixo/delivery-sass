@@ -19,6 +19,7 @@ export default function WhatsAppAuthModal({
 }) {
   const [step, setStep] = useState("phone_step"); // 'phone_step' | 'code_step' | 'name_step'
   const [phone, setPhone] = useState(initialPhone);
+  const [isConfirmingPhone, setIsConfirmingPhone] = useState(false);
   const [nameInput, setNameInput] = useState("");
   const [code, setCode] = useState("");
   const [verifiedUser, setVerifiedUser] = useState(null);
@@ -88,6 +89,7 @@ export default function WhatsAppAuthModal({
     if (isOpen) {
       const formatted = formatPhone(initialPhone || "");
       setPhone(formatted);
+      setIsConfirmingPhone(false);
       setNameInput("");
       setCode("");
       setError("");
@@ -143,8 +145,8 @@ export default function WhatsAppAuthModal({
     }
   };
 
-  // PASSO 1: Enviar Código por SMS (Pede apenas o celular)
-  const handleSendCode = async (e) => {
+  // Validação preliminar e solicitação de confirmação do número
+  const handlePhoneStepSubmit = (e) => {
     e?.preventDefault();
     const cleanPhone = phone.replace(/\D/g, "");
     if (cleanPhone.length < 10) {
@@ -157,6 +159,27 @@ export default function WhatsAppAuthModal({
       const remainingSecs = Math.ceil((stored.cooldownUntil - Date.now()) / 1000);
       setResendCooldown(remainingSecs);
       setError(`Aguarde ${formatCooldown(remainingSecs)} antes de solicitar um novo código.`);
+      return;
+    }
+
+    setError("");
+    setIsConfirmingPhone(true);
+  };
+
+  // PASSO 1: Enviar Código por SMS (Após confirmação explícita do número)
+  const handleSendCode = async (skipConfirmation = false) => {
+    const cleanPhone = phone.replace(/\D/g, "");
+    if (cleanPhone.length < 10) {
+      setError("Informe um número de celular válido com DDD.");
+      return;
+    }
+
+    const stored = getStoredOtpState(cleanPhone);
+    if (stored.cooldownUntil > Date.now()) {
+      const remainingSecs = Math.ceil((stored.cooldownUntil - Date.now()) / 1000);
+      setResendCooldown(remainingSecs);
+      setError(`Aguarde ${formatCooldown(remainingSecs)} antes de solicitar um novo código.`);
+      setIsConfirmingPhone(false);
       return;
     }
 
@@ -175,6 +198,7 @@ export default function WhatsAppAuthModal({
         saveOtpState(cleanPhone, nextAttempt, cooldownSecs);
         setResendCooldown(cooldownSecs);
 
+        setIsConfirmingPhone(false);
         setStep("code_step");
         toast.success("Código SMS enviado com sucesso!");
       } else {
@@ -183,9 +207,11 @@ export default function WhatsAppAuthModal({
           saveOtpState(cleanPhone, (stored.attempts || 1) + 1, waitSecs);
           setResendCooldown(waitSecs);
         }
+        setIsConfirmingPhone(false);
         setError(result.error || "Não foi possível enviar o código agora. Tente novamente.");
       }
     } catch (_err) {
+      setIsConfirmingPhone(false);
       setError("Erro ao se comunicar com o serviço de envio de SMS.");
     } finally {
       setIsLoading(false);
@@ -287,12 +313,87 @@ export default function WhatsAppAuthModal({
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent
-        className={`max-w-[400px] p-6 rounded-2xl border shadow-xl transition-all ${
+        className={`max-w-[400px] p-6 rounded-2xl border shadow-xl transition-all relative overflow-hidden ${
           dark
             ? "bg-stone-900 border-stone-800 text-stone-100"
             : "bg-white border-stone-200 text-stone-900"
         }`}
       >
+        {/* OVERLAY DE CONFIRMAÇÃO DO NÚMERO (EVITA DISPAROS INCORRETOS) */}
+        {isConfirmingPhone && (
+          <div className="absolute inset-0 bg-white/95 dark:bg-stone-900/95 backdrop-blur-xs z-30 flex flex-col items-center justify-center p-6 text-center animate-in fade-in zoom-in-95">
+            <div
+              className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 border ${
+                dark
+                  ? "bg-stone-800 border-stone-700 text-stone-200"
+                  : "bg-stone-50 border-stone-200 text-stone-700"
+              }`}
+            >
+              <Smartphone className="w-5 h-5 text-[#047857]" strokeWidth={2} />
+            </div>
+
+            <h4
+              className={`font-bold text-base tracking-tight ${dark ? "text-white" : "text-stone-900"}`}
+              style={{ fontFamily: "Plus Jakarta Sans, sans-serif" }}
+            >
+              Confirme seu número
+            </h4>
+
+            <p className={`text-xs mt-1.5 leading-relaxed max-w-[270px] ${dark ? "text-stone-400" : "text-stone-500"}`}>
+              Enviaremos um código SMS de verificação para o seguinte telefone:
+            </p>
+
+            <div
+              className={`my-3.5 px-4 py-2.5 rounded-xl font-mono font-bold text-lg tracking-wide border shadow-2xs ${
+                dark
+                  ? "bg-stone-950 border-stone-800 text-emerald-400"
+                  : "bg-stone-50 border-stone-200 text-stone-900"
+              }`}
+            >
+              {phone}
+            </div>
+
+            <p className={`text-[11px] mb-4.5 ${dark ? "text-stone-400" : "text-stone-500"}`}>
+              O número acima está correto?
+            </p>
+
+            <div className="grid grid-cols-2 gap-2.5 w-full">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsConfirmingPhone(false)}
+                className={`h-11 rounded-xl text-xs font-semibold cursor-pointer border ${
+                  dark
+                    ? "bg-stone-800 border-stone-700 text-stone-200 hover:bg-stone-700"
+                    : "bg-white border-stone-200 text-stone-700 hover:bg-stone-50"
+                }`}
+              >
+                Editar
+              </Button>
+
+              <Button
+                type="button"
+                onClick={() => handleSendCode(true)}
+                disabled={isLoading}
+                className={`h-11 rounded-xl text-xs font-semibold cursor-pointer shadow-xs flex items-center justify-center gap-1.5 ${
+                  dark
+                    ? "bg-emerald-600 hover:bg-emerald-500 text-white"
+                    : "bg-[#047857] hover:bg-[#065f46] text-white"
+                }`}
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Enviando...</span>
+                  </>
+                ) : (
+                  <span>Sim, enviar SMS</span>
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
+
         <DialogHeader className="text-center pb-1">
           <div
             className={`w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3 border ${
@@ -335,7 +436,7 @@ export default function WhatsAppAuthModal({
 
         {/* ETAPA 1: CELULAR APENAS */}
         {step === "phone_step" && (
-          <form onSubmit={handleSendCode} className="space-y-4 mt-1">
+          <form onSubmit={handlePhoneStepSubmit} className="space-y-4 mt-1">
             <div>
               <Label
                 htmlFor="auth-phone"
