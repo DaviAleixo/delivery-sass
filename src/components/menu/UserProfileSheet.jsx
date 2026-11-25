@@ -287,6 +287,48 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
   const [newName, setNewName] = useState("");
   const [isSavingName, setIsSavingName] = useState(false);
 
+  // Escada progressiva de reenvio de SMS (anti-spam)
+  const getCooldownByAttempt = (attemptCount) => {
+    if (attemptCount <= 1) return 60;
+    if (attemptCount === 2) return 300;
+    if (attemptCount === 3) return 600;
+    if (attemptCount === 4) return 1800;
+    return 3600;
+  };
+
+  const formatCooldown = (seconds) => {
+    if (seconds >= 3600) {
+      const h = Math.floor(seconds / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
+      return `${h}h ${String(m).padStart(2, "0")}m`;
+    }
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  };
+
+  const getStoredOtpState = (phoneDigits) => {
+    try {
+      const raw = localStorage.getItem(`pedemuleke_otp_rate_${phoneDigits}`);
+      if (!raw) return { attempts: 0, cooldownUntil: 0 };
+      return JSON.parse(raw);
+    } catch {
+      return { attempts: 0, cooldownUntil: 0 };
+    }
+  };
+
+  const saveOtpState = (phoneDigits, attempts, cooldownSeconds) => {
+    try {
+      const cooldownUntil = Date.now() + cooldownSeconds * 1000;
+      localStorage.setItem(
+        `pedemuleke_otp_rate_${phoneDigits}`,
+        JSON.stringify({ attempts, cooldownUntil })
+      );
+    } catch {
+      // ignore
+    }
+  };
+
   useEffect(() => {
     loadUserData();
   }, [open]);
@@ -294,7 +336,7 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
   useEffect(() => {
     let timer;
     if (resendCooldown > 0) {
-      timer = setInterval(() => setResendCooldown(prev => prev - 1), 1000);
+      timer = setInterval(() => setResendCooldown(prev => (prev > 0 ? prev - 1 : 0)), 1000);
     }
     return () => clearInterval(timer);
   }, [resendCooldown]);
@@ -456,26 +498,44 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
     e?.preventDefault();
     const clean = phoneInput.replace(/\D/g, "");
     if (clean.length < 10) {
-      setPhoneError("Digite um número de WhatsApp válido com DDD.");
+      setPhoneError("Digite um número de celular válido com DDD.");
       return;
     }
     if (!nameInput.trim()) {
       setPhoneError("Informe seu nome completo para o cadastro.");
       return;
     }
+
+    const stored = getStoredOtpState(clean);
+    if (stored.cooldownUntil > Date.now()) {
+      const remainingSecs = Math.ceil((stored.cooldownUntil - Date.now()) / 1000);
+      setResendCooldown(remainingSecs);
+      setPhoneError(`Aguarde ${formatCooldown(remainingSecs)} antes de solicitar um novo código.`);
+      return;
+    }
+
     setPhoneError("");
     setIsSubmittingPhone(true);
     try {
       const res = await sendWhatsAppOtp({ phone: clean, fullName: nameInput.trim() });
       if (res.success) {
+        const nextAttempt = (stored.attempts || 0) + 1;
+        const cooldownSecs = getCooldownByAttempt(nextAttempt);
+        saveOtpState(clean, nextAttempt, cooldownSecs);
+        setResendCooldown(cooldownSecs);
+
         setAuthStep("code");
-        setResendCooldown(60);
         toast.success("Código enviado com sucesso para o seu celular!");
       } else {
+        if (res.rate_limited && res.wait_seconds) {
+          const waitSecs = Number(res.wait_seconds);
+          saveOtpState(clean, (stored.attempts || 1) + 1, waitSecs);
+          setResendCooldown(waitSecs);
+        }
         setPhoneError(res.error || "Erro ao enviar código.");
       }
     } catch (_err) {
-      setPhoneError("Erro ao se conectar ao serviço de envio.");
+      setPhoneError("Erro ao se conectar ao serviço de envio de SMS.");
     } finally {
       setIsSubmittingPhone(false);
     }
@@ -498,6 +558,12 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
         fullName: nameInput.trim()
       });
       if (res.success && res.user) {
+        // Reseta o cooldown e o histórico anti-spam após validação com sucesso
+        try {
+          localStorage.removeItem(`pedemuleke_otp_rate_${clean}`);
+        } catch {}
+        setResendCooldown(0);
+
         setUser(res.user);
         toast.success(`Bem-vindo, ${res.user.full_name || 'Cliente'}!`);
         setAuthStep("phone");
@@ -1100,12 +1166,12 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
                   className={`font-black text-xl tracking-tight ${dark ? "text-white" : "text-[#171717]"}`}
                   style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
                 >
-                  {authStep === "phone" ? "Entrar com WhatsApp" : "Confirmar Código"}
+                  {authStep === "phone" ? "Entrar com Celular / SMS" : "Confirmar Código"}
                 </h3>
                 <p className={`text-xs mt-1 max-w-[280px] mx-auto leading-relaxed ${dark ? "text-stone-400" : "text-stone-500"}`}>
                   {authStep === "phone" 
                     ? "Cadastre-se ou acesse sua conta para salvar endereços e liberar cupons exclusivos." 
-                    : `Digite o código de 6 dígitos que enviamos para ${phoneInput}.`}
+                    : `Digite o código de 6 dígitos que enviamos via SMS para ${phoneInput}.`}
                 </p>
               </div>
 
@@ -1117,7 +1183,7 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
                 }`}>
                   <div>
                     <Label htmlFor="phone" className={`text-xs font-bold uppercase tracking-wider ${dark ? "text-stone-300" : "text-stone-700"}`}>
-                      Seu WhatsApp com DDD *
+                      Seu Celular com DDD *
                     </Label>
                     <Input
                       id="phone"
@@ -1163,7 +1229,7 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
 
                   <Button
                     type="submit"
-                    disabled={isSubmittingPhone}
+                    disabled={isSubmittingPhone || resendCooldown > 0}
                     className={`w-full font-extrabold h-11 rounded-xl shadow-md flex items-center justify-center gap-2 mt-2 cursor-pointer transition-all ${
                       dark 
                         ? "bg-emerald-600 hover:bg-emerald-500 text-white" 
@@ -1175,10 +1241,15 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
                         <Loader2 className="w-4 h-4 animate-spin" />
                         <span>Enviando código...</span>
                       </>
+                    ) : resendCooldown > 0 ? (
+                      <>
+                        <PhoneCall className="w-4 h-4" />
+                        <span>Aguarde {formatCooldown(resendCooldown)}</span>
+                      </>
                     ) : (
                       <>
                         <PhoneCall className="w-4 h-4" />
-                        <span>Enviar Código no WhatsApp</span>
+                        <span>Enviar Código por SMS</span>
                       </>
                     )}
                   </Button>
@@ -1259,15 +1330,15 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${isSubmittingPhone ? "animate-spin" : ""}`} />
                       {resendCooldown > 0
-                        ? `Reenviar código em ${resendCooldown}s`
-                        : "Reenviar código no WhatsApp"}
+                        ? `Reenviar SMS em ${formatCooldown(resendCooldown)}`
+                        : "Reenviar código por SMS"}
                     </button>
                   </div>
                 </form>
               )}
 
               <p className={`text-[11px] text-center ${dark ? "text-stone-500" : "text-stone-400"}`}>
-                🔒 Verificação oficial por WhatsApp. Seus dados e endereços protegidos.
+                🔒 Verificação oficial por SMS. Seus dados e endereços protegidos.
               </p>
             </div>
           )}

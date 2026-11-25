@@ -218,7 +218,7 @@ export default function OrderModal({
   const [errors, setErrors] = useState({});
   const [user, setUser] = useState(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [authModalTitle, setAuthModalTitle] = useState("Acessar Conta com WhatsApp");
+  const [authModalTitle, setAuthModalTitle] = useState("Acessar Conta por SMS");
   const [pendingCoupon, setPendingCoupon] = useState("");
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState(null);
@@ -1190,7 +1190,7 @@ export default function OrderModal({
                     <button
                       type="button"
                       onClick={() => {
-                        setAuthModalTitle(user ? "Trocar de Conta WhatsApp" : "Acessar Conta com WhatsApp");
+                        setAuthModalTitle(user ? "Trocar de Conta" : "Acessar Conta por SMS");
                         setShowAuthModal(true);
                       }}
                       className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 flex items-center gap-1.5 cursor-pointer transition-colors"
@@ -1950,7 +1950,7 @@ export default function OrderModal({
                           className="text-xs font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1.5 cursor-pointer pt-0.5"
                         >
                           <PhoneCall className="w-3.5 h-3.5" />
-                          <span>Entrar com WhatsApp para validar este cupom</span>
+                          <span>Entrar por SMS para validar este cupom</span>
                         </button>
                       )}
                     </div>

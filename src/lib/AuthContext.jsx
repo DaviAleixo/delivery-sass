@@ -167,8 +167,19 @@ export const AuthProvider = ({ children }) => {
         setIsPasswordRecovery(false);
         clearSession();
         setIsLoadingAuth(false);
-      } else if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
-        setIsLoadingAuth(true);
+      } else if (event === "TOKEN_REFRESHED" || event === "USER_UPDATED") {
+        // Atualiza a sessão silenciosamente em background sem desmontar o app, fechar modais ou reiniciar telas
+        fetchUserProfile(session.user).then((profile) => {
+          if (mounted && profile) {
+            setUser(profile);
+            setIsAdminAuthenticated(true);
+          }
+        });
+      } else if (event === "SIGNED_IN") {
+        // No primeiro login explícito, carrega os dados
+        if (!user) {
+          setIsLoadingAuth(true);
+        }
         const profile = await fetchUserProfile(session.user);
         if (mounted) {
           if (profile) {

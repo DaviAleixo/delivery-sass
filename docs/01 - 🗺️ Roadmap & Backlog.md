@@ -71,8 +71,9 @@
     - [x] Rate limit / Backoff progressivo anti-spam implementado com isolamento estrito por número (1 min -> 5 min -> 10 min -> 30 min -> 1 hora), reset automático pós-login e restauração por janela deslizante de 1 hora de inatividade.
   - [x] **Frontend Checkout & Login (100% Pronto)**:
     - [x] Serviço `whatsappOtpService.js` com suporte a OTP real por SMS e captura de rate limiting.
-    - [x] Componentes de login (`WhatsAppAuthModal.jsx`, `UserProfileSheet.jsx`, `Cart.jsx`) com timer formatado, persistência em localStorage e bloqueio de cliques repetidos.
-    - [x] Dimensionamento Comtele: recarga de R$ 50,00 garante ~555 disparos de SMS a R$ 0,09 sem expiração e sem necessidade de webhook.
+    - [x] Componentes de login (`WhatsAppAuthModal.jsx`, `UserProfileSheet.jsx`, `OrderModal.jsx`) 100% alinhados para envio de SMS/Celular, com timer formatado, persistência em localStorage e bloqueio de cliques repetidos.
+    - [x] Correção do recarregamento de tela e reset indesejado ao alternar de aba/aplicativo (`AuthContext.jsx` atualizado para não desmontar a árvore React em `TOKEN_REFRESHED`).
+    - [x] Dimensionamento Comtele: recarga de R$ 50,00 garante ~555 disparos de SMS a R$ 0,09 na Rota 17 Premium sem expiração e sem necessidade de webhook.
 
 - [x] 🛒 **Redesenho Executivo Completo do Checkout do Cliente (`OrderModal.jsx`)**:
   - [x] **Seletor de Canal (Segmented Pill iOS/macOS)**: Seletor Delivery / Retirada em barra segmentada moderna com transição suave, sem bordas verdes grossas.
