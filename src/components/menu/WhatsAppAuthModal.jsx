@@ -167,7 +167,7 @@ export default function WhatsAppAuthModal({
   };
 
   // PASSO 1: Enviar Código por SMS (Após confirmação explícita do número)
-  const handleSendCode = async (skipConfirmation = false) => {
+  const handleSendCode = async () => {
     const cleanPhone = phone.replace(/\D/g, "");
     if (cleanPhone.length < 10) {
       setError("Informe um número de celular válido com DDD.");

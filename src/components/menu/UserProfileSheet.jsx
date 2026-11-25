@@ -24,7 +24,8 @@ import {
   ArrowLeft,
   RefreshCw,
   Coins,
-  Sparkles
+  Sparkles,
+  Smartphone
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
