@@ -19,11 +19,11 @@ function canPlayStoreAudio() {
   return true;
 }
 
-// Utilitário de alerta sonoro potente e contínuo para pedidos pendentes usando Web Audio API
+// Utilitário de alerta sonoro potente, cristalino e contínuo para pedidos pendentes
+// Garante sequência de toques em ordem ("trim... trim... trim") sem sobreposição.
 class SoundAlertManager {
   constructor() {
     this.audioCtx = null;
-    // Padrão sempre ativo (true), a menos que o usuário tenha explicitamente desligado salvando "false"
     this.enabled = typeof window !== "undefined"
       ? localStorage.getItem("vrumburguer_order_sound_enabled") !== "false"
       : true;
@@ -31,7 +31,8 @@ class SoundAlertManager {
     this.isLooping = false;
     this.pendingCount = 0;
     this.loopTimer = null;
-    this.activeTimeouts = [];
+    this.finishTimer = null;
+    this.activeNodes = [];
   }
 
   getAudioContext() {
@@ -93,13 +94,28 @@ class SoundAlertManager {
 
   stopContinuousAlert() {
     this.isLooping = false;
+    this.isPlaying = false;
     if (this.loopTimer) {
       clearTimeout(this.loopTimer);
       this.loopTimer = null;
     }
-    this.activeTimeouts.forEach((t) => clearTimeout(t));
-    this.activeTimeouts = [];
-    this.isPlaying = false;
+    if (this.finishTimer) {
+      clearTimeout(this.finishTimer);
+      this.finishTimer = null;
+    }
+    this.cleanupNodes();
+  }
+
+  cleanupNodes() {
+    if (this.activeNodes && this.activeNodes.length > 0) {
+      this.activeNodes.forEach((node) => {
+        try {
+          if (node.stop) node.stop();
+          if (node.disconnect) node.disconnect();
+        } catch (_err) {}
+      });
+      this.activeNodes = [];
+    }
   }
 
   playLoop() {
@@ -109,20 +125,28 @@ class SoundAlertManager {
     }
 
     this.playOrderChime(() => {
+      // Quando a sequência de toques termina, se ainda houver pedidos pendentes,
+      // espera um intervalo limpo de 2.5s antes de tocar a próxima sequência ordenada.
       if (canPlayStoreAudio() && this.isLooping && this.enabled && this.pendingCount > 0) {
         this.loopTimer = setTimeout(() => {
           this.playLoop();
-        }, 1800); // 1.8s entre repetições de campainha enquanto houver pedidos pendentes
+        }, 2500); // 2.5s de silêncio nítido entre repetições
       } else {
         this.stopContinuousAlert();
       }
     });
   }
 
-  // Toca um alerta sonoro potente estilo iFood/Anota AI
+  // Toca a sequência ordenada de 3 toques estilo iFood ("trim... trim... trim")
+  // Trava com isPlaying para garantir que NENHUM som toque em cima do outro.
   async playOrderChime(onFinish) {
     if (!canPlayStoreAudio() || !this.enabled) {
       if (onFinish) onFinish();
+      return;
+    }
+
+    // Trava de concorrência: se já estiver tocando, NÃO sobrepõe
+    if (this.isPlaying) {
       return;
     }
 
@@ -133,91 +157,86 @@ class SoundAlertManager {
         return;
       }
 
-      // Garante que o contexto de áudio não esteja suspenso pelo navegador
       if (ctx.state === "suspended") {
         await ctx.resume().catch(() => {});
       }
 
       this.isPlaying = true;
+      this.cleanupNodes();
 
-      // Compressor dinâmico para maximizar o volume com segurança
+      // Compressor dinâmico para som nítido, forte e sem estalos
       const compressor = ctx.createDynamicsCompressor();
-      compressor.threshold.setValueAtTime(-15, ctx.currentTime);
-      compressor.knee.setValueAtTime(30, ctx.currentTime);
-      compressor.ratio.setValueAtTime(12, ctx.currentTime);
+      compressor.threshold.setValueAtTime(-12, ctx.currentTime);
+      compressor.knee.setValueAtTime(25, ctx.currentTime);
+      compressor.ratio.setValueAtTime(8, ctx.currentTime);
       compressor.attack.setValueAtTime(0.003, ctx.currentTime);
-      compressor.release.setValueAtTime(0.25, ctx.currentTime);
+      compressor.release.setValueAtTime(0.20, ctx.currentTime);
       compressor.connect(ctx.destination);
+      this.activeNodes.push(compressor);
 
-      // Função auxiliar para tocar um sino harmônico duplo
-      const playBell = (freq, startTime, duration = 0.5, volume = 0.85) => {
+      // Função geradora de toque metálico ("trimmmm") com ataque percussivo e brilho harmônico
+      const playTrimNote = (fundamentalFreq, startTime, duration = 0.38, volume = 0.90) => {
         try {
-          const osc1 = ctx.createOscillator();
-          const gain1 = ctx.createGain();
-          osc1.type = "sine";
-          osc1.frequency.setValueAtTime(freq, startTime);
+          // Onda fundamental (corpo do sino)
+          const oscMain = ctx.createOscillator();
+          const gainMain = ctx.createGain();
+          oscMain.type = "sine";
+          oscMain.frequency.setValueAtTime(fundamentalFreq, startTime);
 
-          gain1.gain.setValueAtTime(0.001, startTime);
-          gain1.gain.exponentialRampToValueAtTime(volume, startTime + 0.02);
-          gain1.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+          // Envelope: ataque imediato de 15ms ("TR") e decaimento exponencial suave ("IMMMM")
+          gainMain.gain.setValueAtTime(0.0001, startTime);
+          gainMain.gain.exponentialRampToValueAtTime(volume, startTime + 0.015);
+          gainMain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
 
-          osc1.connect(gain1);
-          gain1.connect(compressor);
-          osc1.start(startTime);
-          osc1.stop(startTime + duration);
+          oscMain.connect(gainMain);
+          gainMain.connect(compressor);
+          oscMain.start(startTime);
+          oscMain.stop(startTime + duration + 0.05);
 
-          // Harmônico agudo (brilho metálico)
-          const osc2 = ctx.createOscillator();
-          const gain2 = ctx.createGain();
-          osc2.type = "triangle";
-          osc2.frequency.setValueAtTime(freq * 2, startTime);
+          this.activeNodes.push(oscMain, gainMain);
 
-          gain2.gain.setValueAtTime(0.001, startTime);
-          gain2.gain.exponentialRampToValueAtTime(volume * 0.4, startTime + 0.015);
-          gain2.gain.exponentialRampToValueAtTime(0.0001, startTime + duration * 0.7);
+          // Harmônico cintilante (+3Hz detune para vibrato de campainha de balcão)
+          const oscShimmer = ctx.createOscillator();
+          const gainShimmer = ctx.createGain();
+          oscShimmer.type = "triangle";
+          oscShimmer.frequency.setValueAtTime(fundamentalFreq * 2 + 3, startTime);
 
-          osc2.connect(gain2);
-          gain2.connect(compressor);
-          osc2.start(startTime);
-          osc2.stop(startTime + duration);
+          gainShimmer.gain.setValueAtTime(0.0001, startTime);
+          gainShimmer.gain.exponentialRampToValueAtTime(volume * 0.35, startTime + 0.012);
+          gainShimmer.gain.exponentialRampToValueAtTime(0.0001, startTime + duration * 0.75);
+
+          oscShimmer.connect(gainShimmer);
+          gainShimmer.connect(compressor);
+          oscShimmer.start(startTime);
+          oscShimmer.stop(startTime + duration);
+
+          this.activeNodes.push(oscShimmer, gainShimmer);
         } catch (_err) {}
       };
 
-      const startBase = ctx.currentTime + 0.05;
+      const startBase = ctx.currentTime + 0.03;
 
-      // Sequência de toques cristalinos estilo iFood/Anota AI
-      playBell(587.33, startBase + 0.00, 0.45, 0.85); // Ré5
-      playBell(783.99, startBase + 0.18, 0.50, 0.95); // Sol5
-      playBell(1046.50, startBase + 0.38, 0.80, 1.00); // Dó6
+      // SEQUÊNCIA LIMPA E ORDENADA DE 3 TOQUES (SEM SOBREPOSIÇÃO):
+      // 1. Primeiro Trim (880 Hz - Lá5): 0.00s até 0.35s
+      playTrimNote(880.00, startBase + 0.00, 0.35, 0.85);
 
-      const t1 = setTimeout(() => {
-        if (!this.enabled || !this.audioCtx) return;
-        const now2 = this.audioCtx.currentTime;
-        playBell(880.00, now2 + 0.00, 0.45, 0.85);
-        playBell(1174.66, now2 + 0.18, 0.50, 0.95);
-        playBell(1567.98, now2 + 0.38, 0.95, 1.00);
-      }, 700);
-      this.activeTimeouts.push(t1);
+      // 2. Segundo Trim (1108 Hz - Dó#6): 0.42s até 0.77s
+      playTrimNote(1108.73, startBase + 0.42, 0.35, 0.90);
 
-      const t2 = setTimeout(() => {
-        if (!this.enabled || !this.audioCtx) return;
-        const now3 = this.audioCtx.currentTime;
-        playBell(1046.50, now3 + 0.00, 0.40, 0.90);
-        playBell(1318.51, now3 + 0.16, 0.45, 0.95);
-        playBell(1567.98, now3 + 0.32, 0.55, 1.00);
-        playBell(2093.00, now3 + 0.48, 1.10, 1.00);
+      // 3. Terceiro Trim (1318.5 Hz - Mi6): 0.84s até 1.50s (eco final agradável)
+      playTrimNote(1318.51, startBase + 0.84, 0.65, 0.95);
 
-        const t3 = setTimeout(() => {
-          this.isPlaying = false;
-          if (onFinish) onFinish();
-        }, 1200);
-        this.activeTimeouts.push(t3);
-      }, 1500);
-      this.activeTimeouts.push(t2);
+      // Timer único para liberar a trava e notificar o fim da sequência
+      const totalPhraseDurationMs = 1550; // 1.55s
+      this.finishTimer = setTimeout(() => {
+        this.isPlaying = false;
+        this.cleanupNodes();
+        if (onFinish) onFinish();
+      }, totalPhraseDurationMs);
 
     } catch (err) {
       this.isPlaying = false;
-      console.log("Aviso ao tocar som de notificação:", err);
+      this.cleanupNodes();
       if (onFinish) onFinish();
     }
   }

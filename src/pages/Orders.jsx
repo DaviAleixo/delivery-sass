@@ -127,7 +127,6 @@ export default function OrdersPage() {
       enqueueOrders([newOrder]);
 
       if (newOrder.status === "pendente") {
-        soundAlert.playOrderChime();
         soundAlert.setPendingCount((prev) => (prev || 0) + 1);
         knownPendingIds.current.add(newOrder.id);
       }
