@@ -57,12 +57,14 @@
   - [x] Ativação de domínios customizados no Cloudflare Pages com certificado SSL.
   - [x] **Blindagem da Rota de Login (`App.jsx`, `public/_redirects`)**: import direto de `AdminLoginPage` sem condicionais frágeis e guards de rota em `StoreRootRedirect` e `StoreMenuRoute` para impedir que a rota `/login` seja tratada como slug multi-tenant e redirecionada para `/login/menu`. Regra de SPA rewrite com flag `200!`.
 
-- [ ] 📱 **Autenticação & OTP via WhatsApp Cloud API Oficial da Meta (`whatsapp-otp`, `Supabase Edge Functions`)**:
-  - [ ] **Configuração e Registro da WABA no Meta Developers (Status: Aguardando Aprovação da Meta)**:
+- [x] 📱 **Autenticação & OTP Multi-Canal (SMS Dev + Comtele SMS + Fallback Meta WhatsApp - `whatsapp-otp`, `Supabase Edge Functions`)**:
+  - [x] **Integração com SMS Dev API v1 (`whatsapp-otp/index.ts`)**: Suporte nativo ao gateway de SMS nacional SMS Dev (`POST https://api.smsdev.com.br/v1/send`) via secret `SMSDEV_API_KEY`, garantindo envio rápido sem burocracia por R$ 0,05 a R$ 0,07 por mensagem.
+  - [x] **Integração com Comtele SMS API v2 (`whatsapp-otp/index.ts`)**: Suporte nativo ao gateway Comtele via secret `COMTELE_API_KEY`.
+  - [x] **Fallback e Coexistência com Meta Cloud API & Modo Simulação**: A Edge Function prioriza envio por SMS via Comtele quando a chave estiver ativa, mantendo contingência Meta WhatsApp e modo de simulação em desenvolvimento.
+  - [x] **Atualização da Interface do Usuário (`WhatsAppAuthModal.jsx`, `UserProfileSheet.jsx`, `whatsappOtpService.js`)**: Modais e notificações adaptados para comunicação de código de verificação via SMS/Celular.
+  - [ ] **Configuração e Registro da WABA no Meta Developers (Status: Desativada/Bloqueada pela Meta)**:
     - [x] Criação e identificação da WABA comercial `1126913376908908` (App ID `1133124069684887`, Phone Number ID `1496118243581329`, número comercial `+55 31 98660-6935`).
-    - [ ] _Pendente na Meta_: Aprovação do nome de exibição ("PedeMuleke") e liberação do certificado de registro do número. Enquanto pendente, a Meta bloqueia criação de modelos (`auth_code`) e atribuição de permissões na WABA.
-    - [ ] Conceder acesso à WABA comercial e validar status ativo na Cloud API.
-    - [ ] Criar System User e gerar Token Permanente (System User Token) de longa duração.
+    - [ ] _Recurso Meta_: Conta desativada preventivamente pelo robô da Meta; recurso para análise humana solicitado. Alternativa de SMS com Comtele implementada para produção imediata.
   - [x] **Infraestrutura Backend Supabase & Edge Functions (100% Pronta)**:
     - [x] Tabela `whatsapp_otp_codes` e funções RPC `request_whatsapp_otp` e `verify_whatsapp_otp` criadas.
     - [x] Edge Function `whatsapp-otp` implementada com suporte a envio Graph API v19 e fallback de contingência.

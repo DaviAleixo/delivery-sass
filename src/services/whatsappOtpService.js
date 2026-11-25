@@ -42,9 +42,9 @@ export async function sendWhatsAppOtp({ phone, fullName = "", tenantId = null })
       if (data.success) {
         if (data.simulated && data.code) {
           devOtpCache.set(cleanPhone, { code: data.code, expiresAt: Date.now() + 10 * 60 * 1000 });
-          toast.info(`[WhatsApp Simulado] Código de acesso: ${data.code}`, {
+          toast.info(`[Código de Acesso] Código: ${data.code}`, {
             duration: 10000,
-            description: "Modo de preparação ativo enquanto a Meta API oficial não está configurada."
+            description: "Modo de preparação ativo (Comtele SMS ou WhatsApp)."
           });
         }
         return data;
@@ -66,9 +66,9 @@ export async function sendWhatsAppOtp({ phone, fullName = "", tenantId = null })
       if (!rpcErr && rpcData?.success) {
         const code = rpcData.code;
         devOtpCache.set(cleanPhone, { code, expiresAt: Date.now() + 10 * 60 * 1000 });
-        toast.info(`[WhatsApp Simulado] Código de acesso: ${code}`, {
+        toast.info(`[Código de Acesso] Código: ${code}`, {
           duration: 10000,
-          description: "Use este código para entrar enquanto a Meta API oficial está em modo de preparação."
+          description: "Use este código para validar seu acesso com segurança."
         });
         return {
           success: true,
@@ -85,7 +85,7 @@ export async function sendWhatsAppOtp({ phone, fullName = "", tenantId = null })
   // 3. Fallback em memória (para funcionamento offline / testes)
   const localCode = String(Math.floor(100000 + Math.random() * 900000));
   devOtpCache.set(cleanPhone, { code: localCode, expiresAt: Date.now() + 10 * 60 * 1000 });
-  toast.info(`[WhatsApp Teste] Código de acesso: ${localCode}`, {
+  toast.info(`[Código de Teste] Código: ${localCode}`, {
     duration: 10000,
     description: "Ambiente local sem conexão."
   });

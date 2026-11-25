@@ -470,7 +470,7 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
       if (res.success) {
         setAuthStep("code");
         setResendCooldown(60);
-        toast.success("Código enviado com sucesso pelo WhatsApp!");
+        toast.success("Código enviado com sucesso para o seu celular!");
       } else {
         setPhoneError(res.error || "Erro ao enviar código.");
       }

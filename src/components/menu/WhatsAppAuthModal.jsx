@@ -11,8 +11,8 @@ export default function WhatsAppAuthModal({
   isOpen,
   onClose,
   onSuccess,
-  title = "Acessar Conta com WhatsApp",
-  description = "Receba um código de 6 dígitos no seu WhatsApp para validar seu acesso com total segurança.",
+  title = "Acessar Conta por SMS / Celular",
+  description = "Receba um código de 6 dígitos via SMS no seu celular para validar seu acesso com total segurança.",
   initialPhone = "",
   initialName = "",
   dark = false,
@@ -75,7 +75,7 @@ export default function WhatsAppAuthModal({
     e?.preventDefault();
     const cleanPhone = phone.replace(/\D/g, "");
     if (cleanPhone.length < 10) {
-      setError("Informe um número de WhatsApp com DDD (mínimo 10 dígitos).");
+      setError("Informe um número de celular com DDD (mínimo 10 dígitos).");
       return;
     }
     if (!fullName.trim()) {
@@ -95,7 +95,7 @@ export default function WhatsAppAuthModal({
       if (result.success) {
         setStep("code_step");
         setResendCooldown(60);
-        toast.success("Código enviado com sucesso pelo WhatsApp!");
+        toast.success("Código enviado com sucesso para seu celular!");
       } else {
         setError(result.error || "Não foi possível enviar o código agora. Tente novamente.");
       }
@@ -174,7 +174,7 @@ export default function WhatsAppAuthModal({
           >
             {step === "phone_step"
               ? description
-              : `Enviamos um código de verificação para o WhatsApp ${phone}.`}
+              : `Enviamos um código de verificação para o número ${phone}.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -193,7 +193,7 @@ export default function WhatsAppAuthModal({
                   dark ? "text-stone-300" : "text-stone-700"
                 }`}
               >
-                Número do WhatsApp *
+                Número de Celular *
               </Label>
               <Input
                 id="auth-phone"

@@ -50,7 +50,100 @@ serve(async (req: Request) => {
       const cleanPhone = rpcData.phone;
       const fullPhone = cleanPhone.startsWith("55") ? cleanPhone : `55${cleanPhone}`;
 
-      // 2. Credenciais da Meta WhatsApp Cloud API
+      // =========================================================================
+      // 2. DISPARO VIA SMS DEV (api.smsdev.com.br) — PRIORITÁRIO & SEM BUROCRACIA
+      // =========================================================================
+      const smsdevApiKey = Deno.env.get("SMSDEV_API_KEY") || "LQP0WM30YEMPJPXUZJL4PRK7MOK1KA22H3UBKAYH9FVKCW7BKVQUADG8EA1HW62GHH13ZVC9YHO1OSI7JAWUNIAVEWSHG0YRWWOCSJKICEWY5YFXLYCKPDBVDTKGWA1V";
+      if (smsdevApiKey) {
+        try {
+          const formattedPhone = cleanPhone.length > 11 && cleanPhone.startsWith("55")
+            ? cleanPhone.replace(/^55/, "")
+            : cleanPhone;
+          const smsdevUrl = "https://api.smsdev.com.br/v1/send";
+          const smsdevPayload = {
+            key: smsdevApiKey,
+            type: 9,
+            number: formattedPhone,
+            msg: `Seu codigo de acesso ao PedeMuleke e: ${generatedCode}. Valido por 10 minutos.`,
+          };
+
+          const smsdevRes = await fetch(smsdevUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(smsdevPayload),
+          });
+
+          const smsdevResult = await smsdevRes.json().catch(() => ({}));
+          console.log("[SMS Dev Response]:", smsdevResult);
+
+          const isSuccess = Array.isArray(smsdevResult)
+            ? smsdevResult[0]?.situacao === "OK" || smsdevResult[0]?.codigo === "1"
+            : smsdevResult?.situacao === "OK" || smsdevResult?.codigo === "1" || smsdevResult?.status === "OK";
+
+          if (isSuccess) {
+            return new Response(
+              JSON.stringify({
+                success: true,
+                message: "Código de verificação enviado por SMS!",
+                phone: cleanPhone,
+                channel: "smsdev",
+              }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          } else {
+            console.warn("[SMS Dev Warning]:", smsdevResult);
+          }
+        } catch (smsdevErr: any) {
+          console.error("[SMS Dev Request Error]:", smsdevErr);
+        }
+      }
+
+      // =========================================================================
+      // 3. DISPARO VIA COMTELE SMS (SE CONFIGURADA)
+      // =========================================================================
+      const comteleApiKey = Deno.env.get("COMTELE_API_KEY");
+      if (comteleApiKey) {
+        try {
+          const receiversPhone = cleanPhone.length === 11 ? cleanPhone : cleanPhone.replace(/^55/, "");
+          const comteleUrl = "https://sms.comtele.com.br/api/v2/send";
+          const comtelePayload = {
+            Sender: "PedeMuleke",
+            Receivers: receiversPhone,
+            Content: `Seu codigo de acesso ao PedeMuleke e: ${generatedCode}. Valido por 10 minutos.`,
+          };
+
+          const smsRes = await fetch(comteleUrl, {
+            method: "POST",
+            headers: {
+              "auth-key": comteleApiKey,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(comtelePayload),
+          });
+
+          const smsResult = await smsRes.json().catch(() => ({}));
+
+          if (smsRes.ok && (smsResult.Success === true || smsResult.success === true)) {
+            return new Response(
+              JSON.stringify({
+                success: true,
+                message: "Código de verificação enviado por SMS!",
+                phone: cleanPhone,
+                channel: "sms",
+              }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          } else {
+            console.warn("[Comtele SMS Warning]:", smsResult);
+          }
+        } catch (smsErr: any) {
+          console.error("[Comtele SMS Request Error]:", smsErr);
+        }
+      }
+
+      // =========================================================================
+      // 3. DISPARO VIA WHATSAPP CLOUD API DA META (SE CONFIGURADA)
+      // =========================================================================
       const metaPhoneNumberId = Deno.env.get("META_WA_PHONE_NUMBER_ID");
       const metaAccessToken = Deno.env.get("META_WA_ACCESS_TOKEN");
       const metaTemplateName = Deno.env.get("META_WA_TEMPLATE_NAME") || "auth_code";
