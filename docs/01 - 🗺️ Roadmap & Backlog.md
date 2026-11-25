@@ -72,6 +72,11 @@
   - [x] **Frontend Checkout & Login (100% Pronto)**:
     - [x] Serviço `whatsappOtpService.js` com suporte a OTP real por SMS e captura de rate limiting.
     - [x] Componentes de login (`WhatsAppAuthModal.jsx`, `UserProfileSheet.jsx`, `OrderModal.jsx`) 100% alinhados para envio de SMS/Celular, com timer formatado, persistência em localStorage e bloqueio de cliques repetidos.
+    - [x] **Fluxo Unificado Padrão iFood / Uber em 3 Etapas**:
+      - Etapa 1: Apenas o número de celular com formatação automática e botão `Continuar`.
+      - Etapa 2: Código SMS de 6 dígitos com validação instantânea ao digitar o 6º dígito, timer de bloqueio progressivo e opção `Alterar número`.
+      - Etapa 3 (condicional): Se cliente já cadastrado com nome, login imediato direto sem atrito; se novo cliente, solicitação elegante de nome completo (*"Como podemos te chamar?"*) e conclusão imediata.
+    - [x] **Design Executivo Sóbrio**: 100% livre de emojis (`🔒`, `🛡️`), cores pastéis infantis ou estética genérica de IA; tipografia nítida, botões sóbrios e microcopy institucional de segurança.
     - [x] Correção do recarregamento de tela e reset indesejado ao alternar de aba/aplicativo (`AuthContext.jsx` atualizado para não desmontar a árvore React em `TOKEN_REFRESHED`).
     - [x] Dimensionamento Comtele: recarga de R$ 50,00 garante ~555 disparos de SMS a R$ 0,09 na Rota 17 Premium sem expiração e sem necessidade de webhook.
 

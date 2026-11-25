@@ -277,8 +277,9 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
   
   const [phoneInput, setPhoneInput] = useState("");
   const [nameInput, setNameInput] = useState("");
-  const [authStep, setAuthStep] = useState("phone"); // 'phone' | 'code'
+  const [authStep, setAuthStep] = useState("phone"); // 'phone' | 'code' | 'name'
   const [otpCode, setOtpCode] = useState("");
+  const [verifiedUser, setVerifiedUser] = useState(null);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [isSubmittingPhone, setIsSubmittingPhone] = useState(false);
   const [phoneError, setPhoneError] = useState("");
@@ -501,10 +502,6 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
       setPhoneError("Digite um número de celular válido com DDD.");
       return;
     }
-    if (!nameInput.trim()) {
-      setPhoneError("Informe seu nome completo para o cadastro.");
-      return;
-    }
 
     const stored = getStoredOtpState(clean);
     if (stored.cooldownUntil > Date.now()) {
@@ -517,7 +514,7 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
     setPhoneError("");
     setIsSubmittingPhone(true);
     try {
-      const res = await sendWhatsAppOtp({ phone: clean, fullName: nameInput.trim() });
+      const res = await sendWhatsAppOtp({ phone: clean, fullName: "" });
       if (res.success) {
         const nextAttempt = (stored.attempts || 0) + 1;
         const cooldownSecs = getCooldownByAttempt(nextAttempt);
@@ -525,14 +522,14 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
         setResendCooldown(cooldownSecs);
 
         setAuthStep("code");
-        toast.success("Código enviado com sucesso para o seu celular!");
+        toast.success("Código de confirmação enviado via SMS.");
       } else {
         if (res.rate_limited && res.wait_seconds) {
           const waitSecs = Number(res.wait_seconds);
           saveOtpState(clean, (stored.attempts || 1) + 1, waitSecs);
           setResendCooldown(waitSecs);
         }
-        setPhoneError(res.error || "Erro ao enviar código.");
+        setPhoneError(res.error || "Erro ao enviar código por SMS.");
       }
     } catch (_err) {
       setPhoneError("Erro ao se conectar ao serviço de envio de SMS.");
@@ -541,9 +538,9 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
     }
   };
 
-  const handleVerifyOtp = async (e) => {
-    e?.preventDefault();
-    const cleanCode = otpCode.replace(/\D/g, "").slice(0, 6);
+  const handleVerifyOtp = async (codeToVerify) => {
+    const rawCode = typeof codeToVerify === "string" ? codeToVerify : otpCode;
+    const cleanCode = rawCode.replace(/\D/g, "").slice(0, 6);
     if (cleanCode.length < 4) {
       setPhoneError("Digite o código de 6 dígitos recebido.");
       return;
@@ -555,7 +552,7 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
       const res = await verifyWhatsAppOtp({
         phone: clean,
         code: cleanCode,
-        fullName: nameInput.trim()
+        fullName: ""
       });
       if (res.success && res.user) {
         // Reseta o cooldown e o histórico anti-spam após validação com sucesso
@@ -564,20 +561,72 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
         } catch {}
         setResendCooldown(0);
 
-        setUser(res.user);
-        toast.success(`Bem-vindo, ${res.user.full_name || 'Cliente'}!`);
-        setAuthStep("phone");
-        setOtpCode("");
-        try {
-          window.dispatchEvent(new CustomEvent("customer_auth_changed", { detail: res.user }));
-          window.dispatchEvent(new CustomEvent("customer_address_changed"));
-        } catch {}
-        loadUserData();
+        // Se o cliente já possui nome no cadastro:
+        if (res.user.full_name && res.user.full_name !== "Cliente") {
+          setUser(res.user);
+          const firstName = res.user.full_name.split(" ")[0];
+          toast.success(`Olá, ${firstName}!`);
+          setAuthStep("phone");
+          setOtpCode("");
+          try {
+            window.dispatchEvent(new CustomEvent("customer_auth_changed", { detail: res.user }));
+            window.dispatchEvent(new CustomEvent("customer_address_changed"));
+          } catch {}
+          loadUserData();
+        } else {
+          // Cliente novo (primeiro acesso): etapa para coletar o nome
+          setVerifiedUser(res.user);
+          setAuthStep("name");
+        }
       } else {
         setPhoneError(res.error || "Código incorreto ou expirado.");
       }
     } catch (_err) {
       setPhoneError("Erro ao validar código.");
+    } finally {
+      setIsSubmittingPhone(false);
+    }
+  };
+
+  const handleSaveNewCustomerName = async (e) => {
+    e?.preventDefault();
+    const cleanName = nameInput.trim();
+    if (cleanName.length < 2) {
+      setPhoneError("Por favor, informe seu nome completo.");
+      return;
+    }
+
+    setIsSubmittingPhone(true);
+    setPhoneError("");
+    try {
+      const updatedUser = {
+        ...verifiedUser,
+        full_name: cleanName,
+      };
+
+      if (isSupabaseConfigured() && supabase && verifiedUser?.id) {
+        await supabase
+          .from("customers")
+          .update({ full_name: cleanName, updated_date: new Date().toISOString() })
+          .eq("id", verifiedUser.id);
+      }
+
+      await User.login(updatedUser);
+
+      setUser(updatedUser);
+      const firstName = cleanName.split(" ")[0];
+      toast.success(`Cadastro concluído. Bem-vindo(a), ${firstName}!`);
+      setAuthStep("phone");
+      setOtpCode("");
+      setNameInput("");
+      setVerifiedUser(null);
+      try {
+        window.dispatchEvent(new CustomEvent("customer_auth_changed", { detail: updatedUser }));
+        window.dispatchEvent(new CustomEvent("customer_address_changed"));
+      } catch {}
+      loadUserData();
+    } catch (_err) {
+      setPhoneError("Erro ao salvar seu nome. Tente novamente.");
     } finally {
       setIsSubmittingPhone(false);
     }
@@ -1148,89 +1197,76 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
               </Button>
             </div>
           ) : (
-            /* Formulário de Identificação Oficial via WhatsApp OTP */
+            /* Formulário de Autenticação Executivo via SMS OTP */
             <div className="space-y-4">
               <div className="text-center pb-2">
-                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-sm ${
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3 border ${
                   dark 
-                    ? "bg-emerald-950/80 border border-emerald-500/40 text-emerald-400" 
-                    : "bg-[#D1E9DF]/70 border border-[#D1E9DF] text-[#047857]"
+                    ? "bg-stone-800 border-stone-700 text-stone-200" 
+                    : "bg-stone-50 border-stone-200 text-stone-700"
                 }`}>
-                  {authStep === "phone" ? (
-                    <PhoneCall className="w-7 h-7" />
-                  ) : (
-                    <ShieldCheck className="w-7 h-7" />
-                  )}
+                  {authStep === "phone" && <PhoneCall className="w-5 h-5" strokeWidth={1.75} />}
+                  {authStep === "code" && <ShieldCheck className="w-5 h-5 text-[#047857]" strokeWidth={1.75} />}
+                  {authStep === "name" && <UserIcon className="w-5 h-5 text-[#047857]" strokeWidth={1.75} />}
                 </div>
+
                 <h3 
-                  className={`font-black text-xl tracking-tight ${dark ? "text-white" : "text-[#171717]"}`}
+                  className={`font-bold text-lg tracking-tight ${dark ? "text-white" : "text-stone-900"}`}
                   style={{ fontFamily: 'Plus Jakarta Sans, sans-serif' }}
                 >
-                  {authStep === "phone" ? "Entrar com Celular / SMS" : "Confirmar Código"}
+                  {authStep === "phone" && "Acessar Conta"}
+                  {authStep === "code" && "Confirmar Código"}
+                  {authStep === "name" && "Como podemos te chamar?"}
                 </h3>
-                <p className={`text-xs mt-1 max-w-[280px] mx-auto leading-relaxed ${dark ? "text-stone-400" : "text-stone-500"}`}>
-                  {authStep === "phone" 
-                    ? "Cadastre-se ou acesse sua conta para salvar endereços e liberar cupons exclusivos." 
-                    : `Digite o código de 6 dígitos que enviamos via SMS para ${phoneInput}.`}
+
+                <p className={`text-xs mt-1 leading-relaxed max-w-[290px] mx-auto ${dark ? "text-stone-400" : "text-stone-500"}`}>
+                  {authStep === "phone" && "Informe seu número de celular para receber um código de acesso por SMS."}
+                  {authStep === "code" && `Enviamos um código de 6 dígitos via SMS para ${phoneInput}.`}
+                  {authStep === "name" && "Informe seu nome para identificação nos seus pedidos e entregas."}
                 </p>
               </div>
 
-              {authStep === "phone" ? (
-                <form onSubmit={handleSendOtp} className={`space-y-3.5 p-4.5 rounded-2xl border ${
-                  dark 
-                    ? "bg-stone-900/90 border-stone-800" 
-                    : "bg-[#F7F9F8] border-[#E5EAE7] shadow-2xs"
-                }`}>
+              {phoneError && (
+                <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium">
+                  {phoneError}
+                </div>
+              )}
+
+              {/* ETAPA 1: CELULAR APENAS */}
+              {authStep === "phone" && (
+                <form onSubmit={handleSendOtp} className="space-y-3.5">
                   <div>
-                    <Label htmlFor="phone" className={`text-xs font-bold uppercase tracking-wider ${dark ? "text-stone-300" : "text-stone-700"}`}>
-                      Seu Celular com DDD *
+                    <Label 
+                      htmlFor="profile-phone" 
+                      className={`text-xs font-semibold uppercase tracking-wider ${
+                        dark ? "text-stone-300" : "text-stone-600"
+                      }`}
+                    >
+                      Número de Celular
                     </Label>
                     <Input
-                      id="phone"
+                      id="profile-phone"
                       type="tel"
-                      placeholder="(11) 99999-9999"
+                      placeholder="(00) 00000-0000"
                       value={phoneInput}
                       onChange={(e) => {
                         handlePhoneInputChange(e.target.value);
                         if (phoneError) setPhoneError("");
                       }}
-                      className={`mt-1 rounded-xl h-11 text-base sm:text-sm font-medium ${
+                      className={`mt-1.5 rounded-xl h-12 text-base font-medium tracking-wide ${
                         dark 
                           ? "bg-stone-950 border-stone-800 text-white placeholder:text-stone-600 focus-visible:ring-emerald-500" 
-                          : "bg-white border-stone-200 text-[#171717] placeholder:text-stone-400 focus-visible:ring-[#047857]"
-                      } ${phoneError ? 'border-red-500' : ''}`}
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="name" className={`text-xs font-bold uppercase tracking-wider ${dark ? "text-stone-300" : "text-stone-700"}`}>
-                      Seu Nome Completo *
-                    </Label>
-                    <Input
-                      id="name"
-                      type="text"
-                      placeholder="Ex: Carlos Silva"
-                      value={nameInput}
-                      onChange={(e) => {
-                        setNameInput(e.target.value);
-                        if (phoneError) setPhoneError("");
-                      }}
-                      required
-                      className={`mt-1 rounded-xl h-11 text-base sm:text-sm ${
-                        dark 
-                          ? "bg-stone-950 border-stone-800 text-white placeholder:text-stone-600 focus-visible:ring-emerald-500" 
-                          : "bg-white border-stone-200 text-[#171717] placeholder:text-stone-400 focus-visible:ring-[#047857]"
+                          : "bg-stone-50/60 border-stone-200 text-stone-900 placeholder:text-stone-400 focus-visible:ring-[#047857]"
                       }`}
+                      required
+                      autoFocus
                     />
                   </div>
-
-                  {phoneError && <p className="text-xs text-rose-500 mt-1 font-semibold">{phoneError}</p>}
 
                   <Button
                     type="submit"
                     disabled={isSubmittingPhone || resendCooldown > 0}
-                    className={`w-full font-extrabold h-11 rounded-xl shadow-md flex items-center justify-center gap-2 mt-2 cursor-pointer transition-all ${
+                    className={`w-full font-semibold h-11 rounded-xl shadow-xs flex items-center justify-center gap-2 cursor-pointer transition-all ${
                       dark 
                         ? "bg-emerald-600 hover:bg-emerald-500 text-white" 
                         : "bg-[#047857] hover:bg-[#065f46] text-white"
@@ -1239,68 +1275,75 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
                     {isSubmittingPhone ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Enviando código...</span>
+                        <span>Enviando SMS...</span>
                       </>
                     ) : resendCooldown > 0 ? (
-                      <>
-                        <PhoneCall className="w-4 h-4" />
-                        <span>Aguarde {formatCooldown(resendCooldown)}</span>
-                      </>
+                      <span>Aguarde {formatCooldown(resendCooldown)}</span>
                     ) : (
-                      <>
-                        <PhoneCall className="w-4 h-4" />
-                        <span>Enviar Código por SMS</span>
-                      </>
+                      <span>Continuar</span>
                     )}
                   </Button>
-                </form>
-              ) : (
-                <form onSubmit={handleVerifyOtp} className={`space-y-3.5 p-4.5 rounded-2xl border ${
-                  dark 
-                    ? "bg-stone-900/90 border-stone-800" 
-                    : "bg-[#F7F9F8] border-[#E5EAE7] shadow-2xs"
-                }`}>
-                  <div className="flex items-center justify-between mb-1">
-                    <Label htmlFor="otp" className={`text-xs font-bold uppercase tracking-wider ${dark ? "text-stone-300" : "text-stone-700"}`}>
-                      Código de 6 dígitos
-                    </Label>
-                    <button
-                      type="button"
-                      onClick={() => { setAuthStep("phone"); setPhoneError(""); }}
-                      className={`text-xs font-bold inline-flex items-center gap-1 cursor-pointer transition-colors ${
-                        dark ? "text-emerald-400 hover:text-emerald-300" : "text-[#047857] hover:text-[#065f46]"
-                      }`}
-                    >
-                      <ArrowLeft className="w-3 h-3" />
-                      Alterar número
-                    </button>
+
+                  <div className="flex items-center justify-center gap-1.5 text-[11px] text-stone-400 font-medium pt-1">
+                    <ShieldCheck className="w-3.5 h-3.5 text-stone-400" />
+                    <span>Ambiente seguro. Acesso por código transacional.</span>
                   </div>
+                </form>
+              )}
 
-                  <Input
-                    id="otp"
-                    type="text"
-                    maxLength={6}
-                    placeholder="••••••"
-                    value={otpCode}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/\D/g, "").slice(0, 6);
-                      setOtpCode(val);
-                      if (phoneError) setPhoneError("");
-                    }}
-                    required
-                    className={`rounded-xl h-12 text-center text-xl font-black tracking-[0.4em] font-mono ${
-                      dark 
-                        ? "bg-stone-950 border-stone-800 text-white placeholder:text-stone-700 focus-visible:ring-emerald-500" 
-                        : "bg-white border-stone-300 text-[#171717] placeholder:text-stone-300 focus-visible:ring-[#047857]"
-                    }`}
-                  />
+              {/* ETAPA 2: CÓDIGO DE 6 DÍGITOS */}
+              {authStep === "code" && (
+                <form onSubmit={(e) => { e.preventDefault(); handleVerifyOtp(); }} className="space-y-3.5">
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <Label 
+                        htmlFor="profile-otp" 
+                        className={`text-xs font-semibold uppercase tracking-wider ${
+                          dark ? "text-stone-300" : "text-stone-600"
+                        }`}
+                      >
+                        Código de 6 dígitos
+                      </Label>
+                      <button
+                        type="button"
+                        onClick={() => { setAuthStep("phone"); setPhoneError(""); }}
+                        className={`text-xs font-semibold inline-flex items-center gap-1 cursor-pointer transition-colors ${
+                          dark ? "text-emerald-400 hover:text-emerald-300" : "text-[#047857] hover:text-[#065f46]"
+                        }`}
+                      >
+                        <ArrowLeft className="w-3 h-3" />
+                        Alterar número
+                      </button>
+                    </div>
 
-                  {phoneError && <p className="text-xs text-rose-500 mt-1 font-semibold">{phoneError}</p>}
+                    <Input
+                      id="profile-otp"
+                      type="text"
+                      maxLength={6}
+                      placeholder="000000"
+                      value={otpCode}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, "").slice(0, 6);
+                        setOtpCode(val);
+                        if (phoneError) setPhoneError("");
+                        if (val.length === 6) {
+                          handleVerifyOtp(val);
+                        }
+                      }}
+                      required
+                      autoFocus
+                      className={`rounded-xl h-13 text-center text-2xl font-bold tracking-[0.35em] font-mono ${
+                        dark 
+                          ? "bg-stone-950 border-stone-800 text-white placeholder:text-stone-700 focus-visible:ring-emerald-500" 
+                          : "bg-stone-50/60 border-stone-200 text-stone-900 placeholder:text-stone-300 focus-visible:ring-[#047857]"
+                      }`}
+                    />
+                  </div>
 
                   <Button
                     type="submit"
                     disabled={isSubmittingPhone || otpCode.length < 4}
-                    className={`w-full font-extrabold h-11 rounded-xl shadow-md flex items-center justify-center gap-2 mt-2 cursor-pointer transition-all ${
+                    className={`w-full font-semibold h-11 rounded-xl shadow-xs flex items-center justify-center gap-2 cursor-pointer transition-all ${
                       dark 
                         ? "bg-emerald-600 hover:bg-emerald-500 text-white" 
                         : "bg-[#047857] hover:bg-[#065f46] text-white"
@@ -1309,37 +1352,82 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
                     {isSubmittingPhone ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Validando código...</span>
+                        <span>Validando...</span>
                       </>
                     ) : (
-                      <>
-                        <ShieldCheck className="w-4 h-4" />
-                        <span>Confirmar e Entrar</span>
-                      </>
+                      <span>Confirmar e Entrar</span>
                     )}
                   </Button>
 
-                  <div className="flex items-center justify-between pt-1">
+                  <div className="flex items-center justify-center pt-1">
                     <button
                       type="button"
                       disabled={resendCooldown > 0 || isSubmittingPhone}
                       onClick={handleSendOtp}
-                      className={`text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${
-                        dark ? "text-stone-400 hover:text-stone-200" : "text-stone-600 hover:text-[#047857]"
+                      className={`text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${
+                        dark ? "text-stone-400 hover:text-stone-200" : "text-stone-500 hover:text-stone-800"
                       }`}
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${isSubmittingPhone ? "animate-spin" : ""}`} />
                       {resendCooldown > 0
-                        ? `Reenviar SMS em ${formatCooldown(resendCooldown)}`
+                        ? `Reenviar código em ${formatCooldown(resendCooldown)}`
                         : "Reenviar código por SMS"}
                     </button>
                   </div>
                 </form>
               )}
 
-              <p className={`text-[11px] text-center ${dark ? "text-stone-500" : "text-stone-400"}`}>
-                🔒 Verificação oficial por SMS. Seus dados e endereços protegidos.
-              </p>
+              {/* ETAPA 3: NOME COMPLETO (APENAS CLIENTES NOVOS) */}
+              {authStep === "name" && (
+                <form onSubmit={handleSaveNewCustomerName} className="space-y-3.5">
+                  <div>
+                    <Label 
+                      htmlFor="new-customer-name" 
+                      className={`text-xs font-semibold uppercase tracking-wider ${
+                        dark ? "text-stone-300" : "text-stone-600"
+                      }`}
+                    >
+                      Seu Nome Completo
+                    </Label>
+                    <Input
+                      id="new-customer-name"
+                      type="text"
+                      placeholder="Ex: Carlos Oliveira"
+                      value={nameInput}
+                      onChange={(e) => {
+                        setNameInput(e.target.value);
+                        if (phoneError) setPhoneError("");
+                      }}
+                      required
+                      autoFocus
+                      className={`mt-1.5 rounded-xl h-12 text-base font-medium ${
+                        dark 
+                          ? "bg-stone-950 border-stone-800 text-white placeholder:text-stone-600 focus-visible:ring-emerald-500" 
+                          : "bg-stone-50/60 border-stone-200 text-stone-900 placeholder:text-stone-400 focus-visible:ring-[#047857]"
+                      }`}
+                    />
+                  </div>
+
+                  <Button
+                    type="submit"
+                    disabled={isSubmittingPhone || nameInput.trim().length < 2}
+                    className={`w-full font-semibold h-11 rounded-xl shadow-xs flex items-center justify-center gap-2 cursor-pointer transition-all ${
+                      dark 
+                        ? "bg-emerald-600 hover:bg-emerald-500 text-white" 
+                        : "bg-[#047857] hover:bg-[#065f46] text-white"
+                    }`}
+                  >
+                    {isSubmittingPhone ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Salvando...</span>
+                      </>
+                    ) : (
+                      <span>Concluir Cadastro</span>
+                    )}
+                  </Button>
+                </form>
+              )}
             </div>
           )}
         </div>
