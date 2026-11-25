@@ -42,6 +42,11 @@ serve(async (req: Request) => {
 
       // =========================================================================
       // 0. VERIFICAÇÃO DE RATE LIMIT / INTERVALO PROGRESSIVO (PROTEÇÃO ANTI-SPAM)
+      // Isolado individualmente por telefone (cleanPhoneInput).
+      // Regras de restauração / reset:
+      // - Se o cliente validar o código com sucesso (verified=true), a penalidade zera.
+      // - Se passar 1 hora sem tentativas (janela deslizante), o tempo restaura para o nível inicial.
+      //
       // Escada de Espera:
       // 1º reenvio: 1 minuto (60s)
       // 2º reenvio: 5 minutos (300s)
@@ -50,12 +55,13 @@ serve(async (req: Request) => {
       // 5º+ reenvio: 1 hora (3600s)
       // =========================================================================
       try {
-        const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
         const { data: recentCodes } = await supabase
           .from("whatsapp_otp_codes")
-          .select("created_at")
+          .select("created_at, verified")
           .eq("phone", cleanPhoneInput)
-          .gte("created_at", twoHoursAgo)
+          .eq("verified", false)
+          .gte("created_at", oneHourAgo)
           .order("created_at", { ascending: false })
           .limit(10);
 

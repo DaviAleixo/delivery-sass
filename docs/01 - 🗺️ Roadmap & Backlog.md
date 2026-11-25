@@ -68,7 +68,7 @@
   - [x] **Infraestrutura Backend Supabase & Edge Functions (100% Pronta)**:
     - [x] Tabela `whatsapp_otp_codes` e funções RPC `request_whatsapp_otp` e `verify_whatsapp_otp` criadas.
     - [x] Edge Function `whatsapp-otp` implementada com suporte a envio Graph API v19, Comtele SMS API (prioritária com `x-api-key`) e SMS Dev como contingência.
-    - [x] Rate limit / Backoff progressivo anti-spam implementado (1 min -> 5 min -> 10 min -> 30 min -> 1 hora) com HTTP 429 e proteção de saldo.
+    - [x] Rate limit / Backoff progressivo anti-spam implementado com isolamento estrito por número (1 min -> 5 min -> 10 min -> 30 min -> 1 hora), reset automático pós-login e restauração por janela deslizante de 1 hora de inatividade.
   - [x] **Frontend Checkout & Login (100% Pronto)**:
     - [x] Serviço `whatsappOtpService.js` com suporte a OTP real por SMS e captura de rate limiting.
     - [x] Componentes de login (`WhatsAppAuthModal.jsx`, `UserProfileSheet.jsx`, `Cart.jsx`) com timer formatado, persistência em localStorage e bloqueio de cliques repetidos.

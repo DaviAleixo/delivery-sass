@@ -212,6 +212,15 @@ export default function WhatsAppAuthModal({
       });
 
       if (result.success && result.user) {
+        // Reseta o cooldown e o histórico anti-spam após validação com sucesso
+        const cleanDigits = phone.replace(/\D/g, "");
+        try {
+          localStorage.removeItem(`pedemuleke_otp_rate_${cleanDigits}`);
+        } catch {
+          // ignore
+        }
+        setResendCooldown(0);
+
         toast.success(`Bem-vindo(a), ${result.user.full_name || "Cliente"}!`);
         if (onSuccess) {
           onSuccess(result.user);
