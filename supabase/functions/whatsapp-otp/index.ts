@@ -130,7 +130,7 @@ serve(async (req: Request) => {
           const comtelePayload = {
             receivers: [fullPhone],
             message: `Seu codigo de acesso ao PedeMuleke e: ${generatedCode}. Valido por 10 minutos.`,
-            route: 1,
+            route: 17,
           };
 
           const smsRes = await fetch(comteleUrl, {
