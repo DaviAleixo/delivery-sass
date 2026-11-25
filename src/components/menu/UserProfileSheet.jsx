@@ -941,6 +941,13 @@ export default function UserProfileSheet({ dark = false, trigger, open, onOpenCh
                     <span className="text-lg sm:text-xl font-black text-white block mt-0.5 whitespace-nowrap">
                       R$ {Number(cashbackData?.balance || 0).toFixed(2).replace('.', ',')}
                     </span>
+                    {Number(cashbackData?.balance || 0) > 0 && (
+                      <span className="text-[9px] text-emerald-300/80 block mt-0.5 whitespace-nowrap">
+                        {cashbackData?.expires_at
+                          ? `Até ${new Date(cashbackData.expires_at).toLocaleDateString('pt-BR')}`
+                          : "Saldo vitalício"}
+                      </span>
+                    )}
                   </div>
                 </div>
 

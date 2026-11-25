@@ -423,29 +423,40 @@ export default function OperationsTab({
                   </div>
 
                   <div className="bg-white p-3.5 rounded-xl border border-stone-200 space-y-1.5">
-                    <Label htmlFor="cashback_validity" className="text-xs font-bold text-stone-800 block">
-                      Validade do Crédito
-                    </Label>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="cashback_validity" className="text-xs font-bold text-stone-800 block">
+                        Validade do Crédito
+                      </Label>
+                      {Number(settings.cashback_validity_days || 0) === 0 ? (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          Para sempre
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-semibold text-stone-600 bg-stone-100 px-2 py-0.5 rounded-full">
+                          {settings.cashback_validity_days} dias
+                        </span>
+                      )}
+                    </div>
                     <p className="text-[10px] text-stone-500">
-                      Cria urgência de recompra
+                      Digite 0 para cashback sem expiração (vitalício)
                     </p>
                     <div className="flex items-center gap-2 pt-1">
                       <Input
                         id="cashback_validity"
                         type="number"
-                        min="1"
-                        max="90"
+                        min="0"
+                        max="365"
                         step="1"
                         value={settings.cashback_validity_days ?? 15}
-                        onChange={(e) =>
-                          handleInputChange(
-                            "cashback_validity_days",
-                            Math.max(1, Math.min(90, Number(e.target.value) || 1))
-                          )
-                        }
+                        onChange={(e) => {
+                          const val = Math.max(0, Math.min(365, Number(e.target.value) || 0));
+                          handleInputChange("cashback_validity_days", val);
+                        }}
                         className="w-20 h-8 text-center font-mono font-bold text-xs bg-stone-50 border-stone-300 rounded-lg"
                       />
-                      <span className="text-xs font-bold text-stone-700">dias</span>
+                      <span className="text-xs font-bold text-stone-700">
+                        {Number(settings.cashback_validity_days || 0) === 0 ? "dias (Sem validade)" : "dias"}
+                      </span>
                     </div>
                   </div>
 

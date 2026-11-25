@@ -475,6 +475,7 @@
   - [x] **Exclusivo para Clientes Cadastrados**: Apenas clientes com conta verificada acumulam e abatem cashback.
   - [x] **Isca & Propaganda para Clientes Não Cadastrados**: Exibição de tag com valor de cashback nos produtos e banner chamativo de conversão no checkout incentivando o cadastro em 10 segundos.
   - [x] **Travas de Segurança Anti-Prejuízo**: Validade configurável em dias com expiração automática (`cashback_validity_days`), teto máximo de desconto por pedido (`cashback_max_discount_percentage`), e incidência restrita a produtos (nunca sobre taxa de entrega).
+    - [x] **Suporte a Cashback Vitalício (Sem Expiração)**: Lojista pode definir `0` dias em `cashback_validity_days` para crédito sem validade (`expires_at = NULL`). Banco e checkout (`get_customer_cashback_balance`, `create_public_order`, `process_order_cashback`) adaptados para permitir saldo vitalício sem expirar.
   - [x] **Painel de Configurações do Lojista**: Aba Geral em `Settings.jsx` com switch liga/desliga, % de retorno (1% a 30%), dias de validade e % máx de abatimento.
   - [x] **Checkout & Resumo Financeiro**: Abatimento com switch 1-clique em `OrderModal.jsx`, recálculo dinâmico do total e registro automático de transações.
   - [x] **Liberação de Saldo no Status "Entregue" & Regra Segura de Abatimento**:
