@@ -783,7 +783,13 @@ export default function OrderModal({
       ? (customerData.payment_method === 'dinheiro' && changeFor.trim() ? `${customerData.notes} | Troco para: ${changeFor.trim()}` : customerData.notes)
       : (customerData.payment_method === 'dinheiro' && changeFor.trim() ? `Troco para: ${changeFor.trim()}` : "");
 
-    const activeTenantId = propTenantId || deliveryRules?.id || deliveryRules?.tenant_id || getActiveTenantId() || "a0000000-0000-0000-0000-000000000001";
+    const activeTenantId = 
+      cart?.[0]?.tenant_id || 
+      propTenantId || 
+      deliveryRules?.tenant_id || 
+      deliveryRules?.id || 
+      getActiveTenantId() || 
+      "5489690b-a8dd-4f5e-bd75-de339521ac47";
     const persistentCheckoutOrderId = getOrCreateCheckoutOrderId(activeTenantId, cart);
     const isCardOrMeal = !isDineIn && ["cartao_credito", "cartao_debito", "alimentacao", "cartao"].includes(resolvedPaymentMethod);
 
@@ -802,6 +808,7 @@ export default function OrderModal({
       total_amount: isDineIn ? subtotal : finalTotal,
       items: cart.map(item => ({
         product_id: item.id,
+        tenant_id: item.tenant_id || activeTenantId,
         product_name: item.name,
         product_price: item.price,
         size_id: item.size_id || item.pizza_size_id || null,

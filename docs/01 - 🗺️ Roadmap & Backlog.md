@@ -57,6 +57,13 @@
   - [x] Ativação de domínios customizados no Cloudflare Pages com certificado SSL.
   - [x] **Blindagem da Rota de Login (`App.jsx`, `public/_redirects`)**: import direto de `AdminLoginPage` sem condicionais frágeis e guards de rota em `StoreRootRedirect` e `StoreMenuRoute` para impedir que a rota `/login` seja tratada como slug multi-tenant e redirecionada para `/login/menu`. Regra de SPA rewrite com flag `200!`.
 
+- [x] ⚡ **Blindagem de Tenant Multi-Loja & Finalização de Pedidos no Checkout (`Menu.jsx`, `OrderModal.jsx`)**:
+  - [x] **Resolução Dinâmica do Tenant no Checkout**: Eliminada a dependência de ID estático (`a0000000-0000-0000-0000-000000000001`) que causava o erro `Produto não encontrado no cardápio desta loja.` na RPC `create_public_order`. Agora o sistema prioriza o `tenant_id` dos produtos reais presentes no carrinho/cardápio antes de qualquer fallback de sessão ou localStorage.
+  - [x] **Preservação de Contexto do Carrinho**: Inclusão de `tenant_id` em cada item mapeado no carrinho dentro de `OrderModal.jsx` e passagem do tenant correto para a chave de idempotência e criação segura do pedido.
+  - [x] **Ajuste Fino de Layout do Banner & Cards de Entrega/Cashback**: Reduzido o recuo do cardápio sobre o banner (`-mt-2.5 sm:-mt-3`) e altura calibrada para visualização íntegra da imagem sem cortes, preservando cantos arredondados (`rounded-t-[24px]`).
+  - [x] **Alerta Sonoro de Novos Pedidos (`soundAlert.js`)**: Trava de concorrência (`isPlaying`) e intervalo de 2.5s entre repetições eliminando a sobreposição de áudio ("som em cima do outro"), com sequência harmônica limpa de 3 toques ordenados.
+  - [x] **Cashback Vitalício (Sem Vencimento / 0 Dias)**: Suporte completo a saldo sem expiração no banco Supabase (`v_new_expires_at := NULL`), painel administrativo com selo *"Para sempre (Sem validade / Crédito vitalício)"* e visualização no extrato do cliente como *"Saldo vitalício"*.
+
 - [x] 📱 **Autenticação & OTP Multi-Canal (SMS Dev + Comtele SMS + Fallback Meta WhatsApp - `whatsapp-otp`, `Supabase Edge Functions`)**:
   - [x] **Integração com SMS Dev API v1 (`whatsapp-otp/index.ts`)**: Suporte nativo ao gateway de SMS nacional SMS Dev (`POST https://api.smsdev.com.br/v1/send`) via secret `SMSDEV_API_KEY`, garantindo envio rápido sem burocracia por R$ 0,05 a R$ 0,07 por mensagem.
   - [x] **Integração com Comtele SMS API v2 (`whatsapp-otp/index.ts`)**: Suporte nativo ao gateway Comtele via secret `COMTELE_API_KEY`.

@@ -679,7 +679,18 @@ export default function MenuPage() {
     isSubmittingRef.current = true;
     setIsSubmitting(true);
     try {
-      const activeTenantId = tenantId || tenant?.id || localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001";
+      // Resolução inteligente do Tenant ID:
+      // 1. Tenta pegar tenant_id dos itens do pedido / carrinho / produtos carregados
+      // 2. Se não houver, tenta tenantId do contexto ou tenant?.id
+      // 3. Em seguida localStorage ou slug da rota
+      const activeTenantId = 
+        orderData?.items?.[0]?.tenant_id ||
+        cart?.[0]?.tenant_id ||
+        products?.[0]?.tenant_id ||
+        tenantId || 
+        tenant?.id || 
+        (typeof window !== "undefined" ? localStorage.getItem("current_tenant_id") : null) || 
+        "5489690b-a8dd-4f5e-bd75-de339521ac47";
       const isPixOnline = orderData.payment_method === 'pix_online';
       
       // Usa ID persistido por carrinho/sessão de checkout (ou gera fallback determinístico único)
@@ -1702,7 +1713,14 @@ export default function MenuPage() {
         minOrderValue={settings?.min_order_value || 0}
         deliveryTime={settings?.delivery_time || "40-50 min"}
         deliveryRules={settings}
-        tenantId={tenantId || tenant?.id || localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001"}
+        tenantId={
+          cart?.[0]?.tenant_id ||
+          products?.[0]?.tenant_id ||
+          tenantId ||
+          tenant?.id ||
+          (typeof window !== "undefined" ? localStorage.getItem("current_tenant_id") : null) ||
+          "5489690b-a8dd-4f5e-bd75-de339521ac47"
+        }
         initialTableNumber={urlMesa || ""}
         onSubmit={submitOrder}
         isSubmitting={isSubmitting}
@@ -1719,14 +1737,28 @@ export default function MenuPage() {
           accessToken={tenant?.payment_methods?.mp_access_token}
           tenant={tenant}
           onPaymentApproved={(paidOrder) => {
-            clearCheckoutIdempotencyKey(tenantId || tenant?.id || localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001");
+            clearCheckoutIdempotencyKey(
+              cart?.[0]?.tenant_id ||
+              products?.[0]?.tenant_id ||
+              tenantId ||
+              tenant?.id ||
+              (typeof window !== "undefined" ? localStorage.getItem("current_tenant_id") : null) ||
+              "5489690b-a8dd-4f5e-bd75-de339521ac47"
+            );
             setPixOnlineOrder(null);
             setCart([]);
             const tq = paidOrder.tracking_token ? `&token=${paidOrder.tracking_token}` : "";
             navigate(`${createPageUrl("MyOrders")}?id=${paidOrder.id}${tq}`);
           }}
           onPaymentConvertedToDelivery={(convertedOrder) => {
-            clearCheckoutIdempotencyKey(tenantId || tenant?.id || localStorage.getItem("current_tenant_id") || "a0000000-0000-0000-0000-000000000001");
+            clearCheckoutIdempotencyKey(
+              cart?.[0]?.tenant_id ||
+              products?.[0]?.tenant_id ||
+              tenantId ||
+              tenant?.id ||
+              (typeof window !== "undefined" ? localStorage.getItem("current_tenant_id") : null) ||
+              "5489690b-a8dd-4f5e-bd75-de339521ac47"
+            );
             setPixOnlineOrder(null);
             setCart([]);
             const tq = convertedOrder.tracking_token ? `&token=${convertedOrder.tracking_token}` : "";
