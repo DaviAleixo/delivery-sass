@@ -392,6 +392,8 @@ export default function PizzaBuilderModal({
 
     // Sabores estruturados para exibição fracionada e comanda térmica
     const pizzaFlavorsList = selectedFlavors.map((slot, idx) => ({
+      id: slot.product?.id || initialProduct?.id || null,
+      product_id: slot.product?.id || initialProduct?.id || null,
       name: slot.product?.name || "Sabor",
       fraction: fractions[idx] || "1/2",
       notes: "",
@@ -435,8 +437,15 @@ export default function PizzaBuilderModal({
     const cleanSizeName = selectedSize.name.replace(/\(.*?\)/g, '').trim();
     const pizzaDisplayName = `Pizza ${cleanSizeName} (${titleParts.join(' + ')})`;
 
+    const primaryPizzaProductId = 
+      selectedFlavors[0]?.product?.id || 
+      initialProduct?.id || 
+      allCategoryProducts[0]?.id || 
+      `pizza-${selectedSize.id}-${Date.now()}`;
+
     const customPizzaProduct = {
-      id: `pizza-${selectedSize.id}-${Date.now()}`,
+      id: primaryPizzaProductId,
+      builder_id: `pizza-${selectedSize.id}-${Date.now()}`,
       name: pizzaDisplayName,
       price: unitTotalPrice,
       image_url: selectedFlavors[0]?.product?.image_url || initialProduct?.image_url || "",
@@ -444,6 +453,8 @@ export default function PizzaBuilderModal({
       category: category.id,
       is_pizza: true,
       pizza_size: selectedSize,
+      pizza_size_id: selectedSize.id,
+      size_id: selectedSize.id,
       pizza_flavors: pizzaFlavorsList,
       notes: observations.trim(),
     };

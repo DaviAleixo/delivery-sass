@@ -734,7 +734,29 @@ export default function MenuPage() {
         }
       }
 
-      const stampedItems = stampOrderItemsWithSectors(orderData.items, {
+      // Sanitiza itens para garantir que pizzas customizadas apontem sempre para um product_id real do cardápio
+      const sanitizedOrderItems = (orderData.items || []).map((item) => {
+        const isPizza = item.is_pizza || (Array.isArray(item.pizza_flavors) && item.pizza_flavors.length > 0);
+        let prodId = item.product_id || item.id;
+        
+        if (isPizza) {
+          const flavorId = item.pizza_flavors?.[0]?.product_id || item.pizza_flavors?.[0]?.id;
+          const fallbackPizza = products.find(p => p.id === flavorId) || products.find(p => p.category === item.category_id || p.category_id === item.category_id);
+          prodId = flavorId || fallbackPizza?.id || prodId;
+        }
+
+        return {
+          ...item,
+          product_id: prodId,
+          pizza_flavors: Array.isArray(item.pizza_flavors) ? item.pizza_flavors.map(f => ({
+            ...f,
+            id: f.id || f.product_id || prodId,
+            product_id: f.product_id || f.id || prodId,
+          })) : [],
+        };
+      });
+
+      const stampedItems = stampOrderItemsWithSectors(sanitizedOrderItems, {
         sectors: productionSectors,
         products,
         categories,

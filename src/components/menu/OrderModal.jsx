@@ -806,20 +806,31 @@ export default function OrderModal({
       customer_address: deliveryAddress,
       delivery_fee: orderType === 'delivery' ? effectiveDeliveryFee : 0,
       total_amount: isDineIn ? subtotal : finalTotal,
-      items: cart.map(item => ({
-        product_id: item.id,
-        tenant_id: item.tenant_id || activeTenantId,
-        product_name: item.name,
-        product_price: item.price,
-        size_id: item.size_id || item.pizza_size_id || null,
-        pizza_size_id: item.pizza_size_id || item.size_id || null,
-        pizza_flavors: Array.isArray(item.pizza_flavors) ? item.pizza_flavors : [],
-        category_name: item.category_name || item.category || 'Geral',
-        quantity: item.quantity,
-        subtotal: (item.price + (item.additionals || []).reduce((s, a) => s + (a.price || 0), 0)) * item.quantity,
-        additionals: item.additionals || [],
-        notes: item.notes || "",
-      })),
+      items: cart.map(item => {
+        // Para pizzas customizadas do montador, garante que product_id aponte para um ID real de produto do catálogo
+        const resolvedProductId = (item.is_pizza || (Array.isArray(item.pizza_flavors) && item.pizza_flavors.length > 0))
+          ? (item.pizza_flavors?.[0]?.product_id || item.pizza_flavors?.[0]?.id || item.id)
+          : item.id;
+
+        return {
+          product_id: resolvedProductId,
+          tenant_id: item.tenant_id || activeTenantId,
+          product_name: item.name,
+          product_price: item.price,
+          size_id: item.size_id || item.pizza_size_id || null,
+          pizza_size_id: item.pizza_size_id || item.size_id || null,
+          pizza_flavors: Array.isArray(item.pizza_flavors) ? item.pizza_flavors.map(f => ({
+            ...f,
+            id: f.id || f.product_id || resolvedProductId,
+            product_id: f.product_id || f.id || resolvedProductId,
+          })) : [],
+          category_name: item.category_name || item.category || 'Geral',
+          quantity: item.quantity,
+          subtotal: (item.price + (item.additionals || []).reduce((s, a) => s + (a.price || 0), 0)) * item.quantity,
+          additionals: item.additionals || [],
+          notes: item.notes || "",
+        };
+      }),
       status: "pendente",
       payment_status: isDineIn ? "pending_cashier" : (customerData.payment_method === 'pix_online' ? "pending" : "pending_delivery"),
       coupon_code: !isDineIn ? appliedCoupon?.code : null,
