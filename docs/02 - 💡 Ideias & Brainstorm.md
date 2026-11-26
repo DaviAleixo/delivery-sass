@@ -2,6 +2,24 @@
 
 > **Nota Automática**: Este arquivo é o repositório de ideias e insights das nossas conversas. Conforme você ou a equipe tiverem ideias de diferenciais, melhorias de UX ou modelos de negócio, elas são salvas aqui para amadurecimento antes de irem para o [[01 - 🗺️ Roadmap & Backlog]].
 
+### 🚀 34. Auditoria de Mercado: Os 4 Recursos Críticos que Definem o Sucesso de um SaaS de Cardápio
+* **Contexto**: Análise comparativa profunda entre o PedeMuleke e os líderes consolidados de cardápio digital no Brasil (Anota AI, CardápioWeb, Goomer, Yooga, Saipos, InstaDelivery).
+* **Onde o PedeMuleke já é nível ERP Sênior (Diferenciais Prontos)**:
+  - Spooler nativo Windows em porta 9100 com corte automático e vias de produção/caixa.
+  - Fechamento de Turno/Caixa com contagem cega, suprimento, sangria e reconciliação de motoboys.
+  - Grade modular de variações (Latão, Long Neck, Açaí, Tamanhos P/M/G) sem poluição visual.
+  - PDV Balcão completo com atalhos de teclado ágeis.
+  - Automação de cobrança de mensalidades via Asaas em produção com período de testes de 7 dias.
+* **Gargalos Críticos que Geram Fricção / Churn em Restaurantes (O que falta para dominar o mercado)**:
+  1. **Atendente Virtual / Resposta Automática no WhatsApp (O motor da Anota AI)**:
+     - 80% dos clientes pedem pelo WhatsApp mandando "manda o cardápio". Se a loja precisa colar o link manualmente, o lojista sobrecarrega o atendimento. Uma resposta automática com o link do cardápio resolve o maior atrito do lojista.
+  2. **Notificação de Status do Pedido para o Cliente no WhatsApp**:
+     - O cliente fecha o cardápio web após pedir e fica ansioso. Disparos automáticos avisando "Pedido aceito pela cozinha" e "Saiu para entrega com o motoboy" eliminam 90% das mensagens de "onde está meu lanche?" no WhatsApp da loja.
+  3. **Pausa Rápida de Produtos / "Esgotado Hoje" no PDV/KDS**:
+     - No meio do rush (sexta à noite), quando um ingrediente ou bebida acaba, o operador precisa de um botão de 1-clique para marcar o item como esgotado sem ter que navegar nas telas administrativas.
+  4. **Alerta Sonoro Repetitivo / Alarme Anti-Esquecimento de Pedidos**:
+     - Em cozinhas barulhentas, um bip único pode passar batido. Um toque em repetição até o aceite do pedido evita pedidos esquecidos e atrasos operacionais graves.
+
 ---
 
 ## 💡 Ideias de Recursos e Diferenciais Competitivos
