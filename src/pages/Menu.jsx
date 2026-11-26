@@ -444,8 +444,8 @@ export default function MenuPage() {
       setBanners(bannerData || []);
       setCategories(categoryData || []);
       
-      if (!activeCategory) {
-        setActiveCategory("all");
+      if (!activeCategory && categoryData && categoryData.length > 0) {
+        setActiveCategory(categoryData[0].id);
       }
     } catch (_error) {
       console.error("Erro ao carregar dados:", _error);
@@ -583,8 +583,9 @@ export default function MenuPage() {
   };
 
   const isSearching = Boolean(searchQuery.trim());
+  const effectiveCategory = activeCategory || (categories?.[0]?.id || "");
   const filteredProducts = enrichedProducts.filter(product => {
-    const matchesCategory = isSearching || !activeCategory || activeCategory === "all" || product.category === activeCategory || product.category_id === activeCategory;
+    const matchesCategory = isSearching || !effectiveCategory || product.category === effectiveCategory || product.category_id === effectiveCategory;
     const matchesSearch = !isSearching || 
       product.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
       (product.description && product.description.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -592,30 +593,37 @@ export default function MenuPage() {
   });
 
   const displayCategories = React.useMemo(() => {
-    if (!categories || categories.length === 0) return [{ id: "all", name: "Todos" }];
-    const hasAll = categories.some(c => c.id === "all" || c.name?.toLowerCase() === "todos");
-    if (hasAll) return categories;
-    return [{ id: "all", name: "Todos" }, ...categories];
+    if (!categories || categories.length === 0) return [];
+    return categories.filter(c => c.id !== "all" && c.name?.toLowerCase() !== "todos");
   }, [categories]);
 
-  const activeCategoryObj = activeCategory === "all"
-    ? { id: "all", name: "Todos", description: "Todos os produtos disponíveis no cardápio" }
-    : categories.find(c => c.id === activeCategory);
+  const activeCategoryObj = categories.find(c => c.id === effectiveCategory) || categories?.[0];
 
-  // Agrupamento por categorias para renderização em componentes grandes (Inspirado na Foto 1)
+  // Agrupamento por categorias para renderização em componentes grandes
   const categorizedSections = React.useMemo(() => {
-    if (isSearching || (activeCategory && activeCategory !== "all")) {
+    if (isSearching) {
       return [
         {
-          id: activeCategory || "filtered",
-          name: isSearching ? `Resultados da Busca` : (activeCategoryObj?.name || "Cardápio"),
-          description: isSearching ? `${filteredProducts.length} itens encontrados` : (activeCategoryObj?.description || ""),
+          id: "search_results",
+          name: "Resultados da Busca",
+          description: `${filteredProducts.length} itens encontrados`,
           products: filteredProducts,
         }
       ];
     }
 
-    const realCategories = (categories || []).filter(c => c.id !== "all");
+    if (effectiveCategory) {
+      return [
+        {
+          id: effectiveCategory,
+          name: activeCategoryObj?.name || "Cardápio",
+          description: activeCategoryObj?.description || "",
+          products: filteredProducts,
+        }
+      ];
+    }
+
+    const realCategories = (categories || []).filter(c => c.id !== "all" && c.name?.toLowerCase() !== "todos");
     const sections = [];
     const usedProductIds = new Set();
 
@@ -654,7 +662,7 @@ export default function MenuPage() {
     }
 
     return sections;
-  }, [isSearching, activeCategory, activeCategoryObj, filteredProducts, categories, products]);
+  }, [isSearching, effectiveCategory, activeCategoryObj, filteredProducts, categories, products]);
 
   const handleCartToggle = () => {
     setIsCartVisible(!isCartVisible);
@@ -1399,7 +1407,7 @@ export default function MenuPage() {
           >
             <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide py-1">
               {displayCategories.map((category) => {
-                const isActive = activeCategory === category.id;
+                const isActive = effectiveCategory === category.id;
                 return (
                   <button
                     key={category.id}

@@ -185,6 +185,140 @@ export async function fetchClientsSummary(tenantId) {
   }));
 }
 
+export async function fetchClientsSummaryPaged(tenantId, {
+  page = 1,
+  pageSize = 25,
+  search = "",
+  segment = "all",
+  sortBy = "last_order_at",
+  sortDir = "desc",
+} = {}) {
+  assertSupabaseTenant(tenantId);
+
+  try {
+    const { data, error } = await supabase.rpc("get_clients_summary_paged", {
+      p_tenant_id: tenantId,
+      p_page: page,
+      p_page_size: pageSize,
+      p_search: search && search.trim() !== "" ? search.trim() : null,
+      p_segment: segment || "all",
+      p_sort_by: sortBy || "last_order_at",
+      p_sort_dir: sortDir || "desc",
+    });
+
+    if (error) throw error;
+
+    if (data && typeof data === "object") {
+      const items = (Array.isArray(data.items) ? data.items : []).map((c) => ({
+        id: c.id || c.customer_phone,
+        full_name: c.customer_name || "Cliente",
+        email: c.customer_email || "",
+        phone: c.customer_phone || "",
+        lastAddress: c.last_address || "",
+        totalOrders: Number(c.total_orders || 0),
+        totalSpent: Number(c.total_spent || 0),
+        firstOrderDate: c.first_order_at ? new Date(c.first_order_at) : null,
+        lastOrderDate: c.last_order_at ? new Date(c.last_order_at) : null,
+        cashbackBalance: Number(c.cashback_balance || 0),
+        cashbackExpiresAt: c.cashback_expires_at ? new Date(c.cashback_expires_at) : null,
+        crmNotes: c.crm_notes || "",
+        lastOrderType: c.last_order_type || "",
+        lastPaymentMethod: c.last_payment_method || "",
+        isVip: Boolean(c.is_vip),
+        isRecurring: Boolean(c.is_recurring),
+        isAtRisk: Boolean(c.is_at_risk),
+        isNew: Boolean(c.is_new),
+      }));
+
+      return {
+        page: Number(data.page || 1),
+        pageSize: Number(data.page_size || pageSize),
+        totalCount: Number(data.total_count || 0),
+        totalPages: Number(data.total_pages || 1),
+        vipThreshold: Number(data.vip_threshold || 150),
+        metrics: {
+          totalClients: Number(data.metrics?.total_clients || 0),
+          totalOrders: Number(data.metrics?.total_orders || 0),
+          totalRevenue: Number(data.metrics?.total_spent || 0),
+          vipCount: Number(data.metrics?.vip_count || 0),
+          recurringCount: Number(data.metrics?.recurring_count || 0),
+          atRiskCount: Number(data.metrics?.at_risk_count || 0),
+          newCount: Number(data.metrics?.new_count || 0),
+          active30dCount: Number(data.metrics?.active_30d_count || 0),
+        },
+        items,
+      };
+    }
+  } catch (rpcErr) {
+    console.warn("[clientsService] Fallback para get_clients_summary:", rpcErr);
+  }
+
+  // Fallback offline / unmigrated RPC
+  const all = await fetchClientsSummary(tenantId);
+  const vipSpentThreshold = computeVipSpentThreshold(all);
+  const enriched = all.map((c) => ({
+    ...c,
+    segment: classifyClientSegment(c, vipSpentThreshold),
+  }));
+
+  const q = (search || "").toLowerCase().trim();
+  const qDigits = cleanPhoneDigits(q);
+  const filtered = enriched.filter((client) => {
+    if (segment === "vip" && !client.segment.isVip) return false;
+    if (segment === "recurring" && !client.segment.isRecurring) return false;
+    if (segment === "at_risk" && !client.segment.isAtRisk) return false;
+    if (segment === "new" && !client.segment.isNew) return false;
+    if (!q) return true;
+    const nameMatch = (client.full_name || "").toLowerCase().includes(q);
+    const phoneDigits = cleanPhoneDigits(client.phone);
+    const phoneMatch =
+      (client.phone || "").includes(q) ||
+      (qDigits.length > 0 && phoneDigits.includes(qDigits));
+    return nameMatch || phoneMatch;
+  });
+
+  const dir = sortDir === "asc" ? 1 : -1;
+  const sorted = [...filtered].sort((a, b) => {
+    if (sortBy === "total_orders" || sortBy === "totalOrders") {
+      return (a.totalOrders - b.totalOrders) * dir;
+    }
+    if (sortBy === "total_spent" || sortBy === "totalSpent") {
+      return (a.totalSpent - b.totalSpent) * dir;
+    }
+    const timeA = a.lastOrderDate ? a.lastOrderDate.getTime() : 0;
+    const timeB = b.lastOrderDate ? b.lastOrderDate.getTime() : 0;
+    return (timeA - timeB) * dir;
+  });
+
+  const totalCount = sorted.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const sliceStart = (page - 1) * pageSize;
+  const items = sorted.slice(sliceStart, sliceStart + pageSize);
+
+  const totalClients = enriched.length;
+  const totalOrders = enriched.reduce((sum, c) => sum + c.totalOrders, 0);
+  const totalRevenue = enriched.reduce((sum, c) => sum + c.totalSpent, 0);
+
+  return {
+    page,
+    pageSize,
+    totalCount,
+    totalPages,
+    vipThreshold: vipSpentThreshold,
+    metrics: {
+      totalClients,
+      totalOrders,
+      totalRevenue,
+      vipCount: enriched.filter((c) => c.segment.isVip).length,
+      recurringCount: enriched.filter((c) => c.segment.isRecurring).length,
+      atRiskCount: enriched.filter((c) => c.segment.isAtRisk).length,
+      newCount: enriched.filter((c) => c.segment.isNew).length,
+      active30dCount: enriched.filter((c) => c.totalOrders > 0 && !c.segment.isAtRisk).length,
+    },
+    items,
+  };
+}
+
 export async function fetchClientDetail(tenantId, phone) {
   assertSupabaseTenant(tenantId);
   const { data, error } = await supabase.rpc("get_client_crm_detail", {

@@ -87,6 +87,11 @@ export default function CashManagement() {
   const [pastClosings, setPastClosings] = useState([]);
   const [historyPeriodFilter, setHistoryPeriodFilter] = useState("all");
   const [historyOperatorFilter, setHistoryOperatorFilter] = useState("all");
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyPageSize] = useState(15);
+  const [pastClosingsLimit, setPastClosingsLimit] = useState(50);
+  const [isLoadingMoreClosings, setIsLoadingMoreClosings] = useState(false);
+  const [hasMoreBackendClosings, setHasMoreBackendClosings] = useState(true);
   const [tenantBlindClosing, setTenantBlindClosing] = useState(false);
 
   const activeTenantId = useMemo(() => {
@@ -438,6 +443,39 @@ export default function CashManagement() {
       return op === historyOperatorFilter;
     });
   }, [periodFilteredPastClosings, historyOperatorFilter]);
+
+  const historyTotalPages = Math.max(1, Math.ceil(filteredPastClosings.length / historyPageSize));
+  const pagedPastClosings = useMemo(() => {
+    const start = (historyPage - 1) * historyPageSize;
+    return filteredPastClosings.slice(start, start + historyPageSize);
+  }, [filteredPastClosings, historyPage, historyPageSize]);
+
+  const handleHistoryPeriodChange = (val) => {
+    setHistoryPeriodFilter(val);
+    setHistoryPage(1);
+  };
+
+  const handleHistoryOperatorChange = (val) => {
+    setHistoryOperatorFilter(val);
+    setHistoryPage(1);
+  };
+
+  const handleLoadMoreClosings = async () => {
+    setIsLoadingMoreClosings(true);
+    try {
+      const nextLimit = pastClosingsLimit + 50;
+      const more = await ShiftClosing.list("-created_at", nextLimit);
+      setPastClosings(more || []);
+      setPastClosingsLimit(nextLimit);
+      if (!more || more.length < nextLimit) {
+        setHasMoreBackendClosings(false);
+      }
+    } catch (err) {
+      console.warn("Erro ao carregar mais fechamentos:", err);
+    } finally {
+      setIsLoadingMoreClosings(false);
+    }
+  };
 
   const formatHistoryTurnLabel = (c) => {
     if (c.opened_at && c.closed_at) {
@@ -1892,7 +1930,7 @@ export default function CashManagement() {
                 <button
                   key={opt.id}
                   type="button"
-                  onClick={() => setHistoryPeriodFilter(opt.id)}
+                  onClick={() => handleHistoryPeriodChange(opt.id)}
                   className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors cursor-pointer ${
                     historyPeriodFilter === opt.id
                       ? "bg-stone-900 text-white"
@@ -1909,7 +1947,7 @@ export default function CashManagement() {
                 <span className="text-[11px] font-semibold text-stone-500">Operador:</span>
                 <select
                   value={historyOperatorFilter}
-                  onChange={(e) => setHistoryOperatorFilter(e.target.value)}
+                  onChange={(e) => handleHistoryOperatorChange(e.target.value)}
                   className="h-7.5 rounded-md border border-stone-200 bg-stone-50 px-2.5 text-xs font-medium text-stone-800 focus:outline-none focus:ring-2 focus:ring-stone-300 cursor-pointer"
                 >
                   <option value="all">Todos</option>
@@ -2008,7 +2046,7 @@ export default function CashManagement() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-stone-100">
-                      {filteredPastClosings.map((c) => {
+                      {pagedPastClosings.map((c) => {
                         const expectedVal = Number(
                           c.cash_drawer?.expectedCashInDrawer ??
                             c.cash_drawer?.expectedInDrawer ??
@@ -2155,6 +2193,64 @@ export default function CashManagement() {
                       })}
                     </tbody>
                   </table>
+                </div>
+              )}
+
+              {filteredPastClosings.length > 0 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 border-t border-stone-200/80 bg-stone-50/50">
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs text-stone-500 font-medium">
+                      Mostrando{" "}
+                      <strong className="text-stone-800">
+                        {(historyPage - 1) * historyPageSize + 1}
+                      </strong>{" "}
+                      a{" "}
+                      <strong className="text-stone-800">
+                        {Math.min(historyPage * historyPageSize, filteredPastClosings.length)}
+                      </strong>{" "}
+                      de <strong className="text-stone-800">{filteredPastClosings.length}</strong> fechamentos carregados
+                    </p>
+                    {hasMoreBackendClosings && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={isLoadingMoreClosings}
+                        onClick={handleLoadMoreClosings}
+                        className="h-7 px-2 text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 rounded cursor-pointer"
+                      >
+                        {isLoadingMoreClosings ? "Carregando..." : "+ Carregar mais do banco"}
+                      </Button>
+                    )}
+                  </div>
+
+                  {historyTotalPages > 1 && (
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={historyPage <= 1}
+                        onClick={() => setHistoryPage((p) => Math.max(1, p - 1))}
+                        className="h-8 px-3 text-xs font-semibold rounded-lg border-stone-300 text-stone-700 bg-white hover:bg-stone-100 disabled:opacity-40"
+                      >
+                        Anterior
+                      </Button>
+                      <span className="text-xs font-medium text-stone-600 px-2 font-mono">
+                        {historyPage} / {historyTotalPages}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={historyPage >= historyTotalPages}
+                        onClick={() => setHistoryPage((p) => Math.min(historyTotalPages, p + 1))}
+                        className="h-8 px-3 text-xs font-semibold rounded-lg border-stone-300 text-stone-700 bg-white hover:bg-stone-100 disabled:opacity-40"
+                      >
+                        Próxima
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>

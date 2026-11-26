@@ -34,6 +34,7 @@ import {
   cleanPhoneDigits,
   computeVipSpentThreshold,
   fetchClientsSummary,
+  fetchClientsSummaryPaged,
   formatMoneyBRL,
   formatPhoneBR,
 } from "@/services/clientsService";
@@ -85,24 +86,70 @@ export default function ClientsPage() {
   const [tenantId, setTenantId] = useState(null);
   const [clients, setClients] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isFetchingPage, setIsFetchingPage] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [segmentFilter, setSegmentFilter] = useState("all");
   const [sortBy, setSortBy] = useState("lastOrderDate");
   const [sortDir, setSortDir] = useState("desc");
   const [selectedClient, setSelectedClient] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const loadData = useCallback(async () => {
-    setIsLoading(true);
+  // Paginação no Backend
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [vipThreshold, setVipThreshold] = useState(150);
+  const [rawMetrics, setRawMetrics] = useState({
+    totalClients: 0,
+    totalOrders: 0,
+    totalRevenue: 0,
+    vipCount: 0,
+    recurringCount: 0,
+    atRiskCount: 0,
+    newCount: 0,
+    active30dCount: 0,
+  });
+
+  // Debounce do campo de busca para evitar requisições a cada tecla
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [searchTerm]);
+
+  const loadData = useCallback(async (isInitial = false) => {
+    if (isInitial) setIsLoading(true);
+    else setIsFetchingPage(true);
+
     try {
       const effectiveId = await resolveActiveTenantId();
       setTenantId(effectiveId);
 
       if (effectiveId && isSupabaseConfigured() && supabase) {
-        const list = await fetchClientsSummary(effectiveId);
-        setClients(list);
+        const result = await fetchClientsSummaryPaged(effectiveId, {
+          page,
+          pageSize,
+          search: debouncedSearch,
+          segment: segmentFilter,
+          sortBy,
+          sortDir,
+        });
+
+        setClients(result.items || []);
+        setTotalCount(result.totalCount || 0);
+        setTotalPages(result.totalPages || 1);
+        setVipThreshold(result.vipThreshold || 150);
+        if (result.metrics) {
+          setRawMetrics(result.metrics);
+        }
       } else {
         setClients([]);
+        setTotalCount(0);
+        setTotalPages(1);
       }
     } catch (err) {
       console.error("Erro ao carregar clientes:", err);
@@ -110,54 +157,33 @@ export default function ClientsPage() {
       setClients([]);
     } finally {
       setIsLoading(false);
+      setIsFetchingPage(false);
     }
-  }, []);
+  }, [page, pageSize, debouncedSearch, segmentFilter, sortBy, sortDir]);
 
   useEffect(() => {
-    loadData();
+    loadData(clients.length === 0);
   }, [loadData]);
-
-  const vipSpentThreshold = useMemo(
-    () => computeVipSpentThreshold(clients),
-    [clients]
-  );
 
   const enrichedClients = useMemo(
     () =>
       clients.map((client) => ({
         ...client,
-        segment: classifyClientSegment(client, vipSpentThreshold),
+        segment: classifyClientSegment(client, vipThreshold),
       })),
-    [clients, vipSpentThreshold]
+    [clients, vipThreshold]
   );
 
   const metrics = useMemo(() => {
-    const totalClients = enrichedClients.length;
-    const totalOrders = enrichedClients.reduce(
-      (sum, c) => sum + c.totalOrders,
-      0
-    );
-    const totalRevenue = enrichedClients.reduce(
-      (sum, c) => sum + c.totalSpent,
-      0
-    );
+    const totalClients = rawMetrics.totalClients;
+    const totalOrders = rawMetrics.totalOrders;
+    const totalRevenue = rawMetrics.totalRevenue;
     const avgLtv = totalClients > 0 ? totalRevenue / totalClients : 0;
     const avgOrderTicket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
-    const recurringCount = enrichedClients.filter(
-      (c) => c.segment.isRecurring
-    ).length;
+    const recurringCount = rawMetrics.recurringCount;
     const recurringPct =
       totalClients > 0 ? Math.round((recurringCount / totalClients) * 100) : 0;
-
-    const vipCount = enrichedClients.filter((c) => c.segment.isVip).length;
-    const atRiskCount = enrichedClients.filter(
-      (c) => c.segment.isAtRisk
-    ).length;
-    const active30dCount = enrichedClients.filter(
-      (c) => c.totalOrders > 0 && !c.segment.isAtRisk
-    ).length;
-    const newCount = enrichedClients.filter((c) => c.segment.isNew).length;
 
     return {
       totalClients,
@@ -165,48 +191,20 @@ export default function ClientsPage() {
       avgOrderTicket,
       recurringCount,
       recurringPct,
-      vipCount,
-      atRiskCount,
-      active30dCount,
-      newCount,
+      vipCount: rawMetrics.vipCount,
+      atRiskCount: rawMetrics.atRiskCount,
+      active30dCount: rawMetrics.active30dCount,
+      newCount: rawMetrics.newCount,
     };
-  }, [enrichedClients]);
+  }, [rawMetrics]);
 
-  const filteredAndSortedClients = useMemo(() => {
-    const q = searchTerm.toLowerCase().trim();
-    const qDigits = cleanPhoneDigits(q);
-
-    const filtered = enrichedClients.filter((client) => {
-      if (segmentFilter === "vip" && !client.segment.isVip) return false;
-      if (segmentFilter === "recurring" && !client.segment.isRecurring)
-        return false;
-      if (segmentFilter === "at_risk" && !client.segment.isAtRisk) return false;
-      if (segmentFilter === "new" && !client.segment.isNew) return false;
-
-      if (!q) return true;
-      const nameMatch = (client.full_name || "").toLowerCase().includes(q);
-      const phoneDigits = cleanPhoneDigits(client.phone);
-      const phoneMatch =
-        (client.phone || "").includes(q) ||
-        (qDigits.length > 0 && phoneDigits.includes(qDigits));
-      return nameMatch || phoneMatch;
-    });
-
-    const dir = sortDir === "asc" ? 1 : -1;
-    return [...filtered].sort((a, b) => {
-      if (sortBy === "totalOrders") {
-        return (a.totalOrders - b.totalOrders) * dir;
-      }
-      if (sortBy === "totalSpent") {
-        return (a.totalSpent - b.totalSpent) * dir;
-      }
-      const timeA = a.lastOrderDate ? a.lastOrderDate.getTime() : 0;
-      const timeB = b.lastOrderDate ? b.lastOrderDate.getTime() : 0;
-      return (timeA - timeB) * dir;
-    });
-  }, [enrichedClients, searchTerm, segmentFilter, sortBy, sortDir]);
+  const handleSegmentChange = (newSegment) => {
+    setSegmentFilter(newSegment);
+    setPage(1);
+  };
 
   const toggleSort = (field) => {
+    setPage(1);
     if (sortBy === field) {
       setSortDir((prev) => (prev === "desc" ? "asc" : "desc"));
     } else {
@@ -327,7 +325,7 @@ export default function ClientsPage() {
             {metrics.atRiskCount > 0 && (
               <button
                 type="button"
-                onClick={() => setSegmentFilter("at_risk")}
+                onClick={() => handleSegmentChange("at_risk")}
                 className="ml-auto text-[11px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full hover:bg-rose-100 transition-colors cursor-pointer"
               >
                 {metrics.atRiskCount} sumidos
@@ -392,7 +390,7 @@ export default function ClientsPage() {
                 <button
                   key={chip.key}
                   type="button"
-                  onClick={() => setSegmentFilter(chip.key)}
+                  onClick={() => handleSegmentChange(chip.key)}
                   className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors cursor-pointer flex items-center gap-1.5 ${
                     active
                       ? "bg-stone-900 text-white border-stone-900"
@@ -444,17 +442,19 @@ export default function ClientsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                {filteredAndSortedClients.length === 0 ? (
+                {enrichedClients.length === 0 ? (
                   <tr>
                     <td
                       colSpan={6}
                       className="text-center py-12 text-stone-400 text-xs"
                     >
-                      Nenhum cliente encontrado com os critérios selecionados.
+                      {isFetchingPage
+                        ? "Carregando clientes..."
+                        : "Nenhum cliente encontrado com os critérios selecionados."}
                     </td>
                   </tr>
                 ) : (
-                  filteredAndSortedClients.map((client) => {
+                  enrichedClients.map((client) => {
                     const { recency, primaryBadge } = client.segment;
                     const templates = buildWhatsAppTemplates(client);
 
@@ -616,6 +616,52 @@ export default function ClientsPage() {
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* Paginação do Servidor */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 border-t border-stone-200/80 bg-stone-50/50">
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-stone-500 font-medium">
+                Mostrando{" "}
+                <strong className="text-stone-800">
+                  {totalCount === 0 ? 0 : (page - 1) * pageSize + 1}
+                </strong>{" "}
+                a{" "}
+                <strong className="text-stone-800">
+                  {Math.min(page * pageSize, totalCount)}
+                </strong>{" "}
+                de <strong className="text-stone-800">{totalCount}</strong> clientes
+              </p>
+              {isFetchingPage && (
+                <RefreshCw className="w-3.5 h-3.5 text-stone-400 animate-spin" />
+              )}
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={page <= 1 || isFetchingPage}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="h-8 px-3 text-xs font-semibold rounded-lg border-stone-300 text-stone-700 bg-white hover:bg-stone-100 disabled:opacity-40"
+              >
+                Anterior
+              </Button>
+              <span className="text-xs font-medium text-stone-600 px-2 font-mono">
+                {page} / {totalPages || 1}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={page >= totalPages || isFetchingPage}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                className="h-8 px-3 text-xs font-semibold rounded-lg border-stone-300 text-stone-700 bg-white hover:bg-stone-100 disabled:opacity-40"
+              >
+                Próxima
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

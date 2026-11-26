@@ -14,8 +14,13 @@ export default function PDVProductGrid({
   onOpenMobileCart,
 }) {
   const [search, setSearch] = useState("");
-  const [activeCategory, setActiveCategory] = useState("all");
+  const [activeCategory, setActiveCategory] = useState(() => categories?.[0]?.id || "");
   const [flashItems, setFlashItems] = useState(new Set());
+
+  // Garante que se activeCategory estiver vazia ou for 'all', seleciona a primeira categoria real
+  const effectiveCategory = activeCategory && activeCategory !== "all"
+    ? activeCategory 
+    : (categories?.[0]?.id || "");
 
   const filtered = products.filter((p) => {
     const q = search.toLowerCase().trim();
@@ -24,10 +29,10 @@ export default function PDVProductGrid({
       (p.name || "").toLowerCase().includes(q);
 
     const matchCat =
-      activeCategory === "all" ||
-      p.category === activeCategory ||
-      p.category_id === activeCategory ||
-      categories.find((c) => c.id === activeCategory)?.name === p.category;
+      !effectiveCategory ||
+      p.category === effectiveCategory ||
+      p.category_id === effectiveCategory ||
+      categories.find((c) => c.id === effectiveCategory)?.name === p.category;
 
     return matchSearch && matchCat;
   });
@@ -84,24 +89,14 @@ export default function PDVProductGrid({
           </div>
         </div>
 
-        {/* Filtro por categoria */}
+        {/* Filtro por categoria (sem 'Todos') */}
         <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-          <button
-            onClick={() => setActiveCategory("all")}
-            className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer shrink-0 ${
-              activeCategory === "all"
-                ? "bg-[#047857] text-white shadow-xs"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-            }`}
-          >
-            Todos
-          </button>
           {categories.map((cat) => (
             <button
               key={cat.id}
               onClick={() => setActiveCategory(cat.id)}
               className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer shrink-0 ${
-                activeCategory === cat.id
+                effectiveCategory === cat.id
                   ? "bg-[#047857] text-white shadow-xs"
                   : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}

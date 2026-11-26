@@ -6,6 +6,12 @@
 
 ## 🚀 Em Andamento / Foco Atual
 
+- [x] ⚡ **Paginação no Backend (CRM Clientes & Fechamento de Caixa) e Otimização do Cardápio/PDV**:
+  - [x] **Remoção da Categoria "Todos" no Cardápio & PDV (`Menu.jsx`, `PDVProductGrid.jsx`)**: Eliminado o botão sintético "Todos" da barra de categorias tanto do cardápio público quanto da grade do PDV Balcão; a interface agora inicializa selecionada diretamente na primeira categoria real cadastrada pelo restaurante, simplificando a navegação.
+  - [x] **Paginação no Servidor para o Mini-CRM de Clientes (`Clients.jsx`, `clientsService.js`, `get_clients_summary_paged`)**: Implementada a RPC PostgreSQL `get_clients_summary_paged` com paginação em fatias de 25 clientes, busca por nome/telefone/email e filtro por segmentos (VIP, Recorrente, Sumido, Novo), calculando as métricas globais e o percentil VIP no banco de dados e eliminando o consumo excessivo de memória em bases volumosas.
+  - [x] **Paginação do Histórico de Fechamentos de Caixa (`CashManagement.jsx`)**: Implementada paginação (15 turnos por página) e botão dinâmico de carregamento sob demanda (`+ Carregar mais do banco`) no histórico e auditoria de fechamentos de turno (Aba 3), evitando travamento em lojas com centenas de turnos arquivados.
+  - [x] **Preservação de Turno Ativo no Kanban de Pedidos (`Orders.jsx`)**: Mantido o escopo focado do turno do dia em `Orders.jsx` conforme aprovado pelo lojista, sem cortes arbitrários de pedidos em andamento.
+
 - [x] 🧹 **Depreciação & Remoção Completa do Template Legado Vrumm (`src/custom-menus/vrumm/`, `registry.js`, `Menu.jsx`)**:
   - [x] **Exclusão Definitiva dos Arquivos Legados**: Removida integralmente a pasta `src/custom-menus/vrumm/` (`VrummMenu.jsx`, `VrummCart.jsx`, `VrummPopularProductsRow.jsx`, `VrummProductCard.jsx`, `VrummProductDetailModal.jsx`, `VrummRecentOrdersRow.jsx`), eliminando duplicidade de código, dependências mortas e reduzindo 60 kB do bundle final do app.
   - [x] **Unificação do Registro de Cardápios (`registry.js`, `Menu.jsx`)**: Removida a entrada `vrumm` do catálogo de templates e removido o override hardcoded de slug em `Menu.jsx`; agora todas as lojas e rotas utilizam exclusivamente a arquitetura oficial, robusta e modular do cardápio padrão (`Menu.jsx`).
