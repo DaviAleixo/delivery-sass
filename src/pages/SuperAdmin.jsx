@@ -1028,7 +1028,7 @@ export default function SuperAdminPage() {
                 <tr>
                   <th className="py-3.5 px-6">Restaurante</th>
                   <th className="py-3.5 px-4">Cobrança & Vencimento</th>
-                  <th className="py-3.5 px-4 text-center">Pedidos no Mês</th>
+                  <th className="py-3.5 px-4 text-center">Pedidos no Ciclo</th>
                   <th className="py-3.5 px-4 text-center">Pedidos Totais</th>
                   <th className="py-3.5 px-4">Link Público</th>
                   <th className="py-3.5 px-6 text-right">Ações</th>
@@ -1170,7 +1170,7 @@ export default function SuperAdminPage() {
                             <span className="font-mono font-black text-stone-900 text-base">
                               {t.month_orders || 0}
                             </span>
-                            <span className="text-[10px] text-stone-400 font-medium">este mês</span>
+                            <span className="text-[10px] text-stone-400 font-medium">ciclo atual</span>
                           </span>
                         </td>
 

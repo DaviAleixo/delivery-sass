@@ -14,7 +14,7 @@
   - [x] **Refatoração da Tabela de Restaurantes do SuperAdmin (`SuperAdmin.jsx`)**:
     - [x] Remoção das colunas obsoletas "Plano" e "Status da Loja".
     - [x] Inclusão da coluna **Cobrança & Vencimento** com status (Pendente, Vencida, Em dia ou Isento), valor da mensalidade e data de vencimento.
-    - [x] Inclusão das colunas analíticas **Pedidos no Mês** (total no mês corrente) e **Pedidos Totais** (histórico consolidado).
+    - [x] Inclusão das colunas analíticas **Pedidos no Ciclo** (contagem precisa baseada no ciclo mensal da fatura de cada restaurante) e **Pedidos Totais** (histórico consolidado).
     - [x] Destaque visual vermelho integral (`bg-rose-50/70`, borda esquerda vermelha, texto em destaque e badge `⛔ Pausada`) para lojas inativas/pausadas.
   - [x] **Fallback e Resiliência em `asaasService.js`**: Roteamento prioritário para o endpoint de produção com fallback seguro e remoção de endpoints obsoletos de sandbox.
   - [x] **Correções Críticas de UI & Acesso no SuperAdmin (`SuperAdmin.jsx`, `AdminLogin.jsx`, `SubscriptionTab.jsx`)**:
