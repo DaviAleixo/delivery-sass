@@ -6,6 +6,13 @@
 
 ## 🚀 Em Andamento / Foco Atual
 
+- [x] 🔒 **Blindagem Estrita de Rotas & Isolamento Multi-Tenant Anti-Invasão (`Layout.jsx`, `storage.js`, `TenantContext.jsx`, `App.jsx`)**:
+  - [x] **Guarda de Rota Centralizada Anti-Cross-Tenant (`Layout.jsx`)**: Bloqueio ativo no layout administrativo. Se um administrador ou colaborador autenticado da Loja A alterar manualmente a URL para a Loja B (ex: `/coldbeer/dashboard`, `/coldbeer/orders`, `/coldbeer/settings`, `/coldbeer/pdv`), o sistema detecta a divergência entre o slug da rota e o `user.tenant_slug` cadastrado, bloqueia a renderização, dispara toast de _"Acesso Não Autorizado"_ e redireciona imediatamente para o painel da sua própria loja (`/${user.tenant_slug}/dashboard`).
+  - [x] **Bloqueio de Sobrescrita de Configurações (`loadSettings` em `Layout.jsx`)**: Impede que a troca manual de URL no navegador sobrescreva `current_tenant_slug` ou `current_tenant_id` no `localStorage` com credenciais ou identidades da loja vizinha.
+  - [x] **Defesa em Profundidade na Camada de Dados (`storage.js` > `getActiveTenantId`)**: Para qualquer chamada administrativa interna (`Order.list()`, `Product.list()`, `CashSession`, `Financial`, etc.), se o usuário for operador/admin de restaurante (não `super_admin`), `getActiveTenantId()` trava compulsoriamente no `admin_user.tenant_id` oficial dele, impedindo qualquer injeção de parâmetros via rota ou consulta forçada de dados alheios.
+  - [x] **Proteção de Redirecionamento de Rotas Soltas (`App.jsx` > `SlugRedirect`)**: Ao digitar rotas soltas sem slug (ex: `/dashboard`, `/orders`), o sistema prioriza compulsoriamente o `tenant_slug` do lojista logado.
+  - [x] **Preservação de Acesso SuperAdmin & Cardápio Público**: O SuperAdmin (Davi) mantém privilégios irrestritos de auditoria e suporte global em qualquer loja, e os cardápios públicos (`/:slug/menu`, `/:slug/myorders`) continuam acessíveis a clientes de qualquer estabelecimento.
+
 - [x] 💳 **Migração e Homologação Asaas em Produção & Estabilização do SuperAdmin**:
   - [x] **Deploy de Edge Functions em Produção (`jqwtnzdsaivbjudvjhld`)**: Realizado o deploy com sucesso de todas as 5 Edge Functions essenciais (`asaas`, `mercadopago`, `whatsapp-otp`, `admin-login`, `r2-upload`) no Supabase oficial de produção com token CLI de organização.
   - [x] **Validação da API Asaas de Produção & Webhook Ativo**: Chave oficial `$aact_prod_...` testada e validada contra `https://api.asaas.com/v3/customers` com status 200. Webhook configurado e testado com token de segurança `whsec_...` garantindo bloqueio 401 para requisições inválidas e 200 para eventos oficiais.

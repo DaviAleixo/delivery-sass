@@ -91,11 +91,27 @@ export function TenantProvider({ children }) {
 
         if (!error && data) {
           setTenant(data);
-          localStorage.setItem("current_tenant_id", data.id);
-          localStorage.setItem("current_tenant_slug", data.slug);
-          localStorage.setItem("current_tenant_name", data.name);
-          localStorage.setItem(`tenant_id_by_slug_${data.slug}`, data.id);
-          localStorage.setItem(`tenant_name_by_slug_${data.slug}`, data.name);
+
+          // 🔒 Se um operador/admin de restaurante (não super_admin) estiver logado,
+          // não sobrescreve os identificadores oficiais do restaurante dele no localStorage caso acesse outra URL
+          const rawUser = localStorage.getItem("admin_user");
+          let isForeignStoreForAdmin = false;
+          if (rawUser) {
+            try {
+              const parsed = JSON.parse(rawUser);
+              if (parsed?.tenant_slug && parsed?.role !== "super_admin" && parsed.tenant_slug.toLowerCase() !== data.slug.toLowerCase()) {
+                isForeignStoreForAdmin = true;
+              }
+            } catch {}
+          }
+
+          if (!isForeignStoreForAdmin) {
+            localStorage.setItem("current_tenant_id", data.id);
+            localStorage.setItem("current_tenant_slug", data.slug);
+            localStorage.setItem("current_tenant_name", data.name);
+            localStorage.setItem(`tenant_id_by_slug_${data.slug}`, data.id);
+            localStorage.setItem(`tenant_name_by_slug_${data.slug}`, data.name);
+          }
 
           // Injeta a cor primária dinâmica da marca no CSS
           if (data.theme_config?.primary_color) {

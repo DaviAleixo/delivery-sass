@@ -71,7 +71,19 @@ const LoginRedirect = () => {
 
 // Redireciona rotas soltas para a rota da loja ativa com prefixo /:slug
 const SlugRedirect = ({ targetPage = "menu" }) => {
-  const currentSlug = (typeof window !== "undefined" ? localStorage.getItem("current_tenant_slug") : null) || "vrumm";
+  let currentSlug = null;
+  const rawUser = typeof window !== "undefined" ? localStorage.getItem("admin_user") : null;
+  if (rawUser) {
+    try {
+      const parsed = JSON.parse(rawUser);
+      if (parsed?.tenant_slug && parsed?.role !== "super_admin") {
+        currentSlug = parsed.tenant_slug;
+      }
+    } catch {}
+  }
+  if (!currentSlug) {
+    currentSlug = (typeof window !== "undefined" ? localStorage.getItem("current_tenant_slug") : null) || "vrumm";
+  }
   const target = targetPage ? `/${currentSlug}/${targetPage}` : `/${currentSlug}/menu`;
   return <Navigate to={target} replace />;
 };

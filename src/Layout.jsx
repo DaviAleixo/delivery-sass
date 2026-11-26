@@ -190,8 +190,28 @@ export default function Layout({ children, currentPageName }) {
   React.useEffect(() => {
     if (!isPublicPage && !isAdminAuthenticated && !isLoadingAuth && !isCheckingAuth) {
       navigate(createPageUrl("AdminLogin"), { replace: true });
+      return;
     }
-  }, [isPublicPage, isAdminAuthenticated, isLoadingAuth, isCheckingAuth, navigate]);
+
+    // 🔒 Blindagem Cross-Tenant Estrita:
+    // Impede que um operador/administrador da Loja A acesse o painel administrativo da Loja B
+    if (!isPublicPage && isAdminAuthenticated && user && !isLoadingAuth) {
+      const isSuperAdmin = user.role === "super_admin";
+      if (!isSuperAdmin && routeStoreSlug && user.tenant_slug) {
+        const cleanRouteSlug = routeStoreSlug.toLowerCase();
+        const cleanUserSlug = user.tenant_slug.toLowerCase();
+        if (cleanRouteSlug !== cleanUserSlug) {
+          toast({
+            title: "Acesso Não Autorizado",
+            description: `Você não possui permissão para acessar o painel de "${routeStoreSlug}".`,
+            variant: "destructive",
+          });
+          navigate(`/${cleanUserSlug}/dashboard`, { replace: true });
+          return;
+        }
+      }
+    }
+  }, [isPublicPage, isAdminAuthenticated, isLoadingAuth, isCheckingAuth, user, routeStoreSlug, navigate, toast]);
 
   // Alerta Global de Novos Pedidos para TODAS as abas do Painel Administrativo do RESTAURANTE (nunca SuperAdmin)
   React.useEffect(() => {
@@ -457,6 +477,16 @@ export default function Layout({ children, currentPageName }) {
       const segments = location.pathname.split("/").filter(Boolean);
       const RESERVED = new Set(["menu", "dashboard", "orders", "pedidos", "pdv", "tables", "kds", "deliverydrivers", "clients", "products", "categories", "banners", "coupons", "complements", "reports", "settings", "superadmin", "adminlogin", "login", "myorders", "printorder", "home", "api"]);
       const slugFromPath = segments.length > 0 && !RESERVED.has(segments[0].toLowerCase()) ? segments[0].toLowerCase() : null;
+
+      // 🔒 Proteção Cross-Tenant: Bloqueia leitura e sobrescrita de configurações de outra loja no painel admin
+      if (!isPublicPage && user && user.role !== "super_admin" && user.tenant_slug) {
+        const cleanRoute = slugFromPath?.toLowerCase();
+        const cleanUser = user.tenant_slug.toLowerCase();
+        if (cleanRoute && cleanRoute !== cleanUser) {
+          return;
+        }
+      }
+
       const targetSlug = slugFromPath || localStorage.getItem("current_tenant_slug");
       const currentTenantId = localStorage.getItem("current_tenant_id");
       const currentTenantName = localStorage.getItem("current_tenant_name");

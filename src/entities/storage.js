@@ -135,10 +135,29 @@ export function getActiveTenantId() {
   if (typeof window === "undefined") return null;
 
   const routeSlug = getRouteTenantSlug();
-  const isSuperAdmin = window.location.pathname.toLowerCase().includes("superadmin");
+  const pathname = window.location.pathname.toLowerCase();
+  const isSuperAdmin = pathname.includes("superadmin");
 
   if (isSuperAdmin) {
     return null;
+  }
+
+  // 🔒 Defesa em Profundidade Multi-Tenant:
+  // Se estiver em telas administrativas (não públicas) e o usuário for um lojista/operador autenticado (não super_admin),
+  // trava estritamente as consultas no tenant_id oficial dele, impedindo qualquer vazamento ou injeção via URL.
+  const isPublicPage = pathname.includes("/menu") || 
+                       pathname.includes("/myorders") || 
+                       pathname.includes("/meus-pedidos");
+  if (!isPublicPage) {
+    const rawUser = localStorage.getItem("admin_user");
+    if (rawUser) {
+      try {
+        const parsed = JSON.parse(rawUser);
+        if (parsed?.tenant_id && parsed?.role !== "super_admin") {
+          return parsed.tenant_id;
+        }
+      } catch {}
+    }
   }
 
   // Se a rota mudou de loja, limpa caches em memória instantaneamente
