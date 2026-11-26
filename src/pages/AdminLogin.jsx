@@ -255,14 +255,32 @@ export default function AdminLoginPage() {
           let prof = null;
 
           // 1. Tentar autenticação nativa e direta no Supabase Auth primeiro (sem CORS/preflight issues)
-          const emailToTry = cleanUser.includes("@")
-            ? cleanUser
-            : `${cleanUser.toLowerCase()}@${cleanStore}.delivery.internal`;
+          const isSuperAdminLogin = cleanStore === "superadmin" || cleanStore === "master" || cleanStore === "admin";
+          const candidateEmails = cleanUser.includes("@")
+            ? [cleanUser.toLowerCase()]
+            : isSuperAdminLogin
+            ? [
+                "davialeixo_nogueira@outlook.com",
+                `${cleanUser.toLowerCase()}@superadmin.delivery.internal`,
+                "davialeixonogueira@gmail.com",
+              ]
+            : [`${cleanUser.toLowerCase()}@${cleanStore}.delivery.internal`];
 
-          const { data: authResult, error: directAuthErr } = await supabase.auth.signInWithPassword({
-            email: emailToTry,
-            password: cleanPassword,
-          });
+          let authResult = null;
+          let directAuthErr = null;
+          for (const emailToTry of candidateEmails) {
+            const res = await supabase.auth.signInWithPassword({
+              email: emailToTry,
+              password: cleanPassword,
+            });
+            if (!res.error && res.data?.user) {
+              authResult = res.data;
+              directAuthErr = null;
+              break;
+            } else {
+              directAuthErr = res.error;
+            }
+          }
 
           if (!directAuthErr && authResult?.user) {
             const { data: memberProfile } = await supabase

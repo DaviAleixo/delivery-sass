@@ -25,15 +25,14 @@ import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { toast } from "sonner";
 
 export default function SubscriptionTab({ tenantData, onUpdateTenant }) {
-  const planName = 
-    tenantData?.plan === "custom" ? "Plano Personalizado (White-Label VIP)" :
-    tenantData?.plan === "table" || tenantData?.salon_mode === "table_only" ? "Plano Autoatendimento (QR Code Mesas & Salão)" :
-    tenantData?.plan === "showcase" || tenantData?.salon_mode === "showcase" ? "Plano Visual (Cardápio Digital Vitrine)" :
-    "Plano Pro Delivery & Balcão";
-  const monthlyPrice = parseFloat(tenantData?.monthly_price) || 149.00;
-  const status = tenantData?.subscription_status || "pending";
-  const paymentLink = tenantData?.payment_link || "https://sandbox.asaas.com/i/r7wwc9plm0m0fp4n";
-  const dueDate = tenantData?.next_due_date ? new Date(tenantData.next_due_date).toLocaleDateString("pt-BR") : "14/10/2026";
+  const planName = "Plano Completo";
+  const parsedPrice = parseFloat(tenantData?.monthly_price);
+  const monthlyPrice = !isNaN(parsedPrice) ? parsedPrice : 149.00;
+  const isFreePlan = monthlyPrice === 0;
+  const status = isFreePlan ? "active" : (tenantData?.subscription_status || "pending");
+  const paymentLink = tenantData?.payment_link || "";
+  const dueDate = tenantData?.next_due_date ? new Date(tenantData.next_due_date).toLocaleDateString("pt-BR") : "A definir";
+  const isTrial = !isFreePlan && status !== "active" && status !== "overdue" && tenantData?.next_due_date && new Date(tenantData.next_due_date + "T23:59:59") > new Date();
 
   // Formulário de Dados Fiscais / Cobrança
   const [billingEmail, setBillingEmail] = useState("");
@@ -124,10 +123,20 @@ export default function SubscriptionTab({ tenantData, onUpdateTenant }) {
               </p>
             </div>
 
-            {status === "active" ? (
+            {isFreePlan ? (
+              <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 flex items-center gap-1.5 w-fit py-1 px-3">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span className="font-bold">Plano Isento / Gratuito (Ativo)</span>
+              </Badge>
+            ) : status === "active" ? (
               <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 flex items-center gap-1.5 w-fit py-1 px-3">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                 <span className="font-bold">Assinatura Ativa (Em dia)</span>
+              </Badge>
+            ) : isTrial ? (
+              <Badge className="bg-sky-100 text-sky-800 border-sky-300 flex items-center gap-1.5 w-fit py-1 px-3">
+                <Sparkles className="w-4 h-4 text-sky-600" />
+                <span className="font-bold">Avaliação Gratuita (7 dias)</span>
               </Badge>
             ) : status === "overdue" ? (
               <Badge className="bg-rose-100 text-rose-800 border-rose-300 flex items-center gap-1.5 w-fit py-1 px-3">
@@ -183,28 +192,72 @@ export default function SubscriptionTab({ tenantData, onUpdateTenant }) {
             </div>
           </div>
 
-          {/* Botão de Pagamento com Link do Asaas */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 p-5 rounded-2xl bg-gradient-to-r from-rose-600 to-amber-600 text-white shadow-lg shadow-rose-900/20">
-            <div className="space-y-1">
-              <h4 className="font-bold text-base flex items-center gap-2">
-                <Receipt className="w-5 h-5 text-amber-200" />
-                Fatura Oficial Disponível
-              </h4>
-              <p className="text-xs text-rose-100 max-w-md">
-                Clique no botão ao lado para abrir a sua fatura segura no Asaas. Você pode pagar via PIX instantâneo ou cadastrar seu cartão para cobrança automática.
-              </p>
+          {/* Bloco de Pagamento / Isenção / Trial */}
+          {isFreePlan ? (
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 p-5 rounded-2xl bg-emerald-50 border border-emerald-200/90 text-emerald-950 shadow-xs">
+              <div className="space-y-1">
+                <h4 className="font-bold text-base flex items-center gap-2 text-emerald-800">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                  Plano Isento de Mensalidade (R$ 0,00)
+                </h4>
+                <p className="text-xs text-emerald-700 max-w-lg leading-relaxed">
+                  Esta loja possui condições especiais com mensalidade R$ 0,00 (sem emissão de cobranças recorrentes no Asaas). Todos os recursos, pedidos e operação continuam 100% liberados.
+                </p>
+              </div>
             </div>
+          ) : isTrial ? (
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 p-5 rounded-2xl bg-gradient-to-r from-sky-600 to-indigo-600 text-white shadow-lg shadow-sky-900/20">
+              <div className="space-y-1">
+                <h4 className="font-bold text-base flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-sky-200" />
+                  Período de Testes Ativo (7 dias grátis)
+                </h4>
+                <p className="text-xs text-sky-100 max-w-lg leading-relaxed">
+                  Sua loja está com todos os recursos, cardápio, PDV e pedidos 100% liberados! Sua primeira fatura vence apenas em <strong>{dueDate}</strong>.
+                </p>
+              </div>
 
-            <Button
-              asChild
-              className="bg-white text-rose-600 hover:bg-stone-100 font-extrabold text-sm h-12 px-6 rounded-xl shadow-md cursor-pointer whitespace-nowrap self-start sm:self-auto"
-            >
-              <a href={paymentLink} target="_blank" rel="noreferrer">
-                <span>Pagar Fatura / 2ª Via</span>
-                <ExternalLink className="w-4 h-4 ml-2" />
-              </a>
-            </Button>
-          </div>
+              {paymentLink && (
+                <Button
+                  asChild
+                  className="bg-white text-sky-700 hover:bg-stone-100 font-extrabold text-sm h-12 px-6 rounded-xl shadow-md cursor-pointer whitespace-nowrap self-start sm:self-auto"
+                >
+                  <a href={paymentLink} target="_blank" rel="noreferrer">
+                    <span>Visualizar 1ª Fatura</span>
+                    <ExternalLink className="w-4 h-4 ml-2" />
+                  </a>
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 p-5 rounded-2xl bg-gradient-to-r from-rose-600 to-amber-600 text-white shadow-lg shadow-rose-900/20">
+              <div className="space-y-1">
+                <h4 className="font-bold text-base flex items-center gap-2">
+                  <Receipt className="w-5 h-5 text-amber-200" />
+                  Fatura Oficial Disponível
+                </h4>
+                <p className="text-xs text-rose-100 max-w-md">
+                  Clique no botão ao lado para abrir a sua fatura segura no Asaas. Você pode pagar via PIX instantâneo ou cadastrar seu cartão para cobrança automática.
+                </p>
+              </div>
+
+              {paymentLink ? (
+                <Button
+                  asChild
+                  className="bg-white text-rose-600 hover:bg-stone-100 font-extrabold text-sm h-12 px-6 rounded-xl shadow-md cursor-pointer whitespace-nowrap self-start sm:self-auto"
+                >
+                  <a href={paymentLink} target="_blank" rel="noreferrer">
+                    <span>Pagar Fatura / 2ª Via</span>
+                    <ExternalLink className="w-4 h-4 ml-2" />
+                  </a>
+                </Button>
+              ) : (
+                <div className="bg-white/20 text-white text-xs font-semibold px-4 py-3 rounded-xl border border-white/30">
+                  Fatura aguardando emissão no Asaas
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Benefícios Inclusos */}
           <div className="pt-2">

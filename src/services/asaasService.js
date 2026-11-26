@@ -7,6 +7,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://jqwtnzdsaivbjudvjhld.supabase.co';
 const ASAAS_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/asaas`;
+const FALLBACK_ASAAS_FUNCTION_URL = 'https://zecuwijuiqsaoeafonsv.supabase.co/functions/v1/asaas';
 
 async function getAuthHeaders() {
   const headers = { 'Content-Type': 'application/json' };
@@ -21,6 +22,36 @@ async function getAuthHeaders() {
   return headers;
 }
 
+async function fetchAsaasEndpoint(payload) {
+  const headers = await getAuthHeaders();
+  let res;
+  try {
+    res = await fetch(ASAAS_FUNCTION_URL, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    if (res.status === 404 && ASAAS_FUNCTION_URL !== FALLBACK_ASAAS_FUNCTION_URL) {
+      res = await fetch(FALLBACK_ASAAS_FUNCTION_URL, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      });
+    }
+  } catch (_netErr) {
+    if (ASAAS_FUNCTION_URL !== FALLBACK_ASAAS_FUNCTION_URL) {
+      res = await fetch(FALLBACK_ASAAS_FUNCTION_URL, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      });
+    } else {
+      throw _netErr;
+    }
+  }
+  return res;
+}
+
 /**
  * Cria o cliente e a assinatura recorrente mensal no Asaas para uma loja
  */
@@ -31,22 +62,20 @@ export async function createAsaasCustomerAndSubscription({
   cpfCnpj,
   plan = 'pro',
   monthlyPrice,
-  dueDays = 3
+  dueDays = 3,
+  nextDueDate
 }) {
   try {
-    const res = await fetch(ASAAS_FUNCTION_URL, {
-      method: 'POST',
-      headers: await getAuthHeaders(),
-      body: JSON.stringify({
-        action: 'create_customer_and_subscription',
-        name,
-        email,
-        phone,
-        cpfCnpj,
-        plan,
-        monthlyPrice,
-        dueDays
-      })
+    const res = await fetchAsaasEndpoint({
+      action: 'create_customer_and_subscription',
+      name,
+      email,
+      phone,
+      cpfCnpj,
+      plan,
+      monthlyPrice,
+      dueDays,
+      nextDueDate
     });
 
     const data = await res.json();
@@ -91,17 +120,13 @@ export async function updateAsaasCustomer({
   }
 
   try {
-    const res = await fetch(ASAAS_FUNCTION_URL, {
-      method: 'POST',
-      headers: await getAuthHeaders(),
-      body: JSON.stringify({
-        action: 'update_customer',
-        customerId,
-        name,
-        email,
-        phone,
-        cpfCnpj
-      })
+    const res = await fetchAsaasEndpoint({
+      action: 'update_customer',
+      customerId,
+      name,
+      email,
+      phone,
+      cpfCnpj
     });
 
     const data = await res.json();
@@ -130,13 +155,9 @@ export async function getAsaasSubscription(subscriptionId) {
   if (!subscriptionId) return null;
 
   try {
-    const res = await fetch(ASAAS_FUNCTION_URL, {
-      method: 'POST',
-      headers: await getAuthHeaders(),
-      body: JSON.stringify({
-        action: 'get_subscription',
-        subscriptionId
-      })
+    const res = await fetchAsaasEndpoint({
+      action: 'get_subscription',
+      subscriptionId
     });
 
     if (!res.ok) return null;

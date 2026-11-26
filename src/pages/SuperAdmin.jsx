@@ -30,8 +30,11 @@ import {
   ArrowUpRight,
   Mail,
   FileText,
-  ShieldAlert
+  ShieldAlert,
+  Zap,
+  Calendar
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -110,12 +113,30 @@ export default function SuperAdminPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
   const [selectedTenantDrawer, setSelectedTenantDrawer] = useState(null);
+  const [drawerPrice, setDrawerPrice] = useState("149.00");
+  const [drawerDueOption, setDrawerDueOption] = useState("7");
+
+  const handleOpenTenantDrawer = (tenant) => {
+    setSelectedTenantDrawer(tenant);
+    const rawPrice = parseFloat(tenant.monthly_price);
+    setDrawerPrice(!isNaN(rawPrice) && rawPrice > 0 ? String(rawPrice) : "149.00");
+    setDrawerDueOption("7");
+  };
 
   const handleOpenWhatsAppBilling = (tenant) => {
     if (!tenant) return;
     const phone = (tenant.phone || tenant.whatsapp || "31982607426").replace(/\D/g, "");
-    const price = (parseFloat(tenant.monthly_price) || 149).toFixed(2).replace(".", ",");
-    const link = tenant.payment_link || "https://sandbox.asaas.com/i/r7wwc9plm0m0fp4n";
+    const rawPrice = parseFloat(tenant.monthly_price);
+    const price = (!isNaN(rawPrice) ? rawPrice : 149).toFixed(2).replace(".", ",");
+    const link = tenant.payment_link || "";
+    if (!link) {
+      toast({
+        title: "Link da Fatura Ausente",
+        description: "Essa empresa ainda não possui um link de fatura gerado no Asaas.",
+        variant: "destructive"
+      });
+      return;
+    }
     const msg = encodeURIComponent(`Olá, pessoal da ${tenant.name}! Tudo bem?\n\nPassando para enviar a fatura da mensalidade da sua plataforma de cardápio digital (R$ ${price}).\n\nVocê pode pagar via PIX ou Cartão pelo link seguro oficial:\n${link}\n\nQualquer dúvida estou à disposição!`);
     window.open(`https://wa.me/55${phone}?text=${msg}`, "_blank");
   };
@@ -136,6 +157,77 @@ export default function SuperAdminPage() {
       description: "Link da fatura do Asaas copiado para enviar no WhatsApp.",
     });
     setTimeout(() => setCopiedId(null), 2500);
+  };
+
+  const handleGenerateAsaasSubscription = async (tenant, customPrice, customDueDate, customDueDays) => {
+    if (!tenant) return;
+    const cleanCpf = String(tenant.cpf_cnpj || "").replace(/\D/g, "");
+    if (cleanCpf.length < 11) {
+      toast({
+        title: "CPF/CNPJ Obrigatório",
+        description: "Clique no botão Editar abaixo e preencha o CPF ou CNPJ da loja para emitir a assinatura no Asaas.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const price = customPrice !== undefined && customPrice !== null && !isNaN(parseFloat(customPrice))
+        ? parseFloat(customPrice)
+        : (!isNaN(parseFloat(tenant.monthly_price)) ? parseFloat(tenant.monthly_price) : 149.00);
+
+      const res = await createAsaasCustomerAndSubscription({
+        name: tenant.name,
+        email: tenant.email || undefined,
+        phone: tenant.phone || tenant.whatsapp || undefined,
+        cpfCnpj: cleanCpf,
+        plan: tenant.plan || "pro",
+        monthlyPrice: price,
+        dueDays: customDueDays !== undefined ? customDueDays : 0,
+        nextDueDate: customDueDate || undefined,
+      });
+
+      if (!res.success || res.error) {
+        throw new Error(res.error || "Erro ao conectar com o Asaas.");
+      }
+
+      await supabase
+        .from("tenants")
+        .update({
+          monthly_price: price,
+          asaas_customer_id: res.customerId,
+          asaas_subscription_id: res.subscriptionId,
+          payment_link: res.paymentLink,
+          next_due_date: res.nextDueDate,
+          subscription_status: "pending",
+        })
+        .eq("id", tenant.id);
+
+      toast({
+        title: "🎉 Assinatura Gerada com Sucesso!",
+        description: `Fatura de R$ ${price.toFixed(2).replace(".", ",")}/mês emitida no Asaas com vencimento em ${new Date(res.nextDueDate).toLocaleDateString("pt-BR")}.`,
+      });
+
+      await loadTenants();
+      setSelectedTenantDrawer(prev => prev && prev.id === tenant.id ? {
+        ...prev,
+        monthly_price: price,
+        asaas_customer_id: res.customerId,
+        asaas_subscription_id: res.subscriptionId,
+        payment_link: res.paymentLink,
+        next_due_date: res.nextDueDate,
+        subscription_status: "pending",
+      } : prev);
+    } catch (err) {
+      toast({
+        title: "Erro ao gerar assinatura",
+        description: err.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // 1. Checa autenticação de Super Admin via Supabase Session
@@ -356,7 +448,7 @@ export default function SuperAdminPage() {
                   newTenant.plan === "table" ? "table_salon" :
                   newTenant.plan === "showcase" ? "showcase_digital" : "standard_delivery",
                 monthlyPrice: monthlyPrice,
-                dueDays: 3,
+                dueDays: 7,
               })
             : { success: false, skipped: true };
 
@@ -583,6 +675,40 @@ export default function SuperAdminPage() {
         const computedTakeaway = editForm.plan !== "showcase" && editForm.accepts_takeaway !== false;
 
         const parsedEditPrice = parseFloat(String(editForm.monthly_price ?? "").replace(",", "."));
+        
+        // Se a loja ainda não tem assinatura no Asaas e agora foi preenchido CPF/CNPJ válido, gera automaticamente!
+        let asaasUpdates = {};
+        const cleanCpfCnpj = String(editForm.cpf_cnpj || "").replace(/\D/g, "");
+        if (
+          !editingTenant.asaas_subscription_id &&
+          cleanCpfCnpj.length >= 11 &&
+          !isNaN(parsedEditPrice) &&
+          parsedEditPrice > 0
+        ) {
+          try {
+            const asaasRes = await createAsaasCustomerAndSubscription({
+              name: editForm.name.trim(),
+              email: editForm.email.trim() || undefined,
+              phone: editForm.phone.trim() || undefined,
+              cpfCnpj: cleanCpfCnpj,
+              plan: editForm.plan || "pro",
+              monthlyPrice: parsedEditPrice,
+              dueDays: 3,
+            });
+            if (asaasRes.success) {
+              asaasUpdates = {
+                asaas_customer_id: asaasRes.customerId,
+                asaas_subscription_id: asaasRes.subscriptionId,
+                payment_link: asaasRes.paymentLink,
+                next_due_date: asaasRes.nextDueDate,
+                subscription_status: "pending",
+              };
+            }
+          } catch (_e) {
+            console.warn("Falha ao emitir assinatura Asaas na edição:", _e);
+          }
+        }
+
         await supabase
           .from("tenants")
           .update({
@@ -596,7 +722,8 @@ export default function SuperAdminPage() {
             phone: editForm.phone.trim() || null,
             whatsapp: editForm.phone.trim() || null,
             cpf_cnpj: editForm.cpf_cnpj.trim() || null,
-            subscription_status: editForm.subscription_status || "pending",
+            subscription_status: asaasUpdates.subscription_status || editForm.subscription_status || "pending",
+            ...asaasUpdates,
           })
           .eq("id", editingTenant.id);
 
@@ -699,7 +826,8 @@ export default function SuperAdminPage() {
       t.plan === "custom" ? 249.00 : 
       t.plan === "table" ? 79.00 :
       t.plan === "showcase" ? 49.00 : 89.00;
-    return acc + (parseFloat(t.monthly_price) || defaultPrice);
+    const p = parseFloat(t.monthly_price);
+    return acc + (!isNaN(p) ? p : defaultPrice);
   }, 0);
   const pendingInvoicesCount = tenants.filter((t) => t.subscription_status === "pending" || t.subscription_status === "overdue").length;
 
@@ -899,137 +1027,183 @@ export default function SuperAdminPage() {
               <thead className="bg-stone-50/90 text-stone-500 text-[11px] font-bold uppercase tracking-wider border-b border-stone-200">
                 <tr>
                   <th className="py-3.5 px-6">Restaurante</th>
+                  <th className="py-3.5 px-4">Cobrança & Vencimento</th>
+                  <th className="py-3.5 px-4 text-center">Pedidos no Mês</th>
+                  <th className="py-3.5 px-4 text-center">Pedidos Totais</th>
                   <th className="py-3.5 px-4">Link Público</th>
-                  <th className="py-3.5 px-4">Plano</th>
-                  <th className="py-3.5 px-4">Status da Loja</th>
                   <th className="py-3.5 px-6 text-right">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={5} className="py-12 text-center text-stone-500">
+                    <td colSpan={6} className="py-12 text-center text-stone-500">
                       <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2 text-[#047857]" />
                       Carregando empresas...
                     </td>
                   </tr>
                 ) : filteredTenants.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-12 text-center text-stone-500">
+                    <td colSpan={6} className="py-12 text-center text-stone-500">
                       Nenhum restaurante encontrado.
                     </td>
                   </tr>
                 ) : (
-                  filteredTenants.map((t) => (
-                    <tr 
-                      key={t.id} 
-                      onClick={() => setSelectedTenantDrawer(t)}
-                      className="hover:bg-emerald-50/35 transition-colors cursor-pointer group"
-                    >
-                      <td className="py-4 px-6">
-                        <div className="flex items-center gap-3.5">
-                          {t.logo_url ? (
-                            <img
-                              src={t.logo_url}
-                              alt={t.name}
-                              className="h-11 w-11 rounded-xl object-cover border border-stone-200 shadow-2xs"
-                            />
-                          ) : (
-                            <div className="h-11 w-11 rounded-xl bg-stone-100 flex items-center justify-center text-stone-600 font-black text-sm border border-stone-200">
-                              {t.name.substring(0, 2).toUpperCase()}
+                  filteredTenants.map((t) => {
+                    const isPaused = t.is_active === false;
+                    const rawPrice = parseFloat(t.monthly_price);
+                    const isFree = !isNaN(rawPrice) && rawPrice === 0;
+                    const formattedPrice = (!isNaN(rawPrice) ? rawPrice : 149).toFixed(2).replace(".", ",");
+                    const isOverdue = t.subscription_status === "overdue";
+                    const isPaid = t.subscription_status === "active";
+
+                    return (
+                      <tr 
+                        key={t.id} 
+                        onClick={() => handleOpenTenantDrawer(t)}
+                        className={cn(
+                          "transition-colors cursor-pointer group",
+                          isPaused 
+                            ? "bg-rose-50/70 hover:bg-rose-100/80 border-l-4 border-l-rose-500" 
+                            : "hover:bg-emerald-50/35"
+                        )}
+                      >
+                        <td className="py-4 px-6">
+                          <div className="flex items-center gap-3.5">
+                            {t.logo_url ? (
+                              <img
+                                src={t.logo_url}
+                                alt={t.name}
+                                className={cn(
+                                  "h-11 w-11 rounded-xl object-cover border shadow-2xs",
+                                  isPaused ? "border-rose-300 opacity-80" : "border-stone-200"
+                                )}
+                              />
+                            ) : (
+                              <div className={cn(
+                                "h-11 w-11 rounded-xl flex items-center justify-center font-black text-sm border",
+                                isPaused 
+                                  ? "bg-rose-100 text-rose-700 border-rose-300" 
+                                  : "bg-stone-100 text-stone-600 border-stone-200"
+                              )}>
+                                {t.name.substring(0, 2).toUpperCase()}
+                              </div>
+                            )}
+                            <div>
+                              <div className="font-bold flex items-center gap-2">
+                                <span className={cn(
+                                  "font-mono text-xs font-black px-2 py-0.5 rounded-md border",
+                                  isPaused 
+                                    ? "bg-rose-100 text-rose-800 border-rose-300" 
+                                    : "bg-emerald-50 text-[#047857] border-emerald-200/80"
+                                )} title="Código de Login da Loja">
+                                  #{t.code || 1}
+                                </span>
+                                <span className={cn(
+                                  "transition-colors",
+                                  isPaused 
+                                    ? "text-rose-900 font-extrabold" 
+                                    : "text-stone-900 group-hover:text-[#047857]"
+                                )}>
+                                  {t.name}
+                                </span>
+                                {isPaused && (
+                                  <Badge variant="outline" className="text-[10px] bg-rose-100 border-rose-300 text-rose-800 font-bold px-1.5 py-0">
+                                    ⛔ Pausada
+                                  </Badge>
+                                )}
+                                {t.slug === "vruum-burguer" && (
+                                  <Badge variant="outline" className="text-[10px] bg-amber-50 border-amber-200 text-amber-800 font-semibold">
+                                    Piloto
+                                  </Badge>
+                                )}
+                              </div>
+
+                              <div className="text-xs text-stone-500 flex items-center gap-2 mt-0.5">
+                                <span>Admin: <span className="text-stone-700 font-mono font-medium">{t.admin_username || "admin"}</span></span>
+                                <span className="text-stone-300">•</span>
+                                <span className="text-[11px] font-semibold text-[#047857] group-hover:underline">Ver detalhes ➔</span>
+                              </div>
                             </div>
-                          )}
-                          <div>
-                            <div className="font-bold text-stone-900 flex items-center gap-2 group-hover:text-[#047857] transition-colors">
-                              <span className="font-mono text-xs font-black bg-emerald-50 text-[#047857] px-2 py-0.5 rounded-md border border-emerald-200/80" title="Código de Login da Loja">
-                                #{t.code || 1}
-                              </span>
-                              <span>{t.name}</span>
-                              {t.slug === "vruum-burguer" && (
-                                <Badge variant="outline" className="text-[10px] bg-rose-50 border-rose-200 text-rose-700 font-semibold">
-                                  Piloto
+                          </div>
+                        </td>
+
+                        {/* Cobrança & Vencimento */}
+                        <td className="py-4 px-4">
+                          <div className="flex flex-col gap-1 items-start">
+                            <div className="flex items-center gap-1.5">
+                              {isFree ? (
+                                <Badge variant="outline" className="bg-stone-100 border-stone-300 text-stone-600 text-[10px] font-bold">
+                                  Isento (R$ 0)
+                                </Badge>
+                              ) : isPaid ? (
+                                <Badge variant="outline" className="bg-emerald-50 border-emerald-300 text-emerald-700 text-[10px] font-bold flex items-center gap-1">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                  Em dia (R$ {formattedPrice})
+                                </Badge>
+                              ) : isOverdue ? (
+                                <Badge variant="outline" className="bg-rose-100 border-rose-300 text-rose-800 text-[10px] font-extrabold flex items-center gap-1">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-rose-600 animate-pulse" />
+                                  Vencida (R$ {formattedPrice})
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="bg-amber-50 border-amber-300 text-amber-800 text-[10px] font-bold flex items-center gap-1">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                                  Pendente (R$ {formattedPrice})
                                 </Badge>
                               )}
                             </div>
-
-                            <div className="text-xs text-stone-500 flex items-center gap-2 mt-0.5">
-                              <span>Admin: <span className="text-stone-700 font-mono font-medium">{t.admin_username || "admin"}</span></span>
-                              <span className="text-stone-300">•</span>
-                              <span className="text-[11px] font-semibold text-[#047857] group-hover:underline">Ver detalhes ➔</span>
+                            <div className="text-xs text-stone-600 font-medium flex items-center gap-1 mt-0.5">
+                              <Calendar className="h-3.5 w-3.5 text-stone-400" />
+                              <span>
+                                {t.next_due_date 
+                                  ? new Date(t.next_due_date + "T12:00:00").toLocaleDateString("pt-BR")
+                                  : "Vencimento a definir"}
+                              </span>
                             </div>
                           </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      <td className="py-4 px-4" onClick={(e) => e.stopPropagation()}>
-                        <a
-                          href={`/${t.slug}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="font-mono text-xs font-medium text-[#047857] hover:text-[#065f46] inline-flex items-center gap-1 bg-emerald-50/70 hover:bg-emerald-100/70 px-2.5 py-1 rounded-lg border border-emerald-200/60 transition-colors"
-                        >
-                          /{t.slug}
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
-                      </td>
+                        {/* Pedidos no Mês */}
+                        <td className="py-4 px-4 text-center">
+                          <span className="inline-flex flex-col items-center">
+                            <span className="font-mono font-black text-stone-900 text-base">
+                              {t.month_orders || 0}
+                            </span>
+                            <span className="text-[10px] text-stone-400 font-medium">este mês</span>
+                          </span>
+                        </td>
 
-                      <td className="py-4 px-4">
-                        {t.plan === "custom" || t.custom_template ? (
-                          <div className="flex flex-col gap-1 items-start">
-                            <Badge variant="outline" className="bg-purple-50 border-purple-200 text-purple-700 font-bold">
-                              👑 VIP Personalizado
-                            </Badge>
-                            {t.custom_template ? (
-                              <span className="text-[10px] text-purple-600 font-mono font-medium">
-                                Tmpl: {t.custom_template}
-                              </span>
-                            ) : (
-                              <span className="text-[10px] text-stone-500 italic">
-                                (Cardápio padrão ativo)
-                              </span>
-                            )}
-                          </div>
-                        ) : t.plan === "showcase" || t.salon_mode === "showcase" ? (
-                          <Badge variant="outline" className="bg-sky-50 border-sky-200 text-sky-700 font-semibold">
-                            👁️ Visual Vitrine
-                          </Badge>
-                        ) : t.plan === "table" || t.salon_mode === "table_only" ? (
-                          <Badge variant="outline" className="bg-amber-50 border-amber-200 text-amber-800 font-semibold">
-                            🍽️ Autoatendimento (Mesas)
-                          </Badge>
-                        ) : (
-                          <div className="flex flex-col gap-1 items-start">
-                            <Badge variant="outline" className="bg-emerald-50 border-emerald-200 text-emerald-700 font-semibold">
-                              {t.accepts_delivery === false && t.accepts_takeaway !== false
-                                ? "🛍️ Só Retirada"
-                                : t.accepts_delivery !== false && t.accepts_takeaway === false
-                                ? "🛵 Só Delivery"
-                                : "🛵 Delivery Completo"}
-                            </Badge>
-                          </div>
-                        )}
-                      </td>
+                        {/* Pedidos Totais */}
+                        <td className="py-4 px-4 text-center">
+                          <span className="inline-flex flex-col items-center">
+                            <span className="font-mono font-black text-emerald-700 text-base">
+                              {t.total_orders || 0}
+                            </span>
+                            <span className="text-[10px] text-stone-400 font-medium">total geral</span>
+                          </span>
+                        </td>
 
-                      <td className="py-4 px-4">
-                        {t.is_active ? (
-                          <Badge variant="outline" className="bg-emerald-50 border-emerald-200 text-emerald-700 font-semibold flex items-center gap-1.5 w-fit">
-                            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                            No ar
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="bg-rose-50 border-rose-200 text-rose-700 font-semibold flex items-center gap-1.5 w-fit">
-                            <span className="h-2 w-2 rounded-full bg-rose-500" />
-                            Pausada
-                          </Badge>
-                        )}
-                      </td>
+                        {/* Link Público */}
+                        <td className="py-4 px-4" onClick={(e) => e.stopPropagation()}>
+                          <a
+                            href={`/${t.slug}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="font-mono text-xs font-medium text-[#047857] hover:text-[#065f46] inline-flex items-center gap-1 bg-emerald-50/70 hover:bg-emerald-100/70 px-2.5 py-1 rounded-lg border border-emerald-200/60 transition-colors"
+                          >
+                            /{t.slug}
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        </td>
 
-                      <td className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
+                        {/* Ações */}
+                        <td className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1.5 flex-wrap">
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => setSelectedTenantDrawer(t)}
+                            onClick={() => handleOpenTenantDrawer(t)}
                             className="bg-white border-stone-200 hover:bg-stone-100 text-stone-800 font-semibold text-xs h-8 px-3 rounded-lg shadow-2xs cursor-pointer"
                           >
                             Detalhes
@@ -1074,7 +1248,8 @@ export default function SuperAdminPage() {
                         </div>
                       </td>
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -1233,7 +1408,7 @@ export default function SuperAdminPage() {
                     <div className="p-3.5 bg-white rounded-xl border border-stone-200 shadow-2xs">
                       <span className="text-xs font-medium text-stone-500">Mensalidade</span>
                       <p className="text-lg font-black text-[#047857] mt-0.5 font-mono">
-                        R$ {(parseFloat(selectedTenantDrawer.monthly_price) || 149).toFixed(2).replace(".", ",")}
+                        R$ {(!isNaN(parseFloat(selectedTenantDrawer.monthly_price)) ? parseFloat(selectedTenantDrawer.monthly_price) : 149).toFixed(2).replace(".", ",")}
                       </p>
                     </div>
                     <div className="p-3.5 bg-white rounded-xl border border-stone-200 shadow-2xs">
@@ -1244,7 +1419,7 @@ export default function SuperAdminPage() {
                     </div>
                   </div>
 
-                  {selectedTenantDrawer.payment_link && /^https?:\/\//i.test(String(selectedTenantDrawer.payment_link).trim()) && (
+                  {selectedTenantDrawer.payment_link && /^https?:\/\//i.test(String(selectedTenantDrawer.payment_link).trim()) ? (
                     <div className="pt-1 flex items-center gap-2">
                       <a
                         href={String(selectedTenantDrawer.payment_link).trim()}
@@ -1264,6 +1439,53 @@ export default function SuperAdminPage() {
                       >
                         {copiedId === selectedTenantDrawer.id ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
                       </Button>
+                    </div>
+                  ) : (
+                    <div className="pt-1 space-y-2">
+                      <div className="grid grid-cols-2 gap-2 bg-stone-50 p-2.5 rounded-xl border border-stone-200">
+                        <div>
+                          <Label className="text-[11px] text-stone-600 font-semibold">Valor Mensal (R$)</Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={drawerPrice}
+                            onChange={(e) => setDrawerPrice(e.target.value)}
+                            className="h-8 text-xs bg-white rounded-lg mt-1"
+                            placeholder="149.00"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-[11px] text-stone-600 font-semibold">Vencimento da 1ª Fatura</Label>
+                          <select
+                            value={drawerDueOption}
+                            onChange={(e) => setDrawerDueOption(e.target.value)}
+                            className="h-8 text-xs bg-white border border-stone-200 rounded-lg mt-1 w-full px-2 text-stone-800"
+                          >
+                            <option value="7">🎁 7 dias grátis de teste (Padrão)</option>
+                            <option value="0">⚡ Vence Hoje (Cobrança imediata)</option>
+                            <option value="1">Vence Amanhã</option>
+                            <option value="3">Em 3 dias</option>
+                            <option value="5">Em 5 dias</option>
+                            <option value="10">Em 10 dias</option>
+                            <option value="15">Em 15 dias</option>
+                            <option value="30">Em 30 dias</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <Button
+                        onClick={() => handleGenerateAsaasSubscription(selectedTenantDrawer, drawerPrice, null, Number(drawerDueOption))}
+                        disabled={isSubmitting}
+                        className="w-full bg-[#047857] hover:bg-[#065f46] text-white font-bold text-xs h-10 rounded-xl shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <Zap className="h-4 w-4" />
+                        {isSubmitting ? "Gerando Fatura no Asaas..." : "Gerar Assinatura & Fatura no Asaas"}
+                      </Button>
+                      {!selectedTenantDrawer.cpf_cnpj && (
+                        <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200/80 rounded-lg p-2 mt-1.5 leading-relaxed">
+                          ⚠️ CPF ou CNPJ ausente. Para gerar a cobrança, clique em <strong>Editar</strong> abaixo e preencha os dados fiscais.
+                        </p>
+                      )}
                     </div>
                   )}
 
@@ -1445,7 +1667,7 @@ export default function SuperAdminPage() {
                 >
                   <option value="showcase">👁️ Plano Visual (Cardápio Digital Informativo sem Pedidos)</option>
                   <option value="table">🍽️ Plano Autoatendimento (QR Code Mesas, KDS & Balcão)</option>
-                  <option value="basic">🛵 Plano Normal (Delivery Completo, Balcão & KDS)</option>
+                  <option value="basic">✨ Plano Completo (Delivery, Balcão, Mesas & KDS)</option>
                   <option value="custom">👑 Plano Personalizado (VIP Front-End Exclusivo)</option>
                 </select>
               </div>
@@ -1709,7 +1931,7 @@ export default function SuperAdminPage() {
                   <SelectContent className="bg-white border-stone-300 text-stone-900">
                     <SelectItem value="showcase">👁️ Visual (Cardápio Digital sem Pedidos)</SelectItem>
                     <SelectItem value="table">🍽️ Autoatendimento (QR Code Mesas & KDS)</SelectItem>
-                    <SelectItem value="basic">🛵 Normal (Delivery Completo & Balcão)</SelectItem>
+                    <SelectItem value="basic">✨ Plano Completo (Delivery, Balcão, Mesas & KDS)</SelectItem>
                     <SelectItem value="custom">👑 Personalizado (Front-End Exclusivo)</SelectItem>
                   </SelectContent>
                 </Select>

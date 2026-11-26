@@ -621,10 +621,10 @@ export default function Layout({ children, currentPageName }) {
   }
 
   if (isTenantSuspended) {
-    const rawPayLink = settings?.payment_link || "https://sandbox.asaas.com/i/r7wwc9plm0m0fp4n";
+    const rawPayLink = settings?.payment_link || "";
     const paymentLink = /^https?:\/\//i.test(String(rawPayLink).trim())
       ? String(rawPayLink).trim()
-      : "https://sandbox.asaas.com/i/r7wwc9plm0m0fp4n";
+      : "";
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-slate-900 border border-rose-900/60 rounded-3xl p-8 text-center shadow-2xl space-y-5">

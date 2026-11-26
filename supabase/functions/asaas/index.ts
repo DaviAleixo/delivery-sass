@@ -11,7 +11,7 @@ function getAsaasBaseUrl(): string {
   const customUrl = Deno.env.get("ASAAS_API_URL");
   if (customUrl) return customUrl.replace(/\/+$/, "");
 
-  const env = (Deno.env.get("ASAAS_ENV") || "sandbox").toLowerCase();
+  const env = (Deno.env.get("ASAAS_ENV") || "production").toLowerCase();
   return env === "production"
     ? "https://api.asaas.com/v3"
     : "https://api-sandbox.asaas.com/v3";
@@ -199,7 +199,7 @@ serve(async (req: Request) => {
     if (action === "create_customer_and_subscription") {
       await requireSuperAdminOrTenantAdmin(req, supabase, true);
 
-      const { name, email, phone, cpfCnpj, monthlyPrice, dueDays = 3 } = body;
+      const { name, email, phone, cpfCnpj, monthlyPrice, dueDays = 3, nextDueDate: customDueDate } = body;
       const val = (monthlyPrice !== undefined && monthlyPrice !== null && monthlyPrice !== "")
         ? Number(monthlyPrice)
         : 99.00;
@@ -259,9 +259,42 @@ serve(async (req: Request) => {
       }
 
       const customerId = custData.id;
+
+      // Ativar WhatsApp, SMS e E-mail em todas as notificações do cliente no Asaas
+      try {
+        const notifListRes = await fetch(`${asaasBaseUrl}/customers/${customerId}/notifications`, {
+          headers: { "access_token": asaasApiKey }
+        });
+        const notifListData = await notifListRes.json();
+        if (Array.isArray(notifListData?.data)) {
+          await Promise.all(
+            notifListData.data.map((n: any) =>
+              fetch(`${asaasBaseUrl}/notifications/${n.id}`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "access_token": asaasApiKey
+                },
+                body: JSON.stringify({
+                  whatsappEnabledForCustomer: false,
+                  smsEnabledForCustomer: false,
+                  emailEnabledForCustomer: true,
+                  enabled: true
+                })
+              }).catch(() => {})
+            )
+          );
+        }
+      } catch (_eNotif) {
+        console.warn("Aviso ao ativar notificações WhatsApp no Asaas:", _eNotif);
+      }
+
       const dueDate = new Date();
       dueDate.setDate(dueDate.getDate() + Number(dueDays || 3));
-      const nextDueDate = dueDate.toISOString().split("T")[0];
+      let nextDueDate = customDueDate ? String(customDueDate).split("T")[0] : null;
+      if (!nextDueDate) {
+        nextDueDate = dueDate.toISOString().split("T")[0];
+      }
 
       const subPayload = {
         customer: customerId,

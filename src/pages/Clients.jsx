@@ -31,9 +31,6 @@ import {
   buildWhatsAppTemplates,
   buildWhatsAppUrl,
   classifyClientSegment,
-  cleanPhoneDigits,
-  computeVipSpentThreshold,
-  fetchClientsSummary,
   fetchClientsSummaryPaged,
   formatMoneyBRL,
   formatPhoneBR,
@@ -97,7 +94,7 @@ export default function ClientsPage() {
 
   // Paginação no Backend
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  const [pageSize] = useState(25);
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [vipThreshold, setVipThreshold] = useState(150);
@@ -672,7 +669,7 @@ export default function ClientsPage() {
         onOpenChange={setDrawerOpen}
         client={selectedClient}
         tenantId={tenantId}
-        vipSpentThreshold={vipSpentThreshold}
+        vipSpentThreshold={vipThreshold}
         onNoteUpdated={handleNoteUpdated}
       />
     </div>

@@ -6,9 +6,29 @@
 
 ## 🚀 Em Andamento / Foco Atual
 
+- [x] 💳 **Migração e Homologação Asaas em Produção & Estabilização do SuperAdmin**:
+  - [x] **Deploy de Edge Functions em Produção (`jqwtnzdsaivbjudvjhld`)**: Realizado o deploy com sucesso de todas as 5 Edge Functions essenciais (`asaas`, `mercadopago`, `whatsapp-otp`, `admin-login`, `r2-upload`) no Supabase oficial de produção com token CLI de organização.
+  - [x] **Validação da API Asaas de Produção & Webhook Ativo**: Chave oficial `$aact_prod_...` testada e validada contra `https://api.asaas.com/v3/customers` com status 200. Webhook configurado e testado com token de segurança `whsec_...` garantindo bloqueio 401 para requisições inválidas e 200 para eventos oficiais.
+  - [x] **Desativação de Cobranças por Notificação Paga no Asaas**: Desabilitadas notificações pagas via WhatsApp e SMS (`whatsappEnabledForCustomer: false`, `smsEnabledForCustomer: false`) em todos os clientes e na Edge Function, mantendo e-mail gratuito e evitando tarifas de R$ 0,55 por disparo.
+  - [x] **Implementação do Período de Testes de 7 Dias Grátis (Trial)**: Configurado padrão de 7 dias de avaliação gratuita na criação de novos restaurantes e emissão de assinaturas Asaas, com badge dedicado (`Avaliação Gratuita - 7 dias`) e banner explicativo em [SubscriptionTab.jsx](file:///c:/Users/Davi/Projetos/PedeMuleke/src/components/admin/settings/SubscriptionTab.jsx).
+  - [x] **Refatoração da Tabela de Restaurantes do SuperAdmin (`SuperAdmin.jsx`)**:
+    - [x] Remoção das colunas obsoletas "Plano" e "Status da Loja".
+    - [x] Inclusão da coluna **Cobrança & Vencimento** com status (Pendente, Vencida, Em dia ou Isento), valor da mensalidade e data de vencimento.
+    - [x] Inclusão das colunas analíticas **Pedidos no Mês** (total no mês corrente) e **Pedidos Totais** (histórico consolidado).
+    - [x] Destaque visual vermelho integral (`bg-rose-50/70`, borda esquerda vermelha, texto em destaque e badge `⛔ Pausada`) para lojas inativas/pausadas.
+  - [x] **Fallback e Resiliência em `asaasService.js`**: Roteamento prioritário para o endpoint de produção com fallback seguro e remoção de endpoints obsoletos de sandbox.
+  - [x] **Correções Críticas de UI & Acesso no SuperAdmin (`SuperAdmin.jsx`, `AdminLogin.jsx`, `SubscriptionTab.jsx`)**:
+    - [x] Resolução de login SuperAdmin mapeando usuários internos para `davialeixo_nogueira@outlook.com`.
+    - [x] Correção de import ausente do ícone `Zap` em `SuperAdmin.jsx`.
+    - [x] Exibição e persistência do plano isento/gratuito (`R$ 0,00`) tratando valores zero sem cair no fallback padrão de R$ 149,00.
+    - [x] Seleção dinâmica de data de vencimento (Vence Hoje, Vence Amanhã, 3, 5 ou 10 dias) e edição imediata de valor da mensalidade no drawer do SuperAdmin para emissão de assinaturas Asaas.
+    - [x] Simplificação e padronização da nomenclatura comercial de planos: unificado para **"Plano Completo"** em [SubscriptionTab.jsx](file:///c:/Users/Davi/Projetos/PedeMuleke/src/components/admin/settings/SubscriptionTab.jsx) e [SuperAdmin.jsx](file:///c:/Users/Davi/Projetos/PedeMuleke/src/pages/SuperAdmin.jsx).
+    - [x] Correção da RPC `get_store_admin_users(p_tenant_id UUID DEFAULT NULL)` resolvendo erro 404 em chamadas da tela de configurações.
+
 - [x] ⚡ **Paginação no Backend (CRM Clientes & Fechamento de Caixa) e Otimização do Cardápio/PDV**:
   - [x] **Remoção da Categoria "Todos" no Cardápio & PDV (`Menu.jsx`, `PDVProductGrid.jsx`)**: Eliminado o botão sintético "Todos" da barra de categorias tanto do cardápio público quanto da grade do PDV Balcão; a interface agora inicializa selecionada diretamente na primeira categoria real cadastrada pelo restaurante, simplificando a navegação.
   - [x] **Paginação no Servidor para o Mini-CRM de Clientes (`Clients.jsx`, `clientsService.js`, `get_clients_summary_paged`)**: Implementada a RPC PostgreSQL `get_clients_summary_paged` com paginação em fatias de 25 clientes, busca por nome/telefone/email e filtro por segmentos (VIP, Recorrente, Sumido, Novo), calculando as métricas globais e o percentil VIP no banco de dados e eliminando o consumo excessivo de memória em bases volumosas.
+  - [x] **Correção de ReferenceError na Ficha 360º do Cliente (`Clients.jsx`)**: Corrigida a referência da prop `vipSpentThreshold` para consumir o estado `vipThreshold` sincronizado com o backend, eliminando a quebra do `ErrorBoundary` e limpando imports não utilizados.
   - [x] **Paginação do Histórico de Fechamentos de Caixa (`CashManagement.jsx`)**: Implementada paginação (15 turnos por página) e botão dinâmico de carregamento sob demanda (`+ Carregar mais do banco`) no histórico e auditoria de fechamentos de turno (Aba 3), evitando travamento em lojas com centenas de turnos arquivados.
   - [x] **Preservação de Turno Ativo no Kanban de Pedidos (`Orders.jsx`)**: Mantido o escopo focado do turno do dia em `Orders.jsx` conforme aprovado pelo lojista, sem cortes arbitrários de pedidos em andamento.
 
@@ -69,7 +89,7 @@
   - [x] **Preservação de Contexto do Carrinho**: Inclusão de `tenant_id` em cada item mapeado no carrinho dentro de `OrderModal.jsx` e passagem do tenant correto para a chave de idempotência e criação segura do pedido.
   - [x] **Ajuste Fino de Layout do Banner & Cards de Entrega/Cashback**: Reduzido o recuo do cardápio sobre o banner (`-mt-2.5 sm:-mt-3`) e altura calibrada para visualização íntegra da imagem sem cortes, preservando cantos arredondados (`rounded-t-[24px]`).
   - [x] **Alerta Sonoro de Novos Pedidos (`soundAlert.js`)**: Trava de concorrência (`isPlaying`) e intervalo de 2.5s entre repetições eliminando a sobreposição de áudio ("som em cima do outro"), com sequência harmônica limpa de 3 toques ordenados.
-  - [x] **Cashback Vitalício (Sem Vencimento / 0 Dias)**: Suporte completo a saldo sem expiração no banco Supabase (`v_new_expires_at := NULL`), painel administrativo com selo *"Para sempre (Sem validade / Crédito vitalício)"* e visualização no extrato do cliente como *"Saldo vitalício"*.
+  - [x] **Cashback Vitalício (Sem Vencimento / 0 Dias)**: Suporte completo a saldo sem expiração no banco Supabase (`v_new_expires_at := NULL`), painel administrativo com selo _"Para sempre (Sem validade / Crédito vitalício)"_ e visualização no extrato do cliente como _"Saldo vitalício"_.
 
 - [x] 📱 **Autenticação & OTP Multi-Canal (SMS Dev + Comtele SMS + Fallback Meta WhatsApp - `whatsapp-otp`, `Supabase Edge Functions`)**:
   - [x] **Integração com SMS Dev API v1 (`whatsapp-otp/index.ts`)**: Suporte nativo ao gateway de SMS nacional SMS Dev (`POST https://api.smsdev.com.br/v1/send`) via secret `SMSDEV_API_KEY`, garantindo envio rápido sem burocracia por R$ 0,05 a R$ 0,07 por mensagem.
@@ -88,9 +108,9 @@
     - [x] Componentes de login (`WhatsAppAuthModal.jsx`, `UserProfileSheet.jsx`, `OrderModal.jsx`) 100% alinhados para envio de SMS/Celular, com timer formatado, persistência em localStorage e bloqueio de cliques repetidos.
     - [x] **Fluxo Unificado Padrão iFood / Uber em 3 Etapas**:
       - Etapa 1: Apenas o número de celular com formatação automática e botão `Continuar`.
-      - **Modal de Confirmação Pré-Disparo (Padrão WhatsApp)**: Card de confirmação (*"Confirme seu número"*) antes do envio real do SMS, com opção de `Editar` ou `Sim, enviar SMS`, impedindo desperdício de créditos por digitação errada.
+      - **Modal de Confirmação Pré-Disparo (Padrão WhatsApp)**: Card de confirmação (_"Confirme seu número"_) antes do envio real do SMS, com opção de `Editar` ou `Sim, enviar SMS`, impedindo desperdício de créditos por digitação errada.
       - Etapa 2: Código SMS de 6 dígitos com validação instantânea ao digitar o 6º dígito, timer de bloqueio progressivo e opção `Alterar número`.
-      - Etapa 3 (condicional): Se cliente já cadastrado com nome, login imediato direto sem atrito; se novo cliente, solicitação elegante de nome completo (*"Como podemos te chamar?"*) e conclusão imediata.
+      - Etapa 3 (condicional): Se cliente já cadastrado com nome, login imediato direto sem atrito; se novo cliente, solicitação elegante de nome completo (_"Como podemos te chamar?"_) e conclusão imediata.
     - [x] **Proteção Total Anti-Refresh (Front & Back)**: O tempo de cooldown (1 min, 5 min, etc.) utiliza timestamp absoluto gravado em `localStorage` e é validado no servidor Supabase PostgreSQL; se a página for recarregada ou aberta em nova aba, o tempo não se perde e o cliente continua bloqueado até o término real.
     - [x] **Design Executivo Sóbrio**: 100% livre de emojis (`🔒`, `🛡️`), cores pastéis infantis ou estética genérica de IA; tipografia nítida, botões sóbrios e microcopy institucional de segurança.
     - [x] Correção do recarregamento de tela e reset indesejado ao alternar de aba/aplicativo (`AuthContext.jsx` atualizado para não desmontar a árvore React em `TOKEN_REFRESHED`).
@@ -311,6 +331,7 @@
 
 - [x] 🔐 **Redesign da Tela de Login, E-mail Unificado do Lojista & Recuperação de Senha (`AdminLogin.jsx`, `SuperAdmin.jsx`)**:
   - [x] **Login Responsivo Claro (Mobile & Desktop)**: Novo visual com `/imgs/backgroundloginmobile.png`, `/imgs/backgroundlogin.png` e `/imgs/logo-painel.png`, card branco arredondado, coluna institucional no desktop e remoção da menção a `superadmin` do placeholder.
+  - [x] **Resolução Automática de SuperAdmin no Login (`AdminLogin.jsx`)**: Corrigido mapeamento de autenticação ao digitar `superadmin` / `davi` para resolver nativamente para a identidade oficial (`davialeixo_nogueira@outlook.com`), garantindo login instantâneo com a senha mestre.
   - [x] **E-mail Unificado na Edição (`update_tenant_info` & `get_master_tenants`)**: Migration `20261110_unified_admin_email_and_recovery.sql` sincronizando `auth.users.email`, `auth.identities` e `tenants.email` ao editar um restaurante no [[SuperAdmin]].
   - [x] **Fluxo "Esqueci minha senha?" (`AdminLogin.jsx`)**: Envio de link de recuperação via Supabase Auth (`resetPasswordForEmail` usando código da loja + usuário ou e-mail), SMTP configurado via Brevo + template HTML `recovery.html`, e retorno direto ao login (`exitRecoveryToLogin`) preservando loja e usuário após redefinir a senha.
 
@@ -449,6 +470,7 @@
   - [x] **Toggle Rápido de Campanha (No Ar vs. Pausado)**: Switch nos cards com feedback visual em tempo real (badge `🟢 No Ar` vs `⏸️ Pausado` com efeito grayscale/opacidade) e mensagens toast informativas.
 
 - [x] 💳 **Gateway de Cobrança Asaas: Mensalidade Customizável & Trava Ativa de Vencimento (100% Concluído & Integrado)**:
+  - [x] **Suporte a Mensalidade R$ 0,00 (Plano Isento / Cortesia)**: Corrigido fallback JavaScript (`0 || 149`) em `SubscriptionTab.jsx` e `SuperAdmin.jsx` para suportar legitimamente o valor zero (`0.00`), exibindo badge de isenção e dispensando cobranças no Asaas.
   - [x] **Valor de Mensalidade 100% Livre no SuperAdmin**: Campo numérico aberto `Valor da Mensalidade (R$)` nos modais de criação e edição de empresa, permitindo definir qualquer valor negociado por cliente (independente do plano técnico).
   - [x] **Emissão Automatizada no Asaas**: O valor customizado digitado pelo SuperAdmin é enviado diretamente à API do Asaas para gerar a assinatura recorrente e faturas no Pix/Boleto.
   - [x] **Trava Ativa por Data de Vencimento (`next_due_date`)**: Sistema agora verifica ativamente se a fatura está vencida (com 2 dias de tolerância de cortesia). Se a data expirar sem pagamento confirmado, o painel e o cardápio são bloqueados automaticamente com tela de pagamento do Asaas, sem depender exclusivamente da chegada de webhooks.
@@ -654,6 +676,15 @@
 - [x] **Auto-Onboarding no Asaas**: Criar cliente, assinatura e link da 1ª fatura automaticamente ao cadastrar nova empresa no SuperAdmin.
 - [x] **Autoatendimento Fiscal na Loja**: Permitir que o lojista atualize seu e-mail de faturamento, WhatsApp e CPF/CNPJ em Configurações > Minha Assinatura com sincronização direta no Asaas.
 - [x] **Webhook do Asaas Ativo**: Altera automaticamente o status `is_active` e `subscription_status` da loja no Supabase em tempo real.
+- [ ] 🚀 **Virada de Chave para Produção Oficial do Asaas (Esta Semana)**:
+  - [x] **Configuração da Conta Real Asaas**: Conta PJ/PF oficial criada no Asaas (`Davi Aleixo Nogueira`), documentos enviados e chave de API de Produção validada via API (`Status: 200`).
+  - [x] **Token e Parâmetros de Webhook Definidos**: Token `whsec_tGbaw4UuaJlgwokc_aSFDyM2450` gerado e testado com sucesso contra a Edge Function (`Status: 200` com autenticação segura).
+  - [x] **Deploy de 100% das 5 Edge Functions no Banco de Produção (`jqwtnzdsaivbjudvjhld`)**: Todas as 5 Edge Functions (`asaas`, `mercadopago`, `whatsapp-otp`, `admin-login` e `r2-upload`) compiladas e deployadas oficialmente no projeto de produção PedeMuleke.
+  - [x] **Webhook Oficial de Produção Validado**: Endpoint `https://jqwtnzdsaivbjudvjhld.supabase.co/functions/v1/asaas` testado e respondendo `200 OK`.
+  - [x] **Criação & Vínculo do Primeiro Cliente Real no Asaas**: Cliente `PedeMuleke - Davi Aleixo Nogueira` (`cus_000219844975`) criado e vinculado com sucesso na conta Asaas de produção.
+  - [x] **Botão de Emissão Sob Demanda no SuperAdmin (`SuperAdmin.jsx`)**: Adicionado botão executivo "Gerar Assinatura & Fatura no Asaas" e auto-emissão ao preencher CPF/CNPJ na edição de qualquer loja.
+  - [ ] **Emissão da 1ª Assinatura Real**: Cadastrar CPF/CNPJ na loja PedeMuleke para gerar a primeira assinatura recorrente e fatura Pix/Boleto oficial no Asaas.
+  - [ ] **Régua de Notificações Ativa no Asaas**: Ativar disparos automáticos de WhatsApp, E-mail e SMS nativos do Asaas para cobrança prévia (3 dias antes), no dia do vencimento e aviso de atraso.
 - [ ] Definir régua de cobrança automática (Lembrete via WhatsApp e E-mail 3 dias antes do vencimento).
 - [ ] **Módulo Financeiro SaaS no SuperAdmin**: Dashboard executivo com MRR, ARR, inadimplência Asaas e lucro líquido em tempo real ([[02 - 💡 Ideias & Brainstorm]]).
 
