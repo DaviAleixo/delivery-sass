@@ -85,6 +85,21 @@ export const getSessionPaymentsList = (session) => {
   return [];
 };
 
+export const getNextComandaName = (existingNames = []) => {
+  const safeList = Array.isArray(existingNames) ? existingNames : [];
+  let highestNum = 0;
+  safeList.forEach(name => {
+    const match = String(name || "").match(/comanda\s*(\d+)/i);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (!isNaN(num) && num > highestNum) {
+        highestNum = num;
+      }
+    }
+  });
+  return `Comanda ${highestNum + 1}`;
+};
+
 export default function TablesPage() {
   const navigate = useNavigate();
   const [tables, setTables] = useState([]);
@@ -164,6 +179,13 @@ export default function TablesPage() {
   const [_preBillViewMode, _setPreBillViewMode] = useState("by_person"); // 'by_person' | 'items'
   const [isCopiedSummary, setIsCopiedSummary] = useState(false);
   const [isPrintingPreBill, setIsPrintingPreBill] = useState(false);
+
+  // Sub-Comandas por Mesa
+  const [isAddComandaModalOpen, setIsAddComandaModalOpen] = useState(false);
+  const [newComandaName, setNewComandaName] = useState("");
+  const [suggestedComandaName, setSuggestedComandaName] = useState("Comanda 1");
+  const [settlingComanda, setSettlingComanda] = useState(null); // Objeto da comanda que está sendo quitada individualmente
+  const [preBillFilterPerson, setPreBillFilterPerson] = useState(null); // Nome da comanda para pré-conta individual (ou null para a mesa toda)
 
   // Configuração da taxa de serviço da mesa
   const isServiceFeeEnabled = settings?.table_service_fee_enabled === true;
@@ -354,11 +376,54 @@ export default function TablesPage() {
 
       const totalItemsCount = aggregatedItems.reduce((sum, it) => sum + it.quantity, 0);
 
-      // Agrupamento detalhado por pessoa (cliente que pediu na mesa)
+      // Status efetivo: mesa ocupada apenas se houver sessão aberta ou pedidos em aberto não liquidados
+      const hasActiveOrders = tableOrders.length > 0;
+      const isBillRequested = (activeSession?.status === 'bill_requested') || (table.status === 'bill_requested');
+      const isOccupied = isBillRequested ? false : (Boolean(activeSession) || hasActiveOrders);
+      const effectiveStatus = isBillRequested ? 'bill_requested' : (isOccupied ? 'occupied' : 'available');
+
+      // Sessão resolvida (com fallback para pedidos feitos no PDV)
+      const resolvedSession = activeSession || (hasActiveOrders || isOccupied ? {
+        id: tableOrders[0]?.table_session_id || `virtual_${table.id}`,
+        table_id: table.id,
+        table_number: table.table_number,
+        customer_name: tableOrders[0]?.customer_name || `Comanda 1`,
+        customer_phone: tableOrders[0]?.customer_phone || "",
+        status: isBillRequested ? 'bill_requested' : 'open',
+        opened_at: tableOrders[0]?.created_date || new Date().toISOString(),
+        is_virtual: !activeSession,
+      } : null);
+
+      const sessionPayments = getSessionPaymentsList(resolvedSession);
+
+      // Agrupamento detalhado por comanda / pessoa (com suporte a Comanda 1, 2, 3...)
       const customerMap = new Map();
+
+      // 1. Inclui comandas cadastradas na sessão (mesmo antes de terem pedidos lançados)
+      const sessionComandas = Array.isArray(resolvedSession?.payment_details?.comandas)
+        ? resolvedSession.payment_details.comandas
+        : [];
+      sessionComandas.forEach(cName => {
+        const cleanName = String(cName || "").trim();
+        if (cleanName) {
+          const normKey = cleanName.toLowerCase();
+          if (!customerMap.has(normKey)) {
+            customerMap.set(normKey, {
+              name: cleanName,
+              phone: "",
+              totalAmount: 0,
+              itemsCount: 0,
+              items: [],
+              orderCount: 0,
+            });
+          }
+        }
+      });
+
+      // 2. Mapeia todos os pedidos vinculados
       tableOrders.forEach(ord => {
         const rawName = (ord.customer_name || "").trim();
-        const fallbackName = activeSession?.customer_name || `Mesa ${table.table_number}`;
+        const fallbackName = resolvedSession?.customer_name || `Comanda 1`;
         const personName = rawName || fallbackName;
         const normKey = personName.toLowerCase();
 
@@ -403,25 +468,45 @@ export default function TablesPage() {
           }
         });
       });
-      const ordersByCustomer = Array.from(customerMap.values());
 
-      // Status efetivo: mesa ocupada apenas se houver sessão aberta ou pedidos em aberto não liquidados
-      const hasActiveOrders = tableOrders.length > 0;
-      const isBillRequested = (activeSession?.status === 'bill_requested') || (table.status === 'bill_requested');
-      const isOccupied = isBillRequested ? false : (Boolean(activeSession) || hasActiveOrders);
-      const effectiveStatus = isBillRequested ? 'bill_requested' : (isOccupied ? 'occupied' : 'available');
+      // Se a mesa estiver aberta e não tiver nenhuma comanda, inicializa ao menos a Comanda 1 padrão
+      if (customerMap.size === 0 && (isOccupied || isBillRequested)) {
+        const defaultName = resolvedSession?.customer_name || "Comanda 1";
+        customerMap.set(defaultName.toLowerCase(), {
+          name: defaultName,
+          phone: "",
+          totalAmount: 0,
+          itemsCount: 0,
+          items: [],
+          orderCount: 0,
+        });
+      }
 
-      // Sessão resolvida (com fallback para pedidos feitos no PDV)
-      const resolvedSession = activeSession || (hasActiveOrders || isOccupied ? {
-        id: tableOrders[0]?.table_session_id || `virtual_${table.id}`,
-        table_id: table.id,
-        table_number: table.table_number,
-        customer_name: tableOrders[0]?.customer_name || `Mesa ${table.table_number}`,
-        customer_phone: tableOrders[0]?.customer_phone || "",
-        status: isBillRequested ? 'bill_requested' : 'open',
-        opened_at: tableOrders[0]?.created_date || new Date().toISOString(),
-        is_virtual: !activeSession,
-      } : null);
+      const sFeeMultiplierCalc = Number(settings?.table_service_fee_rate ?? 10) / 100;
+      const sFeeEnabledCalc = settings?.table_service_fee_enabled === true;
+
+      // 3. Enriquece cada comanda com status de pagamento individual e saldo devedor
+      const ordersByCustomer = Array.from(customerMap.values()).map(person => {
+        const norm = (person.name || "").trim().toLowerCase();
+        const pPayments = sessionPayments.filter(p => (p.customer_name || "").trim().toLowerCase() === norm);
+        const pPaid = pPayments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+        const pFee = sFeeEnabledCalc ? (person.totalAmount * sFeeMultiplierCalc) : 0;
+        const pTotalWithFee = person.totalAmount + pFee;
+        const pRemaining = Math.max(0, pTotalWithFee - pPaid);
+        const isPaid = (pPaid >= (pTotalWithFee - 0.01)) && (pTotalWithFee > 0);
+        const pMethod = pPayments.length > 0 ? (pPayments[pPayments.length - 1].method_label || getPaymentMethodLabel(pPayments[pPayments.length - 1].method)) : null;
+
+        return {
+          ...person,
+          paidAmount: pPaid,
+          serviceFee: pFee,
+          totalWithFee: pTotalWithFee,
+          remainingAmount: pRemaining,
+          isPaid,
+          payments: pPayments,
+          lastPaymentMethod: pMethod,
+        };
+      });
 
       // ⏱️ Cronômetro: Duração total da mesa aberta
       let tableDurationText = "";
@@ -499,7 +584,6 @@ export default function TablesPage() {
         }
       }
 
-      const sessionPayments = getSessionPaymentsList(resolvedSession);
       const paidAmount = sessionPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
       const sFeeMultiplier = Number(settings?.table_service_fee_rate ?? 10) / 100;
       const feeEnabled = settings?.table_service_fee_enabled === true;
@@ -601,13 +685,16 @@ export default function TablesPage() {
       setIsOpeningTable(true);
       const activeTenantId = getActiveTenantId() || "a0000000-0000-0000-0000-000000000001";
 
+      const initialComanda = openCustomerName.trim() || "Comanda 1";
+      const initialDetails = { comandas: [initialComanda], payments: [] };
+
       // Call Supabase RPC or direct Entity creation
       let newSession = null;
       if (isSupabaseConfigured() && supabase) {
         const { data, error } = await supabase.rpc("open_table_session", {
           p_tenant_id: activeTenantId,
           p_table_id: selectedTable.id,
-          p_customer_name: openCustomerName.trim() || `Mesa ${selectedTable.table_number}`,
+          p_customer_name: initialComanda,
           p_customer_phone: null,
           p_people_count: 1,
         });
@@ -619,31 +706,38 @@ export default function TablesPage() {
             tenant_id: activeTenantId,
             table_id: selectedTable.id,
             table_number: selectedTable.table_number,
-            customer_name: openCustomerName.trim() || `Mesa ${selectedTable.table_number}`,
+            customer_name: initialComanda,
             customer_phone: "",
             people_count: 1,
             opened_at: new Date().toISOString(),
             status: "open",
+            payment_details: initialDetails,
           });
           await RestaurantTable.update(selectedTable.id, { status: "occupied" });
         } else {
           newSession = data;
+          if (newSession?.id) {
+            await supabase.from("table_sessions").update({
+              payment_details: initialDetails,
+            }).eq("id", newSession.id).catch(() => {});
+          }
         }
       } else {
         newSession = await TableSession.create({
           tenant_id: activeTenantId,
           table_id: selectedTable.id,
           table_number: selectedTable.table_number,
-          customer_name: openCustomerName.trim() || `Mesa ${selectedTable.table_number}`,
+          customer_name: initialComanda,
           customer_phone: "",
           people_count: 1,
           opened_at: new Date().toISOString(),
           status: "open",
+          payment_details: initialDetails,
         });
         await RestaurantTable.update(selectedTable.id, { status: "occupied" });
       }
 
-      toast.success(`Mesa ${selectedTable.table_number} aberta com sucesso!`);
+      toast.success(`Mesa ${selectedTable.table_number} aberta com ${initialComanda}! 🍻`);
       setIsOpenTableModalOpen(false);
       await loadAllData();
 
@@ -769,19 +863,16 @@ export default function TablesPage() {
     }
   };
 
-  // Gera texto da pré-conta para impressão térmica (80mm/58mm) com separação por pessoa
-  const generatePreBillThermalText = (table, storeSettings) => {
+  // Gera texto da pré-conta para impressão térmica (80mm/58mm) com separação por pessoa ou individual
+  const generatePreBillThermalText = (table, storeSettings, filterPerson = null) => {
     const width = 42;
     const storeName = (storeSettings?.restaurant_name || "RESTAURANTE").toUpperCase();
     const tableNum = String(table?.table_number || "");
     const session = table?.activeSession;
     const ordersByCustomer = table?.ordersByCustomer || [];
-    const subtotal = Number(table?.totalConsumed || 0);
     const isFeeEnabled = storeSettings?.table_service_fee_enabled === true;
     const feeRate = Number(storeSettings?.table_service_fee_rate ?? 10);
     const feeMultiplier = feeRate / 100;
-    const serviceFee = isFeeEnabled ? (subtotal * feeMultiplier) : 0;
-    const totalWithService = subtotal + serviceFee;
 
     const pad = (left, right) => {
       const l = String(left || "");
@@ -799,82 +890,140 @@ export default function TablesPage() {
 
     const lines = [];
     lines.push(center(storeName));
-    lines.push(center("*** PRE-CONTA / CONFERENCIA ***"));
-    lines.push("-".repeat(width));
-    lines.push(pad(`MESA ${tableNum}`, session?.customer_name ? `Resp: ${session.customer_name}` : ""));
-    lines.push(pad(`Data: ${new Date().toLocaleDateString("pt-BR")}`, `Hora: ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`));
-    lines.push("=".repeat(width));
 
-    // CONSUMO POR PESSOA
-    if (ordersByCustomer.length > 0) {
-      lines.push(center("CONSUMO DETALHADO POR PESSOA"));
+    if (filterPerson) {
+      lines.push(center(`*** PRE-CONTA: ${filterPerson.toUpperCase()} ***`));
       lines.push("-".repeat(width));
-
-      ordersByCustomer.forEach((person, idx) => {
-        const pSubtotal = Number(person.totalAmount || 0);
-        const pService = isFeeEnabled ? (pSubtotal * feeMultiplier) : 0;
-        const pTotal = pSubtotal + pService;
-
-        lines.push(`>> ${person.name.toUpperCase()}`);
-        (person.items || []).forEach(it => {
-          const itemLine = `  ${it.quantity}x ${it.name}`;
-          const itemPrice = `R$ ${Number(it.totalPrice || 0).toFixed(2).replace(".", ",")}`;
-          lines.push(pad(itemLine.slice(0, 28), itemPrice));
-        });
-        lines.push(pad("   Subtotal cliente:", `R$ ${pSubtotal.toFixed(2).replace(".", ",")}`));
-        if (isFeeEnabled) {
-          lines.push(pad(`   c/ ${feeRate}% opcional:`, `R$ ${pTotal.toFixed(2).replace(".", ",")}`));
-        }
-        if (idx < ordersByCustomer.length - 1) {
-          lines.push("- - - - - - - - - - - - - - - - - - - - - -");
-        }
-      });
+      lines.push(pad(`MESA ${tableNum}`, `COMANDA: ${filterPerson.toUpperCase()}`));
+      lines.push(pad(`Data: ${new Date().toLocaleDateString("pt-BR")}`, `Hora: ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`));
       lines.push("=".repeat(width));
-    }
 
-    // TOTAIS DA MESA
-    lines.push(center("TOTAIS DA MESA"));
-    lines.push(pad("SUBTOTAL DE CONSUMO:", `R$ ${subtotal.toFixed(2).replace(".", ",")}`));
-    if (isFeeEnabled) {
-      lines.push(pad(`TAXA SERVICO (${feeRate}% OPC.):`, `R$ ${serviceFee.toFixed(2).replace(".", ",")}`));
+      const person = ordersByCustomer.find(p => (p.name || "").trim().toLowerCase() === filterPerson.trim().toLowerCase()) || {
+        name: filterPerson,
+        items: [],
+        totalAmount: 0,
+      };
+      const pSubtotal = Number(person.totalAmount || 0);
+      const pService = isFeeEnabled ? (pSubtotal * feeMultiplier) : 0;
+      const pTotal = pSubtotal + pService;
+
+      lines.push(center(`ITENS CONSUMIDOS (${person.itemsCount || (person.items || []).length})`));
       lines.push("-".repeat(width));
-      lines.push(pad(`TOTAL GERAL C/ ${feeRate}%:`, `R$ ${totalWithService.toFixed(2).replace(".", ",")}`));
+      (person.items || []).forEach(it => {
+        const itemLine = `  ${it.quantity}x ${it.name}`;
+        const itemPrice = `R$ ${Number(it.totalPrice || 0).toFixed(2).replace(".", ",")}`;
+        lines.push(pad(itemLine.slice(0, 28), itemPrice));
+      });
+      lines.push("-".repeat(width));
+      lines.push(pad("SUBTOTAL:", `R$ ${pSubtotal.toFixed(2).replace(".", ",")}`));
+      if (isFeeEnabled) {
+        lines.push(pad(`TAXA SERVICO (${feeRate}% OPC.):`, `R$ ${pService.toFixed(2).replace(".", ",")}`));
+        lines.push("-".repeat(width));
+        lines.push(pad(`TOTAL DA COMANDA:`, `R$ ${pTotal.toFixed(2).replace(".", ",")}`));
+      } else {
+        lines.push("-".repeat(width));
+        lines.push(pad(`TOTAL DA COMANDA:`, `R$ ${pSubtotal.toFixed(2).replace(".", ",")}`));
+      }
+
+      // Pagamentos desta comanda
+      const allPayments = getSessionPaymentsList(session);
+      const personPayments = allPayments.filter(p => (p.customer_name || "").trim().toLowerCase() === filterPerson.trim().toLowerCase());
+      if (personPayments.length > 0) {
+        const pPaid = personPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+        const pRem = Math.max(0, pTotal - pPaid);
+        lines.push("-".repeat(width));
+        lines.push(center("PAGAMENTOS RECEBIDOS"));
+        personPayments.forEach(p => {
+          const methodStr = p.method_label || getPaymentMethodLabel(p.method);
+          const amtStr = `R$ ${Number(p.amount || 0).toFixed(2).replace(".", ",")}`;
+          lines.push(pad(`  ${methodStr}`, amtStr));
+        });
+        lines.push("-".repeat(width));
+        lines.push(pad("TOTAL PAGO:", `R$ ${pPaid.toFixed(2).replace(".", ",")}`));
+        lines.push(pad(pRem === 0 ? "STATUS:" : "SALDO A PAGAR:", pRem === 0 ? "100% QUITADO" : `R$ ${pRem.toFixed(2).replace(".", ",")}`));
+      }
     } else {
+      lines.push(center("*** PRE-CONTA / CONFERENCIA ***"));
       lines.push("-".repeat(width));
-      lines.push(pad("TOTAL GERAL:", `R$ ${subtotal.toFixed(2).replace(".", ",")}`));
-    }
+      lines.push(pad(`MESA ${tableNum}`, session?.customer_name ? `Resp: ${session.customer_name}` : ""));
+      lines.push(pad(`Data: ${new Date().toLocaleDateString("pt-BR")}`, `Hora: ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`));
+      lines.push("=".repeat(width));
 
-    // PAGAMENTOS RECEBIDOS (SE HOUVER)
-    const sessionPayments = getSessionPaymentsList(session);
-    if (sessionPayments.length > 0) {
-      const totalPaid = sessionPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
-      const remaining = Math.max(0, totalWithService - totalPaid);
+      const subtotal = Number(table?.totalConsumed || 0);
+      const serviceFee = isFeeEnabled ? (subtotal * feeMultiplier) : 0;
+      const totalWithService = subtotal + serviceFee;
 
-      lines.push("-".repeat(width));
-      lines.push(center("PAGAMENTOS RECEBIDOS"));
-      sessionPayments.forEach(p => {
-        const timeStr = p.created_at ? new Date(p.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
-        const methodStr = p.method_label || getPaymentMethodLabel(p.method);
-        const whoStr = p.customer_name ? ` (${p.customer_name})` : "";
-        const desc = `${timeStr} ${methodStr}${whoStr}`.slice(0, 24);
-        const amtStr = `R$ ${Number(p.amount || 0).toFixed(2).replace(".", ",")}`;
-        lines.push(pad(`  ${desc}`, amtStr));
-      });
-      lines.push("-".repeat(width));
-      lines.push(pad("TOTAL JA PAGO:", `R$ ${totalPaid.toFixed(2).replace(".", ",")}`));
-      lines.push(pad(remaining === 0 ? "STATUS:" : "SALDO A PAGAR:", remaining === 0 ? "100% QUITADO" : `R$ ${remaining.toFixed(2).replace(".", ",")}`));
-    }
-    lines.push("-".repeat(width));
+      // CONSUMO POR PESSOA
+      if (ordersByCustomer.length > 0) {
+        lines.push(center("CONSUMO DETALHADO POR PESSOA"));
+        lines.push("-".repeat(width));
 
-    // QUANTO CADA UM PAGA
-    if (ordersByCustomer.length > 1) {
-      lines.push(center("QUANTO CADA UM PAGA" + (isFeeEnabled ? ` (C/ ${feeRate}%)` : "")));
-      ordersByCustomer.forEach(person => {
-        const pSubtotal = Number(person.totalAmount || 0);
-        const pTotal = isFeeEnabled ? (pSubtotal * (1 + feeMultiplier)) : pSubtotal;
-        lines.push(pad(`  ${person.name}:`, `R$ ${pTotal.toFixed(2).replace(".", ",")}`));
-      });
+        ordersByCustomer.forEach((person, idx) => {
+          const pSubtotal = Number(person.totalAmount || 0);
+          const pService = isFeeEnabled ? (pSubtotal * feeMultiplier) : 0;
+          const pTotal = pSubtotal + pService;
+
+          lines.push(`>> ${person.name.toUpperCase()}`);
+          (person.items || []).forEach(it => {
+            const itemLine = `  ${it.quantity}x ${it.name}`;
+            const itemPrice = `R$ ${Number(it.totalPrice || 0).toFixed(2).replace(".", ",")}`;
+            lines.push(pad(itemLine.slice(0, 28), itemPrice));
+          });
+          lines.push(pad("   Subtotal cliente:", `R$ ${pSubtotal.toFixed(2).replace(".", ",")}`));
+          if (isFeeEnabled) {
+            lines.push(pad(`   c/ ${feeRate}% opcional:`, `R$ ${pTotal.toFixed(2).replace(".", ",")}`));
+          }
+          if (idx < ordersByCustomer.length - 1) {
+            lines.push("- - - - - - - - - - - - - - - - - - - - - -");
+          }
+        });
+        lines.push("=".repeat(width));
+      }
+
+      // TOTAIS DA MESA
+      lines.push(center("TOTAIS DA MESA"));
+      lines.push(pad("SUBTOTAL DE CONSUMO:", `R$ ${subtotal.toFixed(2).replace(".", ",")}`));
+      if (isFeeEnabled) {
+        lines.push(pad(`TAXA SERVICO (${feeRate}% OPC.):`, `R$ ${serviceFee.toFixed(2).replace(".", ",")}`));
+        lines.push("-".repeat(width));
+        lines.push(pad(`TOTAL GERAL C/ ${feeRate}%:`, `R$ ${totalWithService.toFixed(2).replace(".", ",")}`));
+      } else {
+        lines.push("-".repeat(width));
+        lines.push(pad("TOTAL GERAL:", `R$ ${subtotal.toFixed(2).replace(".", ",")}`));
+      }
+
+      // PAGAMENTOS RECEBIDOS (SE HOUVER)
+      const sessionPayments = getSessionPaymentsList(session);
+      if (sessionPayments.length > 0) {
+        const totalPaid = sessionPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+        const remaining = Math.max(0, totalWithService - totalPaid);
+
+        lines.push("-".repeat(width));
+        lines.push(center("PAGAMENTOS RECEBIDOS"));
+        sessionPayments.forEach(p => {
+          const timeStr = p.created_at ? new Date(p.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
+          const methodStr = p.method_label || getPaymentMethodLabel(p.method);
+          const whoStr = p.customer_name ? ` (${p.customer_name})` : "";
+          const desc = `${timeStr} ${methodStr}${whoStr}`.slice(0, 24);
+          const amtStr = `R$ ${Number(p.amount || 0).toFixed(2).replace(".", ",")}`;
+          lines.push(pad(`  ${desc}`, amtStr));
+        });
+        lines.push("-".repeat(width));
+        lines.push(pad("TOTAL JA PAGO:", `R$ ${totalPaid.toFixed(2).replace(".", ",")}`));
+        lines.push(pad(remaining === 0 ? "STATUS:" : "SALDO A PAGAR:", remaining === 0 ? "100% QUITADO" : `R$ ${remaining.toFixed(2).replace(".", ",")}`));
+      }
       lines.push("-".repeat(width));
+
+      // QUANTO CADA UM PAGA
+      if (ordersByCustomer.length > 1) {
+        lines.push(center("QUANTO CADA UM PAGA" + (isFeeEnabled ? ` (C/ ${feeRate}%)` : "")));
+        ordersByCustomer.forEach(person => {
+          const pSubtotal = Number(person.totalAmount || 0);
+          const pTotal = isFeeEnabled ? (pSubtotal * (1 + feeMultiplier)) : pSubtotal;
+          lines.push(pad(`  ${person.name}:`, `R$ ${pTotal.toFixed(2).replace(".", ",")}`));
+        });
+        lines.push("-".repeat(width));
+      }
     }
 
     lines.push(center("CONFERENCIA DE MESA"));
@@ -885,14 +1034,16 @@ export default function TablesPage() {
     return lines.join("\n");
   };
 
-  // Impressão da Pré-Conta (Direta via Spooler ou Navegador)
-  const handlePrintPreBill = async (tableToPrint) => {
+  // Impressão da Pré-Conta (Direta via Spooler ou Navegador - Toda a Mesa ou Comanda Individual)
+  const handlePrintPreBill = async (tableToPrint, filterPerson = null) => {
     const tbl = tableToPrint || currentTable || selectedTable;
     if (!tbl) return;
 
+    const personFilter = filterPerson || preBillFilterPerson || null;
+
     try {
       setIsPrintingPreBill(true);
-      const thermalText = generatePreBillThermalText(tbl, settings);
+      const thermalText = generatePreBillThermalText(tbl, settings, personFilter);
 
       let printedViaSpooler = false;
       try {
@@ -903,7 +1054,7 @@ export default function TablesPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             rawText: thermalText,
-            order: { id: `prebill_${tbl.table_number}` },
+            order: { id: `prebill_${tbl.table_number}${personFilter ? `_${personFilter}` : ""}` },
             storeName: settings?.restaurant_name,
           }),
           signal: controller.signal,
@@ -913,7 +1064,7 @@ export default function TablesPage() {
           const json = await res.json();
           if (json.success) {
             printedViaSpooler = true;
-            toast.success(`🖨️ Pré-conta da Mesa ${tbl.table_number} impressa com sucesso!`);
+            toast.success(`🖨️ Pré-conta ${personFilter ? `da Comanda "${personFilter}" (Mesa ${tbl.table_number})` : `da Mesa ${tbl.table_number}`} impressa com sucesso!`);
           }
         }
       } catch (_err) {
@@ -931,71 +1082,116 @@ export default function TablesPage() {
     }
   };
 
-  // Copia resumo por pessoa para colar no WhatsApp
-  const handleCopyPreBillSummary = (tableToCopy) => {
+  // Copia resumo por pessoa para colar no WhatsApp (Toda a mesa ou individual)
+  const handleCopyPreBillSummary = (tableToCopy, filterPerson = null) => {
     const tbl = tableToCopy || currentTable || selectedTable;
     if (!tbl) return;
 
-    const subtotal = Number(tbl.totalConsumed || 0);
+    const personFilter = filterPerson || preBillFilterPerson || null;
     const isFeeEnabled = settings?.table_service_fee_enabled === true;
     const feeRate = Number(settings?.table_service_fee_rate ?? 10);
     const feeMultiplier = feeRate / 100;
-    const serviceFee = isFeeEnabled ? (subtotal * feeMultiplier) : 0;
-    const totalWithService = subtotal + serviceFee;
     const ordersByCustomer = tbl.ordersByCustomer || [];
 
-    let text = `🧾 *PRÉ-CONTA - MESA ${tbl.table_number}*\n`;
-    text += `🏬 ${settings?.restaurant_name || "Restaurante"}\n`;
-    text += `📅 ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}\n\n`;
+    let text = "";
 
-    if (ordersByCustomer.length > 0) {
-      text += `👥 *CONSUMO POR PESSOA:*\n`;
-      ordersByCustomer.forEach(p => {
-        const pSub = Number(p.totalAmount || 0);
-        const pTotal = isFeeEnabled ? (pSub * (1 + feeMultiplier)) : pSub;
-        text += `\n👤 *${p.name}* (${p.itemsCount} ${p.itemsCount === 1 ? "item" : "itens"}):\n`;
-        (p.items || []).forEach(it => {
-          text += `  • ${it.quantity}x ${it.name} - R$ ${Number(it.totalPrice || 0).toFixed(2).replace(".", ",")}\n`;
+    if (personFilter) {
+      const person = ordersByCustomer.find(p => (p.name || "").trim().toLowerCase() === personFilter.trim().toLowerCase()) || {
+        name: personFilter,
+        items: [],
+        totalAmount: 0,
+      };
+      const pSub = Number(person.totalAmount || 0);
+      const pFee = isFeeEnabled ? (pSub * feeMultiplier) : 0;
+      const pTotal = pSub + pFee;
+
+      text += `🧾 *PRÉ-CONTA INDIVIDUAL: ${person.name.toUpperCase()}*\n`;
+      text += `🍽️ *Mesa ${tbl.table_number}* • 🏬 ${settings?.restaurant_name || "Restaurante"}\n`;
+      text += `📅 ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}\n\n`;
+
+      text += `📦 *ITENS CONSUMIDOS (${person.itemsCount || (person.items || []).length}):*\n`;
+      (person.items || []).forEach(it => {
+        text += `  • ${it.quantity}x ${it.name} - R$ ${Number(it.totalPrice || 0).toFixed(2).replace(".", ",")}\n`;
+      });
+
+      text += `\n💰 *Subtotal Comanda:* R$ ${pSub.toFixed(2).replace(".", ",")}\n`;
+      if (isFeeEnabled) {
+        text += `🛎️ *Taxa de Serviço (${feeRate}%):* R$ ${pFee.toFixed(2).replace(".", ",")}\n`;
+        text += `💳 *TOTAL DA COMANDA (c/ ${feeRate}%):* R$ ${pTotal.toFixed(2).replace(".", ",")}\n`;
+      } else {
+        text += `💳 *TOTAL DA COMANDA:* R$ ${pSub.toFixed(2).replace(".", ",")}\n`;
+      }
+
+      const allPayments = getSessionPaymentsList(tbl.activeSession);
+      const personPayments = allPayments.filter(p => (p.customer_name || "").trim().toLowerCase() === personFilter.trim().toLowerCase());
+      if (personPayments.length > 0) {
+        const pPaid = personPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+        const pRem = Math.max(0, pTotal - pPaid);
+        text += `\n💳 *PAGAMENTOS EFETUADOS:*\n`;
+        personPayments.forEach(p => {
+          text += `  • ${p.method_label || getPaymentMethodLabel(p.method)}: R$ ${Number(p.amount || 0).toFixed(2).replace(".", ",")}\n`;
         });
-        text += isFeeEnabled 
-          ? `  Subtotal: R$ ${pSub.toFixed(2).replace(".", ",")} | c/ ${feeRate}%: R$ ${pTotal.toFixed(2).replace(".", ",")}\n`
-          : `  Subtotal: R$ ${pSub.toFixed(2).replace(".", ",")}\n`;
-      });
-      text += `\n-------------------------\n`;
-    }
-
-    text += `💰 *Subtotal Consumo:* R$ ${subtotal.toFixed(2).replace(".", ",")}\n`;
-    if (isFeeEnabled) {
-      text += `🛎️ *Taxa de Serviço (${feeRate}%):* R$ ${serviceFee.toFixed(2).replace(".", ",")}\n`;
-      text += `💳 *TOTAL GERAL (c/ ${feeRate}%):* R$ ${totalWithService.toFixed(2).replace(".", ",")}\n`;
+        text += `💰 *Total Já Pago:* R$ ${pPaid.toFixed(2).replace(".", ",")}\n`;
+        text += pRem === 0 ? `✅ *Status:* 100% Quitado!\n` : `⚠️ *Saldo a Pagar:* R$ ${pRem.toFixed(2).replace(".", ",")}\n`;
+      }
     } else {
-      text += `💳 *TOTAL GERAL:* R$ ${subtotal.toFixed(2).replace(".", ",")}\n`;
-    }
+      const subtotal = Number(tbl.totalConsumed || 0);
+      const serviceFee = isFeeEnabled ? (subtotal * feeMultiplier) : 0;
+      const totalWithService = subtotal + serviceFee;
 
-    const sessionPayments = getSessionPaymentsList(tbl.activeSession);
-    if (sessionPayments.length > 0) {
-      const totalPaid = sessionPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
-      const remaining = Math.max(0, totalWithService - totalPaid);
-      text += `\n💳 *PAGAMENTOS RECEBIDOS:*\n`;
-      sessionPayments.forEach(p => {
-        const timeStr = p.created_at ? new Date(p.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
-        const whoStr = p.customer_name ? ` (${p.customer_name})` : "";
-        text += `  • ${timeStr} ${p.method_label || getPaymentMethodLabel(p.method)}${whoStr}: R$ ${Number(p.amount || 0).toFixed(2).replace(".", ",")}\n`;
-      });
-      text += `💰 *Total Já Pago:* R$ ${totalPaid.toFixed(2).replace(".", ",")}\n`;
-      text += remaining === 0 
-        ? `✅ *Status da Comanda:* 100% Quitado!\n`
-        : `⚠️ *Saldo Restante a Pagar:* R$ ${remaining.toFixed(2).replace(".", ",")}\n`;
-    }
+      text += `🧾 *PRÉ-CONTA - MESA ${tbl.table_number}*\n`;
+      text += `🏬 ${settings?.restaurant_name || "Restaurante"}\n`;
+      text += `📅 ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}\n\n`;
 
-    if (ordersByCustomer.length > 1) {
-      text += isFeeEnabled 
-        ? `\n📊 *QUANTO CADA UM PAGA (c/ ${feeRate}%):*\n`
-        : `\n📊 *QUANTO CADA UM PAGA:*\n`;
-      ordersByCustomer.forEach(p => {
-        const pTotal = isFeeEnabled ? Number(p.totalAmount || 0) * (1 + feeMultiplier) : Number(p.totalAmount || 0);
-        text += `  • ${p.name}: R$ ${pTotal.toFixed(2).replace(".", ",")}\n`;
-      });
+      if (ordersByCustomer.length > 0) {
+        text += `👥 *CONSUMO POR PESSOA:*\n`;
+        ordersByCustomer.forEach(p => {
+          const pSub = Number(p.totalAmount || 0);
+          const pTotal = isFeeEnabled ? (pSub * (1 + feeMultiplier)) : pSub;
+          text += `\n👤 *${p.name}* (${p.itemsCount} ${p.itemsCount === 1 ? "item" : "itens"}):\n`;
+          (p.items || []).forEach(it => {
+            text += `  • ${it.quantity}x ${it.name} - R$ ${Number(it.totalPrice || 0).toFixed(2).replace(".", ",")}\n`;
+          });
+          text += isFeeEnabled 
+            ? `  Subtotal: R$ ${pSub.toFixed(2).replace(".", ",")} | c/ ${feeRate}%: R$ ${pTotal.toFixed(2).replace(".", ",")}\n`
+            : `  Subtotal: R$ ${pSub.toFixed(2).replace(".", ",")}\n`;
+        });
+        text += `\n-------------------------\n`;
+      }
+
+      text += `💰 *Subtotal Consumo:* R$ ${subtotal.toFixed(2).replace(".", ",")}\n`;
+      if (isFeeEnabled) {
+        text += `🛎️ *Taxa de Serviço (${feeRate}%):* R$ ${serviceFee.toFixed(2).replace(".", ",")}\n`;
+        text += `💳 *TOTAL GERAL (c/ ${feeRate}%):* R$ ${totalWithService.toFixed(2).replace(".", ",")}\n`;
+      } else {
+        text += `💳 *TOTAL GERAL:* R$ ${subtotal.toFixed(2).replace(".", ",")}\n`;
+      }
+
+      const sessionPayments = getSessionPaymentsList(tbl.activeSession);
+      if (sessionPayments.length > 0) {
+        const totalPaid = sessionPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+        const remaining = Math.max(0, totalWithService - totalPaid);
+        text += `\n💳 *PAGAMENTOS RECEBIDOS:*\n`;
+        sessionPayments.forEach(p => {
+          const timeStr = p.created_at ? new Date(p.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
+          const whoStr = p.customer_name ? ` (${p.customer_name})` : "";
+          text += `  • ${timeStr} ${p.method_label || getPaymentMethodLabel(p.method)}${whoStr}: R$ ${Number(p.amount || 0).toFixed(2).replace(".", ",")}\n`;
+        });
+        text += `💰 *Total Já Pago:* R$ ${totalPaid.toFixed(2).replace(".", ",")}\n`;
+        text += remaining === 0 
+          ? `✅ *Status da Comanda:* 100% Quitado!\n`
+          : `⚠️ *Saldo Restante a Pagar:* R$ ${remaining.toFixed(2).replace(".", ",")}\n`;
+      }
+
+      if (ordersByCustomer.length > 1) {
+        text += isFeeEnabled 
+          ? `\n📊 *QUANTO CADA UM PAGA (c/ ${feeRate}%):*\n`
+          : `\n📊 *QUANTO CADA UM PAGA:*\n`;
+        ordersByCustomer.forEach(p => {
+          const pTotal = isFeeEnabled ? Number(p.totalAmount || 0) * (1 + feeMultiplier) : Number(p.totalAmount || 0);
+          text += `  • ${p.name}: R$ ${pTotal.toFixed(2).replace(".", ",")}\n`;
+        });
+      }
     }
 
     if (navigator?.clipboard) {
@@ -1177,7 +1373,94 @@ export default function TablesPage() {
       }
     }
 
+    setSettlingComanda(null);
     initializeSettlementModal(current);
+  };
+
+  // Abrir Modal de Pagamento para uma Comanda Específica da Mesa (Saída Antecipada / Quitação Individual)
+  const openComandaSettlement = async (person) => {
+    const current = currentTable || selectedTable;
+    if (!current || !person) return;
+
+    if (!cashSession.isCashDrawerOpen) {
+      const refreshed = await cashSession.refreshCashSession();
+      if (!refreshed?.isCashDrawerOpen) {
+        setPendingCashAction({ type: "settle_comanda", table: current, person });
+        setShowOpenCashModal(true);
+        return;
+      }
+    }
+
+    setSettlingComanda(person);
+    setIncludeServiceFee(isServiceFeeEnabled);
+    setDiscountAmount(0);
+    setShowDiscountField(false);
+
+    const pRem = Number(person.remainingAmount || 0);
+    setPartialPaymentAmount(pRem > 0 ? pRem : 0);
+    setPartialPayerName(person.name);
+    setPartialNotes(`Quitação da Comanda ${person.name}`);
+    setCashGiven("");
+    setPaymentMethod("dinheiro");
+    setIsSettlementModalOpen(true);
+  };
+
+  // Abrir Modal de Criação de Nova Comanda
+  const handleOpenAddComandaModal = () => {
+    const effectiveTable = currentTable || selectedTable;
+    if (!effectiveTable) return;
+    const existing = (effectiveTable.ordersByCustomer || []).map(p => p.name);
+    const nextName = getNextComandaName(existing);
+    setNewComandaName("");
+    setSuggestedComandaName(nextName);
+    setIsAddComandaModalOpen(true);
+  };
+
+  // Criar Nova Comanda na Mesa
+  const handleAddComanda = async (e) => {
+    e?.preventDefault();
+    const effectiveTable = currentTable || selectedTable;
+    if (!effectiveTable) return;
+    const existing = (effectiveTable.ordersByCustomer || []).map(p => p.name);
+    const finalName = newComandaName.trim() || suggestedComandaName || getNextComandaName(existing);
+
+    try {
+      const targetSession = effectiveTable.activeSession;
+      if (targetSession && !String(targetSession.id).startsWith("virtual_")) {
+        const currentComandas = Array.isArray(targetSession.payment_details?.comandas)
+          ? targetSession.payment_details.comandas
+          : [];
+        if (!currentComandas.some(c => c.toLowerCase() === finalName.toLowerCase())) {
+          const updatedComandas = [...currentComandas, finalName];
+          const updatedDetails = {
+            ...(typeof targetSession.payment_details === "object" && !Array.isArray(targetSession.payment_details) ? targetSession.payment_details : {}),
+            comandas: updatedComandas,
+          };
+          if (isSupabaseConfigured() && supabase) {
+            await supabase.from("table_sessions").update({
+              payment_details: updatedDetails,
+              updated_at: new Date().toISOString(),
+            }).eq("id", targetSession.id).catch(() => {});
+          }
+          await TableSession.update(targetSession.id, { payment_details: updatedDetails }).catch(() => {});
+        }
+      }
+
+      setQuickOrderPersonName(finalName);
+      setIsAddComandaModalOpen(false);
+      setIsAddItemModalOpen(true);
+      toast.success(`Comanda "${finalName}" adicionada à Mesa ${effectiveTable.table_number}!`);
+      loadAllData(false);
+    } catch (err) {
+      console.error("Erro ao adicionar comanda:", err);
+      toast.error("Erro ao adicionar comanda.");
+    }
+  };
+
+  // Abrir Pré-Conta de Comanda Individual
+  const handleOpenIndividualPreBill = (person) => {
+    setPreBillFilterPerson(person?.name || null);
+    setIsPrintPreBillOpen(true);
   };
 
   // Registrar Pagamento Parcial / Amortização da Mesa (Mantém mesa aberta)
@@ -1324,8 +1607,11 @@ export default function TablesPage() {
       setSelectedSession(authoritativeSessionObj);
       setSelectedTable(prev => prev ? { ...prev, activeSession: authoritativeSessionObj } : null);
 
-      if (newRemaining <= 0.01) {
-        toast.success(`Pagamento de R$ ${enteredAmount.toFixed(2).replace(".", ",")} registrado! Comanda 100% quitada.`);
+      if (settlingComanda) {
+        toast.success(`Comanda "${settlingComanda.name}" de R$ ${enteredAmount.toFixed(2).replace(".", ",")} quitada com sucesso! 🟢 A Mesa ${tbl.table_number} continua aberta.`);
+        setSettlingComanda(null);
+      } else if (newRemaining <= 0.01) {
+        toast.success(`Pagamento de R$ ${enteredAmount.toFixed(2).replace(".", ",")} registrado! Mesa 100% quitada.`);
       } else {
         toast.success(`Pagamento de R$ ${enteredAmount.toFixed(2).replace(".", ",")} recebido! Resta a pagar: R$ ${newRemaining.toFixed(2).replace(".", ",")}.`);
       }
@@ -1640,7 +1926,9 @@ export default function TablesPage() {
       setIsSubmittingQuickOrder(true);
       const activeTenantId = getActiveTenantId() || "a0000000-0000-0000-0000-000000000001";
       const totalCart = quickCart.reduce((sum, it) => sum + (Number(it.price) * it.qty), 0);
-      const personName = quickOrderPersonName.trim() || effectiveTable.activeSession?.customer_name || `Mesa ${effectiveTable.table_number}`;
+      const existingComandas = (effectiveTable.ordersByCustomer || []).map(p => p.name);
+      const fallbackName = existingComandas.length > 0 ? existingComandas[0] : (effectiveTable.activeSession?.customer_name || "Comanda 1");
+      const personName = quickOrderPersonName.trim() || fallbackName;
 
       const orderData = {
         tenant_id: activeTenantId,
@@ -2182,6 +2470,16 @@ export default function TablesPage() {
 
                 <div className="flex items-center gap-2">
                   <Button
+                    onClick={handleOpenAddComandaModal}
+                    size="sm"
+                    variant="outline"
+                    className="h-8 rounded-xl bg-white text-stone-800 hover:bg-stone-50 font-bold border border-stone-200 text-xs gap-1.5 cursor-pointer shadow-2xs"
+                  >
+                    <User className="w-3.5 h-3.5 text-stone-500" />
+                    <span>+ Nova Comanda</span>
+                  </Button>
+
+                  <Button
                     onClick={() => setIsAddItemModalOpen(true)}
                     size="sm"
                     className="h-8 rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-bold border border-emerald-200 text-xs gap-1.5 cursor-pointer shadow-2xs"
@@ -2244,25 +2542,48 @@ export default function TablesPage() {
                 )}
 
                 {currentTable.tableOrders.length === 0 ? (
-                  <div className="bg-gray-50 border border-dashed border-gray-200 rounded-3xl p-8 text-center">
+                  <div className="bg-gray-50 border border-dashed border-gray-200 rounded-3xl p-8 text-center space-y-3">
                     <p className="text-xs text-gray-500 font-medium">Nenhum item lançado ainda nesta mesa.</p>
-                    <Button
-                      onClick={() => setIsAddItemModalOpen(true)}
-                      className="mt-3 bg-[#047857] hover:bg-[#036348] text-white text-xs font-bold rounded-xl h-8 cursor-pointer"
-                    >
-                      Lançar Primeiro Item
-                    </Button>
+                    <div className="flex items-center justify-center gap-2">
+                      <Button
+                        onClick={() => setIsAddItemModalOpen(true)}
+                        className="bg-[#047857] hover:bg-[#036348] text-white text-xs font-bold rounded-xl h-8 cursor-pointer gap-1.5"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        Lançar Primeiro Item
+                      </Button>
+                      <Button
+                        onClick={handleOpenAddComandaModal}
+                        variant="outline"
+                        className="bg-white border-stone-200 text-stone-700 hover:bg-stone-50 text-xs font-bold rounded-xl h-8 cursor-pointer gap-1.5"
+                      >
+                        <User className="w-3.5 h-3.5 text-stone-500" />
+                        + Nova Comanda
+                      </Button>
+                    </div>
                   </div>
                 ) : comandaViewMode === "by_person" ? (
                   /* ABA 1: CONSUMO SEPARADO POR PESSOA (O QUE CADA UM PEDIU) */
                   <div className="space-y-3.5">
                     <div className="flex items-center justify-between pb-1">
                       <p className="text-xs font-black uppercase tracking-wider text-gray-400">
-                        O que cada pessoa pediu na mesa ({currentTable.ordersByCustomer?.length || 1})
+                        Comandas na Mesa ({currentTable.ordersByCustomer?.length || 1})
                       </p>
-                      <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-150">
-                        ✓ Valores individuais
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={handleOpenAddComandaModal}
+                          className="h-6 px-2 rounded-md text-[11px] font-bold text-emerald-700 hover:bg-emerald-50 cursor-pointer gap-1"
+                        >
+                          <Plus className="w-3 h-3" />
+                          Nova Comanda
+                        </Button>
+                        <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-150">
+                          ✓ Valores individuais
+                        </span>
+                      </div>
                     </div>
 
                     {currentTable.ordersByCustomer?.map((person, pIdx) => {
@@ -2283,9 +2604,14 @@ export default function TablesPage() {
                       return (
                         <div
                           key={pIdx}
-                          className="rounded-2xl border border-gray-200/90 bg-white shadow-2xs overflow-hidden hover:border-emerald-300 transition-all"
+                          className={cn(
+                            "rounded-2xl border bg-white shadow-2xs overflow-hidden transition-all",
+                            person.isPaid
+                              ? "border-emerald-200 bg-emerald-50/20"
+                              : "border-gray-200/90 hover:border-emerald-300"
+                          )}
                         >
-                          {/* Cabeçalho do Cliente */}
+                          {/* Cabeçalho da Comanda */}
                           <div className="p-3.5 sm:p-4 bg-stone-50/70 border-b border-gray-150 flex items-center justify-between">
                             <div className="flex items-center gap-3">
                               <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center font-black text-sm border shadow-2xs", avatarStyle)}>
@@ -2296,11 +2622,19 @@ export default function TablesPage() {
                                   <p className="font-black text-gray-900 text-sm sm:text-base capitalize">
                                     {person.name}
                                   </p>
-                                  {pIdx === 0 && (
-                                    <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-gray-200 text-gray-700">
-                                      Titular
+                                  {person.isPaid ? (
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-900 border border-emerald-200">
+                                      🟢 Quitado ({person.lastPaymentMethod || "Pago"})
                                     </span>
-                                  )}
+                                  ) : person.totalAmount === 0 ? (
+                                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-stone-100 text-stone-600 border border-stone-200">
+                                      Aberta (0 itens)
+                                    </span>
+                                  ) : person.paidAmount > 0 ? (
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-200">
+                                      🟡 Parcial (Resta R$ {person.remainingAmount.toFixed(2).replace(".", ",")})
+                                    </span>
+                                  ) : null}
                                 </div>
                                 <p className="text-[11px] text-gray-500 font-medium">
                                   {person.itemsCount} {person.itemsCount === 1 ? "item pedido" : "itens pedidos"} • {percent}% do total da mesa
@@ -2309,51 +2643,118 @@ export default function TablesPage() {
                             </div>
 
                             <div className="text-right">
-                              <p className="text-base sm:text-lg font-black text-emerald-700">
+                              <p className={cn("text-base sm:text-lg font-black", person.isPaid ? "text-emerald-700" : "text-stone-900")}>
                                 R$ {person.totalAmount.toFixed(2).replace(".", ",")}
                               </p>
                               {isServiceFeeEnabled && (
                                 <p className="text-[10px] text-gray-400 font-medium">
-                                  com {serviceFeeRate}%: R$ {(person.totalAmount * (1 + serviceFeeMultiplier)).toFixed(2).replace(".", ",")}
+                                  com {serviceFeeRate}%: R$ {(person.totalWithFee).toFixed(2).replace(".", ",")}
                                 </p>
                               )}
                             </div>
                           </div>
 
                           {/* Itens deste cliente */}
-                          <div className="p-3 divide-y divide-gray-100">
-                            {person.items.map((it, itIdx) => (
-                              <div key={itIdx} className="py-2.5 first:pt-1 last:pb-1 flex items-center justify-between text-xs">
-                                <div className="flex items-center gap-2.5">
-                                  <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 font-black text-xs border border-emerald-150">
-                                    {it.quantity}x
-                                  </span>
-                                  <div>
-                                    <p className="font-bold text-gray-900 text-xs sm:text-sm">{it.name}</p>
-                                    {it.quantity > 1 && (
-                                      <p className="text-[11px] text-gray-400">R$ {it.unitPrice.toFixed(2).replace(".", ",")} cada</p>
-                                    )}
-                                    {it.notes && (
-                                      <p className="text-[10px] text-amber-700 italic font-medium">Obs: {it.notes}</p>
-                                    )}
+                          {person.items.length === 0 ? (
+                            <div className="p-4 text-center text-xs text-stone-400 font-medium">
+                              Nenhum item lançado ainda nesta comanda.
+                            </div>
+                          ) : (
+                            <div className="p-3 divide-y divide-gray-100">
+                              {person.items.map((it, itIdx) => (
+                                <div key={itIdx} className="py-2.5 first:pt-1 last:pb-1 flex items-center justify-between text-xs">
+                                  <div className="flex items-center gap-2.5">
+                                    <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 font-black text-xs border border-emerald-150">
+                                      {it.quantity}x
+                                    </span>
+                                    <div>
+                                      <p className="font-bold text-gray-900 text-xs sm:text-sm">{it.name}</p>
+                                      {it.quantity > 1 && (
+                                        <p className="text-[11px] text-gray-400">R$ {it.unitPrice.toFixed(2).replace(".", ",")} cada</p>
+                                      )}
+                                      {it.notes && (
+                                        <p className="text-[10px] text-amber-700 italic font-medium">Obs: {it.notes}</p>
+                                      )}
+                                    </div>
                                   </div>
+                                  <span className="font-black text-gray-950 text-xs sm:text-sm">
+                                    R$ {it.totalPrice.toFixed(2).replace(".", ",")}
+                                  </span>
                                 </div>
-                                <span className="font-black text-gray-950 text-xs sm:text-sm">
-                                  R$ {it.totalPrice.toFixed(2).replace(".", ",")}
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Rodapé de Ações da Comanda Individual */}
+                          <div className="p-2.5 sm:p-3 bg-stone-50/80 border-t border-gray-150 flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5">
+                              {person.itemsCount > 0 && (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleOpenIndividualPreBill(person)}
+                                  className="h-7 px-2.5 rounded-lg text-[11px] font-bold border-gray-200 text-stone-700 hover:text-emerald-700 hover:border-emerald-300 gap-1.5 cursor-pointer bg-white"
+                                  title="Imprimir extrato individual desta comanda"
+                                >
+                                  <Printer className="w-3 h-3 text-emerald-600" />
+                                  Pré-Conta
+                                </Button>
+                              )}
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setQuickOrderPersonName(person.name);
+                                  setIsAddItemModalOpen(true);
+                                }}
+                                className="h-7 px-2.5 rounded-lg text-[11px] font-bold border-gray-200 text-stone-700 hover:bg-stone-100 gap-1.5 cursor-pointer bg-white"
+                              >
+                                <Plus className="w-3 h-3 text-emerald-600" />
+                                Lançar Item
+                              </Button>
+                            </div>
+
+                            <div>
+                              {person.isPaid ? (
+                                <span className="text-xs font-bold text-emerald-700 flex items-center gap-1 pr-1">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                  Quitada
                                 </span>
-                              </div>
-                            ))}
+                              ) : person.totalAmount > 0 ? (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  onClick={() => openComandaSettlement(person)}
+                                  className="h-7 px-3 rounded-lg text-[11px] font-black bg-[#047857] hover:bg-[#036348] text-white gap-1.5 cursor-pointer shadow-2xs"
+                                >
+                                  <CreditCard className="w-3 h-3" />
+                                  Cobrar Comanda (R$ {person.remainingAmount.toFixed(2).replace(".", ",")})
+                                </Button>
+                              ) : null}
+                            </div>
                           </div>
                         </div>
                       );
                     })}
 
                     {currentTable.ordersByCustomer?.length === 1 && (
-                      <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-200/70 text-amber-900 text-xs flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
-                        <span>
-                          <strong>Dica:</strong> Ao lançar novos itens pelo PDV ou no botão <em>+ Lançar Itens</em>, digite o nome de quem pediu para separar automaticamente o consumo de cada amigo na mesa!
-                        </span>
+                      <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-200/70 text-amber-900 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
+                          <span>
+                            <strong>Dica:</strong> Separe o consumo criando <strong>Comanda 2</strong>, <strong>Comanda 3</strong> etc. para cobrar cada amigo individualmente!
+                          </span>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={handleOpenAddComandaModal}
+                          className="h-7 px-2.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] cursor-pointer shrink-0"
+                        >
+                          + Nova Comanda
+                        </Button>
                       </div>
                     )}
                   </div>
@@ -2651,6 +3052,62 @@ export default function TablesPage() {
         </DialogContent>
       </Dialog>
 
+      {/* MODAL: NOVA COMANDA NA MESA */}
+      <Dialog open={isAddComandaModalOpen} onOpenChange={setIsAddComandaModalOpen}>
+        <DialogContent className="max-w-md rounded-2xl p-6 bg-white border border-stone-200 shadow-xl">
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-1">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0">
+                <User className="w-5 h-5 text-emerald-700" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-bold text-stone-900">
+                  Nova Comanda • Mesa {currentTable?.table_number || selectedTable?.table_number}
+                </DialogTitle>
+                <DialogDescription className="text-xs text-stone-500">
+                  Adicione uma nova comanda para esta mesa.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <form onSubmit={handleAddComanda} className="space-y-4 mt-2">
+            <div>
+              <label className="text-xs font-semibold text-stone-700 block mb-1.5">
+                Nome ou Identificação da Comanda (Opcional)
+              </label>
+              <Input
+                value={newComandaName}
+                onChange={(e) => setNewComandaName(e.target.value)}
+                placeholder={`Ex: ${suggestedComandaName}, Davi, Ficha 12...`}
+                className="h-10 rounded-xl text-sm border-stone-300"
+                autoFocus
+              />
+              <p className="text-[11px] text-stone-500 mt-1">
+                Deixe em branco para criar automaticamente como <strong>"{suggestedComandaName}"</strong>.
+              </p>
+            </div>
+
+            <div className="pt-2 border-t border-stone-200 flex items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsAddComandaModalOpen(false)}
+                className="h-10 rounded-xl font-medium text-xs text-stone-600 border-stone-300 cursor-pointer"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                className="h-10 px-5 rounded-xl bg-[#047857] hover:bg-[#036348] text-white font-bold text-xs cursor-pointer shadow-xs"
+              >
+                {newComandaName.trim() ? `Criar "${newComandaName.trim()}"` : `Criar "${suggestedComandaName}"`}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {/* MODAL: LANÇAR ITENS NA COMANDA */}
       <Dialog open={isAddItemModalOpen} onOpenChange={setIsAddItemModalOpen}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col p-0 rounded-3xl bg-white border border-gray-200 shadow-2xl">
@@ -2661,7 +3118,7 @@ export default function TablesPage() {
               </div>
               <div>
                 <p className="text-base font-black text-gray-950">Lançar Itens na Mesa {currentTable?.table_number || selectedTable?.table_number}</p>
-                <p className="text-xs text-gray-400 font-medium">Selecione os produtos e atribua à pessoa que pediu</p>
+                <p className="text-xs text-gray-400 font-medium">Selecione os produtos e atribua à comanda de quem pediu</p>
               </div>
             </div>
             <button
@@ -2690,33 +3147,48 @@ export default function TablesPage() {
                 <Input
                   value={quickOrderPersonName}
                   onChange={(e) => setQuickOrderPersonName(e.target.value)}
-                  placeholder="Quem pediu? (Ex: Carlos, Ana...)"
+                  placeholder={`Comanda (padrão: ${currentTable?.ordersByCustomer?.[0]?.name || "Comanda 1"})`}
                   className="pl-9 h-9 rounded-xl text-xs bg-emerald-50/40 border-emerald-200/90 font-medium text-emerald-950 placeholder:text-gray-400 focus:bg-white"
                 />
               </div>
             </div>
 
-            {/* Pílulas rápidas de pessoas já na mesa */}
-            {currentTable?.ordersByCustomer && currentTable.ordersByCustomer.length > 0 && (
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 text-xs">
-                <span className="text-[11px] font-bold text-gray-400 shrink-0">Na mesa:</span>
-                {currentTable.ordersByCustomer.map((p, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => setQuickOrderPersonName(p.name)}
-                    className={cn(
-                      "px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer border shrink-0",
-                      quickOrderPersonName === p.name
-                        ? "bg-[#047857] text-white border-[#047857]"
-                        : "bg-gray-100/80 text-gray-700 border-gray-200 hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-200"
-                    )}
-                  >
-                    👤 {p.name}
-                  </button>
-                ))}
-              </div>
-            )}
+            {/* Pílulas rápidas de comandas na mesa */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 text-xs">
+              <span className="text-[11px] font-bold text-gray-400 shrink-0">Comandas:</span>
+              {currentTable?.ordersByCustomer?.map((p, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => setQuickOrderPersonName(p.name)}
+                  className={cn(
+                    "px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer border shrink-0 flex items-center gap-1",
+                    quickOrderPersonName === p.name
+                      ? "bg-[#047857] text-white border-[#047857]"
+                      : "bg-gray-100/80 text-gray-700 border-gray-200 hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-200"
+                  )}
+                >
+                  <span>👤</span>
+                  <span>{p.name}</span>
+                  {p.isPaid && <span className="text-[9px] text-emerald-600 font-semibold">(pago)</span>}
+                </button>
+              ))}
+
+              <button
+                type="button"
+                onClick={() => {
+                  const existing = (currentTable?.ordersByCustomer || []).map(p => p.name);
+                  const nextName = getNextComandaName(existing);
+                  setQuickOrderPersonName(nextName);
+                  toast.info(`Selecionado para criar "${nextName}"`);
+                }}
+                className="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-dashed border-emerald-300 text-emerald-700 hover:bg-emerald-50 transition-all cursor-pointer shrink-0 flex items-center gap-1"
+                title="Gera a próxima comanda sequencial automática"
+              >
+                <Plus className="w-3 h-3" />
+                + {getNextComandaName((currentTable?.ordersByCustomer || []).map(p => p.name))}
+              </button>
+            </div>
 
             {/* Categorias */}
             <div className="flex items-center gap-1 overflow-x-auto pt-1 pb-1 scrollbar-none">
@@ -2851,7 +3323,7 @@ export default function TablesPage() {
       </Dialog>
 
       {/* MODAL: FECHAMENTO / RECEBIMENTO DE CONTA */}
-      <Dialog open={isSettlementModalOpen} onOpenChange={setIsSettlementModalOpen}>
+      <Dialog open={isSettlementModalOpen} onOpenChange={(open) => { setIsSettlementModalOpen(open); if (!open) setSettlingComanda(null); }}>
         <DialogContent className="max-w-lg max-h-[92vh] overflow-y-auto rounded-2xl p-6 bg-white border border-stone-200 shadow-xl">
           <DialogHeader>
             <div className="flex items-center gap-3">
@@ -2860,10 +3332,14 @@ export default function TablesPage() {
               </div>
               <div>
                 <DialogTitle className="text-lg font-bold text-stone-900">
-                  Receber Mesa {selectedTable?.table_number}
+                  {settlingComanda 
+                    ? `Cobrar Comanda "${settlingComanda.name}" • Mesa ${selectedTable?.table_number}`
+                    : `Receber Mesa ${selectedTable?.table_number}`}
                 </DialogTitle>
                 <DialogDescription className="text-xs text-stone-500">
-                  Amortização parcial, múltiplos meios de pagamento e encerramento de comanda.
+                  {settlingComanda
+                    ? `Recebimento individual da comanda de ${settlingComanda.name}. A mesa continuará aberta no salão para as demais comandas.`
+                    : "Amortização parcial, múltiplos meios de pagamento e encerramento de comanda."}
                 </DialogDescription>
               </div>
             </div>
@@ -2873,16 +3349,20 @@ export default function TablesPage() {
             const modalTable = currentTable || selectedTable;
             if (!modalTable) return null;
 
-            const subtotal = modalTable.totalConsumed || 0;
+            const isSingleComanda = Boolean(settlingComanda);
+            const subtotal = isSingleComanda ? Number(settlingComanda.totalAmount || 0) : (modalTable.totalConsumed || 0);
             const feeMultiplier = serviceFeeRate / 100;
             const serviceFeeValue = (includeServiceFee && isServiceFeeEnabled) ? (subtotal * feeMultiplier) : 0;
             const discountVal = Number(discountAmount) || 0;
             const totalAccount = Math.max(0, subtotal + serviceFeeValue - discountVal);
 
-            const sessionPayments = getSessionPaymentsList(modalTable.activeSession);
+            const allSessionPayments = getSessionPaymentsList(modalTable.activeSession);
+            const sessionPayments = isSingleComanda 
+              ? allSessionPayments.filter(p => (p.customer_name || "").trim().toLowerCase() === (settlingComanda.name || "").trim().toLowerCase())
+              : allSessionPayments;
             const totalPaidSoFar = sessionPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
             const remainingToPay = Math.max(0, totalAccount - totalPaidSoFar);
-            const isAccountFullyPaid = totalPaidSoFar >= totalAccount && totalAccount > 0;
+            const isAccountFullyPaid = totalPaidSoFar >= (totalAccount - 0.01) && totalAccount > 0;
 
             const enteredAmount = Number(partialPaymentAmount) || 0;
             const _isPartialLowerThanRemaining = enteredAmount > 0 && enteredAmount < (remainingToPay - 0.01);
@@ -2892,7 +3372,7 @@ export default function TablesPage() {
                 {/* 1. Resumo Financeiro da Comanda */}
                 <div className="p-3.5 bg-stone-50 rounded-xl border border-stone-200 space-y-2 text-xs">
                   <div className="flex items-center justify-between text-stone-600">
-                    <span>Subtotal de Consumo:</span>
+                    <span>{isSingleComanda ? `Subtotal da Comanda (${settlingComanda.name}):` : "Subtotal de Consumo:"}</span>
                     <span className="font-mono font-semibold text-stone-900">
                       R$ {subtotal.toFixed(2).replace(".", ",")}
                     </span>
@@ -2951,7 +3431,7 @@ export default function TablesPage() {
                   </div>
 
                   <div className="pt-2 border-t border-stone-300 flex items-center justify-between font-bold text-stone-900">
-                    <span>Total da Comanda:</span>
+                    <span>{isSingleComanda ? `Total da Comanda (${settlingComanda.name}):` : "Total da Comanda:"}</span>
                     <span className="font-mono text-sm">
                       R$ {totalAccount.toFixed(2).replace(".", ",")}
                     </span>
@@ -3043,7 +3523,7 @@ export default function TablesPage() {
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
                         <label className="text-xs font-bold text-stone-700">
-                          Valor a Receber Agora
+                          {isSingleComanda ? `Valor a Receber de ${settlingComanda.name}` : "Valor a Receber Agora"}
                         </label>
                         <button
                           type="button"
@@ -3067,8 +3547,8 @@ export default function TablesPage() {
                         />
                       </div>
 
-                      {/* Pílulas de consumo por pessoa para atalho instantâneo */}
-                      {modalTable.ordersByCustomer && modalTable.ordersByCustomer.length > 1 && (
+                      {/* Pílulas de consumo por pessoa para atalho instantâneo (somente se cobrança geral da mesa) */}
+                      {!isSingleComanda && modalTable.ordersByCustomer && modalTable.ordersByCustomer.length > 1 && (
                         <div className="flex flex-wrap items-center gap-1.5 mt-2">
                           <span className="text-[10px] text-stone-400 uppercase font-semibold">Atalhos por pessoa:</span>
                           {modalTable.ordersByCustomer.map((p, idx) => {
@@ -3149,10 +3629,12 @@ export default function TablesPage() {
                     <CheckCircle2 className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
                     <div>
                       <p className="text-xs font-bold text-emerald-950">
-                        Comanda 100% quitada!
+                        {isSingleComanda ? `Comanda "${settlingComanda.name}" 100% quitada!` : "Comanda 100% quitada!"}
                       </p>
                       <p className="text-[11px] text-emerald-800 mt-0.5">
-                        Todos os pagamentos foram registrados com sucesso. Clique abaixo para finalizar o turno da mesa e liberá-la no salão.
+                        {isSingleComanda 
+                          ? "Todos os pagamentos desta comanda foram recebidos com sucesso. A mesa continuará aberta no salão para as demais comandas."
+                          : "Todos os pagamentos foram registrados com sucesso. Clique abaixo para finalizar o turno da mesa e liberá-la no salão."}
                       </p>
                     </div>
                   </div>
@@ -3163,41 +3645,62 @@ export default function TablesPage() {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => setIsSettlementModalOpen(false)}
+                    onClick={() => { setIsSettlementModalOpen(false); setSettlingComanda(null); }}
                     className="w-full sm:w-auto h-10 rounded-xl font-medium text-xs text-stone-600 border-stone-300 cursor-pointer"
                   >
                     Voltar
                   </Button>
 
                   <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                    {/* Regra Estrita de Segurança Financeira: só libera a mesa se o valor restante for quitado */}
-                    {remainingToPay === 0 || isAccountFullyPaid ? (
-                      <Button
-                        onClick={handleFinalizeSettlement}
-                        disabled={isClosingSession}
-                        className="flex-1 sm:flex-none h-10 px-5 rounded-xl bg-[#047857] hover:bg-[#036348] text-white font-bold text-xs cursor-pointer shadow-xs"
-                      >
-                        {isClosingSession ? "Finalizando..." : "Finalizar e Liberar Mesa 🟢"}
-                      </Button>
-                    ) : enteredAmount > 0 && enteredAmount < (remainingToPay - 0.01) ? (
-                      /* Pagamento Parcial: a mesa NÃO PODE ser liberada com saldo pendente */
-                      <Button
-                        type="button"
-                        onClick={handleRegisterPartialPayment}
-                        disabled={isRegisteringPartial || isClosingSession}
-                        className="flex-1 sm:flex-none h-10 px-5 rounded-xl bg-[#047857] hover:bg-[#036348] text-white font-bold text-xs cursor-pointer shadow-xs"
-                      >
-                        {isRegisteringPartial ? "Abatendo..." : `Abater R$ ${enteredAmount.toFixed(2).replace(".", ",")} (Mesa continua aberta)`}
-                      </Button>
+                    {isSingleComanda ? (
+                      remainingToPay === 0 || isAccountFullyPaid ? (
+                        <Button
+                          type="button"
+                          onClick={() => { setIsSettlementModalOpen(false); setSettlingComanda(null); }}
+                          className="flex-1 sm:flex-none h-10 px-5 rounded-xl bg-[#047857] hover:bg-[#036348] text-white font-bold text-xs cursor-pointer shadow-xs"
+                        >
+                          Comanda 100% Quitada 🟢 (Concluir)
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          onClick={handleRegisterPartialPayment}
+                          disabled={isRegisteringPartial}
+                          className="flex-1 sm:flex-none h-10 px-5 rounded-xl bg-[#047857] hover:bg-[#036348] text-white font-bold text-xs cursor-pointer shadow-xs"
+                        >
+                          {isRegisteringPartial ? "Recebendo..." : `Receber Comanda (${settlingComanda.name}) R$ ${(enteredAmount > 0 ? enteredAmount : remainingToPay).toFixed(2).replace(".", ",")} 🟢`}
+                        </Button>
+                      )
                     ) : (
-                      /* Pagamento Total do Restante: quita 100% e libera a mesa */
-                      <Button
-                        onClick={handleFinalizeSettlement}
-                        disabled={isClosingSession || isRegisteringPartial}
-                        className="flex-1 sm:flex-none h-10 px-5 rounded-xl bg-[#047857] hover:bg-[#036348] text-white font-bold text-xs cursor-pointer shadow-xs"
-                      >
-                        {isClosingSession ? "Recebendo..." : `Receber R$ ${remainingToPay.toFixed(2).replace(".", ",")} e Liberar Mesa 🟢`}
-                      </Button>
+                      /* Regra Estrita de Segurança Financeira: só libera a mesa se o valor restante for quitado */
+                      remainingToPay === 0 || isAccountFullyPaid ? (
+                        <Button
+                          onClick={handleFinalizeSettlement}
+                          disabled={isClosingSession}
+                          className="flex-1 sm:flex-none h-10 px-5 rounded-xl bg-[#047857] hover:bg-[#036348] text-white font-bold text-xs cursor-pointer shadow-xs"
+                        >
+                          {isClosingSession ? "Finalizando..." : "Finalizar e Liberar Mesa 🟢"}
+                        </Button>
+                      ) : enteredAmount > 0 && enteredAmount < (remainingToPay - 0.01) ? (
+                        /* Pagamento Parcial: a mesa NÃO PODE ser liberada com saldo pendente */
+                        <Button
+                          type="button"
+                          onClick={handleRegisterPartialPayment}
+                          disabled={isRegisteringPartial || isClosingSession}
+                          className="flex-1 sm:flex-none h-10 px-5 rounded-xl bg-[#047857] hover:bg-[#036348] text-white font-bold text-xs cursor-pointer shadow-xs"
+                        >
+                          {isRegisteringPartial ? "Abatendo..." : `Abater R$ ${enteredAmount.toFixed(2).replace(".", ",")} (Mesa continua aberta)`}
+                        </Button>
+                      ) : (
+                        /* Pagamento Total do Restante: quita 100% e libera a mesa */
+                        <Button
+                          onClick={handleFinalizeSettlement}
+                          disabled={isClosingSession || isRegisteringPartial}
+                          className="flex-1 sm:flex-none h-10 px-5 rounded-xl bg-[#047857] hover:bg-[#036348] text-white font-bold text-xs cursor-pointer shadow-xs"
+                        >
+                          {isClosingSession ? "Recebendo..." : `Receber R$ ${remainingToPay.toFixed(2).replace(".", ",")} e Liberar Mesa 🟢`}
+                        </Button>
+                      )
                     )}
                   </div>
                 </div>
@@ -3208,140 +3711,203 @@ export default function TablesPage() {
       </Dialog>
 
       {/* MODAL: PRÉ-CONTA / CONFERÊNCIA TÉRMICA (MODELO IMPRESSO) */}
-      <Dialog open={isPrintPreBillOpen} onOpenChange={setIsPrintPreBillOpen}>
+      <Dialog open={isPrintPreBillOpen} onOpenChange={(open) => { setIsPrintPreBillOpen(open); if (!open) setPreBillFilterPerson(null); }}>
         <DialogContent className="max-w-md max-h-[92vh] overflow-y-auto p-5 sm:p-6 bg-white border border-gray-300 shadow-2xl rounded-2xl font-mono text-xs">
           {(() => {
             const preBillTable = currentTable || selectedTable;
             if (!preBillTable) return null;
 
             const ordersByCustomer = preBillTable.ordersByCustomer || [];
-            const subtotal = Number(preBillTable.totalConsumed || 0);
             const isFeeEnabled = settings?.table_service_fee_enabled === true;
             const feeRate = Number(settings?.table_service_fee_rate ?? 10);
             const feeMultiplier = feeRate / 100;
-            const serviceFee = isFeeEnabled ? (subtotal * feeMultiplier) : 0;
-            const totalWithService = subtotal + serviceFee;
             const session = preBillTable.activeSession;
+
+            const filteredPersonData = preBillFilterPerson
+              ? ordersByCustomer.find(p => (p.name || '').trim().toLowerCase() === preBillFilterPerson.trim().toLowerCase())
+              : null;
+
+            const isIndividual = Boolean(filteredPersonData);
+            const displaySubtotal = isIndividual ? Number(filteredPersonData.totalAmount || 0) : Number(preBillTable.totalConsumed || 0);
+            const displayServiceFee = isFeeEnabled ? (displaySubtotal * feeMultiplier) : 0;
+            const displayTotalWithService = displaySubtotal + displayServiceFee;
+
+            const allSessionPayments = getSessionPaymentsList(session);
+            const relevantPayments = isIndividual
+              ? allSessionPayments.filter(p => (p.customer_name || '').trim().toLowerCase() === filteredPersonData.name.trim().toLowerCase())
+              : allSessionPayments;
+            const totalPaid = relevantPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+            const remaining = Math.max(0, displayTotalWithService - totalPaid);
 
             return (
               <div className="space-y-3 text-gray-900">
+                {/* Seletor de visualização rápida: Toda a Mesa ou Comanda Individual */}
+                {ordersByCustomer.length > 0 && (
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-2 border-b border-gray-200 scrollbar-none font-sans">
+                    <button
+                      type="button"
+                      onClick={() => setPreBillFilterPerson(null)}
+                      className={cn(
+                        "px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap",
+                        !preBillFilterPerson
+                          ? "bg-stone-900 text-white shadow-2xs"
+                          : "bg-stone-100 text-stone-700 hover:bg-stone-200"
+                      )}
+                    >
+                      🍽️ Toda a Mesa
+                    </button>
+                    {ordersByCustomer.map((p, idx) => {
+                      const isSelected = (preBillFilterPerson || '').trim().toLowerCase() === (p.name || '').trim().toLowerCase();
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => setPreBillFilterPerson(p.name)}
+                          className={cn(
+                            "px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1",
+                            isSelected
+                              ? "bg-[#047857] text-white shadow-2xs"
+                              : "bg-stone-100 text-stone-700 hover:bg-stone-200"
+                          )}
+                        >
+                          <span>👤 {p.name}</span>
+                          {p.isPaid ? <span className="text-[10px]">🟢</span> : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
                 {/* Cabeçalho do Cupom Impresso */}
                 <div className="text-center space-y-1 border-b border-dashed border-gray-400 pb-3">
                   <p className="font-bold text-base tracking-wide uppercase text-gray-950">
                     {settings?.restaurant_name || "RESTAURANTE"}
                   </p>
                   <p className="text-[11px] font-bold text-gray-600 uppercase tracking-widest">
-                    *** PRÉ-CONTA / CONFERÊNCIA ***
+                    {isIndividual ? `*** PRÉ-CONTA INDIVIDUAL: ${filteredPersonData.name.toUpperCase()} ***` : "*** PRÉ-CONTA / CONFERÊNCIA ***"}
                   </p>
                   <p className="text-sm font-black text-gray-900">
-                    MESA {preBillTable.table_number} {session?.customer_name ? `• ${session.customer_name}` : ""}
+                    MESA {preBillTable.table_number} {isIndividual ? `• Comanda ${filteredPersonData.name}` : (session?.customer_name ? `• ${session.customer_name}` : "")}
                   </p>
                   <p className="text-[10px] text-gray-500">
                     {new Date().toLocaleDateString("pt-BR")} às {new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
                   </p>
                 </div>
 
-                {/* DETALHAMENTO DO CONSUMO POR PESSOA NO CUPOM */}
-                {ordersByCustomer.length > 0 && (
-                  <div className="space-y-2 border-b border-dashed border-gray-400 pb-3">
-                    <p className="text-[11px] font-black uppercase text-center tracking-wider text-gray-700">
-                      - - - CONSUMO POR PESSOA - - -
+                {/* ITENS CONSUMIDOS (Individual ou Geral) */}
+                {isIndividual ? (
+                  <div className="space-y-1 border-b border-dashed border-gray-400 pb-3">
+                    <p className="text-[10px] font-bold uppercase text-gray-500 pb-0.5">
+                      ITENS DE {filteredPersonData.name.toUpperCase()} ({filteredPersonData.itemsCount || (filteredPersonData.items || []).length}):
                     </p>
-
-                    {ordersByCustomer.map((person, pIdx) => {
-                      const pSubtotal = Number(person.totalAmount || 0);
-                      const _pTotal10 = pSubtotal * 1.10;
-
-                      return (
-                        <div key={pIdx} className="space-y-1">
-                          <div className="flex justify-between font-black text-xs text-gray-950 border-b border-dotted border-gray-300 pb-0.5">
-                            <span>👤 {person.name.toUpperCase()} ({person.itemsCount}):</span>
-                            <span>R$ {pSubtotal.toFixed(2).replace(".", ",")}</span>
-                          </div>
-
-                          <div className="pl-2 space-y-0.5 text-gray-700 text-[11px]">
-                            {(person.items || []).map((it, itIdx) => (
-                              <div key={itIdx} className="flex justify-between">
-                                <span>{it.quantity}x {it.name}</span>
-                                <span>R$ {Number(it.totalPrice || 0).toFixed(2).replace(".", ",")}</span>
-                              </div>
-                            ))}
-                          </div>
-
-                          {isFeeEnabled && (
-                            <div className="flex justify-between text-[10px] text-emerald-800 font-bold pl-2 pt-0.5">
-                              <span>c/ {feeRate}% opcional:</span>
-                              <span>R$ {(pSubtotal * (1 + feeMultiplier)).toFixed(2).replace(".", ",")}</span>
-                            </div>
-                          )}
+                    {(filteredPersonData.items || []).length === 0 ? (
+                      <p className="text-gray-400 italic text-[11px]">Nenhum item lançado ainda.</p>
+                    ) : (
+                      (filteredPersonData.items || []).map((it, idx) => (
+                        <div key={idx} className="flex justify-between text-[11px] text-gray-800">
+                          <span>{it.quantity}x {it.name}</span>
+                          <span>R$ {Number(it.totalPrice || 0).toFixed(2).replace(".", ",")}</span>
                         </div>
-                      );
-                    })}
+                      ))
+                    )}
                   </div>
-                )}
+                ) : (
+                  <>
+                    {/* DETALHAMENTO DO CONSUMO POR PESSOA NO CUPOM */}
+                    {ordersByCustomer.length > 0 && (
+                      <div className="space-y-2 border-b border-dashed border-gray-400 pb-3">
+                        <p className="text-[11px] font-black uppercase text-center tracking-wider text-gray-700">
+                          - - - CONSUMO POR PESSOA - - -
+                        </p>
 
-                {/* ITENS TOTAIS DA MESA */}
-                <div className="space-y-1 border-b border-dashed border-gray-400 pb-3">
-                  <p className="text-[10px] font-bold uppercase text-gray-500 pb-0.5">
-                    ITENS CONSUMIDOS NA MESA:
-                  </p>
-                  {preBillTable.aggregatedItems.map((it, idx) => (
-                    <div key={idx} className="flex justify-between text-[11px] text-gray-800">
-                      <span>{it.quantity}x {it.name}</span>
-                      <span>R$ {Number(it.totalPrice || 0).toFixed(2).replace(".", ",")}</span>
+                        {ordersByCustomer.map((person, pIdx) => {
+                          const pSubtotal = Number(person.totalAmount || 0);
+
+                          return (
+                            <div key={pIdx} className="space-y-1">
+                              <div className="flex justify-between font-black text-xs text-gray-950 border-b border-dotted border-gray-300 pb-0.5">
+                                <span>👤 {person.name.toUpperCase()} ({person.itemsCount}):</span>
+                                <span>R$ {pSubtotal.toFixed(2).replace(".", ",")}</span>
+                              </div>
+
+                              <div className="pl-2 space-y-0.5 text-gray-700 text-[11px]">
+                                {(person.items || []).map((it, itIdx) => (
+                                  <div key={itIdx} className="flex justify-between">
+                                    <span>{it.quantity}x {it.name}</span>
+                                    <span>R$ {Number(it.totalPrice || 0).toFixed(2).replace(".", ",")}</span>
+                                  </div>
+                                ))}
+                              </div>
+
+                              {isFeeEnabled && (
+                                <div className="flex justify-between text-[10px] text-emerald-800 font-bold pl-2 pt-0.5">
+                                  <span>c/ {feeRate}% opcional:</span>
+                                  <span>R$ {(pSubtotal * (1 + feeMultiplier)).toFixed(2).replace(".", ",")}</span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* ITENS TOTAIS DA MESA */}
+                    <div className="space-y-1 border-b border-dashed border-gray-400 pb-3">
+                      <p className="text-[10px] font-bold uppercase text-gray-500 pb-0.5">
+                        ITENS CONSUMIDOS NA MESA:
+                      </p>
+                      {preBillTable.aggregatedItems.map((it, idx) => (
+                        <div key={idx} className="flex justify-between text-[11px] text-gray-800">
+                          <span>{it.quantity}x {it.name}</span>
+                          <span>R$ {Number(it.totalPrice || 0).toFixed(2).replace(".", ",")}</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </>
+                )}
 
                 {/* TOTAIS DO CUPOM IMPRESSO */}
                 <div className="space-y-1 pt-1">
                   <div className="flex justify-between font-bold text-gray-900">
-                    <span>SUBTOTAL:</span>
-                    <span>R$ {subtotal.toFixed(2).replace(".", ",")}</span>
+                    <span>{isIndividual ? `SUBTOTAL (${filteredPersonData.name}):` : "SUBTOTAL:"}</span>
+                    <span>R$ {displaySubtotal.toFixed(2).replace(".", ",")}</span>
                   </div>
 
                   {isFeeEnabled && (
                     <div className="flex justify-between text-gray-700">
                       <span>TAXA DE SERVIÇO ({feeRate}% OPC.):</span>
-                      <span>R$ {serviceFee.toFixed(2).replace(".", ",")}</span>
+                      <span>R$ {displayServiceFee.toFixed(2).replace(".", ",")}</span>
                     </div>
                   )}
 
                   <div className="flex justify-between font-black text-sm pt-1.5 border-t border-dashed border-gray-400 text-gray-950">
-                    <span>TOTAL GERAL:</span>
-                    <span>R$ {totalWithService.toFixed(2).replace(".", ",")}</span>
+                    <span>{isIndividual ? `TOTAL (${filteredPersonData.name}):` : "TOTAL GERAL:"}</span>
+                    <span>R$ {displayTotalWithService.toFixed(2).replace(".", ",")}</span>
                   </div>
 
                   {/* Pagamentos parciais recebidos */}
-                  {(() => {
-                    const sessionPayments = getSessionPaymentsList(session);
-                    if (sessionPayments.length === 0) return null;
-                    const totalPaid = sessionPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
-                    const remaining = Math.max(0, totalWithService - totalPaid);
-
-                    return (
-                      <div className="pt-2 border-t border-dashed border-gray-400 space-y-1">
-                        <p className="text-[10px] font-black uppercase text-gray-600">PAGAMENTOS RECEBIDOS:</p>
-                        {sessionPayments.map((p, idx) => (
-                          <div key={idx} className="flex justify-between text-[11px] text-gray-700">
-                            <span>• {p.method_label || getPaymentMethodLabel(p.method)}{p.customer_name ? ` (${p.customer_name})` : ""}:</span>
-                            <span>R$ {Number(p.amount || 0).toFixed(2).replace(".", ",")}</span>
-                          </div>
-                        ))}
-                        <div className="flex justify-between font-bold text-xs pt-1 border-t border-dotted border-gray-300">
-                          <span>TOTAL JÁ PAGO:</span>
-                          <span>R$ {totalPaid.toFixed(2).replace(".", ",")}</span>
+                  {relevantPayments.length > 0 && (
+                    <div className="pt-2 border-t border-dashed border-gray-400 space-y-1">
+                      <p className="text-[10px] font-black uppercase text-gray-600">PAGAMENTOS RECEBIDOS:</p>
+                      {relevantPayments.map((p, idx) => (
+                        <div key={idx} className="flex justify-between text-[11px] text-gray-700">
+                          <span>• {p.method_label || getPaymentMethodLabel(p.method)}{p.customer_name ? ` (${p.customer_name})` : ""}:</span>
+                          <span>R$ {Number(p.amount || 0).toFixed(2).replace(".", ",")}</span>
                         </div>
-                        <div className="flex justify-between font-black text-xs text-amber-900">
-                          <span>SALDO RESTANTE:</span>
-                          <span>{remaining === 0 ? "100% QUITADO 🟢" : `R$ ${remaining.toFixed(2).replace(".", ",")}`}</span>
-                        </div>
+                      ))}
+                      <div className="flex justify-between font-bold text-xs pt-1 border-t border-dotted border-gray-300">
+                        <span>TOTAL JÁ PAGO:</span>
+                        <span>R$ {totalPaid.toFixed(2).replace(".", ",")}</span>
                       </div>
-                    );
-                  })()}
+                      <div className="flex justify-between font-black text-xs text-amber-900">
+                        <span>SALDO RESTANTE:</span>
+                        <span>{remaining === 0 ? "100% QUITADO 🟢" : `R$ ${remaining.toFixed(2).replace(".", ",")}`}</span>
+                      </div>
+                    </div>
+                  )}
 
-                  {/* QUANTO CADA UM PAGA */}
-                  {ordersByCustomer.length > 1 && (
+                  {/* QUANTO CADA UM PAGA (somente na visualização geral) */}
+                  {!isIndividual && ordersByCustomer.length > 1 && (
                     <div className="pt-2 border-t border-dotted border-gray-300 space-y-0.5">
                       <p className="text-[10px] font-black uppercase text-gray-600">
                         DIVISÃO POR PESSOA {isFeeEnabled ? `(COM ${feeRate}%):` : ":"}
@@ -3364,11 +3930,11 @@ export default function TablesPage() {
                 </p>
 
                 {/* Botões de Ação */}
-                <div className="pt-3 border-t border-gray-200 flex flex-wrap items-center justify-between gap-2">
+                <div className="pt-3 border-t border-gray-200 flex flex-wrap items-center justify-between gap-2 font-sans">
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => handleCopyPreBillSummary(preBillTable)}
+                    onClick={() => handleCopyPreBillSummary(preBillTable, preBillFilterPerson)}
                     className="h-9 px-3 rounded-xl border-gray-300 font-bold text-xs gap-1.5 text-gray-700 hover:text-emerald-800 cursor-pointer"
                   >
                     {isCopiedSummary ? (
@@ -3394,7 +3960,7 @@ export default function TablesPage() {
                     </Button>
 
                     <Button
-                      onClick={() => handlePrintPreBill(preBillTable)}
+                      onClick={() => handlePrintPreBill(preBillTable, preBillFilterPerson)}
                       disabled={isPrintingPreBill}
                       className="h-9 px-4 rounded-xl bg-[#047857] hover:bg-[#036348] text-white font-bold text-xs gap-1.5 cursor-pointer shadow-sm"
                     >
