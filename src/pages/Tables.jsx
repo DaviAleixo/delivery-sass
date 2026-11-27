@@ -212,7 +212,7 @@ export default function TablesPage() {
         RestaurantTable.list().catch(() => []),
         TableSession.list("-opened_at", 100).catch(() => []),
         Order.list("-created_date", 250).catch(() => []),
-        (isSupabaseConfigured() && supabase ? supabase.from("table_comandas").select("*").catch(() => ({ data: [] })) : Promise.resolve({ data: [] })),
+        (isSupabaseConfigured() && supabase ? Promise.resolve(supabase.from("table_comandas").select("*")).catch(() => ({ data: [] })) : Promise.resolve({ data: [] })),
       ];
 
       const staticPromises = includeStatic ? [
