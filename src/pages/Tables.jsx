@@ -560,7 +560,7 @@ export default function TablesPage() {
         }
       }
 
-      // 🍽️ Cronômetro Inteligente: Tempo decorrido desde o último pedido (Giro de Mesa)
+      // Cronômetro Inteligente: Tempo decorrido desde o último pedido (Giro de Mesa)
       let lastOrderMinutes = null;
       let lastOrderText = "";
       let lastOrderStatus = "none"; // 'recent' | 'idle' | 'warning' | 'waiting_first' | 'none'
@@ -777,7 +777,7 @@ export default function TablesPage() {
         await RestaurantTable.update(selectedTable.id, { status: "occupied" });
       }
 
-      toast.success(`Mesa ${selectedTable.table_number} aberta com ${initialComanda}! 🍻`);
+      toast.success(`Mesa ${selectedTable.table_number} aberta com ${initialComanda}!`);
       setIsOpenTableModalOpen(false);
       await loadAllData();
 
@@ -1108,7 +1108,7 @@ export default function TablesPage() {
           const json = await res.json();
           if (json.success) {
             printedViaSpooler = true;
-            toast.success(`🖨️ Pré-conta ${personFilter ? `da Comanda "${personFilter}" (Mesa ${tbl.table_number})` : `da Mesa ${tbl.table_number}`} impressa com sucesso!`);
+            toast.success(`Pré-conta ${personFilter ? `da Comanda "${personFilter}" (Mesa ${tbl.table_number})` : `da Mesa ${tbl.table_number}`} impressa com sucesso!`);
           }
         }
       } catch (_err) {
@@ -1149,21 +1149,21 @@ export default function TablesPage() {
       const pFee = isFeeEnabled ? (pSub * feeMultiplier) : 0;
       const pTotal = pSub + pFee;
 
-      text += `🧾 *PRÉ-CONTA INDIVIDUAL: ${person.name.toUpperCase()}*\n`;
-      text += `🍽️ *Mesa ${tbl.table_number}* • 🏬 ${settings?.restaurant_name || "Restaurante"}\n`;
-      text += `📅 ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}\n\n`;
+      text += `*PRÉ-CONTA INDIVIDUAL: ${person.name.toUpperCase()}*\n`;
+      text += `*Mesa ${tbl.table_number}* • ${settings?.restaurant_name || "Restaurante"}\n`;
+      text += `${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}\n\n`;
 
-      text += `📦 *ITENS CONSUMIDOS (${person.itemsCount || (person.items || []).length}):*\n`;
+      text += `*ITENS CONSUMIDOS (${person.itemsCount || (person.items || []).length}):*\n`;
       (person.items || []).forEach(it => {
         text += `  • ${it.quantity}x ${it.name} - R$ ${Number(it.totalPrice || 0).toFixed(2).replace(".", ",")}\n`;
       });
 
-      text += `\n💰 *Subtotal Comanda:* R$ ${pSub.toFixed(2).replace(".", ",")}\n`;
+      text += `\n*Subtotal Comanda:* R$ ${pSub.toFixed(2).replace(".", ",")}\n`;
       if (isFeeEnabled) {
-        text += `🛎️ *Taxa de Serviço (${feeRate}%):* R$ ${pFee.toFixed(2).replace(".", ",")}\n`;
-        text += `💳 *TOTAL DA COMANDA (c/ ${feeRate}%):* R$ ${pTotal.toFixed(2).replace(".", ",")}\n`;
+        text += `*Taxa de Serviço (${feeRate}%):* R$ ${pFee.toFixed(2).replace(".", ",")}\n`;
+        text += `*TOTAL DA COMANDA (c/ ${feeRate}%):* R$ ${pTotal.toFixed(2).replace(".", ",")}\n`;
       } else {
-        text += `💳 *TOTAL DA COMANDA:* R$ ${pSub.toFixed(2).replace(".", ",")}\n`;
+        text += `*TOTAL DA COMANDA:* R$ ${pSub.toFixed(2).replace(".", ",")}\n`;
       }
 
       const allPayments = getSessionPaymentsList(tbl.activeSession);
@@ -1171,28 +1171,28 @@ export default function TablesPage() {
       if (personPayments.length > 0) {
         const pPaid = personPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
         const pRem = Math.max(0, pTotal - pPaid);
-        text += `\n💳 *PAGAMENTOS EFETUADOS:*\n`;
+        text += `\n*PAGAMENTOS EFETUADOS:*\n`;
         personPayments.forEach(p => {
           text += `  • ${p.method_label || getPaymentMethodLabel(p.method)}: R$ ${Number(p.amount || 0).toFixed(2).replace(".", ",")}\n`;
         });
-        text += `💰 *Total Já Pago:* R$ ${pPaid.toFixed(2).replace(".", ",")}\n`;
-        text += pRem === 0 ? `✅ *Status:* 100% Quitado!\n` : `⚠️ *Saldo a Pagar:* R$ ${pRem.toFixed(2).replace(".", ",")}\n`;
+        text += `*Total Já Pago:* R$ ${pPaid.toFixed(2).replace(".", ",")}\n`;
+        text += pRem === 0 ? `*Status:* 100% Quitado!\n` : `*Saldo a Pagar:* R$ ${pRem.toFixed(2).replace(".", ",")}\n`;
       }
     } else {
       const subtotal = Number(tbl.totalConsumed || 0);
       const serviceFee = isFeeEnabled ? (subtotal * feeMultiplier) : 0;
       const totalWithService = subtotal + serviceFee;
 
-      text += `🧾 *PRÉ-CONTA - MESA ${tbl.table_number}*\n`;
-      text += `🏬 ${settings?.restaurant_name || "Restaurante"}\n`;
-      text += `📅 ${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}\n\n`;
+      text += `*PRÉ-CONTA - MESA ${tbl.table_number}*\n`;
+      text += `${settings?.restaurant_name || "Restaurante"}\n`;
+      text += `${new Date().toLocaleDateString("pt-BR")} às ${new Date().toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}\n\n`;
 
       if (ordersByCustomer.length > 0) {
-        text += `👥 *CONSUMO POR PESSOA:*\n`;
+        text += `*CONSUMO POR PESSOA:*\n`;
         ordersByCustomer.forEach(p => {
           const pSub = Number(p.totalAmount || 0);
           const pTotal = isFeeEnabled ? (pSub * (1 + feeMultiplier)) : pSub;
-          text += `\n👤 *${p.name}* (${p.itemsCount} ${p.itemsCount === 1 ? "item" : "itens"}):\n`;
+          text += `\n*${p.name}* (${p.itemsCount} ${p.itemsCount === 1 ? "item" : "itens"}):\n`;
           (p.items || []).forEach(it => {
             text += `  • ${it.quantity}x ${it.name} - R$ ${Number(it.totalPrice || 0).toFixed(2).replace(".", ",")}\n`;
           });
@@ -1203,34 +1203,34 @@ export default function TablesPage() {
         text += `\n-------------------------\n`;
       }
 
-      text += `💰 *Subtotal Consumo:* R$ ${subtotal.toFixed(2).replace(".", ",")}\n`;
+      text += `*Subtotal Consumo:* R$ ${subtotal.toFixed(2).replace(".", ",")}\n`;
       if (isFeeEnabled) {
-        text += `🛎️ *Taxa de Serviço (${feeRate}%):* R$ ${serviceFee.toFixed(2).replace(".", ",")}\n`;
-        text += `💳 *TOTAL GERAL (c/ ${feeRate}%):* R$ ${totalWithService.toFixed(2).replace(".", ",")}\n`;
+        text += `*Taxa de Serviço (${feeRate}%):* R$ ${serviceFee.toFixed(2).replace(".", ",")}\n`;
+        text += `*TOTAL GERAL (c/ ${feeRate}%):* R$ ${totalWithService.toFixed(2).replace(".", ",")}\n`;
       } else {
-        text += `💳 *TOTAL GERAL:* R$ ${subtotal.toFixed(2).replace(".", ",")}\n`;
+        text += `*TOTAL GERAL:* R$ ${subtotal.toFixed(2).replace(".", ",")}\n`;
       }
 
       const sessionPayments = getSessionPaymentsList(tbl.activeSession);
       if (sessionPayments.length > 0) {
         const totalPaid = sessionPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
         const remaining = Math.max(0, totalWithService - totalPaid);
-        text += `\n💳 *PAGAMENTOS RECEBIDOS:*\n`;
+        text += `\n*PAGAMENTOS RECEBIDOS:*\n`;
         sessionPayments.forEach(p => {
           const timeStr = p.created_at ? new Date(p.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
           const whoStr = p.customer_name ? ` (${p.customer_name})` : "";
           text += `  • ${timeStr} ${p.method_label || getPaymentMethodLabel(p.method)}${whoStr}: R$ ${Number(p.amount || 0).toFixed(2).replace(".", ",")}\n`;
         });
-        text += `💰 *Total Já Pago:* R$ ${totalPaid.toFixed(2).replace(".", ",")}\n`;
+        text += `*Total Já Pago:* R$ ${totalPaid.toFixed(2).replace(".", ",")}\n`;
         text += remaining === 0 
-          ? `✅ *Status da Comanda:* 100% Quitado!\n`
-          : `⚠️ *Saldo Restante a Pagar:* R$ ${remaining.toFixed(2).replace(".", ",")}\n`;
+          ? `*Status da Comanda:* 100% Quitado!\n`
+          : `*Saldo Restante a Pagar:* R$ ${remaining.toFixed(2).replace(".", ",")}\n`;
       }
 
       if (ordersByCustomer.length > 1) {
         text += isFeeEnabled 
-          ? `\n📊 *QUANTO CADA UM PAGA (c/ ${feeRate}%):*\n`
-          : `\n📊 *QUANTO CADA UM PAGA:*\n`;
+          ? `\n*QUANTO CADA UM PAGA (c/ ${feeRate}%):*\n`
+          : `\n*QUANTO CADA UM PAGA:*\n`;
         ordersByCustomer.forEach(p => {
           const pTotal = isFeeEnabled ? Number(p.totalAmount || 0) * (1 + feeMultiplier) : Number(p.totalAmount || 0);
           text += `  • ${p.name}: R$ ${pTotal.toFixed(2).replace(".", ",")}\n`;
@@ -1241,7 +1241,7 @@ export default function TablesPage() {
     if (navigator?.clipboard) {
       navigator.clipboard.writeText(text);
       setIsCopiedSummary(true);
-      toast.success("Resumo por pessoa copiado! Pronto para colar no WhatsApp 📲");
+      toast.success("Resumo por pessoa copiado! Pronto para colar no WhatsApp.");
       setTimeout(() => setIsCopiedSummary(false), 2500);
     }
   };
@@ -1292,7 +1292,7 @@ export default function TablesPage() {
       setSessions(prev => prev.filter(s => !(s.table_id === tbl.id || (cleanNum(s.table_number) === thisNum && (s.status === 'open' || s.status === 'bill_requested')))));
       setOrders(prev => prev.map(o => (cleanNum(o.table_number) === thisNum || (targetSessionId && o.table_session_id === targetSessionId)) ? { ...o, payment_status: "paid", status: "entregue" } : o));
 
-      toast.success(`Mesa ${tbl.table_number} liberada com sucesso! 🟢`);
+      toast.success(`Mesa ${tbl.table_number} liberada com sucesso!`);
 
       // 2. Persistência no Supabase / Banco
       if (isSupabaseConfigured() && supabase) {
@@ -1709,7 +1709,7 @@ export default function TablesPage() {
       setSelectedTable(prev => prev ? { ...prev, activeSession: authoritativeSessionObj } : null);
 
       if (settlingComanda) {
-        toast.success(`Comanda "${settlingComanda.name}" de R$ ${enteredAmount.toFixed(2).replace(".", ",")} quitada com sucesso! 🟢 A Mesa ${tbl.table_number} continua aberta.`);
+        toast.success(`Comanda "${settlingComanda.name}" de R$ ${enteredAmount.toFixed(2).replace(".", ",")} quitada com sucesso! A Mesa ${tbl.table_number} continua aberta.`);
         setSettlingComanda(null);
       } else if (newRemaining <= 0.01) {
         toast.success(`Pagamento de R$ ${enteredAmount.toFixed(2).replace(".", ",")} registrado! Mesa 100% quitada.`);
@@ -1873,7 +1873,7 @@ export default function TablesPage() {
         payment_method: finalPaymentMethod,
       } : o));
 
-      toast.success(`Mesa ${tbl.table_number} liquidada e liberada com sucesso! 🟢`);
+      toast.success(`Mesa ${tbl.table_number} liquidada e liberada com sucesso!`);
 
       // 2. Persistência no Supabase / RPC
       if (isSupabaseConfigured() && supabase) {
@@ -2751,16 +2751,16 @@ export default function TablesPage() {
                                     {person.name}
                                   </p>
                                   {person.isPaid ? (
-                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-900 border border-emerald-200">
-                                      🟢 Quitado ({person.lastPaymentMethod || "Pago"})
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                      Quitado ({person.lastPaymentMethod || "Pago"})
                                     </span>
                                   ) : person.totalAmount === 0 ? (
                                     <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-stone-100 text-stone-600 border border-stone-200">
                                       Aberta (0 itens)
                                     </span>
                                   ) : person.paidAmount > 0 ? (
-                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-200">
-                                      🟡 Parcial (Resta R$ {person.remainingAmount.toFixed(2).replace(".", ",")})
+                                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200">
+                                      Parcial (Resta R$ {person.remainingAmount.toFixed(2).replace(".", ",")})
                                     </span>
                                   ) : null}
                                 </div>
@@ -3039,7 +3039,7 @@ export default function TablesPage() {
                           "font-mono font-bold",
                           currentTable.remainingBalance === 0 ? "text-emerald-700" : "text-amber-900"
                         )}>
-                          {currentTable.remainingBalance === 0 ? "100% Quitado 🟢" : `R$ ${currentTable.remainingBalance.toFixed(2).replace(".", ",")}`}
+                          {currentTable.remainingBalance === 0 ? "100% Quitado" : `R$ ${currentTable.remainingBalance.toFixed(2).replace(".", ",")}`}
                         </span>
                       </div>
 
@@ -3110,7 +3110,7 @@ export default function TablesPage() {
                     <CheckCircle2 className="w-4 h-4" />
                     <span>
                       {currentTable.remainingBalance === 0 && currentTable.hasPartialPayments
-                        ? "Finalizar e Liberar Mesa 🟢"
+                        ? "Finalizar e Liberar Mesa"
                         : (currentTable.hasPartialPayments
                             ? `Receber Mesa (Resta R$ ${currentTable.remainingBalance.toFixed(2).replace(".", ",")})`
                             : "Receber / Abater Mesa")}
@@ -3125,14 +3125,14 @@ export default function TablesPage() {
 
       {/* MODAL: ABRIR MESA */}
       <Dialog open={isOpenTableModalOpen} onOpenChange={setIsOpenTableModalOpen}>
-        <DialogContent className="max-w-md rounded-2xl p-6 bg-white border border-stone-200 shadow-xl">
+        <DialogContent className="max-w-md w-[95vw] rounded-2xl p-5 sm:p-6 bg-white border border-stone-200 shadow-xl">
           <DialogHeader>
             <div className="flex items-center gap-3 mb-1">
               <div className="w-10 h-10 rounded-xl bg-stone-100 border border-stone-200 flex items-center justify-center text-stone-700 shrink-0">
                 <UtensilsCrossed className="w-5 h-5 text-stone-700" />
               </div>
               <div>
-                <DialogTitle className="text-lg font-bold text-stone-900">
+                <DialogTitle className="text-base sm:text-lg font-bold text-stone-900">
                   Abrir Mesa {selectedTable?.table_number}
                 </DialogTitle>
                 <DialogDescription className="text-xs text-stone-500">
@@ -3159,34 +3159,34 @@ export default function TablesPage() {
               </p>
             </div>
 
-            <div className="pt-3 border-t border-stone-200 flex flex-col sm:flex-row items-center justify-between gap-2">
+            <div className="pt-3 border-t border-stone-200 flex flex-col gap-2">
               <Button
                 type="button"
-                variant="outline"
-                onClick={() => setIsOpenTableModalOpen(false)}
-                className="w-full sm:w-auto h-10 rounded-xl font-medium text-xs text-stone-600 border-stone-300 cursor-pointer"
+                onClick={(e) => handleOpenTable(e, true)}
+                disabled={isOpeningTable}
+                className="w-full h-11 rounded-xl bg-[#047857] hover:bg-[#036348] text-white font-bold text-xs cursor-pointer shadow-xs flex items-center justify-center gap-2"
               >
-                Cancelar
+                <Plus className="w-4 h-4" />
+                <span>{isOpeningTable ? "Abrindo mesa..." : "Abrir Mesa e Lançar Pedido"}</span>
               </Button>
 
-              <div className="flex items-center gap-2 w-full sm:w-auto">
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsOpenTableModalOpen(false)}
+                  className="h-10 rounded-xl font-medium text-xs text-stone-600 border-stone-300 hover:bg-stone-50 cursor-pointer"
+                >
+                  Cancelar
+                </Button>
+
                 <Button
                   type="submit"
                   disabled={isOpeningTable}
                   variant="outline"
-                  className="flex-1 sm:flex-none h-10 px-4 rounded-xl border-stone-300 text-stone-700 font-bold text-xs cursor-pointer hover:bg-stone-50"
+                  className="h-10 rounded-xl border-stone-300 text-stone-700 font-semibold text-xs cursor-pointer hover:bg-stone-50"
                 >
-                  {isOpeningTable ? "Abrindo..." : "📄 Abrir com Comanda Vazia"}
-                </Button>
-
-                <Button
-                  type="button"
-                  onClick={(e) => handleOpenTable(e, true)}
-                  disabled={isOpeningTable}
-                  className="flex-1 sm:flex-none h-10 px-5 rounded-xl bg-[#047857] hover:bg-[#036348] text-white font-black text-xs cursor-pointer shadow-xs gap-1.5"
-                >
-                  <Flame className="w-3.5 h-3.5" />
-                  <span>{isOpeningTable ? "Abrindo..." : "⚡ Abrir e Lançar Pedido"}</span>
+                  {isOpeningTable ? "Abrindo..." : "Comanda Vazia"}
                 </Button>
               </div>
             </div>
@@ -3310,7 +3310,7 @@ export default function TablesPage() {
                       : "bg-gray-100/80 text-gray-700 border-gray-200 hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-200"
                   )}
                 >
-                  <span>👤</span>
+                  <User className="w-3 h-3 text-stone-500" />
                   <span>{p.name}</span>
                   {p.isPaid && <span className="text-[9px] text-emerald-600 font-semibold">(pago)</span>}
                 </button>
@@ -3646,7 +3646,7 @@ export default function TablesPage() {
                           "font-mono text-base font-bold",
                           remainingToPay === 0 ? "text-emerald-700" : "text-amber-900"
                         )}>
-                          {remainingToPay === 0 ? "100% Quitado 🟢" : `R$ ${remainingToPay.toFixed(2).replace(".", ",")}`}
+                          {remainingToPay === 0 ? "100% Quitado" : `R$ ${remainingToPay.toFixed(2).replace(".", ",")}`}
                         </span>
                       </div>
                     </>
@@ -3843,9 +3843,10 @@ export default function TablesPage() {
                                   setPartialPaymentAmount(Math.min(remainingToPay, pTot));
                                   setPartialPayerName(p.name);
                                 }}
-                                className="text-[11px] font-medium px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 border border-stone-200 text-stone-800 transition-colors cursor-pointer"
+                                className="text-[11px] font-medium px-2 py-0.5 rounded-lg bg-stone-100 hover:bg-stone-200 border border-stone-200 text-stone-800 transition-colors cursor-pointer flex items-center gap-1"
                               >
-                                👤 {p.name} (R$ {pTot.toFixed(2).replace(".", ",")})
+                                <User className="w-3 h-3 text-stone-500" />
+                                <span>{p.name} (R$ {pTot.toFixed(2).replace(".", ",")})</span>
                               </button>
                             );
                           })}
@@ -3940,7 +3941,7 @@ export default function TablesPage() {
                           onClick={() => { setIsSettlementModalOpen(false); setSettlingComanda(null); }}
                           className="flex-1 sm:flex-none h-10 px-5 rounded-xl bg-[#047857] hover:bg-[#036348] text-white font-bold text-xs cursor-pointer shadow-xs"
                         >
-                          Comanda 100% Quitada 🟢 (Concluir)
+                          Comanda 100% Quitada (Concluir)
                         </Button>
                       ) : (
                         <Button
@@ -3949,7 +3950,7 @@ export default function TablesPage() {
                           disabled={isRegisteringPartial}
                           className="flex-1 sm:flex-none h-10 px-5 rounded-xl bg-[#047857] hover:bg-[#036348] text-white font-bold text-xs cursor-pointer shadow-xs"
                         >
-                          {isRegisteringPartial ? "Recebendo..." : `Receber Comanda (${settlingComanda.name}) R$ ${(enteredAmount > 0 ? enteredAmount : remainingToPay).toFixed(2).replace(".", ",")} 🟢`}
+                          {isRegisteringPartial ? "Recebendo..." : `Receber Comanda (${settlingComanda.name}) R$ ${(enteredAmount > 0 ? enteredAmount : remainingToPay).toFixed(2).replace(".", ",")}`}
                         </Button>
                       )
                     ) : (
@@ -3960,7 +3961,7 @@ export default function TablesPage() {
                           disabled={isClosingSession}
                           className="flex-1 sm:flex-none h-10 px-5 rounded-xl bg-[#047857] hover:bg-[#036348] text-white font-bold text-xs cursor-pointer shadow-xs"
                         >
-                          {isClosingSession ? "Finalizando..." : "Finalizar e Liberar Mesa 🟢"}
+                          {isClosingSession ? "Finalizando..." : "Finalizar e Liberar Mesa"}
                         </Button>
                       ) : enteredAmount > 0 && enteredAmount < (remainingToPay - 0.01) ? (
                         /* Pagamento Parcial: a mesa NÃO PODE ser liberada com saldo pendente */
@@ -3979,7 +3980,7 @@ export default function TablesPage() {
                           disabled={isClosingSession || isRegisteringPartial}
                           className="flex-1 sm:flex-none h-10 px-5 rounded-xl bg-[#047857] hover:bg-[#036348] text-white font-bold text-xs cursor-pointer shadow-xs"
                         >
-                          {isClosingSession ? "Recebendo..." : `Receber R$ ${remainingToPay.toFixed(2).replace(".", ",")} e Liberar Mesa 🟢`}
+                          {isClosingSession ? "Recebendo..." : `Receber R$ ${remainingToPay.toFixed(2).replace(".", ",")} e Liberar Mesa`}
                         </Button>
                       )
                     )}
@@ -4035,7 +4036,7 @@ export default function TablesPage() {
                           : "bg-stone-100 text-stone-700 hover:bg-stone-200"
                       )}
                     >
-                      🍽️ Toda a Mesa
+                      Toda a Mesa
                     </button>
                     {ordersByCustomer.map((p, idx) => {
                       const isSelected = (preBillFilterPerson || '').trim().toLowerCase() === (p.name || '').trim().toLowerCase();
@@ -4051,8 +4052,9 @@ export default function TablesPage() {
                               : "bg-stone-100 text-stone-700 hover:bg-stone-200"
                           )}
                         >
-                          <span>👤 {p.name}</span>
-                          {p.isPaid ? <span className="text-[10px]">🟢</span> : null}
+                          <User className="w-3 h-3 text-stone-500" />
+                          <span>{p.name}</span>
+                          {p.isPaid ? <span className="text-[10px] text-emerald-600 font-bold">(pago)</span> : null}
                         </button>
                       );
                     })}
@@ -4107,7 +4109,7 @@ export default function TablesPage() {
                           return (
                             <div key={pIdx} className="space-y-1">
                               <div className="flex justify-between font-black text-xs text-gray-950 border-b border-dotted border-gray-300 pb-0.5">
-                                <span>👤 {person.name.toUpperCase()} ({person.itemsCount}):</span>
+                                <span>{person.name.toUpperCase()} ({person.itemsCount}):</span>
                                 <span>R$ {pSubtotal.toFixed(2).replace(".", ",")}</span>
                               </div>
 
@@ -4182,7 +4184,7 @@ export default function TablesPage() {
                       </div>
                       <div className="flex justify-between font-black text-xs text-amber-900">
                         <span>SALDO RESTANTE:</span>
-                        <span>{remaining === 0 ? "100% QUITADO 🟢" : `R$ ${remaining.toFixed(2).replace(".", ",")}`}</span>
+                        <span>{remaining === 0 ? "100% QUITADO" : `R$ ${remaining.toFixed(2).replace(".", ",")}`}</span>
                       </div>
                     </div>
                   )}
