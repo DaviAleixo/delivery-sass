@@ -21,7 +21,7 @@ $function$;
 
 GRANT EXECUTE ON FUNCTION public.is_authorized_for_tenant(uuid) TO authenticated, service_role;
 
--- 2. Colunas essenciais em tenants, cash_sessions e orders
+-- 2. Colunas essenciais em tenants, cash_sessions e orders + Ajuste de Constraints em cash_movements
 ALTER TABLE public.tenants
     ADD COLUMN IF NOT EXISTS blind_cash_closing BOOLEAN NOT NULL DEFAULT false;
 
@@ -32,6 +32,14 @@ ALTER TABLE public.cash_sessions
 
 ALTER TABLE public.orders
     ADD COLUMN IF NOT EXISTS cash_session_id UUID REFERENCES public.cash_sessions(id) ON DELETE SET NULL;
+
+ALTER TABLE public.cash_movements DROP CONSTRAINT IF EXISTS cash_movements_type_check;
+ALTER TABLE public.cash_movements ADD CONSTRAINT cash_movements_type_check 
+    CHECK (type = ANY (ARRAY['open'::text, 'opening'::text, 'supply'::text, 'bleed'::text, 'expense'::text, 'order_payment'::text, 'cashback_in'::text, 'cashback_out'::text]));
+
+ALTER TABLE public.cash_movements DROP CONSTRAINT IF EXISTS cash_movements_amount_check;
+ALTER TABLE public.cash_movements ADD CONSTRAINT cash_movements_amount_check 
+    CHECK (amount >= (0)::numeric);
 
 CREATE INDEX IF NOT EXISTS idx_orders_cash_session_id ON public.orders (cash_session_id);
 CREATE INDEX IF NOT EXISTS idx_orders_tenant_cash_session ON public.orders (tenant_id, cash_session_id);
