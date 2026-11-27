@@ -6,6 +6,30 @@
 
 ## 🚀 Em Andamento / Foco Atual
 
+- [x] 🍽️ **Módulo Profissional de Salão, Mesas, Comandas, Rateios Compartilhados e Pagamentos (`Tables.jsx`, `RestaurantTable.js`, `MIGRATION_PROFESSIONAL_TABLES_COMANDAS.sql`)**:
+  - [x] **Arquitetura Relacional & Integridade Financeira no Banco de Dados (`PostgreSQL` / `Supabase`)**:
+    - [x] Criação das tabelas relacionais oficiais multi-tenant: `table_comandas`, `table_payments`, `table_payment_allocations`, `table_payment_refunds`, `table_payment_refund_allocations`.
+    - [x] Isolamento estrito de tenant com constraints compostas `(tenant_id, ...)` e `ON DELETE RESTRICT` em comandas, pagamentos e alocações (zero desaparecimento acidental de dados financeiros).
+    - [x] Trigger `trg_orders_session_comanda_guard` em `orders` impedindo lançamento de itens em sessões fechadas ou comandas canceladas.
+    - [x] RLS ativado com políticas restritivas e revogação de inserções/atualizações diretas via REST (`REVOKE INSERT, UPDATE, DELETE FROM authenticated, anon`), forçando o tráfego estritamente por RPCs transacionais seguras.
+  - [x] **Motor Transacional de Pagamentos, Estornos e Liberação de Mesa (`Security Definer RPCs`)**:
+    - [x] **RPC `process_table_payment`**: Hierarquia canônica de locks anti-deadlock (`cash_sessions` -> `restaurant_tables` -> `table_sessions` -> `table_comandas (id ASC)`), verificação de idempotência em duplo check (antes e após os locks), canonicalização de payload JSON com hash SHA-256 e gravação simultânea em `table_payments`, `table_payment_allocations`, `cash_movements` e retrocompatibilidade com `payment_details->'payments'`.
+    - [x] **RPC `refund_table_payment`**: Estorno parcial e total auditado com rateio comanda a comanda (`table_payment_refund_allocations`), sangria (`bleed`) no caixa ativo e reabertura automática de comanda se e somente se o saldo pós-estorno for devedor (`balance > 0`).
+    - [x] **RPC `release_table`**: Validação estrita impedindo liberação com pedidos pendentes na cozinha/KDS ou com comandas com saldo devedor pendente.
+    - [x] **RPCs `create_table_comanda` e `update_table_comanda_name`**: Gestão segura e concorrente de comandas individuais com nomes automáticos (`Comanda 01`, `Comanda 02`...).
+  - [x] **Backfill Idempotente & Auditoria de Dados Legados (`sp_backfill_table_comandas_idempotent`)**:
+    - [x] Migração de comandas e pagamentos históricos armazenados em JSONB sem duplicidade (`legacy_source_key` estável).
+    - [x] Auditoria de pedidos e pagamentos ambíguos em tabelas segregadas (`migration_unlinked_orders_log`, `migration_unallocated_payments_log` e `migration_divergent_records_log`), com zero suposição arbitrária via `MIN(id)` e compatibilidade com pagamentos históricos sem caixa comprovado.
+    - [x] Execução e validação completa tanto em homologação (`zecuwijuiqsaoeafonsv`) quanto em produção (`jqwtnzdsaivbjudvjhld`).
+  - [x] **Evolução da Interface do Salão (`Tables.jsx`)**:
+    - [x] **Abertura Inteligente de Mesas**: Duplo fluxo com ação rápida principal _"⚡ Abrir mesa e lançar pedido"_ (abre a mesa e direciona instantaneamente para o catálogo de produtos com a primeira comanda selecionada) e ação secundária _"📄 Abrir com comanda vazia"_, com auto-identificação como `Comanda 01`.
+    - [x] **Gestão de Comandas Individuais**: Cartões dedicados para cada cliente/comanda com status visual (`🟢 Quitado`, `🟡 Parcial`, `Aberta`), extrato individual, lançamento rápido de itens e cobrança individual.
+    - [x] **Modal Completo de Cobrança em 3 Abas**:
+      - Aba 1: _Individual / Geral_ (quitação individual da comanda ou do saldo geral).
+      - Aba 2: _Pagamento Compartilhado_ (distribuição livre de um valor entre múltiplas comandas, ex: João paga seus itens e R$ 10 da conta do Pedro).
+      - Aba 3: _Divisão de Conta_ (calculadora instantânea em 2x, 3x, 4x, 5x, 6x com preenchimento em 1 clique).
+    - [x] **Liberação de Mesa com Trava de Segurança**: Integração de fechamento otimista e persistência formal via RPC `release_table`, garantindo que a mesa permaneça aberta caso haja saldo pendente.
+
 - [x] 🔒 **Blindagem Estrita de Rotas & Isolamento Multi-Tenant Anti-Invasão (`Layout.jsx`, `storage.js`, `TenantContext.jsx`, `App.jsx`)**:
   - [x] **Guarda de Rota Centralizada Anti-Cross-Tenant (`Layout.jsx`)**: Bloqueio ativo no layout administrativo. Se um administrador ou colaborador autenticado da Loja A alterar manualmente a URL para a Loja B (ex: `/coldbeer/dashboard`, `/coldbeer/orders`, `/coldbeer/settings`, `/coldbeer/pdv`), o sistema detecta a divergência entre o slug da rota e o `user.tenant_slug` cadastrado, bloqueia a renderização, dispara toast de _"Acesso Não Autorizado"_ e redireciona imediatamente para o painel da sua própria loja (`/${user.tenant_slug}/dashboard`).
   - [x] **Bloqueio de Sobrescrita de Configurações (`loadSettings` em `Layout.jsx`)**: Impede que a troca manual de URL no navegador sobrescreva `current_tenant_slug` ou `current_tenant_id` no `localStorage` com credenciais ou identidades da loja vizinha.

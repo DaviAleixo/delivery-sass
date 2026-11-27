@@ -105,6 +105,7 @@ export default function TablesPage() {
   const [tables, setTables] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [comandas, setComandas] = useState([]);
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [productionSectors, setProductionSectors] = useState([]);
@@ -187,6 +188,11 @@ export default function TablesPage() {
   const [settlingComanda, setSettlingComanda] = useState(null); // Objeto da comanda que está sendo quitada individualmente
   const [preBillFilterPerson, setPreBillFilterPerson] = useState(null); // Nome da comanda para pré-conta individual (ou null para a mesa toda)
 
+  // Abas do Modal de Pagamento: individual | shared | split
+  const [settlementTab, setSettlementTab] = useState("individual");
+  const [splitParts, setSplitParts] = useState(2);
+  const [sharedAllocations, setSharedAllocations] = useState({});
+
   // Configuração da taxa de serviço da mesa
   const isServiceFeeEnabled = settings?.table_service_fee_enabled === true;
   const serviceFeeRate = Number(settings?.table_service_fee_rate ?? 10);
@@ -206,6 +212,7 @@ export default function TablesPage() {
         RestaurantTable.list().catch(() => []),
         TableSession.list("-opened_at", 100).catch(() => []),
         Order.list("-created_date", 250).catch(() => []),
+        (isSupabaseConfigured() && supabase ? supabase.from("table_comandas").select("*").catch(() => ({ data: [] })) : Promise.resolve({ data: [] })),
       ];
 
       const staticPromises = includeStatic ? [
@@ -215,7 +222,7 @@ export default function TablesPage() {
         ProductionSector.list("order_index").catch(() => []),
       ] : [];
 
-      const [loadedTables, loadedSessions, loadedOrders, loadedProducts, loadedCategories, settingsList, loadedSectors] = await Promise.all([
+      const [loadedTables, loadedSessions, loadedOrders, loadedComandasRes, loadedProducts, loadedCategories, settingsList, loadedSectors] = await Promise.all([
         ...dynamicPromises,
         ...staticPromises
       ]);
@@ -238,6 +245,7 @@ export default function TablesPage() {
       setTables(finalTables);
       setSessions(loadedSessions || []);
       setOrders(loadedOrders || []);
+      setComandas(loadedComandasRes?.data || []);
       if (includeStatic) {
         if (loadedProducts) setProducts(loadedProducts);
         if (loadedCategories) setCategories(loadedCategories);
@@ -399,7 +407,34 @@ export default function TablesPage() {
       // Agrupamento detalhado por comanda / pessoa (com suporte a Comanda 1, 2, 3...)
       const customerMap = new Map();
 
-      // 1. Inclui comandas cadastradas na sessão (mesmo antes de terem pedidos lançados)
+      // 1. Inclui comandas relacionais cadastradas no banco (table_comandas) para esta sessão
+      const relationalComandas = comandas.filter(c => 
+        resolvedSession?.id && c.table_session_id === resolvedSession.id && c.status !== 'cancelled'
+      );
+      relationalComandas.forEach(cmd => {
+        const cleanName = String(cmd.name || "").trim();
+        if (cleanName) {
+          const normKey = cleanName.toLowerCase();
+          if (!customerMap.has(normKey)) {
+            customerMap.set(normKey, {
+              id: cmd.id,
+              name: cleanName,
+              status: cmd.status,
+              phone: "",
+              totalAmount: 0,
+              itemsCount: 0,
+              items: [],
+              orderCount: 0,
+            });
+          } else {
+            const existing = customerMap.get(normKey);
+            existing.id = cmd.id;
+            existing.status = cmd.status;
+          }
+        }
+      });
+
+      // 1.b. Inclui comandas legadas cadastradas na sessão (mesmo antes de terem pedidos lançados)
       const sessionComandas = Array.isArray(resolvedSession?.payment_details?.comandas)
         ? resolvedSession.payment_details.comandas
         : [];
@@ -409,7 +444,9 @@ export default function TablesPage() {
           const normKey = cleanName.toLowerCase();
           if (!customerMap.has(normKey)) {
             customerMap.set(normKey, {
+              id: null,
               name: cleanName,
+              status: 'open',
               phone: "",
               totalAmount: 0,
               itemsCount: 0,
@@ -676,8 +713,8 @@ export default function TablesPage() {
     }
   };
 
-  // Open Table Session
-  const handleOpenTable = async (e) => {
+  // Open Table Session (com opção de lançamento imediato ou comanda vazia)
+  const handleOpenTable = async (e, shouldLaunchOrderImmediately = false) => {
     e?.preventDefault();
     if (!selectedTable) return;
 
@@ -685,7 +722,7 @@ export default function TablesPage() {
       setIsOpeningTable(true);
       const activeTenantId = getActiveTenantId() || "a0000000-0000-0000-0000-000000000001";
 
-      const initialComanda = openCustomerName.trim() || "Comanda 1";
+      const initialComanda = openCustomerName.trim() || "Comanda 01";
       const initialDetails = { comandas: [initialComanda], payments: [] };
 
       // Call Supabase RPC or direct Entity creation
@@ -701,7 +738,6 @@ export default function TablesPage() {
 
         if (error) {
           console.warn("RPC open_table_session falhou, usando fallback direto:", error);
-          // Fallback manual
           newSession = await TableSession.create({
             tenant_id: activeTenantId,
             table_id: selectedTable.id,
@@ -716,11 +752,15 @@ export default function TablesPage() {
           await RestaurantTable.update(selectedTable.id, { status: "occupied" });
         } else {
           newSession = data;
-          if (newSession?.id) {
-            await supabase.from("table_sessions").update({
-              payment_details: initialDetails,
-            }).eq("id", newSession.id).catch(() => {});
-          }
+        }
+
+        // Garante criação da comanda no banco relacional table_comandas
+        if (newSession?.id) {
+          await supabase.rpc("create_table_comanda", {
+            p_session_id: newSession.id,
+            p_name: initialComanda,
+            p_tenant_id: activeTenantId,
+          }).catch(err => console.warn("create_table_comanda RPC:", err));
         }
       } else {
         newSession = await TableSession.create({
@@ -741,9 +781,13 @@ export default function TablesPage() {
       setIsOpenTableModalOpen(false);
       await loadAllData();
 
-      // Open Comanda right away for adding items
       setSelectedSession(newSession);
-      setIsComandaDrawerOpen(true);
+      if (shouldLaunchOrderImmediately) {
+        setQuickOrderPersonName(initialComanda);
+        setIsAddItemModalOpen(true);
+      } else {
+        setIsComandaDrawerOpen(true);
+      }
     } catch (err) {
       console.error("Erro ao abrir mesa:", err);
       toast.error("Erro ao abrir mesa. Tente novamente.");
@@ -1254,6 +1298,12 @@ export default function TablesPage() {
       if (isSupabaseConfigured() && supabase) {
         const safeExec = (builder) => Promise.resolve(builder).catch(() => ({ data: null, error: null }));
         if (targetSessionId && !String(targetSessionId).startsWith("virtual_")) {
+          // Chama a RPC release_table para validação formal de fechamento e quitação
+          await safeExec(supabase.rpc("release_table", {
+            p_session_id: targetSessionId,
+            p_tenant_id: activeTenantId,
+          }));
+
           await safeExec(supabase.rpc("close_table_session", {
             p_tenant_id: activeTenantId,
             p_session_id: targetSessionId,
@@ -1426,7 +1476,16 @@ export default function TablesPage() {
 
     try {
       const targetSession = effectiveTable.activeSession;
+      const activeTenantId = effectiveTable.tenant_id || getActiveTenantId() || "a0000000-0000-0000-0000-000000000001";
       if (targetSession && !String(targetSession.id).startsWith("virtual_")) {
+        if (isSupabaseConfigured() && supabase) {
+          await supabase.rpc("create_table_comanda", {
+            p_session_id: targetSession.id,
+            p_name: finalName,
+            p_tenant_id: activeTenantId,
+          }).catch(err => console.warn("create_table_comanda RPC:", err));
+        }
+
         const currentComandas = Array.isArray(targetSession.payment_details?.comandas)
           ? targetSession.payment_details.comandas
           : [];
@@ -1555,8 +1614,50 @@ export default function TablesPage() {
 
       let authoritativeSessionObj = null;
 
-      // Persistência atômica no Supabase via FOR UPDATE (evita Lost Update entre dois operadores)
-      if (isSupabaseConfigured() && supabase && targetSessionId) {
+      // Persistência profissional via process_table_payment ou fallback compatível
+      if (isSupabaseConfigured() && supabase && targetSessionId && !String(targetSessionId).startsWith("virtual_")) {
+        // Mapeia comandas envolvidas no rateio
+        const sessionComandas = comandas.filter(c => c.table_session_id === targetSessionId);
+        let allocations = [];
+
+        if (settlementTab === "shared" && Object.keys(sharedAllocations).length > 0) {
+          allocations = Object.entries(sharedAllocations)
+            .filter(([_, amt]) => Number(amt) > 0)
+            .map(([cId, amt]) => ({
+              comanda_id: cId,
+              amount: Number(amt),
+            }));
+        } else if (settlingComanda) {
+          let cId = settlingComanda.id;
+          if (!cId) {
+            const found = sessionComandas.find(c => c.name.toLowerCase() === settlingComanda.name.toLowerCase());
+            cId = found?.id;
+          }
+          if (cId) {
+            allocations = [{ comanda_id: cId, amount: enteredAmount }];
+          }
+        } else if (sessionComandas.length === 1) {
+          allocations = [{ comanda_id: sessionComandas[0].id, amount: enteredAmount }];
+        }
+
+        if (allocations.length > 0 && Math.abs(allocations.reduce((s, a) => s + a.amount, 0) - enteredAmount) < 0.01) {
+          const idempotencyKey = `pay_client_${targetSessionId}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+          const { data: rpcProcRes, error: rpcProcErr } = await supabase.rpc("process_table_payment", {
+            p_session_id: targetSessionId,
+            p_tenant_id: activeTenantId,
+            p_amount: enteredAmount,
+            p_payment_method: paymentMethod,
+            p_allocations: allocations,
+            p_idempotency_key: idempotencyKey,
+            p_paid_by_name: partialPayerName.trim() || null,
+          });
+
+          if (rpcProcErr) {
+            console.warn("RPC process_table_payment retornou erro, tentando fallback:", rpcProcErr);
+          }
+        }
+
+        // Continua com add_table_session_partial_payment para sincronizar payment_details atomicamente
         const { data: rpcPayRes, error: rpcPayErr } = await supabase.rpc("add_table_session_partial_payment", {
           p_session_id: targetSessionId,
           p_payment: newPayment,
@@ -1777,6 +1878,33 @@ export default function TablesPage() {
       // 2. Persistência no Supabase / RPC
       if (isSupabaseConfigured() && supabase) {
         if (isRealSession) {
+          // Se houver saldo restante a liquidar, tenta process_table_payment para a última parcela
+          if (remainingToSettle > 0) {
+            const sessionComandas = comandas.filter(c => c.table_session_id === targetSessionId && c.status === 'open');
+            if (sessionComandas.length > 0) {
+              const perComanda = (remainingToSettle / sessionComandas.length);
+              const autoAllocs = sessionComandas.map((c, idx) => ({
+                comanda_id: c.id,
+                amount: idx === sessionComandas.length - 1 ? (remainingToSettle - (perComanda * (sessionComandas.length - 1))) : perComanda,
+              }));
+              await supabase.rpc("process_table_payment", {
+                p_session_id: targetSessionId,
+                p_tenant_id: activeTenantId,
+                p_amount: remainingToSettle,
+                p_payment_method: paymentMethod,
+                p_allocations: autoAllocs,
+                p_idempotency_key: `pay_final_${targetSessionId}_${Date.now()}`,
+                p_paid_by_name: partialPayerName.trim() || null,
+              }).catch(err => console.warn("process_table_payment final:", err));
+            }
+          }
+
+          // Executa liberação formal via release_table RPC
+          await supabase.rpc("release_table", {
+            p_session_id: targetSessionId,
+            p_tenant_id: activeTenantId,
+          }).catch(err => console.warn("release_table RPC:", err));
+
           const { error } = await supabase.rpc("close_table_session", {
             p_tenant_id: activeTenantId,
             p_session_id: targetSessionId,
@@ -3014,39 +3142,53 @@ export default function TablesPage() {
             </div>
           </DialogHeader>
 
-          <form onSubmit={handleOpenTable} className="space-y-4 mt-2">
+          <form onSubmit={(e) => handleOpenTable(e, false)} className="space-y-4 mt-2">
             <div>
               <label className="text-xs font-semibold text-stone-700 block mb-1.5">
-                Nome do Cliente / Identificação (Opcional)
+                Nome do Cliente / Identificação da Comanda (Opcional)
               </label>
               <Input
                 value={openCustomerName}
                 onChange={(e) => setOpenCustomerName(e.target.value)}
-                placeholder={`Ex: João Silva ou Mesa ${selectedTable?.table_number || ""}`}
+                placeholder={`Ex: João Silva ou Comanda 01`}
                 className="h-10 rounded-xl text-sm border-stone-300"
                 autoFocus
               />
               <p className="text-[11px] text-stone-400 mt-1">
-                Se deixar em branco, será identificado automaticamente como "Mesa {selectedTable?.table_number}".
+                Se deixar em branco, criará automaticamente como "Comanda 01".
               </p>
             </div>
 
-            <div className="pt-2 border-t border-stone-200 flex items-center justify-end gap-2">
+            <div className="pt-3 border-t border-stone-200 flex flex-col sm:flex-row items-center justify-between gap-2">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setIsOpenTableModalOpen(false)}
-                className="h-10 rounded-xl font-medium text-xs text-stone-600 border-stone-300 cursor-pointer"
+                className="w-full sm:w-auto h-10 rounded-xl font-medium text-xs text-stone-600 border-stone-300 cursor-pointer"
               >
                 Cancelar
               </Button>
-              <Button
-                type="submit"
-                disabled={isOpeningTable}
-                className="h-10 px-5 rounded-xl bg-[#047857] hover:bg-[#036348] text-white font-bold text-xs cursor-pointer shadow-xs"
-              >
-                {isOpeningTable ? "Abrindo..." : "Confirmar Abertura"}
-              </Button>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <Button
+                  type="submit"
+                  disabled={isOpeningTable}
+                  variant="outline"
+                  className="flex-1 sm:flex-none h-10 px-4 rounded-xl border-stone-300 text-stone-700 font-bold text-xs cursor-pointer hover:bg-stone-50"
+                >
+                  {isOpeningTable ? "Abrindo..." : "📄 Abrir com Comanda Vazia"}
+                </Button>
+
+                <Button
+                  type="button"
+                  onClick={(e) => handleOpenTable(e, true)}
+                  disabled={isOpeningTable}
+                  className="flex-1 sm:flex-none h-10 px-5 rounded-xl bg-[#047857] hover:bg-[#036348] text-white font-black text-xs cursor-pointer shadow-xs gap-1.5"
+                >
+                  <Flame className="w-3.5 h-3.5" />
+                  <span>{isOpeningTable ? "Abrindo..." : "⚡ Abrir e Lançar Pedido"}</span>
+                </Button>
+              </div>
             </div>
           </form>
         </DialogContent>
@@ -3369,6 +3511,55 @@ export default function TablesPage() {
 
             return (
               <div className="space-y-4 mt-1">
+                {/* Abas de Pagamento (Individual, Compartilhado, Divisão por Pessoas) */}
+                {!isSingleComanda && modalTable.ordersByCustomer && modalTable.ordersByCustomer.length > 1 && (
+                  <div className="flex items-center gap-1 bg-stone-100 p-1 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() => setSettlementTab("individual")}
+                      className={cn(
+                        "flex-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5",
+                        settlementTab === "individual" ? "bg-white text-stone-900 shadow-2xs" : "text-stone-600 hover:text-stone-900"
+                      )}
+                    >
+                      <User className="w-3.5 h-3.5" />
+                      <span>Individual / Geral</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSettlementTab("shared");
+                        // Pré-preenche alocações proporcionais caso vazio
+                        if (Object.keys(sharedAllocations).length === 0) {
+                          const initialAllocs = {};
+                          modalTable.ordersByCustomer.forEach(p => {
+                            if (p.id) initialAllocs[p.id] = (p.remainingAmount || 0);
+                          });
+                          setSharedAllocations(initialAllocs);
+                        }
+                      }}
+                      className={cn(
+                        "flex-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5",
+                        settlementTab === "shared" ? "bg-white text-stone-900 shadow-2xs" : "text-stone-600 hover:text-stone-900"
+                      )}
+                    >
+                      <Layers className="w-3.5 h-3.5" />
+                      <span>Compartilhado</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSettlementTab("split")}
+                      className={cn(
+                        "flex-1 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5",
+                        settlementTab === "split" ? "bg-white text-stone-900 shadow-2xs" : "text-stone-600 hover:text-stone-900"
+                      )}
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Divisão de Conta</span>
+                    </button>
+                  </div>
+                )}
+
                 {/* 1. Resumo Financeiro da Comanda */}
                 <div className="p-3.5 bg-stone-50 rounded-xl border border-stone-200 space-y-2 text-xs">
                   <div className="flex items-center justify-between text-stone-600">
@@ -3519,6 +3710,96 @@ export default function TablesPage() {
                 {/* 3. Formulário de Novo Recebimento (se ainda houver saldo a pagar) */}
                 {remainingToPay > 0 ? (
                   <div className="space-y-3 pt-1">
+                    {/* CONTEÚDO DA ABA COMPARTILHADA */}
+                    {!isSingleComanda && settlementTab === "shared" && (
+                      <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
+                            <Layers className="w-3.5 h-3.5 text-stone-600" />
+                            Distribuição Compartilhada do Valor
+                          </p>
+                          <span className="text-[11px] font-mono text-stone-500">
+                            Total a Distribuir: <strong>R$ {Object.values(sharedAllocations).reduce((s, v) => s + (Number(v) || 0), 0).toFixed(2).replace(".", ",")}</strong>
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-stone-500">
+                          Defina quanto deste recebimento será creditado para cada comanda (ex: João paga a sua conta e mais R$ 10 da conta do Pedro).
+                        </p>
+                        <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                          {modalTable.ordersByCustomer?.map(p => {
+                            const cAlloc = Number(sharedAllocations[p.id] ?? 0);
+                            const pRem = Number(p.remainingAmount || 0);
+                            return (
+                              <div key={p.id || p.name} className="flex items-center justify-between bg-white p-2 rounded-lg border border-stone-200 text-xs">
+                                <div>
+                                  <p className="font-bold text-stone-900">{p.name}</p>
+                                  <p className="text-[10px] text-stone-400">Saldo devedor: R$ {pRem.toFixed(2).replace(".", ",")}</p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-stone-400 font-mono text-xs">R$</span>
+                                  <CurrencyInput
+                                    value={cAlloc}
+                                    onValueChange={(val) => {
+                                      const newAllocs = { ...sharedAllocations, [p.id]: val };
+                                      setSharedAllocations(newAllocs);
+                                      const sumAllocs = Object.values(newAllocs).reduce((s, v) => s + (Number(v) || 0), 0);
+                                      setPartialPaymentAmount(sumAllocs);
+                                    }}
+                                    withPrefix={false}
+                                    placeholder="0,00"
+                                    className="w-24 h-7 text-xs text-right font-mono rounded-lg bg-stone-50 border-stone-200"
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* CONTEÚDO DA ABA DIVISÃO DE CONTA */}
+                    {!isSingleComanda && settlementTab === "split" && (
+                      <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-bold text-stone-800 flex items-center gap-1.5">
+                            <Sparkles className="w-3.5 h-3.5 text-stone-600" />
+                            Calculadora de Divisão Igualitária
+                          </p>
+                          <span className="text-[11px] font-mono text-stone-500">
+                            {splitParts}x de <strong>R$ {(remainingToPay / splitParts).toFixed(2).replace(".", ",")}</strong>
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-stone-600">Dividir conta em:</span>
+                          {[2, 3, 4, 5, 6].map(n => (
+                            <button
+                              key={n}
+                              type="button"
+                              onClick={() => {
+                                setSplitParts(n);
+                                setPartialPaymentAmount(Number((remainingToPay / n).toFixed(2)));
+                              }}
+                              className={cn(
+                                "w-8 h-8 rounded-lg text-xs font-bold border transition-all cursor-pointer",
+                                splitParts === n ? "bg-stone-900 border-stone-900 text-white" : "bg-white border-stone-200 text-stone-700 hover:bg-stone-100"
+                              )}
+                            >
+                              {n}x
+                            </button>
+                          ))}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setPartialPaymentAmount(Number((remainingToPay / splitParts).toFixed(2)))}
+                          className="w-full text-xs font-bold h-8 border-stone-300 text-stone-700 bg-white hover:bg-stone-50"
+                        >
+                          Usar Parcela de R$ {(remainingToPay / splitParts).toFixed(2).replace(".", ",")} como Valor a Receber
+                        </Button>
+                      </div>
+                    )}
+
                     {/* Atalhos Rápidos de Valor */}
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
