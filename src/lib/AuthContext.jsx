@@ -22,12 +22,17 @@ export const AuthProvider = ({ children }) => {
     if (typeof window === "undefined") return false;
     return (
       window.location.hash.includes("type=recovery") ||
-      window.location.search.includes("type=recovery")
+      window.location.search.includes("type=recovery") ||
+      window.location.search.includes("mode=recovery") ||
+      sessionStorage.getItem("auth_recovery_mode") === "true"
     );
   });
 
   const clearPasswordRecovery = useCallback(() => {
     setIsPasswordRecovery(false);
+    try {
+      sessionStorage.removeItem("auth_recovery_mode");
+    } catch (_e) {}
   }, []);
 
   // Carrega os dados de autorização do usuário na tabela tenant_admins
@@ -161,9 +166,15 @@ export const AuthProvider = ({ children }) => {
       if (!mounted) return;
 
       if (event === "PASSWORD_RECOVERY") {
+        try {
+          sessionStorage.setItem("auth_recovery_mode", "true");
+        } catch (_e) {}
         setIsPasswordRecovery(true);
         setIsLoadingAuth(false);
       } else if (event === "SIGNED_OUT" || !session) {
+        try {
+          sessionStorage.removeItem("auth_recovery_mode");
+        } catch (_e) {}
         setIsPasswordRecovery(false);
         clearSession();
         setIsLoadingAuth(false);

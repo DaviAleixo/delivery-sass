@@ -26,8 +26,21 @@ export default function AdminLoginPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
+  const isRecoveryIntent = () => {
+    if (typeof window === "undefined") return false;
+    const search = window.location.search || "";
+    const hash = window.location.hash || "";
+    return (
+      search.includes("mode=recovery") ||
+      search.includes("type=recovery") ||
+      hash.includes("mode=recovery") ||
+      hash.includes("type=recovery") ||
+      sessionStorage.getItem("auth_recovery_mode") === "true"
+    );
+  };
+
   // Modos: "login" | "forgot" | "recovery"
-  const [authMode, setAuthMode] = useState("login");
+  const [authMode, setAuthMode] = useState(() => (isRecoveryIntent() ? "recovery" : "login"));
   const [forgotEmail, setForgotEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
@@ -61,11 +74,10 @@ export default function AdminLoginPage() {
 
   // Detecta retorno de recuperação de senha pela URL ou AuthContext
   useEffect(() => {
-    if (
-      isPasswordRecovery ||
-      window.location.hash.includes("type=recovery") ||
-      window.location.search.includes("type=recovery")
-    ) {
+    if (isPasswordRecovery || isRecoveryIntent()) {
+      try {
+        sessionStorage.setItem("auth_recovery_mode", "true");
+      } catch (_e) {}
       setAuthMode("recovery");
     }
 
@@ -73,6 +85,9 @@ export default function AdminLoginPage() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === "PASSWORD_RECOVERY") {
+        try {
+          sessionStorage.setItem("auth_recovery_mode", "true");
+        } catch (_e) {}
         setError("");
         setSuccessMessage("");
         setAuthMode("recovery");
@@ -143,7 +158,7 @@ export default function AdminLoginPage() {
         return;
       }
 
-      const redirectUrl = `${window.location.origin}/login`;
+      const redirectUrl = `${window.location.origin}/login?mode=recovery`;
       const { data: fnData, error: fnErr } = await supabase.functions.invoke("admin-login", {
         body: {
           action: "request_reset",
@@ -175,6 +190,9 @@ export default function AdminLoginPage() {
     } catch (_e) {}
     localStorage.removeItem("admin_auth");
     localStorage.removeItem("admin_user");
+    try {
+      sessionStorage.removeItem("auth_recovery_mode");
+    } catch (_e) {}
     clearPasswordRecovery();
 
     if (preserveFields) {
