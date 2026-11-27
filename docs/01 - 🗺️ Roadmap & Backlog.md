@@ -55,6 +55,7 @@
   - [x] Provisionamento de schema, colunas críticas de `tenants`, `categories`, `products`, `admin_users` e `whatsapp_otp_codes`.
   - [x] Criação da view pública `tenants_public` com compatibilidade retroativa e políticas de RLS para acesso público ao cardápio.
   - [x] Execução direta e validação via conexão PostgreSQL oficial do script DDL/DML consolidado `PRODUCAO_SYNC_TOTAL.sql` e do hotfix `PROD_HOTFIX_ORDERS_CASH_RPC.sql` (`orders.cash_session_id`, `cash_sessions`, `cash_movements` e RPC `get_store_admin_users`).
+  - [x] **Sincronização de RPCs e Colunas Financeiras e de Mesas em Produção (`supabase/PROD_CASH_AND_TABLES_SYNC.sql`)**: Aplicadas colunas `retained_float`, `collected_to_safe`, `shift_closing_id` em `cash_sessions`, coluna `blind_cash_closing` em `tenants`, e as RPCs vitais `open_cash_session`, `close_cash_session`, `get_orphan_orders_for_tenant`, `attach_orphan_orders_to_session`, `is_authorized_for_tenant`, `add_table_session_partial_payment`, `close_table_session`, `open_table_session`, sanando integralmente erros 400 e 404 de abertura de caixa e salão em produção.
   - [x] Catálogo instantâneo de bairros embutido para Conselheiro Lafaiete e região no serviço de entregas (`cityNeighborhoods.js`).
 
 - [x] 🍧 **Motor Avançado de Complementos & Adicionais + Grade de Variações por Categoria (Padrão iFood / Aiqfome / Zé Delivery - [[02 - 💡 Ideias & Brainstorm#🍺 11. Arquitetura Executiva de Cardápio para Distribuidoras de Bebidas & Conveniência Padrão Zé Delivery vs Aiqfome|Ideias & Brainstorm]])**:
