@@ -2708,8 +2708,9 @@ export default function TablesPage() {
                           <Plus className="w-3 h-3" />
                           Nova Comanda
                         </Button>
-                        <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-150">
-                          ✓ Valores individuais
+                        <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-150 inline-flex items-center gap-1">
+                          <Check className="w-3 h-3 text-emerald-600" />
+                          Valores individuais
                         </span>
                       </div>
                     </div>
@@ -3603,10 +3604,10 @@ export default function TablesPage() {
                           <button
                             type="button"
                             onClick={() => { setDiscountAmount(0); setShowDiscountField(false); }}
-                            className="text-stone-400 hover:text-stone-600 px-1 py-0.5 text-xs font-bold"
+                            className="text-stone-400 hover:text-stone-600 p-1 text-xs cursor-pointer inline-flex items-center justify-center rounded"
                             title="Remover desconto"
                           >
-                            ✕
+                            <X className="w-3.5 h-3.5" />
                           </button>
                         </div>
                       </>

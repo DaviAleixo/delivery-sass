@@ -22,7 +22,8 @@
     - [x] Auditoria de pedidos e pagamentos ambíguos em tabelas segregadas (`migration_unlinked_orders_log`, `migration_unallocated_payments_log` e `migration_divergent_records_log`), com zero suposição arbitrária via `MIN(id)` e compatibilidade com pagamentos históricos sem caixa comprovado.
     - [x] Execução e validação completa tanto em homologação (`zecuwijuiqsaoeafonsv`) quanto em produção (`jqwtnzdsaivbjudvjhld`).
   - [x] **Evolução da Interface do Salão (`Tables.jsx`)**:
-    - [x] **Abertura Inteligente de Mesas**: Duplo fluxo com ação rápida principal _"⚡ Abrir mesa e lançar pedido"_ (abre a mesa e direciona instantaneamente para o catálogo de produtos com a primeira comanda selecionada) e ação secundária _"📄 Abrir com comanda vazia"_, com auto-identificação como `Comanda 01`.
+    - [x] **Abertura Inteligente de Mesas & Design Executivo 100% Livre de Emojis**: Modal com layout responsivo mobile/desktop (ação principal destacada no topo "Abrir Mesa e Lançar Pedido" com ícone vetorial Lucide `Plus`, botões secundários "Cancelar" e "Comanda Vazia" em grid alinhado), eliminação total de emojis em todo o módulo de mesas e padronização com o design system executivo sóbrio.
+    - [x] **Sincronização de RPCs em Produção (`jqwtnzdsaivbjudvjhld`)**: Deploy e validação de `auto_deliver_stale_orders`, `get_financial_overview` e `get_payables_receivables_overview` (com suporte a múltiplas contas bancárias, conciliação e RLS).
     - [x] **Gestão de Comandas Individuais**: Cartões dedicados para cada cliente/comanda com status visual (`🟢 Quitado`, `🟡 Parcial`, `Aberta`), extrato individual, lançamento rápido de itens e cobrança individual.
     - [x] **Modal Completo de Cobrança em 3 Abas**:
       - Aba 1: _Individual / Geral_ (quitação individual da comanda ou do saldo geral).
