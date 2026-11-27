@@ -434,7 +434,7 @@ export default function PDVCart({
                 className="w-full h-11 text-xs sm:text-sm font-black bg-emerald-700 hover:bg-emerald-800 text-white shadow-md rounded-xl cursor-pointer transition-all active:scale-[0.99] gap-1.5"
               >
                 <Flame className="w-4 h-4 text-emerald-200" />
-                <span>{isSubmittingTableOrder ? "Lançando..." : `✓ Lançar na Mesa ${selectedTableNumber}`}</span>
+                <span>{isSubmittingTableOrder ? "Lançando..." : `Lançar na Mesa ${selectedTableNumber}`}</span>
               </Button>
 
               <Button
@@ -466,9 +466,10 @@ export default function PDVCart({
           <Button
             onClick={handleFinalizeClick}
             disabled={cart.length === 0}
-            className="w-full h-11 sm:h-12 text-sm sm:text-base font-bold text-white shadow-md rounded-xl cursor-pointer transition-all active:scale-[0.99] bg-[#047857] hover:bg-[#065f46]"
+            className="w-full h-11 sm:h-12 text-sm sm:text-base font-bold text-white shadow-md rounded-xl cursor-pointer transition-all active:scale-[0.99] bg-[#047857] hover:bg-[#065f46] flex items-center justify-center gap-2"
           >
-            ✓ Finalizar Pedido
+            <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-200" />
+            <span>Finalizar Pedido</span>
           </Button>
         )}
       </div>

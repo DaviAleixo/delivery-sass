@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast as sonnerToast } from "sonner";
+import { cn } from "@/lib/utils";
 import {
   Sidebar,
   SidebarContent,
@@ -743,9 +744,11 @@ export default function Layout({ children, currentPageName }) {
     const currentPageTitle = pageTitles[currentPageName] || currentPageName;
     const storeStatus = getStoreStatusInfo(settings);
 
+    const isAppLikePage = currentPageName === "PDV";
+
     return (
-      <SidebarProvider className="min-h-screen w-full bg-[#F7F9F8]">
-        <div className="flex min-h-screen w-full bg-[#F7F9F8]">
+      <SidebarProvider className={cn("w-full bg-[#F7F9F8]", isAppLikePage ? "h-screen overflow-hidden" : "min-h-screen")}>
+        <div className={cn("flex w-full bg-[#F7F9F8]", isAppLikePage ? "h-screen overflow-hidden" : "min-h-screen")}>
           <Sidebar className="border-r border-gray-200/80 bg-white text-stone-900">
             {user?.role === "super_admin" && (
               <div className="p-2 bg-slate-900 border-b border-slate-800 flex items-center justify-between text-xs text-slate-200">
@@ -883,7 +886,7 @@ export default function Layout({ children, currentPageName }) {
             </SidebarFooter>
           </Sidebar>
 
-          <main className="flex-1 flex flex-col min-w-0 min-h-screen bg-[#F7F9F8]">
+          <main className={cn("flex-1 flex flex-col min-w-0 bg-[#F7F9F8]", isAppLikePage ? "h-screen overflow-hidden" : "min-h-screen")}>
             {/* Top Navbar Moderna Idêntica à Foto (sem notificação) */}
             <header className="bg-white border-b border-gray-150 px-4 md:px-6 py-2.5 shrink-0 flex items-center justify-between sticky top-0 z-20">
               <div className="flex items-center gap-3">
@@ -960,7 +963,7 @@ export default function Layout({ children, currentPageName }) {
               </div>
             </header>
 
-            <div className="flex-1 min-w-0">
+            <div className={cn("flex-1 min-w-0", isAppLikePage ? "min-h-0 overflow-hidden flex flex-col" : "")}>
               {children}
             </div>
           </main>
