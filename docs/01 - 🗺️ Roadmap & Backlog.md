@@ -23,7 +23,7 @@
     - [x] Execução e validação completa tanto em homologação (`zecuwijuiqsaoeafonsv`) quanto em produção (`jqwtnzdsaivbjudvjhld`).
   - [x] **Evolução da Interface do Salão (`Tables.jsx`)**:
     - [x] **Abertura Inteligente de Mesas & Design Executivo 100% Livre de Emojis**: Modal com layout responsivo mobile/desktop (ação principal destacada no topo "Abrir Mesa e Lançar Pedido" com ícone vetorial Lucide `Plus`, botões secundários "Cancelar" e "Comanda Vazia" em grid alinhado), eliminação total de emojis em todo o módulo de mesas e padronização com o design system executivo sóbrio.
-    - [x] **Sincronização de RPCs em Produção (`jqwtnzdsaivbjudvjhld`)**: Deploy e validação de `auto_deliver_stale_orders`, `get_financial_overview` e `get_payables_receivables_overview` (com suporte a múltiplas contas bancárias, conciliação e RLS).
+    - [x] **Sincronização de RPCs em Produção (`jqwtnzdsaivbjudvjhld`)**: Deploy e validação de `auto_deliver_stale_orders`, `get_financial_overview`, `get_payables_receivables_overview`, `get_clients_summary_paged`, `get_client_crm_detail` e rotinas de contas a pagar/receber e bancos com grants para `authenticated, anon` e recarga de cache do PostgREST.
     - [x] **Gestão de Comandas Individuais**: Cartões dedicados para cada cliente/comanda com status visual (`🟢 Quitado`, `🟡 Parcial`, `Aberta`), extrato individual, lançamento rápido de itens e cobrança individual.
     - [x] **Modal Completo de Cobrança em 3 Abas**:
       - Aba 1: _Individual / Geral_ (quitação individual da comanda ou do saldo geral).
