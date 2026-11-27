@@ -57,12 +57,20 @@ export default function SettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialTabParam = searchParams.get("tab");
   const validTabs = ["geral", "operacao", "entregas", "pagamentos", "setores", "usuarios", "assinatura"];
-  const [activeTab, setActiveTabState] = useState(
-    validTabs.includes(initialTabParam) ? initialTabParam : "geral"
-  );
+  const [activeTab, setActiveTabState] = useState(() => {
+    if (validTabs.includes(initialTabParam)) return initialTabParam;
+    try {
+      const saved = sessionStorage.getItem("admin_settings_tab");
+      if (saved && validTabs.includes(saved)) return saved;
+    } catch {}
+    return "geral";
+  });
 
   const setActiveTab = (tab) => {
     setActiveTabState(tab);
+    try {
+      sessionStorage.setItem("admin_settings_tab", tab);
+    } catch {}
     const next = new URLSearchParams(searchParams);
     if (tab === "geral") {
       next.delete("tab");

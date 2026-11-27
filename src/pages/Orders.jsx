@@ -75,7 +75,20 @@ export default function OrdersPage() {
   const [isEditingTime, setIsEditingTime] = useState(false);
   const [customTimeInput, setCustomTimeInput] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState("pendente");
+  const [activeTab, setActiveTabState] = useState(() => {
+    try {
+      return sessionStorage.getItem("admin_orders_tab") || "pendente";
+    } catch {
+      return "pendente";
+    }
+  });
+
+  const setActiveTab = (tab) => {
+    setActiveTabState(tab);
+    try {
+      sessionStorage.setItem("admin_orders_tab", tab);
+    } catch {}
+  };
   const [selectedOrderId, setSelectedOrderId] = useState(null);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const detailDismissedRef = useRef(false);

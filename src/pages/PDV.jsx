@@ -40,19 +40,98 @@ export default function PDVPage() {
   const [productionSectors, setProductionSectors] = useState([]);
   const [tables, setTables] = useState([]);
   const [sessions, setSessions] = useState([]);
-  const [orderType, setOrderType] = useState("pickup");
-  const [selectedTableNumber, setSelectedTableNumber] = useState("");
+  const [orderType, setOrderType] = useState(() => {
+    try {
+      return localStorage.getItem("pdv_draft_order_type") || "pickup";
+    } catch {
+      return "pickup";
+    }
+  });
+  const [selectedTableNumber, setSelectedTableNumber] = useState(() => {
+    try {
+      return localStorage.getItem("pdv_draft_table_number") || "";
+    } catch {
+      return "";
+    }
+  });
   const [isSubmittingTableOrder, setIsSubmittingTableOrder] = useState(false);
-  const [cart, setCart] = useState([]);
-  const [customerName, setCustomerName] = useState("");
-  const [customerPhone, setCustomerPhone] = useState("");
-  const [customerEmail, setCustomerEmail] = useState("");
+  const [cart, setCart] = useState(() => {
+    try {
+      const saved = localStorage.getItem("pdv_draft_cart");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [customerName, setCustomerName] = useState(() => {
+    try {
+      return localStorage.getItem("pdv_draft_customer_name") || "";
+    } catch {
+      return "";
+    }
+  });
+  const [customerPhone, setCustomerPhone] = useState(() => {
+    try {
+      return localStorage.getItem("pdv_draft_customer_phone") || "";
+    } catch {
+      return "";
+    }
+  });
+  const [customerEmail, setCustomerEmail] = useState(() => {
+    try {
+      return localStorage.getItem("pdv_draft_customer_email") || "";
+    } catch {
+      return "";
+    }
+  });
   const [showPayment, setShowPayment] = useState(false);
   const [showOpenCashModal, setShowOpenCashModal] = useState(false);
   const [pendingPaymentAfterOpen, setPendingPaymentAfterOpen] = useState(false);
   const [lastOrder, setLastOrder] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
+
+  // Sincroniza rascunho contínuo do PDV para nunca perder dados ao navegar pelo painel
+  useEffect(() => {
+    try {
+      if (cart.length > 0) localStorage.setItem("pdv_draft_cart", JSON.stringify(cart));
+      else localStorage.removeItem("pdv_draft_cart");
+    } catch {}
+  }, [cart]);
+
+  useEffect(() => {
+    try {
+      if (customerName) localStorage.setItem("pdv_draft_customer_name", customerName);
+      else localStorage.removeItem("pdv_draft_customer_name");
+    } catch {}
+  }, [customerName]);
+
+  useEffect(() => {
+    try {
+      if (customerPhone) localStorage.setItem("pdv_draft_customer_phone", customerPhone);
+      else localStorage.removeItem("pdv_draft_customer_phone");
+    } catch {}
+  }, [customerPhone]);
+
+  useEffect(() => {
+    try {
+      if (customerEmail) localStorage.setItem("pdv_draft_customer_email", customerEmail);
+      else localStorage.removeItem("pdv_draft_customer_email");
+    } catch {}
+  }, [customerEmail]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("pdv_draft_order_type", orderType);
+    } catch {}
+  }, [orderType]);
+
+  useEffect(() => {
+    try {
+      if (selectedTableNumber) localStorage.setItem("pdv_draft_table_number", selectedTableNumber);
+      else localStorage.removeItem("pdv_draft_table_number");
+    } catch {}
+  }, [selectedTableNumber]);
 
   const cashSession = useCashSession();
 
@@ -147,6 +226,14 @@ export default function PDVPage() {
     setCustomerName("");
     setCustomerPhone("");
     setCustomerEmail("");
+    setSelectedTableNumber("");
+    try {
+      localStorage.removeItem("pdv_draft_cart");
+      localStorage.removeItem("pdv_draft_customer_name");
+      localStorage.removeItem("pdv_draft_customer_phone");
+      localStorage.removeItem("pdv_draft_customer_email");
+      localStorage.removeItem("pdv_draft_table_number");
+    } catch {}
   };
 
   const total = cart.reduce((sum, item) => sum + (Number(item.price) || 0) * item.qty, 0);

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { soundAlert } from "@/utils/soundAlert";
 
@@ -16,6 +16,10 @@ const AuthContext = createContext({
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
+  const userRef = useRef(null);
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(() => {
@@ -51,17 +55,19 @@ export const AuthProvider = ({ children }) => {
       }
 
       let tenantSlug = null;
+      let tenantCode = null;
       let tenantName = "Restaurante";
 
       if (member.tenant_id) {
         const { data: tenant } = await supabase
           .from("tenants")
-          .select("slug, name")
+          .select("id, code, slug, name")
           .eq("id", member.tenant_id)
           .maybeSingle();
 
         if (tenant) {
           tenantSlug = tenant.slug;
+          tenantCode = tenant.code;
           tenantName = tenant.name;
         }
       }
@@ -86,6 +92,7 @@ export const AuthProvider = ({ children }) => {
         role: member.role,
         tenant_id: member.tenant_id,
         tenant_slug: tenantSlug,
+        tenant_code: tenantCode,
         tenant_name: tenantName,
         permissions: resolvedPermissions,
       };
@@ -96,6 +103,7 @@ export const AuthProvider = ({ children }) => {
       if (member.tenant_id) {
         localStorage.setItem("current_tenant_id", member.tenant_id);
         if (tenantSlug) localStorage.setItem("current_tenant_slug", tenantSlug);
+        if (tenantCode) localStorage.setItem("current_tenant_code", String(tenantCode));
         if (tenantName) localStorage.setItem("current_tenant_name", tenantName);
       }
 
@@ -187,20 +195,24 @@ export const AuthProvider = ({ children }) => {
           }
         });
       } else if (event === "SIGNED_IN") {
-        // No primeiro login explícito, carrega os dados
-        if (!user) {
+        // Apenas aciona loading na inicialização fria se não houver usuário ativo
+        const isInitialLogin = !userRef.current;
+        if (isInitialLogin) {
           setIsLoadingAuth(true);
         }
-        const profile = await fetchUserProfile(session.user);
-        if (mounted) {
-          if (profile) {
-            setUser(profile);
-            setIsAdminAuthenticated(true);
-          } else {
-            clearSession();
+        fetchUserProfile(session.user).then((profile) => {
+          if (mounted) {
+            if (profile) {
+              setUser(profile);
+              setIsAdminAuthenticated(true);
+            } else if (isInitialLogin) {
+              clearSession();
+            }
+            if (isInitialLogin) {
+              setIsLoadingAuth(false);
+            }
           }
-          setIsLoadingAuth(false);
-        }
+        });
       }
     });
 

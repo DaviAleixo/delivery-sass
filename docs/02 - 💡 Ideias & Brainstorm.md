@@ -1372,6 +1372,23 @@
     2. **Seleção Rápida de Comanda Existente**: No momento de lançar novo pedido (PDV ou garçom), listar pílulas/botões das comandas já abertas naquela mesa para evitar redigitar o nome do cliente a cada nova rodada de chopp.
     3. **Impressão de Pré-Conta Individual da Comanda**: Permitir ao garçom imprimir apenas o extrato daquela pessoa que está saindo mais cedo, sem imprimir a soma da mesa inteira.
 
+### 🎛️ 23. Modularidade Total de Canais: Chave Mestra de Salão & Mesas (Modo Dark Kitchen / Distribuidora)
+* **Contexto**: Estabelecimentos como distribuidoras de bebidas (ex: ColdBeer), dark kitchens, hamburguerias delivery-only e marmitarias não possuem atendimento presencial com garçom ou mesas físicas. Ter a aba "Salão & Mesas" no menu lateral e o seletor "Mesa / Salão" no PDV gera poluição visual, cliques desnecessários e risco de o operador lançar pedidos em mesas inexistentes por engano.
+* **Proposta de Arquitetura (Os 3 Interruptores Mestres de Operação)**:
+  - Em **Configurações > Canais de Atendimento / Operação**:
+    1. `[x] Entrega (Delivery)` — controla cálculo de taxa de entrega, bairros e motoboys.
+    2. `[x] Retirada no Balcão (Takeaway / PDV)` — controla balcão rápido no PDV e retirada pelo cliente.
+    3. `[x] Consumo no Local (Salão, Mesas & Comandas)` — chave mestra do módulo de salão (`accepts_dine_in`).
+* **Comportamento quando "Salão & Mesas" for DESATIVADO (`accepts_dine_in: false`)**:
+  1. **Menu Lateral (Sidebar)**: Oculta compulsoriamente o item **"Salão & Mesas"** (`Tables.jsx`), limpando o menu para a equipe.
+  2. **PDV Balcão (`PDV.jsx` / `PDVCart.jsx`)**:
+     - Remove o seletor de modo `Balcão | Mesa / Salão` e o seletor de mesas no topo do carrinho.
+     - Trava o PDV 100% no modo **Venda Balcão Rápida**, eliminando cliques e indo direto para adicionar itens e pagar.
+  3. **Cardápio Online / QR Code (`Menu.jsx`)**:
+     - Desativa o modo de leitura de QR Code de mesa (`?table=X` ou `mesa`).
+     - Exibe apenas as abas ativas (Delivery e Retirada), impedindo que clientes online tentem abrir mesas falsas.
+* **Benefício Comercial**: Torna o SaaS ultra-adaptável. Para um bar ou choperia, é um sistema completo de comandas; para uma distribuidora ou dark kitchen, vira um PDV enxuto e delivery rápido sem excesso de botões.
+
 ---
 
 ## 🔗 Links Relacionados

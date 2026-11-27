@@ -201,7 +201,9 @@ export default function Layout({ children, currentPageName }) {
       if (!isSuperAdmin && routeStoreSlug && user.tenant_slug) {
         const cleanRouteSlug = routeStoreSlug.toLowerCase();
         const cleanUserSlug = user.tenant_slug.toLowerCase();
-        if (cleanRouteSlug !== cleanUserSlug) {
+        const cleanUserCode = user.tenant_code ? String(user.tenant_code).toLowerCase() : "";
+        const isMatch = cleanRouteSlug === cleanUserSlug || (cleanUserCode && cleanRouteSlug === cleanUserCode);
+        if (!isMatch) {
           toast({
             title: "Acesso Não Autorizado",
             description: `Você não possui permissão para acessar o painel de "${routeStoreSlug}".`,
@@ -493,14 +495,15 @@ export default function Layout({ children, currentPageName }) {
       const currentTenantName = localStorage.getItem("current_tenant_name");
 
       if (slugFromPath && typeof window !== "undefined" && slugFromPath !== localStorage.getItem("current_tenant_slug")) {
-        localStorage.setItem("current_tenant_slug", slugFromPath);
+        const isNumeric = /^\d+$/.test(slugFromPath);
+        if (!isNumeric) {
+          localStorage.setItem("current_tenant_slug", slugFromPath);
+        }
         const fastId = localStorage.getItem(`tenant_id_by_slug_${slugFromPath}`);
         if (fastId) {
           localStorage.setItem("current_tenant_id", fastId);
         } else if (slugFromPath === "vrumm" || slugFromPath === "vruum-burguer") {
           localStorage.setItem("current_tenant_id", "a0000000-0000-0000-0000-000000000001");
-        } else {
-          localStorage.removeItem("current_tenant_id");
         }
       }
 
@@ -509,7 +512,12 @@ export default function Layout({ children, currentPageName }) {
         const tenantTable = session?.user ? "tenants" : "tenants_public";
         let query = supabase.from(tenantTable).select("id, name, slug, plan, salon_mode, logo_url, banner_url, opening_time, closing_time, open_days, phone, address, whatsapp, instagram, delivery_fee, min_order_value, delivery_fee_type, delivery_neighborhoods, delivery_unlisted_policy, delivery_fallback_fee, free_delivery_threshold, address_city, address_state, address_neighborhood, cep, manual_store_open, manual_override_date, accepts_dine_in, accepts_delivery, accepts_takeaway");
         if (targetSlug) {
-          query = query.eq("slug", targetSlug);
+          const isNumeric = /^\d+$/.test(targetSlug);
+          if (isNumeric) {
+            query = query.or(`slug.eq.${targetSlug},code.eq.${parseInt(targetSlug, 10)}`);
+          } else {
+            query = query.eq("slug", targetSlug);
+          }
         } else if (currentTenantId) {
           query = query.eq("id", currentTenantId);
         }

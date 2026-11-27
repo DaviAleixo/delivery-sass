@@ -6,6 +6,13 @@
 
 ## 🚀 Em Andamento / Foco Atual
 
+- [x] ⚡ **Estabilização de Estado, Persistência Contínua de Telas & Eliminação de Recarregamento Involuntário (`AuthContext.jsx`, `Layout.jsx`, `PDV.jsx`, `Orders.jsx`, `Settings.jsx`)**:
+  - [x] **Eliminação de Recarregamento Fantasma ao Alternar Abas no Navegador (`AuthContext.jsx`)**: Corrigido o disparo falso de `SIGNED_IN` do GoTrue ao trocar de aba no navegador, que executava `setIsLoadingAuth(true)` e desmontava o componente raiz com `<LoadingSpinner />`. Blindagem com `userRef` garantindo que o loading só ocorra na carga inicial fria.
+  - [x] **Compatibilidade de Código e Slug na Guarda Anti-Cross-Tenant (`Layout.jsx`)**: Rota agora valida tanto por `tenant_slug` quanto por `tenant_code`, impedindo redirecionamentos involuntários para o dashboard ao usar URLs numéricas como `/11/pdv`.
+  - [x] **Persistência de Rascunho no PDV (`PDV.jsx`)**: Carrinho, cliente, telefone, e-mail, tipo de entrega e mesa são persistidos no `localStorage` (`pdv_draft_*`), mantendo tudo intacto mesmo se o operador trocar de aba no menu lateral ou recarregar.
+  - [x] **Persistência de Sub-abas Ativas (`Orders.jsx`, `Settings.jsx`)**: Manutenção da aba selecionada no `sessionStorage` (`admin_orders_tab`, `admin_settings_tab`).
+  - [x] **Enquadramento Perfeito do PDV no Viewport (`Layout.jsx`, `PDVCart.jsx`)**: Bloqueio de overflow no layout do PDV para garantir que o botão "Finalizar Pedido" fique perfeitamente visível e acessível acima da barra de tarefas do Windows.
+
 - [x] 🍽️ **Módulo Profissional de Salão, Mesas, Comandas, Rateios Compartilhados e Pagamentos (`Tables.jsx`, `RestaurantTable.js`, `MIGRATION_PROFESSIONAL_TABLES_COMANDAS.sql`)**:
   - [x] **Arquitetura Relacional & Integridade Financeira no Banco de Dados (`PostgreSQL` / `Supabase`)**:
     - [x] Criação das tabelas relacionais oficiais multi-tenant: `table_comandas`, `table_payments`, `table_payment_allocations`, `table_payment_refunds`, `table_payment_refund_allocations`.
