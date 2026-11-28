@@ -61,7 +61,9 @@ export default function MenuPage() {
   const navigate = useNavigate();
   const { tenant, tenantId } = useTenant();
   const [searchParams] = useSearchParams();
-  const urlMesa = searchParams.get("mesa");
+  const acceptsDineIn = tenant ? tenant.accepts_dine_in !== false : true;
+  const rawUrlMesa = searchParams.get("mesa");
+  const urlMesa = acceptsDineIn ? rawUrlMesa : null;
 
   const salonMode = tenant?.salon_mode || (tenant?.plan === 'showcase' ? 'showcase' : (tenant?.plan === 'table' ? 'table_only' : 'full'));
   const isVisualOnly = salonMode === 'showcase';

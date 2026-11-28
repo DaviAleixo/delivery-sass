@@ -6,6 +6,13 @@
 
 ## 🚀 Em Andamento / Foco Atual
 
+- [x] 🎛️ **Modularização dos 3 Canais de Venda & Chave Mestra de Salão e Mesas (`accepts_dine_in`) (`Settings.jsx`, `OperationsTab.jsx`, `DeliveryFeesTab.jsx`, `PDV.jsx`, `PDVCart.jsx`, `Menu.jsx`, `OrderModal.jsx`, `SuperAdmin.jsx`)**:
+  - [x] **Interruptor Mestre em Configurações > Operação e Canais**: Adicionado o controle de ativação "Atendimento em Mesas, Salão & Comandas" (`accepts_dine_in`) com sincronização automática em `tenants`.
+  - [x] **PDV Balcão Puro e Desobstruído (`PDV.jsx`, `PDVCart.jsx`)**: Quando o lojista desativa mesas, o PDV oculta completamente o seletor `Balcão | Mesa / Salão` e o seletor de mesas no cabeçalho do carrinho. O PDV opera 100% focado no Balcão rápido, economizando espaço em tela e eliminando cliques acidentais em mesas inexistentes.
+  - [x] **Ocultação da Aba no Menu Lateral (`Layout.jsx`)**: A aba "Salão & Mesas" fica oculta na barra lateral caso `accepts_dine_in === false`, além de redirecionar com segurança caso um operador tente acessar a rota manualmente.
+  - [x] **Desativação de QR Code no Cardápio (`Menu.jsx`, `OrderModal.jsx`)**: Se o salão estiver desativado, o cardápio ignora o parâmetro `?mesa=X`, remove a tarja de mesa ativa e desabilita a aba "Na Mesa" no checkout público, aceitando apenas Delivery e Retirada.
+  - [x] **Gestão Completa no SuperAdmin (`SuperAdmin.jsx`)**: Inclusão do canal "🍽️ Salão & Mesas" nos modais de criação, edição e drawer de detalhes da empresa, permitindo definir se novas empresas nascem com salão ativo ou desligado.
+
 - [x] ⚡ **Estabilização de Estado, Persistência Contínua de Telas & Eliminação de Recarregamento Involuntário (`AuthContext.jsx`, `Layout.jsx`, `PDV.jsx`, `Orders.jsx`, `Settings.jsx`)**:
   - [x] **Eliminação de Recarregamento Fantasma ao Alternar Abas no Navegador (`AuthContext.jsx`)**: Corrigido o disparo falso de `SIGNED_IN` do GoTrue ao trocar de aba no navegador, que executava `setIsLoadingAuth(true)` e desmontava o componente raiz com `<LoadingSpinner />`. Blindagem com `userRef` garantindo que o loading só ocorra na carga inicial fria.
   - [x] **Compatibilidade de Código e Slug na Guarda Anti-Cross-Tenant (`Layout.jsx`)**: Rota agora valida tanto por `tenant_slug` quanto por `tenant_code`, impedindo redirecionamentos involuntários para o dashboard ao usar URLs numéricas como `/11/pdv`.

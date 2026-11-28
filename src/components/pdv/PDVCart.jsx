@@ -33,6 +33,7 @@ export default function PDVCart({
   onSelectTableNumber,
   onLaunchToTable,
   isSubmittingTableOrder = false,
+  acceptsDineIn = true,
 }) {
   const [showClientModal, setShowClientModal] = useState(false);
   const [isSearchingPhone, setIsSearchingPhone] = useState(false);
@@ -41,7 +42,7 @@ export default function PDVCart({
 
   const cleanPhone = (customerPhone || "").replace(/\D/g, "");
   const trimmedName = (customerName || "").trim();
-  const isDineIn = orderType === "dine_in";
+  const isDineIn = acceptsDineIn && orderType === "dine_in";
   const isPhonePartial = cleanPhone.length > 0 && cleanPhone.length < 10;
   const hasIdentifiedCustomer = trimmedName.length > 0 || cleanPhone.length >= 10;
 
@@ -194,67 +195,69 @@ export default function PDVCart({
         </div>
       )}
 
-      {/* Tipo de Atendimento: Balcão vs Mesa */}
-      <div className="px-3 pt-2.5 pb-2 bg-stone-100/70 border-b border-gray-200/80 shrink-0 space-y-1.5">
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => onOrderTypeChange && onOrderTypeChange("pickup")}
-            className={cn(
-              "flex-1 h-8 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 border cursor-pointer",
-              orderType === "pickup"
-                ? "bg-[#047857] text-white border-[#047857] shadow-2xs"
-                : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
-            )}
-          >
-            <Monitor className="w-3.5 h-3.5" />
-            <span>Balcão</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onOrderTypeChange && onOrderTypeChange("dine_in")}
-            className={cn(
-              "flex-1 h-8 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 border cursor-pointer",
-              orderType === "dine_in"
-                ? "bg-[#047857] text-white border-[#047857] shadow-2xs"
-                : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
-            )}
-          >
-            <UtensilsCrossed className="w-3.5 h-3.5" />
-            <span>Mesa / Salão</span>
-          </button>
-        </div>
-
-        {/* Seletor de Mesa */}
-        {orderType === "dine_in" && (
-          <div className="pt-1 space-y-1">
-            <select
-              value={selectedTableNumber || ""}
-              onChange={(e) => onSelectTableNumber && onSelectTableNumber(e.target.value)}
-              className="w-full h-9 text-xs bg-white rounded-xl border-2 border-emerald-400 px-2.5 font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-2xs"
+      {/* Tipo de Atendimento: Balcão vs Mesa (Oculto se a loja não opera salão/mesas) */}
+      {acceptsDineIn && (
+        <div className="px-3 pt-2.5 pb-2 bg-stone-100/70 border-b border-gray-200/80 shrink-0 space-y-1.5">
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => onOrderTypeChange && onOrderTypeChange("pickup")}
+              className={cn(
+                "flex-1 h-8 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 border cursor-pointer",
+                orderType === "pickup"
+                  ? "bg-[#047857] text-white border-[#047857] shadow-2xs"
+                  : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+              )}
             >
-              <option value="">Selecione uma mesa...</option>
-              {(tables.length > 0 ? tables : Array.from({ length: 10 }, (_, i) => ({ id: `fallback_${i+1}`, table_number: String(i+1), status: 'available' }))).map(t => (
-                <option key={t.id || t.table_number} value={t.table_number}>
-                  Mesa {t.table_number} {t.status === 'occupied' ? '🔴 (Ocupada)' : t.status === 'bill_requested' ? '🔵 (Pré-Conta)' : '🟢 (Livre)'}
-                </option>
-              ))}
-            </select>
+              <Monitor className="w-3.5 h-3.5" />
+              <span>Balcão</span>
+            </button>
 
-            {selectedTableNumber && (
-              <div className="flex items-center justify-between text-[11px] px-1 text-emerald-800 font-bold">
-                <span>Mesa {selectedTableNumber} Selecionada</span>
-                <span className="text-[10px] text-gray-500 font-normal">
-                  {tables.find(t => String(t.table_number) === String(selectedTableNumber))?.status === 'occupied' 
-                    ? "Acrescentando à comanda aberta" 
-                    : "Abrirá comanda no salão"}
-                </span>
-              </div>
-            )}
+            <button
+              type="button"
+              onClick={() => onOrderTypeChange && onOrderTypeChange("dine_in")}
+              className={cn(
+                "flex-1 h-8 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 border cursor-pointer",
+                orderType === "dine_in"
+                  ? "bg-[#047857] text-white border-[#047857] shadow-2xs"
+                  : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+              )}
+            >
+              <UtensilsCrossed className="w-3.5 h-3.5" />
+              <span>Mesa / Salão</span>
+            </button>
           </div>
-        )}
-      </div>
+
+          {/* Seletor de Mesa */}
+          {orderType === "dine_in" && (
+            <div className="pt-1 space-y-1">
+              <select
+                value={selectedTableNumber || ""}
+                onChange={(e) => onSelectTableNumber && onSelectTableNumber(e.target.value)}
+                className="w-full h-9 text-xs bg-white rounded-xl border-2 border-emerald-400 px-2.5 font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-2xs"
+              >
+                <option value="">Selecione uma mesa...</option>
+                {(tables.length > 0 ? tables : Array.from({ length: 10 }, (_, i) => ({ id: `fallback_${i+1}`, table_number: String(i+1), status: 'available' }))).map(t => (
+                  <option key={t.id || t.table_number} value={t.table_number}>
+                    Mesa {t.table_number} {t.status === 'occupied' ? '🔴 (Ocupada)' : t.status === 'bill_requested' ? '🔵 (Pré-Conta)' : '🟢 (Livre)'}
+                  </option>
+                ))}
+              </select>
+
+              {selectedTableNumber && (
+                <div className="flex items-center justify-between text-[11px] px-1 text-emerald-800 font-bold">
+                  <span>Mesa {selectedTableNumber} Selecionada</span>
+                  <span className="text-[10px] text-gray-500 font-normal">
+                    {tables.find(t => String(t.table_number) === String(selectedTableNumber))?.status === 'occupied' 
+                      ? "Acrescentando à comanda aberta" 
+                      : "Abrirá comanda no salão"}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Identificação do Cliente */}
       <div className="px-3 py-2.5 border-b border-gray-100 bg-stone-50/80 space-y-2 shrink-0">

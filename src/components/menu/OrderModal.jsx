@@ -188,10 +188,11 @@ export default function OrderModal({
   const savedMesa = initialTableNumber || (typeof window !== "undefined" ? localStorage.getItem("vrumburguer_table_number") || "" : "");
   
   // Regras de canais de atendimento e restrição de mesa via QR Code
+  const acceptsDineIn = deliveryRules?.accepts_dine_in !== false;
   const acceptsDelivery = deliveryRules?.accepts_delivery !== false && !isTableOnlyStore;
   const acceptsTakeaway = deliveryRules?.accepts_takeaway !== false;
-  // "Na Mesa" somente deve aparecer se o cliente escaneou o QR Code da mesa (savedMesa) ou em loja exclusiva de mesas
-  const showDineInTab = Boolean(savedMesa || isTableOnlyStore);
+  // "Na Mesa" somente deve aparecer se o cliente escaneou o QR Code da mesa (savedMesa) ou em loja exclusiva de mesas, desde que accepts_dine_in esteja ativo
+  const showDineInTab = Boolean((savedMesa || isTableOnlyStore) && acceptsDineIn);
   const showDeliveryTab = Boolean(acceptsDelivery && !isTableOnlyStore);
   const showTakeawayTab = Boolean(acceptsTakeaway);
 

@@ -156,7 +156,39 @@ export default function DeliveryFeesTab({
             </div>
           </div>
 
-          {/* Opção 3: Auto-aceite de Pedidos */}
+          {/* Opção 3: Consumo no Local (Salão, Mesas & Comandas) */}
+          <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1 max-w-xl">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-stone-900">
+                  Consumo no Local (Salão, Mesas & Comandas)
+                </span>
+                <Badge
+                  variant="outline"
+                  className={`text-[10px] font-semibold ${
+                    settings.accepts_dine_in !== false
+                      ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                      : "bg-stone-100 text-stone-600 border-stone-200"
+                  }`}
+                >
+                  {settings.accepts_dine_in !== false ? "Ativo no Sistema" : "Desativado"}
+                </Badge>
+              </div>
+              <p className="text-[11px] text-stone-500 leading-relaxed">
+                Habilita a aba Salão & Mesas no menu lateral, o seletor de mesas no PDV e pedidos por QR Code em mesas no cardápio.
+              </p>
+            </div>
+
+            <div className="shrink-0 flex items-center gap-3">
+              <Switch
+                checked={settings.accepts_dine_in !== false}
+                onCheckedChange={(val) => handleInputChange("accepts_dine_in", val)}
+                className="data-[state=checked]:bg-emerald-700 cursor-pointer"
+              />
+            </div>
+          </div>
+
+          {/* Opção 4: Auto-aceite de Pedidos */}
           <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="space-y-1 max-w-xl">
               <div className="flex items-center gap-2">

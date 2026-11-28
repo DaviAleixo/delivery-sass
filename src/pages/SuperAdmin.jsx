@@ -78,6 +78,7 @@ export default function SuperAdminPage() {
     custom_template: "default",
     accepts_delivery: true,
     accepts_takeaway: true,
+    accepts_dine_in: true,
     email: "",
     phone: "",
     cpf_cnpj: "",
@@ -97,6 +98,7 @@ export default function SuperAdminPage() {
     custom_template: "default",
     accepts_delivery: true,
     accepts_takeaway: true,
+    accepts_dine_in: true,
     business_day_cutoff_time: "04:00",
     logo_url: "",
     email: "",
@@ -413,6 +415,7 @@ export default function SuperAdminPage() {
 
         const defaultDelivery = newTenant.plan !== "showcase" && newTenant.plan !== "table" && newTenant.accepts_delivery !== false;
         const defaultTakeaway = newTenant.plan !== "showcase" && newTenant.accepts_takeaway !== false;
+        const defaultDineIn = newTenant.plan !== "showcase" && newTenant.accepts_dine_in !== false;
 
         // 1. Cria a loja no Supabase com novo código sequencial e credenciais de login
         const { data, error } = await supabase.rpc("create_new_tenant", {
@@ -472,6 +475,7 @@ export default function SuperAdminPage() {
                 salon_mode: defaultSalonMode,
                 accepts_delivery: defaultDelivery,
                 accepts_takeaway: defaultTakeaway,
+                accepts_dine_in: defaultDineIn,
               })
               .eq("id", newTenantId);
           } else {
@@ -488,6 +492,7 @@ export default function SuperAdminPage() {
                 salon_mode: defaultSalonMode,
                 accepts_delivery: defaultDelivery,
                 accepts_takeaway: defaultTakeaway,
+                accepts_dine_in: defaultDineIn,
               })
               .eq("id", newTenantId);
           }
@@ -622,6 +627,7 @@ export default function SuperAdminPage() {
       custom_template: tenant.custom_template || "default",
       accepts_delivery: tenant.accepts_delivery !== false,
       accepts_takeaway: tenant.accepts_takeaway !== false,
+      accepts_dine_in: tenant.accepts_dine_in !== false,
       business_day_cutoff_time: tenant.business_day_cutoff_time || "04:00",
       logo_url: tenant.logo_url || "",
       email: resolvedEmail,
@@ -673,6 +679,7 @@ export default function SuperAdminPage() {
 
         const computedDelivery = editForm.plan !== "showcase" && editForm.plan !== "table" && editForm.accepts_delivery !== false;
         const computedTakeaway = editForm.plan !== "showcase" && editForm.accepts_takeaway !== false;
+        const computedDineIn = editForm.plan !== "showcase" && editForm.accepts_dine_in !== false;
 
         const parsedEditPrice = parseFloat(String(editForm.monthly_price ?? "").replace(",", "."));
         
@@ -716,6 +723,7 @@ export default function SuperAdminPage() {
             salon_mode: computedSalonMode,
             accepts_delivery: computedDelivery,
             accepts_takeaway: computedTakeaway,
+            accepts_dine_in: computedDineIn,
             business_day_cutoff_time: editForm.business_day_cutoff_time || "04:00",
             monthly_price: !isNaN(parsedEditPrice) ? parsedEditPrice : 89.00,
             email: editForm.email.trim() || null,
@@ -1348,7 +1356,12 @@ export default function SuperAdminPage() {
                         🛍️ Retirada
                       </Badge>
                     )}
-                    {selectedTenantDrawer.accepts_delivery === false && selectedTenantDrawer.accepts_takeaway === false && (
+                    {selectedTenantDrawer.accepts_dine_in !== false && (
+                      <Badge variant="outline" className="bg-blue-50 border-blue-200 text-blue-800 font-semibold text-[11px]">
+                        🍽️ Salão
+                      </Badge>
+                    )}
+                    {selectedTenantDrawer.accepts_delivery === false && selectedTenantDrawer.accepts_takeaway === false && selectedTenantDrawer.accepts_dine_in === false && (
                       <Badge variant="outline" className="bg-rose-50 border-rose-200 text-rose-700 font-semibold text-[11px]">
                         Nenhum canal ativo
                       </Badge>
@@ -1752,6 +1765,19 @@ export default function SuperAdminPage() {
                       <p className="text-[10px] text-stone-500">Busca no balcão</p>
                     </div>
                   </label>
+
+                  <label className="flex items-center gap-2 p-2.5 rounded-lg border border-stone-200 bg-white cursor-pointer hover:border-stone-200">
+                    <input
+                      type="checkbox"
+                      checked={newTenant.accepts_dine_in !== false}
+                      onChange={(e) => setNewTenant({ ...newTenant, accepts_dine_in: e.target.checked })}
+                      className="accent-rose-500 h-4 w-4 rounded"
+                    />
+                    <div className="text-xs">
+                      <p className="font-bold text-stone-900">🍽️ Salão & Mesas</p>
+                      <p className="text-[10px] text-stone-500">Consumo no local</p>
+                    </div>
+                  </label>
                 </div>
               </div>
 
@@ -2047,6 +2073,19 @@ export default function SuperAdminPage() {
                     <div className="text-xs">
                       <p className="font-bold text-stone-900">🛍️ Retirada</p>
                       <p className="text-[10px] text-stone-500">Busca no balcão</p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-2 p-2.5 rounded-lg border border-stone-200 bg-white cursor-pointer hover:border-emerald-300">
+                    <input
+                      type="checkbox"
+                      checked={editForm.accepts_dine_in !== false}
+                      onChange={(e) => setEditForm({ ...editForm, accepts_dine_in: e.target.checked })}
+                      className="accent-emerald-600 h-4 w-4 rounded"
+                    />
+                    <div className="text-xs">
+                      <p className="font-bold text-stone-900">🍽️ Salão & Mesas</p>
+                      <p className="text-[10px] text-stone-500">Consumo no local</p>
                     </div>
                   </label>
                 </div>

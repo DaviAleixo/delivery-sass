@@ -239,6 +239,40 @@ export default function OperationsTab({
         </div>
 
         <div className="divide-y divide-stone-100">
+          {/* Chave Mestra: Atendimento em Mesas, Salão & Comandas */}
+          {!isVisualOnly && (
+            <div className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1 max-w-xl">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-stone-900">
+                    Atendimento em Mesas, Salão & Comandas
+                  </span>
+                  <Badge
+                    variant="outline"
+                    className={`text-[10px] font-semibold ${
+                      settings.accepts_dine_in !== false
+                        ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                        : "bg-stone-100 text-stone-600 border-stone-200"
+                    }`}
+                  >
+                    {settings.accepts_dine_in !== false ? "Módulo Ativo" : "Desativado"}
+                  </Badge>
+                </div>
+                <p className="text-[11px] text-stone-500 leading-relaxed">
+                  Quando desativado, oculta a aba de Salão & Mesas do menu lateral, desativa o seletor de mesas no PDV (focando 100% no Balcão rápido) e desativa pedidos por QR Code em mesas no cardápio. Ideal para distribuidoras de bebidas, dark kitchens e operações sem salão.
+                </p>
+              </div>
+
+              <div className="shrink-0 flex items-center gap-3">
+                <Switch
+                  checked={settings.accepts_dine_in !== false}
+                  onCheckedChange={(val) => handleInputChange("accepts_dine_in", val)}
+                  className="data-[state=checked]:bg-emerald-700 cursor-pointer"
+                />
+              </div>
+            </div>
+          )}
+
           {/* Taxa de Serviço do Salão & Mesas (10%) */}
           {!isVisualOnly && (
             <div className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">

@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { validateSchema, orderSchema } from "@/schemas";
 import { toast } from "sonner";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
+import { useTenant } from "@/lib/TenantContext";
 
 // Som ao adicionar item
 const playBeep = () => {
@@ -90,6 +91,16 @@ export default function PDVPage() {
   const [lastOrder, setLastOrder] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
+  const { tenant } = useTenant();
+  const acceptsDineIn = tenant ? tenant.accepts_dine_in !== false : true;
+
+  // Se a loja desativou salão/mesas, força sempre o modo Balcão puro
+  useEffect(() => {
+    if (!acceptsDineIn && orderType === "dine_in") {
+      setOrderType("pickup");
+      setSelectedTableNumber("");
+    }
+  }, [acceptsDineIn, orderType]);
 
   // Sincroniza rascunho contínuo do PDV para nunca perder dados ao navegar pelo painel
   useEffect(() => {
@@ -640,6 +651,7 @@ export default function PDVPage() {
               onSelectTableNumber={setSelectedTableNumber}
               onLaunchToTable={handleLaunchToTable}
               isSubmittingTableOrder={isSubmittingTableOrder}
+              acceptsDineIn={acceptsDineIn}
             />
           </div>
         </div>
@@ -669,6 +681,7 @@ export default function PDVPage() {
           onSelectTableNumber={setSelectedTableNumber}
           onLaunchToTable={handleLaunchToTable}
           isSubmittingTableOrder={isSubmittingTableOrder}
+          acceptsDineIn={acceptsDineIn}
         />
       </div>
 
